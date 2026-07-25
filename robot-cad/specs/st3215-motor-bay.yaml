@@ -18,6 +18,7 @@ socket:
   boolean_overtravel_mm: 0.6
   cable_window_y_mm: 16.0
   cable_window_z_mm: 14.0
+  outer_side_perimeter_fillet_radius_mm: 2.0
 
 ventilation:
   side_walls: both
@@ -51,7 +52,7 @@ generated_baseline:
     min_xyz_mm: [-16.0, -15.6117, -22.025]
     max_xyz_mm: [0.0, 15.6117, 22.025]
     size_xyz_mm: [16.0, 31.2234, 44.05]
-  volume_mm3: 9282.994037878747
+  volume_mm3: 9082.938146167759
   kernel_tolerance_mm: 0.01
   volume_relative_tolerance: 1.0e-5
 
@@ -66,3 +67,4 @@ acceptance_tests:
   - generated bounds match the migrated source
   - cable window and four mount access locations remain open
   - eight diamond vents remain open on each broad side wall
+  - the eight marked broad-side perimeter edges have 2 mm cosmetic fillets

@@ -25,6 +25,13 @@ named_frames:
       xyz_mm: [-11.1117, 0.0, 9.425]
       rotation_xyz_deg: [90.0, 0.0, 0.0]
       axis: [1.0, 0.0, 0.0]
+  st3215_servo_output_fork:
+    frame_attachment_datum:
+      xyz_mm: [0.0, 0.0, 0.0]
+      axis: [1.0, 0.0, 0.0]
+    frame_st3215_output_axis:
+      xyz_mm: [50.182161, 0.0, -4.516395]
+      axis: [0.08963769949589058, 0.0, 0.9959744388432287]
   upper_arm:
     frame_st3215_bay_attachment:
       xyz_mm: [-58.2, 12.0, -1.95]
@@ -33,3 +40,12 @@ named_frames:
       xyz_mm: [-69.3117, 12.0, 7.475]
       rotation_xyz_deg: [90.0, 0.0, 0.0]
       axis: [1.0, 0.0, 0.0]
+    frame_servo_output_fork_attachment:
+      xyz_mm: [14.7, 12.0, 0.0]
+      axis: [0.9959744388432287, 0.0, 0.08963769949589058]
+    frame_st3215_output_axis:
+      xyz_mm: [-94.8117, 12.0, 0.0]
+      axis: [0.0, 0.0, 1.0]
+    frame_distal_fork_axis:
+      xyz_mm: [65.084989, 12.0, 0.0]
+      axis: [0.0, 0.0, 1.0]

@@ -36,6 +36,21 @@ ST3215_MOTOR_BAY_INTERFACES = {
     ),
 }
 
+ST3215_SERVO_OUTPUT_FORK_INTERFACES = {
+    "frame_attachment_datum": InterfaceFrame(
+        name="frame_attachment_datum",
+        xyz_mm=(0.0, 0.0, 0.0),
+        axis=(1.0, 0.0, 0.0),
+        role="marked cut plane in reusable fork-local coordinates",
+    ),
+    "frame_st3215_output_axis": InterfaceFrame(
+        name="frame_st3215_output_axis",
+        xyz_mm=(50.182161, 0.0, -4.516395),
+        axis=(0.08963769949589058, 0.0, 0.9959744388432287),
+        role="preserved positive-X fork revolute axis in fork-local coordinates",
+    ),
+}
+
 UPPER_ARM_INTERFACES = {
     "frame_st3215_bay_attachment": InterfaceFrame(
         name="frame_st3215_bay_attachment",
@@ -48,5 +63,23 @@ UPPER_ARM_INTERFACES = {
         xyz_mm=(-69.3117, 12.0, 7.475),
         axis=(1.0, 0.0, 0.0),
         role="installed ST3215 catalog origin in upper-arm coordinates",
+    ),
+    "frame_servo_output_fork_attachment": InterfaceFrame(
+        name="frame_servo_output_fork_attachment",
+        xyz_mm=(14.7, 12.0, 0.0),
+        axis=(0.9959744388432287, 0.0, 0.08963769949589058),
+        role="marked cut plane for the reusable ST3215 servo-output fork",
+    ),
+    "frame_st3215_output_axis": InterfaceFrame(
+        name="frame_st3215_output_axis",
+        xyz_mm=(-94.8117, 12.0, 0.0),
+        axis=(0.0, 0.0, 1.0),
+        role="installed ST3215 dual-output shaft axis in upper-arm coordinates",
+    ),
+    "frame_distal_fork_axis": InterfaceFrame(
+        name="frame_distal_fork_axis",
+        xyz_mm=(65.084989, 12.0, 0.0),
+        axis=(0.0, 0.0, 1.0),
+        role="placed reusable servo-output fork revolute axis",
     ),
 }

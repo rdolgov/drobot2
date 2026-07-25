@@ -15,9 +15,11 @@ assemblies.
 | Target | Generator | Purpose |
 | --- | --- | --- |
 | `exports/step/st3215_motor_bay.step` | `robot_cad/parts/st3215_motor_bay.py` | Printable keyed rear motor bay |
-| `exports/step/upper_arm.step` | `robot_cad/parts/upper_arm.py` | Printable SO-101 upper arm with fused bay |
+| `exports/step/upper_arm.step` | `robot_cad/parts/upper_arm.py` | Printable SO-101 upper arm with fused bay and reusable-fork cut |
+| `exports/step/st3215_servo_output_fork.step` | `robot_cad/parts/st3215_servo_output_fork.py` | Reusable positive-X ST3215 output fork |
 | `exports/step/st3215_motor_bay_fit_preview.step` | `robot_cad/assembly/st3215_motor_bay_fit_preview.py` | Bay plus exact catalog servo |
-| `exports/step/upper_arm_st3215_fit_preview.step` | `robot_cad/assembly/upper_arm_st3215_fit_preview.py` | Upper arm plus installed servo |
+| `exports/step/upper_arm_st3215_fit_preview.step` | `robot_cad/assembly/upper_arm_st3215_fit_preview.py` | Split upper arm, reusable output fork, and installed servo |
+| `exports/step/robot_arm.step` | `robot_cad/assembly/robot_arm.py` | Two upper arms and reusable forks joined by the elbow ST3215 |
 
 STEP is the primary output. STL files are secondary manufacturing exports.
 Everything under `exports/` is generated and intentionally ignored by Git.
@@ -58,7 +60,7 @@ run from PowerShell:
 ## Generate the migrated models
 
 The generation helper discovers the installed text-to-cad CAD skill, makes its
-assembly runtime available, and regenerates all four explicit targets.
+assembly runtime available, and regenerates all five explicit targets.
 
 ```powershell
 .\scripts\generate_cad.ps1 -Force

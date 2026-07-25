@@ -40,7 +40,7 @@ from build123d import (
     loft,
 )
 
-from robot_cad.parts import st3215_motor_bay
+from robot_cad.parts import st3215_motor_bay, st3215_servo_output_fork
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 REFERENCE_STEP = (
@@ -105,6 +105,13 @@ ROTATION_X_DEG = 0.0
 ROTATION_Y_DEG = 0.0
 ROTATION_Z_DEG = 0.0
 TRANSLATION_MM = (0.0, 0.0, 0.0)
+
+# Inspected revolute-joint datums used by the two-link assembly.  The distal
+# fork is coaxial about global Z.  The ST3215 output axis is 25.5 mm along
+# negative local X from the catalog origin; its installed axis is also global
+# Z and is represented at the arm's Z=0 center plane.
+DISTAL_FORK_AXIS_MM = (65.084989, 12.0, 0.0)
+ST3215_CATALOG_OUTPUT_AXIS_OFFSET_X_MM = -25.5
 
 
 def _validated_xyz(name: str, values: tuple[float, float, float]) -> tuple[float, float, float]:
@@ -374,6 +381,23 @@ def st3215_preview_location() -> Location:
     return _motor_bay_location() * motor_bay_module.st3215_installed_location()
 
 
+def st3215_output_axis_location() -> Location:
+    """Return a point on the installed servo's global-Z output axis."""
+    servo_origin = st3215_preview_location().position
+    return Location(
+        (
+            servo_origin.X + float(ST3215_CATALOG_OUTPUT_AXIS_OFFSET_X_MM),
+            servo_origin.Y,
+            0.0,
+        )
+    )
+
+
+def distal_fork_axis_location() -> Location:
+    """Return the placed reusable fork's global-Z revolute axis."""
+    return Location(_validated_xyz("DISTAL_FORK_AXIS_MM", DISTAL_FORK_AXIS_MM))
+
+
 def _apply_pose(body: Shape) -> Shape:
     pivot = Vector(*_validated_xyz("ROTATION_PIVOT_MM", ROTATION_PIVOT_MM))
     posed = body
@@ -393,11 +417,12 @@ def _apply_pose(body: Shape) -> Shape:
 
 
 def gen_step() -> Shape:
-    """Return the STEP-ready upper arm with its fused common motor bay."""
+    """Return the STEP-ready upper arm ending at the output-fork cut datum."""
     body = _load_reference_body()
     body = _apply_optional_cut(body)
     body = _add_st3215_rear_motor_bay(body)
     body = _enlarge_middle_half_circle(body)
+    body = st3215_servo_output_fork.retain_arm_side(body)
     return _apply_pose(body)
 
 

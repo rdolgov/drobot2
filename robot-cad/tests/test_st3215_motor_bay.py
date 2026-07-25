@@ -28,7 +28,7 @@ def test_motor_bay_bounds_match_migrated_geometry() -> None:
 
 def test_motor_bay_volume_matches_migrated_geometry() -> None:
     assert float(migrated_motor_bay().volume) == pytest.approx(
-        9282.994037878747,
+        9082.938146167759,
         rel=1e-5,
     )
 
@@ -58,9 +58,49 @@ def test_motor_bay_has_eight_diamond_vents_on_each_side_wall() -> None:
     vent_area = (
         st3215_motor_bay.VENT_DIAMOND_WIDTH_X_MM * st3215_motor_bay.VENT_DIAMOND_HEIGHT_Z_MM / 2.0
     )
-    expected_side_area = st3215_motor_bay.SOCKET_LENGTH_X_MM * outer_z - vent_count * vent_area
+    fillet_radius = st3215_motor_bay.OUTER_SIDE_PERIMETER_FILLET_RADIUS_MM
+    expected_side_area = (
+        (st3215_motor_bay.SOCKET_LENGTH_X_MM - 2.0 * fillet_radius)
+        * (outer_z - 2.0 * fillet_radius)
+        - vent_count * vent_area
+    )
 
     assert len(side_faces) == 2
     for face in side_faces:
         assert len(face.wires()) == vent_count + 1
         assert float(face.area) == pytest.approx(expected_side_area, abs=1e-6)
+
+
+def test_motor_bay_has_eight_marked_outer_side_perimeter_fillets() -> None:
+    part = migrated_motor_bay()
+    bounds = part.bounding_box()
+    radius = st3215_motor_bay.OUTER_SIDE_PERIMETER_FILLET_RADIUS_MM
+    tolerance = 1.0e-4
+    outer_fillet_faces = []
+
+    for face in part.faces():
+        face_radius = getattr(face, "radius", None)
+        if face.geom_type != GeomType.CYLINDER or face_radius is None:
+            continue
+        face_bounds = face.bounding_box()
+        reaches_outer_side = abs(
+            max(abs(face_bounds.min.Y), abs(face_bounds.max.Y)) - bounds.max.Y
+        ) <= tolerance
+        horizontal_fillet = (
+            abs(face_bounds.size.X - bounds.size.X) <= tolerance
+            and abs(face_bounds.size.Y - radius) <= tolerance
+            and abs(face_bounds.size.Z - radius) <= tolerance
+        )
+        vertical_fillet = (
+            abs(face_bounds.size.X - radius) <= tolerance
+            and abs(face_bounds.size.Y - radius) <= tolerance
+            and abs(face_bounds.size.Z - bounds.size.Z) <= tolerance
+        )
+        if (
+            reaches_outer_side
+            and abs(float(face_radius) - radius) <= tolerance
+            and (horizontal_fillet or vertical_fillet)
+        ):
+            outer_fillet_faces.append(face)
+
+    assert len(outer_fillet_faces) == 8

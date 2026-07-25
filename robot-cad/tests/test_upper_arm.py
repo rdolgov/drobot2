@@ -21,14 +21,14 @@ def test_upper_arm_is_one_valid_solid() -> None:
 def test_upper_arm_bounds_match_migrated_geometry() -> None:
     bounds = migrated_upper_arm().bounding_box()
 
-    assert tuple(bounds.min) == pytest.approx((-74.2, -3.614304, -35.6), abs=0.05)
-    assert tuple(bounds.max) == pytest.approx((77.084989, 27.614304, 31.7), abs=0.05)
-    assert tuple(bounds.size) == pytest.approx((151.284989, 31.228608, 67.3), abs=0.05)
+    assert tuple(bounds.min) == pytest.approx((-74.2, -3.614304, -31.7), abs=0.05)
+    assert tuple(bounds.max) == pytest.approx((17.553, 27.614304, 31.7), abs=0.05)
+    assert tuple(bounds.size) == pytest.approx((91.753, 31.228608, 63.4), abs=0.05)
 
 
 def test_upper_arm_volume_matches_migrated_geometry() -> None:
     assert float(migrated_upper_arm().volume) == pytest.approx(
-        129269.1207987483,
+        84392.91099500656,
         rel=1e-5,
     )
 

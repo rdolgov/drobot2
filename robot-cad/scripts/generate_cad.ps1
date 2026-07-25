@@ -36,8 +36,10 @@ $env:PYTHONPATH = $pythonPathParts -join [IO.Path]::PathSeparator
 $targets = @(
     "robot_cad/parts/st3215_motor_bay.py=exports/step/st3215_motor_bay.step",
     "robot_cad/parts/upper_arm.py=exports/step/upper_arm.step",
+    "robot_cad/parts/st3215_servo_output_fork.py=exports/step/st3215_servo_output_fork.step",
     "robot_cad/assembly/st3215_motor_bay_fit_preview.py=exports/step/st3215_motor_bay_fit_preview.step",
-    "robot_cad/assembly/upper_arm_st3215_fit_preview.py=exports/step/upper_arm_st3215_fit_preview.step"
+    "robot_cad/assembly/upper_arm_st3215_fit_preview.py=exports/step/upper_arm_st3215_fit_preview.step",
+    "robot_cad/assembly/robot_arm.py=exports/step/robot_arm.step"
 )
 $arguments = @($stepTool) + $targets
 if ($Force) {

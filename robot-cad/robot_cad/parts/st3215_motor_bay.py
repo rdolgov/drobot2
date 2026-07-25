@@ -53,6 +53,7 @@ SOCKET_WALL_MM = 3.0
 SOCKET_LENGTH_X_MM = 16.0
 SOCKET_STOP_THICKNESS_MM = 1.5
 BOOLEAN_OVERTRAVEL_MM = 0.6
+OUTER_SIDE_PERIMETER_FILLET_RADIUS_MM = 2.0
 
 # The stop is a perimeter rim, leaving this opening for the servo cable.
 SOCKET_CABLE_WINDOW_Y_MM = 16.0
@@ -926,6 +927,51 @@ def _side_wall_diamond_vent_cutters(
     return cutters
 
 
+def _outer_side_perimeter_edges(
+    bay: Shape,
+    outer_y: float,
+    outer_z: float,
+    outer_min_x: float,
+) -> list[Edge]:
+    """Resolve the eight broad-side perimeter edges marked for filleting."""
+    outer_max_x = float(ATTACHMENT_DATUM_X_MM)
+    length_x = outer_max_x - outer_min_x
+    tolerance = 1.0e-4
+    edges = []
+
+    for edge in bay.edges():
+        if edge.geom_type != GeomType.LINE:
+            continue
+
+        bounds = edge.bounding_box()
+        center = edge.center()
+        on_outer_side = (
+            abs(abs(center.Y) - outer_y / 2.0) <= tolerance
+            and bounds.size.Y <= tolerance
+        )
+        horizontal_boundary = (
+            abs(bounds.size.X - length_x) <= tolerance
+            and bounds.size.Z <= tolerance
+            and abs(abs(center.Z) - outer_z / 2.0) <= tolerance
+        )
+        vertical_boundary = (
+            bounds.size.X <= tolerance
+            and abs(bounds.size.Z - outer_z) <= tolerance
+            and (
+                abs(center.X - outer_min_x) <= tolerance
+                or abs(center.X - outer_max_x) <= tolerance
+            )
+        )
+        if on_outer_side and (horizontal_boundary or vertical_boundary):
+            edges.append(edge)
+
+    if len(edges) != 8:
+        raise RuntimeError(
+            f"Expected eight outer side-perimeter edges for filleting, found {len(edges)}"
+        )
+    return edges
+
+
 def gen_step() -> Shape:
     """Return the standalone, STEP-ready ST3215 rear motor bay."""
     clearance_y = float(SOCKET_CLEARANCE_Y_PER_SIDE_MM)
@@ -934,13 +980,16 @@ def gen_step() -> Shape:
     length_x = float(SOCKET_LENGTH_X_MM)
     stop = float(SOCKET_STOP_THICKNESS_MM)
     overtravel = float(BOOLEAN_OVERTRAVEL_MM)
+    fillet_radius = float(OUTER_SIDE_PERIMETER_FILLET_RADIUS_MM)
 
     if min(clearance_y, clearance_z) < 0.0:
         raise ValueError("Socket clearances cannot be negative")
-    if min(wall, length_x, stop, overtravel) <= 0.0:
-        raise ValueError("Wall, length, stop, and overtravel must be positive")
+    if min(wall, length_x, stop, overtravel, fillet_radius) <= 0.0:
+        raise ValueError("Wall, length, stop, overtravel, and fillet radius must be positive")
     if stop >= length_x:
         raise ValueError("The stop must be thinner than the bay length")
+    if fillet_radius >= wall:
+        raise ValueError("The cosmetic fillet radius must remain smaller than the wall")
 
     inner_y = ST3215_CATALOG_WIDTH_Z_MM + 2.0 * clearance_y
     inner_z = ST3215_CATALOG_HEIGHT_Y_MM + clearance_z
@@ -1051,6 +1100,16 @@ def gen_step() -> Shape:
     bay = _largest_connected_solid(
         bay - vent_pattern,
         "Diamond ventilation cut",
+    )
+    perimeter_edges = _outer_side_perimeter_edges(
+        bay,
+        outer_y,
+        outer_z,
+        outer_min_x,
+    )
+    bay = _largest_connected_solid(
+        bay.fillet(fillet_radius, perimeter_edges),
+        "Outer side-perimeter fillet",
     )
 
     if len(bay.solids()) != 1 or not bay.is_valid:

@@ -38,6 +38,9 @@ def test_motor_bay_yaml_matches_fit_critical_parameters() -> None:
     assert socket["wall_mm"] == pytest.approx(st3215_motor_bay.SOCKET_WALL_MM)
     assert socket["length_x_mm"] == pytest.approx(st3215_motor_bay.SOCKET_LENGTH_X_MM)
     assert socket["stop_thickness_mm"] == pytest.approx(st3215_motor_bay.SOCKET_STOP_THICKNESS_MM)
+    assert socket["outer_side_perimeter_fillet_radius_mm"] == pytest.approx(
+        st3215_motor_bay.OUTER_SIDE_PERIMETER_FILLET_RADIUS_MM
+    )
     assert ventilation["side_walls"] == "both"
     assert ventilation["pattern"] == "diamond"
     assert ventilation["columns_x_mm"] == pytest.approx(st3215_motor_bay.VENT_DIAMOND_COLUMNS_X_MM)
