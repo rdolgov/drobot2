@@ -51,7 +51,7 @@ generated_baseline:
     min_xyz_mm: [-16.0, -15.6117, -22.025]
     max_xyz_mm: [0.0, 15.6117, 22.025]
     size_xyz_mm: [16.0, 31.2234, 44.05]
-  volume_mm3: 9745.45116260892
+  volume_mm3: 9282.994037878747
   kernel_tolerance_mm: 0.01
   volume_relative_tolerance: 1.0e-5
 
