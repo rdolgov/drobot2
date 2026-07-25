@@ -30,7 +30,7 @@ placement parameters, source markups, and fit previews rely on this frame.
 - The installed catalog servo is rotated +90 degrees about X.
 
 In upper-arm coordinates, the bay attachment datum is at
-`[-28.2, 12.0, -1.95]`.
+`[-58.2, 12.0, -1.95]` after the configured 30 mm negative-X extension.
 
 ## Named interfaces
 

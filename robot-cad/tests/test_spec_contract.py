@@ -57,6 +57,7 @@ def test_upper_arm_yaml_matches_migrated_feature_parameters() -> None:
     document = yaml.safe_load((PROJECT_ROOT / "specs" / "upper-arm.yaml").read_text())
     features = document["features"]
     transition = document["transition"]
+    opening = document["enlarged_middle_opening"]
 
     assert features["mount_panel_cut_plane_x_mm"] == pytest.approx(
         upper_arm.MOUNT_PANEL_CUT_PLANE_X_MM
@@ -70,4 +71,20 @@ def test_upper_arm_yaml_matches_migrated_feature_parameters() -> None:
     assert features["motor_bay_join_overlap_mm"] == pytest.approx(
         upper_arm.ST3215_MOTOR_BAY_JOIN_OVERLAP_MM
     )
+    assert features["negative_x_extension_mm"] == pytest.approx(
+        upper_arm.UPPER_ARM_NEGATIVE_X_EXTENSION_MM
+    )
     assert transition["length_mm"] == pytest.approx(upper_arm.SMOOTH_TRANSITION_LENGTH_MM)
+    assert opening["enabled"] is upper_arm.ENLARGE_MIDDLE_HALF_CIRCLE
+    assert opening["left_cap_center_x_mm"] == pytest.approx(
+        upper_arm.MIDDLE_OPENING_LEFT_CAP_CENTER_X_MM
+    )
+    assert opening["right_cap_center_x_mm"] == pytest.approx(
+        upper_arm.MIDDLE_OPENING_RIGHT_CAP_CENTER_X_MM
+    )
+    assert opening["height_z_mm"] == pytest.approx(
+        upper_arm.MIDDLE_OPENING_HEIGHT_Z_MM
+    )
+    assert opening["cap_radius_x_mm"] == pytest.approx(
+        upper_arm.MIDDLE_OPENING_CAP_RADIUS_X_MM
+    )

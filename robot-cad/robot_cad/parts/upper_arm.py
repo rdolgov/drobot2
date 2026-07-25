@@ -27,11 +27,15 @@ from build123d import (
     Axis,
     Box,
     BuildSketch,
+    Ellipse,
     Location,
+    Locations,
     Plane,
+    Rectangle,
     RectangleRounded,
     Shape,
     Vector,
+    extrude,
     import_step,
     loft,
 )
@@ -60,11 +64,14 @@ ADD_ST3215_REAR_MOTOR_BAY = True
 ST3215_MOTOR_BAY_CENTER_Y_MM = 12.0
 ST3215_MOTOR_BAY_CENTER_Z_MM = -1.95
 ST3215_MOTOR_BAY_JOIN_OVERLAP_MM = 0.8
+UPPER_ARM_NEGATIVE_X_EXTENSION_MM = 30.0
 
 # The transition repeats its start/end profiles to make the loft leave the
 # straight bay and arrive at the arm gradually. It intentionally closes the
 # short gap between the arm's upper and lower edge lobes; the shared bay already
 # has a closed attachment wall and therefore still needs a later cable route.
+# The negative-X extension moves only the bay-side profiles; the arm-side
+# profiles and positive-X body remain fixed in the immutable reference frame.
 SMOOTH_TRANSITION_LENGTH_MM = 9.0
 SMOOTH_TRANSITION_BAY_EMBED_MM = 0.4
 SMOOTH_TRANSITION_END_HOLD_MM = 1.0
@@ -72,6 +79,17 @@ SMOOTH_TRANSITION_START_RADIUS_MM = 0.5
 SMOOTH_TRANSITION_ARM_SIZE_Y_MM = 24.0
 SMOOTH_TRANSITION_ARM_SIZE_Z_MM = 50.0
 SMOOTH_TRANSITION_ARM_RADIUS_MM = 5.0
+
+# Enlarge the reference arm's small half-circle into a rounded through-slot
+# across the middle of the extended transition. The negative-X tip stays clear
+# of the motor-bay attachment datum, so the shared bay is not cut or modified.
+ENLARGE_MIDDLE_HALF_CIRCLE = True
+MIDDLE_OPENING_LEFT_CAP_CENTER_X_MM = -44.0
+MIDDLE_OPENING_RIGHT_CAP_CENTER_X_MM = -20.0
+MIDDLE_OPENING_CAP_RADIUS_X_MM = 10.0
+MIDDLE_OPENING_HEIGHT_Z_MM = 20.0
+MIDDLE_OPENING_CENTER_Z_MM = 0.0
+MIDDLE_OPENING_OVERTRAVEL_MM = 1.0
 
 # Optional subtractive edit.  Leave disabled until the intended cut region is
 # needed.  The box is centered at CUT_BOX_CENTER_MM and may safely extend
@@ -166,13 +184,16 @@ def _apply_optional_cut(body: Shape) -> Shape:
 
 
 def _motor_bay_location() -> Location:
-    """Place the bay's X=0 datum just inside the trimmed arm edge."""
+    """Place the bay's X=0 datum beyond the extended negative-X arm end."""
     overlap = float(ST3215_MOTOR_BAY_JOIN_OVERLAP_MM)
+    extension = float(UPPER_ARM_NEGATIVE_X_EXTENSION_MM)
     if overlap <= 0.0:
         raise ValueError("ST3215_MOTOR_BAY_JOIN_OVERLAP_MM must be positive")
+    if extension < 0.0:
+        raise ValueError("UPPER_ARM_NEGATIVE_X_EXTENSION_MM cannot be negative")
     return Location(
         (
-            float(MOUNT_PANEL_CUT_PLANE_X_MM) + overlap,
+            float(MOUNT_PANEL_CUT_PLANE_X_MM) + overlap - extension,
             float(ST3215_MOTOR_BAY_CENTER_Y_MM),
             float(ST3215_MOTOR_BAY_CENTER_Z_MM),
         )
@@ -231,13 +252,14 @@ def _make_motor_bay_transition(motor_bay_module: ModuleType) -> Shape:
     )
 
     cut_x = float(MOUNT_PANEL_CUT_PLANE_X_MM)
+    extension = float(UPPER_ARM_NEGATIVE_X_EXTENSION_MM)
     attach_x = _motor_bay_location().position.X
     transition_end_x = cut_x + transition_length
     arm_center_y = float(ST3215_MOTOR_BAY_CENTER_Y_MM)
     arm_center_z = 0.0
     profiles = [
         _transition_profile(
-            x=cut_x - bay_embed,
+            x=cut_x - extension - bay_embed,
             center_y=arm_center_y,
             center_z=float(ST3215_MOTOR_BAY_CENTER_Z_MM),
             size_y=bay_size_y,
@@ -299,6 +321,53 @@ def _add_st3215_rear_motor_bay(body: Shape) -> Shape:
     return result
 
 
+def _enlarge_middle_half_circle(body: Shape) -> Shape:
+    """Extend the existing middle half-circle into a large rounded slot."""
+    if not ENLARGE_MIDDLE_HALF_CIRCLE:
+        return body
+
+    left_cap_x = float(MIDDLE_OPENING_LEFT_CAP_CENTER_X_MM)
+    right_cap_x = float(MIDDLE_OPENING_RIGHT_CAP_CENTER_X_MM)
+    cap_radius_x = float(MIDDLE_OPENING_CAP_RADIUS_X_MM)
+    height_z = float(MIDDLE_OPENING_HEIGHT_Z_MM)
+    center_z = float(MIDDLE_OPENING_CENTER_Z_MM)
+    overtravel = float(MIDDLE_OPENING_OVERTRAVEL_MM)
+    if min(cap_radius_x, height_z, overtravel) <= 0.0:
+        raise ValueError("Middle-opening dimensions must be positive")
+    straight_length_x = right_cap_x - left_cap_x
+    if straight_length_x <= 0.0:
+        raise ValueError("Middle-opening cap centers must increase along X")
+
+    negative_x_tip = left_cap_x - cap_radius_x
+    bay_attachment_x = _motor_bay_location().position.X
+    if negative_x_tip <= bay_attachment_x:
+        raise ValueError("Middle opening must remain clear of the motor-bay datum")
+
+    bounds = body.bounding_box()
+    through_width_y = bounds.size.Y + 2.0 * overtravel
+    xz_plane = Plane(
+        origin=(0.0, bounds.max.Y + overtravel, 0.0),
+        x_dir=(1.0, 0.0, 0.0),
+        z_dir=(0.0, -1.0, 0.0),
+    )
+    with BuildSketch(xz_plane) as cavity_profile:
+        with Locations(((left_cap_x + right_cap_x) / 2.0, center_z)):
+            Rectangle(straight_length_x, height_z)
+        with Locations((left_cap_x, center_z), (right_cap_x, center_z)):
+            Ellipse(cap_radius_x, height_z / 2.0)
+
+    cutter = extrude(cavity_profile.sketch, amount=through_width_y)
+    result = body - cutter
+    solids = list(result.solids())
+    if len(solids) != 1 or not result.is_valid:
+        raise RuntimeError(
+            "The enlarged middle opening must leave one valid upper-arm solid; "
+            f"found {len(solids)} solids"
+        )
+    result.label = "upper_arm_so101_with_enlarged_middle_opening"
+    return result
+
+
 def st3215_preview_location() -> Location:
     """Return the catalog servo pose from the shared bay in arm coordinates."""
     motor_bay_module = _load_st3215_motor_bay_module()
@@ -328,6 +397,7 @@ def gen_step() -> Shape:
     body = _load_reference_body()
     body = _apply_optional_cut(body)
     body = _add_st3215_rear_motor_bay(body)
+    body = _enlarge_middle_half_circle(body)
     return _apply_pose(body)
 
 

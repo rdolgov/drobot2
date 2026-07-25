@@ -39,13 +39,13 @@ ST3215_MOTOR_BAY_INTERFACES = {
 UPPER_ARM_INTERFACES = {
     "frame_st3215_bay_attachment": InterfaceFrame(
         name="frame_st3215_bay_attachment",
-        xyz_mm=(-28.2, 12.0, -1.95),
+        xyz_mm=(-58.2, 12.0, -1.95),
         axis=(1.0, 0.0, 0.0),
         role="placed ST3215 motor-bay X=0 datum",
     ),
     "frame_st3215_servo_install": InterfaceFrame(
         name="frame_st3215_servo_install",
-        xyz_mm=(-39.3117, 12.0, 7.475),
+        xyz_mm=(-69.3117, 12.0, 7.475),
         axis=(1.0, 0.0, 0.0),
         role="installed ST3215 catalog origin in upper-arm coordinates",
     ),

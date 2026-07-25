@@ -21,6 +21,7 @@ features:
   motor_bay_center_y_mm: 12.0
   motor_bay_center_z_mm: -1.95
   motor_bay_join_overlap_mm: 0.8
+  negative_x_extension_mm: 30.0
 
 transition:
   length_mm: 9.0
@@ -31,32 +32,43 @@ transition:
   arm_size_z_mm: 50.0
   arm_radius_mm: 5.0
 
+enlarged_middle_opening:
+  enabled: true
+  left_cap_center_x_mm: -44.0
+  right_cap_center_x_mm: -20.0
+  cap_radius_x_mm: 10.0
+  height_z_mm: 20.0
+  center_z_mm: 0.0
+  through_width_overtravel_mm: 1.0
+
 frames:
   frame_st3215_bay_attachment:
-    xyz_mm: [-28.2, 12.0, -1.95]
+    xyz_mm: [-58.2, 12.0, -1.95]
     axis: [1.0, 0.0, 0.0]
   frame_st3215_servo_install:
-    xyz_mm: [-39.3117, 12.0, 7.475]
+    xyz_mm: [-69.3117, 12.0, 7.475]
     rotation_xyz_deg: [90.0, 0.0, 0.0]
     axis: [1.0, 0.0, 0.0]
 
 generated_baseline:
   solid_count: 1
   bounds:
-    min_xyz_mm: [-44.2, -3.645729, -35.6]
-    max_xyz_mm: [77.054028, 27.645729, 31.7]
-    size_xyz_mm: [121.254028, 31.291458, 67.3]
-  volume_mm3: 109097.15784699321
+    min_xyz_mm: [-74.2, -3.614304, -35.6]
+    max_xyz_mm: [77.084989, 27.614304, 31.7]
+    size_xyz_mm: [151.284989, 31.228608, 67.3]
+  volume_mm3: 129269.1207987483
   kernel_tolerance_mm: 0.05
   volume_relative_tolerance: 1.0e-5
 
 known_follow_up:
-  - the shared bay attachment wall is closed and still needs a final cable route
+  - confirm the inferred enlarged middle-opening dimensions after physical test fitting
   - confirm ST3215 versus ST3215-HS and the user-supplied STS3212 name before production
 
 acceptance_tests:
   - geometry is valid
   - model contains one connected solid
   - generated bounds match the migrated source
+  - the existing middle half-circle is enlarged through the full Y width
+  - the enlarged opening remains clear of the motor-bay attachment datum
   - shared motor bay is imported rather than duplicated
   - STEP and STL exports succeed
