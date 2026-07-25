@@ -16,8 +16,7 @@ coordinate_system:
 components:
   - id: st3215_servo_output_fork_facing_down
     source: robot_cad/parts/st3215_servo_output_fork.py
-    configuration: legacy_core_without_negative_x_fusion_extension
-    compatibility_note: the extended 30 mm cap is excluded because it intersects the installed servo in this pose
+    configuration: full_fork_with_negative_x_half_oval_extension
     placement:
       xyz_mm: [0.0, 0.0, 0.0]
       rotation_xyz_deg: [0.0, 90.0, 0.0]
@@ -30,26 +29,45 @@ components:
   - id: st3215_rear_motor_bay_facing_left_rolled_90
     source: robot_cad/parts/st3215_motor_bay.py
     placement:
-      xyz_mm: [-15.7, 0.0, 15.6117]
-      rotation_xyz_deg: [90.0, 0.0, 0.0]
+      final_origin_xyz_mm: [8.0, 0.0, 45.6117]
+      transform_sequence:
+        - rotation_deg: 90.0
+          axis: motor_bay_local_positive_x
+          pivot: centerline_between_two_screw_holes
+        - rotation_deg: 90.0
+          direction: left_counterclockwise_in_top_view
+          axis: global_positive_z
+          pivot: center_of_upward_facing_diamond_surface
+        - rotation_deg: 90.0
+          direction: clockwise_in_top_view
+          axis: vertical_axis_through_motor_bay_middle
+          pivot: motor_bay_center
     local_axis_mapping:
       positive_x: [1.0, 0.0, 0.0]
       positive_y: [0.0, 0.0, 1.0]
       positive_z: [0.0, -1.0, 0.0]
-    intent: bay extends left along global negative X and is rolled 90 degrees
+    intent: preserve both prior rotations, then turn clockwise so the opening faces left
 
 positioning:
   longitudinal_axis_angle_deg: 90.0
   shared_centerline_y_mm: 0.0
-  contact_plane_z_mm: 0.0
+  contact_plane_z_mm: 30.0
   contact:
-    fork: rotated attachment root
+    fork: top tangent of rotated half-oval extension
     motor_bay: rolled lower broad outer wall
-  left_edge_alignment_x_mm: -31.7
+  motor_bay_center_x_mm: 0.0
   motor_bay_roll_axis:
-    point_xyz_mm: [-15.7, 0.0, 15.6117]
+    point_xyz_mm: [8.0, 0.0, 45.6117]
     direction: [1.0, 0.0, 0.0]
     role: centerline between the screw-access holes
+  top_view_left_turn_axis:
+    point_xyz_mm: [0.0, 0.0, 61.2234]
+    direction: [0.0, 0.0, 1.0]
+    role: center of upward-facing diamond surface
+  final_clockwise_turn_axis:
+    point_xyz_mm: [0.0, 0.0, 45.6117]
+    direction: [0.0, 0.0, 1.0]
+    role: vertical centerline through the middle of the motor bay
   installed_st3215_to_fork_collision_volume_mm3: 0.0
   final_transition: intentionally_deferred_until_pose_confirmation
 
@@ -61,9 +79,11 @@ acceptance_tests:
   - fork local positive X maps to global negative Z
   - bay local negative X maps to global negative X
   - fork and bay longitudinal directions are perpendicular
-  - bay receives a positive 90 degree roll about its central X axis
-  - bay lower wall and fork root meet at global Z=0
-  - bay and fork root left edges align at global X=-31.7
+  - bay first rolls positive 90 degrees about its central X axis
+  - bay then turns positive 90 degrees about the diamond-face center in top view
+  - bay finally turns clockwise 90 degrees about its vertical middle axis
+  - bay lower wall and oval tip meet at global Z=30
+  - bay is centered at global X=0 over the oval tip
   - components share the global Y=0 centerline
   - exact installed ST3215 does not collide with the fork
   - assembly remains two labeled solids pending position confirmation

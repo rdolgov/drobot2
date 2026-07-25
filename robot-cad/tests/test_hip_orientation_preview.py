@@ -34,14 +34,15 @@ def test_fork_longitudinal_direction_faces_down() -> None:
     assert direction == pytest.approx((0.0, 0.0, -1.0), abs=1.0e-9)
 
 
-def test_motor_bay_faces_left_and_has_requested_roll() -> None:
+def test_motor_bay_has_all_three_requested_ninety_degree_rotations() -> None:
     location = hip_orientation_preview.motor_bay_facing_left_location()
-    facing_direction = mapped_direction(location, (-1.0, 0.0, 0.0))
-    rolled_local_y = mapped_direction(location, (0.0, 1.0, 0.0))
+    insertion_direction = mapped_direction(location, (-1.0, 0.0, 0.0))
+    diamond_face_direction = mapped_direction(location, (0.0, 1.0, 0.0))
+    cross_direction = mapped_direction(location, (0.0, 0.0, 1.0))
 
-    assert facing_direction == pytest.approx((-1.0, 0.0, 0.0), abs=1.0e-9)
-    assert rolled_local_y == pytest.approx((0.0, 0.0, 1.0), abs=1.0e-9)
-    assert tuple(location.orientation) == pytest.approx((90.0, 0.0, 0.0))
+    assert insertion_direction == pytest.approx((-1.0, 0.0, 0.0), abs=1.0e-9)
+    assert diamond_face_direction == pytest.approx((0.0, 0.0, 1.0), abs=1.0e-9)
+    assert cross_direction == pytest.approx((0.0, -1.0, 0.0), abs=1.0e-9)
 
 
 def test_fork_and_motor_bay_are_perpendicular() -> None:
@@ -49,25 +50,38 @@ def test_fork_and_motor_bay_are_perpendicular() -> None:
         hip_orientation_preview.fork_face_down_location(),
         (1.0, 0.0, 0.0),
     )
-    bay_direction = mapped_direction(
+    bay_insertion_direction = mapped_direction(
         hip_orientation_preview.motor_bay_facing_left_location(),
         (-1.0, 0.0, 0.0),
     )
-    dot_product = sum(a * b for a, b in zip(fork_direction, bay_direction, strict=True))
+    dot_product = sum(
+        a * b
+        for a, b in zip(
+            fork_direction,
+            bay_insertion_direction,
+            strict=True,
+        )
+    )
 
     assert dot_product == pytest.approx(0.0, abs=1.0e-9)
 
 
-def test_bay_is_seated_on_top_and_left_aligned() -> None:
+def test_bay_is_seated_on_top_and_centered_over_the_oval_tip() -> None:
     fork, bay = positioned_components()
     fork_bounds = fork.bounding_box()
     bay_bounds = bay.bounding_box()
 
-    assert fork_bounds.max.Z == pytest.approx(0.0, abs=0.05)
-    assert bay_bounds.min.Z == pytest.approx(0.0, abs=0.05)
-    assert bay_bounds.min.X == pytest.approx(
-        hip_orientation_preview.FORK_ROOT_LEFT_EDGE_WORLD_X_MM,
+    assert fork_bounds.max.Z == pytest.approx(
+        hip_orientation_preview.FORK_OVAL_TOP_WORLD_Z_MM,
         abs=0.05,
+    )
+    assert bay_bounds.min.Z == pytest.approx(
+        hip_orientation_preview.FORK_OVAL_TOP_WORLD_Z_MM,
+        abs=0.05,
+    )
+    assert bay_bounds.center().X == pytest.approx(
+        hip_orientation_preview.FORK_OVAL_CENTER_WORLD_X_MM,
+        abs=1.0e-6,
     )
     assert fork_bounds.center().Y == pytest.approx(0.0, abs=1.0e-6)
     assert bay_bounds.center().Y == pytest.approx(0.0, abs=1.0e-6)

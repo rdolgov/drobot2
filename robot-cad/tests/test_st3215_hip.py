@@ -30,41 +30,59 @@ def generated_hip():
     return st3215_hip.gen_step()
 
 
-def test_approved_orientation_is_preserved() -> None:
+def test_requested_three_stage_motor_bay_rotation_is_applied() -> None:
     fork_direction = mapped_direction(
         st3215_hip.fork_face_down_location(),
         (1.0, 0.0, 0.0),
     )
     bay_location = st3215_hip.motor_bay_fused_location()
-    bay_facing_direction = mapped_direction(bay_location, (-1.0, 0.0, 0.0))
-    bay_rolled_local_y = mapped_direction(bay_location, (0.0, 1.0, 0.0))
+    bay_insertion_direction = mapped_direction(
+        bay_location,
+        (-1.0, 0.0, 0.0),
+    )
+    diamond_face_direction = mapped_direction(bay_location, (0.0, 1.0, 0.0))
+    bay_cross_direction = mapped_direction(bay_location, (0.0, 0.0, 1.0))
 
     assert fork_direction == pytest.approx((0.0, 0.0, -1.0), abs=1.0e-9)
-    assert bay_facing_direction == pytest.approx((-1.0, 0.0, 0.0), abs=1.0e-9)
-    assert bay_rolled_local_y == pytest.approx((0.0, 0.0, 1.0), abs=1.0e-9)
+    assert bay_insertion_direction == pytest.approx(
+        (-1.0, 0.0, 0.0),
+        abs=1.0e-9,
+    )
+    assert diamond_face_direction == pytest.approx(
+        (0.0, 0.0, 1.0),
+        abs=1.0e-9,
+    )
+    assert bay_cross_direction == pytest.approx(
+        (0.0, -1.0, 0.0),
+        abs=1.0e-9,
+    )
     assert sum(
         a * b
-        for a, b in zip(fork_direction, bay_facing_direction, strict=True)
+        for a, b in zip(fork_direction, bay_insertion_direction, strict=True)
     ) == pytest.approx(0.0, abs=1.0e-9)
 
 
-def test_hidden_seating_overlap_and_left_alignment() -> None:
+def test_bay_is_centered_and_seated_into_the_oval_tip() -> None:
     fork, bay = positioned_components()
     fork_bounds = fork.bounding_box()
     bay_bounds = bay.bounding_box()
     overlap = fork & bay
 
-    assert fork_bounds.max.Z == pytest.approx(0.0, abs=0.05)
-    assert bay_bounds.min.Z == pytest.approx(
-        -st3215_hip.HIP_JOIN_OVERLAP_MM,
+    assert fork_bounds.max.Z == pytest.approx(
+        st3215_hip.FORK_OVAL_TOP_WORLD_Z_MM,
         abs=0.05,
     )
-    assert bay_bounds.min.X == pytest.approx(
-        st3215_hip.FORK_ROOT_LEFT_EDGE_WORLD_X_MM,
+    assert bay_bounds.min.Z == pytest.approx(
+        st3215_hip.FORK_OVAL_TOP_WORLD_Z_MM
+        - st3215_hip.HIP_JOIN_OVERLAP_MM,
         abs=0.05,
+    )
+    assert bay_bounds.center().X == pytest.approx(
+        st3215_hip.FORK_OVAL_CENTER_WORLD_X_MM,
+        abs=1.0e-6,
     )
     assert overlap is not None
-    assert float(overlap.volume) > 1.0
+    assert float(overlap.volume) > 700.0
 
 
 def test_printable_hip_is_one_valid_solid() -> None:
@@ -75,7 +93,7 @@ def test_printable_hip_is_one_valid_solid() -> None:
     assert len(hip.solids()) == 1
     assert bounds.size.X == pytest.approx(67.3, abs=0.05)
     assert bounds.size.Y == pytest.approx(44.05, abs=0.05)
-    assert bounds.size.Z == pytest.approx(96.1084, abs=0.05)
+    assert bounds.size.Z == pytest.approx(123.3084, abs=0.05)
 
 
 def test_installed_st3215_still_clears_the_fork() -> None:

@@ -1,19 +1,20 @@
 """Position-check assembly for the perpendicular ST3215 hip link.
 
 This file intentionally stops at an assembly-level orientation review.  The
-fork and motor bay remain separate labeled components until the pose is
-confirmed, so a printable transition cannot accidentally lock in the wrong
-handedness.  This approved pose uses the collision-safe legacy fork core; the
-reusable fork's 30 mm negative-X cap is incompatible with the installed servo
-after the face-down rotation.
+fork and motor bay remain separate labeled components for positioning review.
+The new negative-X half-oval maps upward after the face-down rotation, and the
+motor bay is centered on its top tangent point.
 
 Hip review coordinates:
     - +Z is up, +X is right, and +Y is the shared transverse centerline.
     - The fork local +X direction points down along global -Z.
-    - The motor bay extends left: its local -X direction follows global -X.
-    - The motor bay is rolled +90 degrees about its local X centerline between
-      the screw-access holes.
-    - The rolled bay sits on top of the fork with both left edges aligned.
+    - The motor bay first rolls +90 degrees about its local X centerline
+      between the screw-access holes.
+    - Looking down at the diamond face, the rolled bay then turns +90 degrees
+      left about the face center; local -X consequently follows global -Y.
+    - It finally turns 90 degrees clockwise about its vertical middle axis, so
+      the opening at local -X faces global left (-X).
+    - The rolled bay sits centered on top of the new oval end.
 """
 
 from __future__ import annotations
@@ -28,13 +29,18 @@ from robot_cad.parts import st3215_hip
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 FORK_FACE_DOWN_ROTATION_XYZ_DEG = st3215_hip.FORK_FACE_DOWN_ROTATION_XYZ_DEG
-FORK_ROOT_LEFT_EDGE_WORLD_X_MM = st3215_hip.FORK_ROOT_LEFT_EDGE_WORLD_X_MM
+FORK_OVAL_CENTER_WORLD_X_MM = st3215_hip.FORK_OVAL_CENTER_WORLD_X_MM
+FORK_OVAL_TOP_WORLD_Z_MM = st3215_hip.FORK_OVAL_TOP_WORLD_Z_MM
 MOTOR_BAY_DATUM_WORLD_X_MM = st3215_hip.MOTOR_BAY_DATUM_WORLD_X_MM
 MOTOR_BAY_CENTERLINE_WORLD_Z_MM = (
     st3215_hip.MOTOR_BAY_APPROVED_CENTERLINE_WORLD_Z_MM
 )
-MOTOR_BAY_LEFT_ROLL_ROTATION_XYZ_DEG = (
-    st3215_hip.MOTOR_BAY_LEFT_ROLL_ROTATION_XYZ_DEG
+MOTOR_BAY_FIRST_ROLL_ROTATION_XYZ_DEG = (
+    st3215_hip.MOTOR_BAY_FIRST_ROLL_ROTATION_XYZ_DEG
+)
+MOTOR_BAY_TOP_VIEW_LEFT_TURN_DEG = st3215_hip.MOTOR_BAY_TOP_VIEW_LEFT_TURN_DEG
+MOTOR_BAY_FINAL_TOP_VIEW_CLOCKWISE_TURN_DEG = (
+    st3215_hip.MOTOR_BAY_FINAL_TOP_VIEW_CLOCKWISE_TURN_DEG
 )
 
 
@@ -44,7 +50,7 @@ def fork_face_down_location() -> Location:
 
 
 def motor_bay_facing_left_location() -> Location:
-    """Place the left-aligned, rolled motor bay on top of the fork."""
+    """Place the centered bay with its opening facing global left."""
     return st3215_hip.motor_bay_approved_location()
 
 
@@ -72,7 +78,7 @@ def gen_step():
     )
     assembly.add(
         placed_motor_bay(),
-        "st3215_rear_motor_bay_facing_left_rolled_90",
+        "st3215_rear_motor_bay_opening_facing_left",
     )
     return assembly.build()
 
