@@ -41,7 +41,10 @@ ST3215_SERVO_OUTPUT_FORK_INTERFACES = {
         name="frame_attachment_datum",
         xyz_mm=(0.0, 0.0, 0.0),
         axis=(1.0, 0.0, 0.0),
-        role="marked cut plane in reusable fork-local coordinates",
+        role=(
+            "legacy split and fusion-cap diameter datum in reusable "
+            "fork-local coordinates"
+        ),
     ),
     "frame_st3215_output_axis": InterfaceFrame(
         name="frame_st3215_output_axis",

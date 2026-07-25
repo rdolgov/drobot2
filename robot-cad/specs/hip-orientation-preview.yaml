@@ -16,6 +16,8 @@ coordinate_system:
 components:
   - id: st3215_servo_output_fork_facing_down
     source: robot_cad/parts/st3215_servo_output_fork.py
+    configuration: legacy_core_without_negative_x_fusion_extension
+    compatibility_note: the extended 30 mm cap is excluded because it intersects the installed servo in this pose
     placement:
       xyz_mm: [0.0, 0.0, 0.0]
       rotation_xyz_deg: [0.0, 90.0, 0.0]

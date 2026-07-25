@@ -40,7 +40,7 @@ from build123d import (
     loft,
 )
 
-from robot_cad.parts import st3215_motor_bay, st3215_servo_output_fork
+from robot_cad.parts import st3215_motor_bay
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 REFERENCE_STEP = (
@@ -417,12 +417,11 @@ def _apply_pose(body: Shape) -> Shape:
 
 
 def gen_step() -> Shape:
-    """Return the STEP-ready upper arm ending at the output-fork cut datum."""
+    """Return the complete STEP-ready upper arm with its integral output fork."""
     body = _load_reference_body()
     body = _apply_optional_cut(body)
     body = _add_st3215_rear_motor_bay(body)
     body = _enlarge_middle_half_circle(body)
-    body = st3215_servo_output_fork.retain_arm_side(body)
     return _apply_pose(body)
 
 

@@ -21,16 +21,22 @@ def test_upper_arm_is_one_valid_solid() -> None:
 def test_upper_arm_bounds_match_migrated_geometry() -> None:
     bounds = migrated_upper_arm().bounding_box()
 
-    assert tuple(bounds.min) == pytest.approx((-74.2, -3.614304, -31.7), abs=0.05)
-    assert tuple(bounds.max) == pytest.approx((12.0, 27.614304, 31.7), abs=0.05)
-    assert tuple(bounds.size) == pytest.approx((86.2, 31.228608, 63.4), abs=0.05)
+    assert tuple(bounds.min) == pytest.approx((-74.2, -3.614304, -35.6), abs=0.05)
+    assert tuple(bounds.max) == pytest.approx((77.084989, 27.614304, 31.7), abs=0.05)
+    assert tuple(bounds.size) == pytest.approx((151.284989, 31.228608, 67.3), abs=0.05)
 
 
 def test_upper_arm_volume_matches_migrated_geometry() -> None:
     assert float(migrated_upper_arm().volume) == pytest.approx(
-        80421.56167960436,
+        129142.6023015041,
         rel=1e-5,
     )
+
+
+def test_positive_x_servo_output_fork_is_integral_to_upper_arm() -> None:
+    bounds = migrated_upper_arm().bounding_box()
+
+    assert bounds.max.X > upper_arm.DISTAL_FORK_AXIS_MM[0]
 
 
 def test_middle_half_circle_is_enlarged_without_cutting_motor_bay() -> None:

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from robot_cad.parts import st3215_motor_bay, upper_arm
+from robot_cad.parts import st3215_motor_bay, st3215_servo_output_fork, upper_arm
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -16,6 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
         "mechanical-interfaces.yaml",
         "st3215-hip.yaml",
         "st3215-motor-bay.yaml",
+        "st3215-servo-output-fork.yaml",
         "upper-arm.yaml",
     ],
 )
@@ -58,6 +59,33 @@ def test_motor_bay_yaml_matches_fit_critical_parameters() -> None:
     )
 
 
+def test_servo_output_fork_yaml_matches_root_extension_parameters() -> None:
+    document = yaml.safe_load(
+        (PROJECT_ROOT / "specs" / "st3215-servo-output-fork.yaml").read_text()
+    )
+    extension = document["root_extension"]
+
+    assert extension["center_xyz_mm"] == pytest.approx(
+        [
+            st3215_servo_output_fork.ROOT_EXTENSION_CENTER_X_MM,
+            0.0,
+            st3215_servo_output_fork.ROOT_EXTENSION_CENTER_Z_MM,
+        ]
+    )
+    assert extension["radius_x_mm"] == pytest.approx(
+        st3215_servo_output_fork.ROOT_EXTENSION_RADIUS_X_MM
+    )
+    assert extension["radius_z_mm"] == pytest.approx(
+        st3215_servo_output_fork.ROOT_EXTENSION_RADIUS_Z_MM
+    )
+    assert extension["width_y_mm"] == pytest.approx(
+        st3215_servo_output_fork.ROOT_EXTENSION_WIDTH_Y_MM
+    )
+    assert extension["edge_fillet_mm"] == pytest.approx(
+        st3215_servo_output_fork.ROOT_EXTENSION_EDGE_FILLET_MM
+    )
+
+
 def test_upper_arm_yaml_matches_migrated_feature_parameters() -> None:
     document = yaml.safe_load((PROJECT_ROOT / "specs" / "upper-arm.yaml").read_text())
     features = document["features"]
@@ -79,6 +107,7 @@ def test_upper_arm_yaml_matches_migrated_feature_parameters() -> None:
     assert features["negative_x_extension_mm"] == pytest.approx(
         upper_arm.UPPER_ARM_NEGATIVE_X_EXTENSION_MM
     )
+    assert features["include_positive_x_servo_output_fork"] is True
     assert transition["length_mm"] == pytest.approx(upper_arm.SMOOTH_TRANSITION_LENGTH_MM)
     assert opening["enabled"] is upper_arm.ENLARGE_MIDDLE_HALF_CIRCLE
     assert opening["left_cap_center_x_mm"] == pytest.approx(

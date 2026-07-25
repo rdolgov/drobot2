@@ -1,14 +1,18 @@
-"""Reusable positive-X fork for the ST3215 servo output joint.
+"""Reusable fork for the ST3215 servo output joint.
 
 The fork is extracted from the immutable SO-101 upper-arm reference at the
-front-view markup cut.  Its local origin is the center of that cut plane:
+front-view markup cut, then extended with a smooth half-oval fusion tongue.
+Its local origin remains the center of the legacy split plane:
 
-    - local +X is normal to the cut and points into the fork
+    - local +X is normal to the split datum and points toward the output axis
     - local +Y follows the original upper-arm +Y direction
     - the preserved distal revolute axis is the ST3215 output-joint datum
 
-The source cut is intentionally kept in one shared module so the shortened
-upper arm and this reusable component cannot drift apart.
+The source cut remains available for consumers that need the fork as a
+standalone reusable component.  The main upper-arm generator keeps the
+positive-X fork as integral geometry.  The standalone fork's negative-X
+extension is an intentional overlap envelope for boolean fusion into another
+part; it is not a clearance-fit attachment feature.
 """
 
 from __future__ import annotations
@@ -18,13 +22,18 @@ from pathlib import Path
 from warnings import catch_warnings, simplefilter
 
 from build123d import (
+    Align,
     Axis,
     BuildSketch,
+    Ellipse,
+    GeomType,
     Location,
+    Mode,
     Plane,
     Rectangle,
     Shape,
     extrude,
+    fillet,
     import_step,
 )
 
@@ -45,6 +54,18 @@ CUT_PLANE_X_AT_Z0_MM = 12.0
 CUT_PLANE_CENTER_Y_MM = 12.0
 CUT_PLANE_SLOPE_X_PER_Z = 0.0
 CUT_HALFSPACE_MARGIN_MM = 10.0
+
+# Smooth half-oval requested in the 2026-07-25 front-view markup and enlarged
+# in the follow-up to cover the complete X=0 root edge.  Its nose reaches
+# exactly 30 mm into negative X.  It is extruded through the existing 24 mm
+# fork width and its two exposed elliptical rim edges are rounded.
+ROOT_EXTENSION_CENTER_X_MM = 0.0
+ROOT_EXTENSION_CENTER_Z_MM = 0.0
+ROOT_EXTENSION_RADIUS_X_MM = 30.0
+ROOT_EXTENSION_RADIUS_Z_MM = 31.7
+ROOT_EXTENSION_WIDTH_Y_MM = 24.0
+ROOT_EXTENSION_EDGE_FILLET_MM = 3.0
+ROOT_EXTENSION_PROFILE_MARGIN_MM = 0.1
 
 # Established positive-X fork/output-joint datum from the SO-101 reference.
 DISTAL_OUTPUT_AXIS_GLOBAL_MM = (65.084989, 12.0, 0.0)
@@ -107,6 +128,61 @@ def _one_valid_solid(shape: Shape, label: str) -> Shape:
     result = solids[0]
     result.label = label
     return result
+
+
+def make_root_extension() -> Shape:
+    """Return the rounded half-elliptical negative-X fusion envelope."""
+    radius_x = float(ROOT_EXTENSION_RADIUS_X_MM)
+    radius_z = float(ROOT_EXTENSION_RADIUS_Z_MM)
+    width_y = float(ROOT_EXTENSION_WIDTH_Y_MM)
+    fillet_radius = float(ROOT_EXTENSION_EDGE_FILLET_MM)
+    profile_margin = float(ROOT_EXTENSION_PROFILE_MARGIN_MM)
+    if min(radius_x, radius_z, width_y, fillet_radius, profile_margin) <= 0.0:
+        raise ValueError("Root-extension dimensions must be positive")
+    if fillet_radius >= width_y / 2.0:
+        raise ValueError(
+            "ROOT_EXTENSION_EDGE_FILLET_MM must be less than half the Y width"
+        )
+
+    profile_plane = Plane(
+        origin=(0.0, -width_y / 2.0, 0.0),
+        x_dir=(1.0, 0.0, 0.0),
+        z_dir=(0.0, 1.0, 0.0),
+    )
+    with BuildSketch(profile_plane) as profile:
+        Ellipse(radius_x, radius_z)
+        Rectangle(
+            radius_x + profile_margin,
+            2.0 * (radius_z + profile_margin),
+            align=(Align.MAX, Align.CENTER),
+            mode=Mode.INTERSECT,
+        )
+
+    raw_extension = extrude(profile.sketch, amount=width_y)
+    elliptical_rims = [
+        edge
+        for edge in raw_extension.edges()
+        if edge.geom_type == GeomType.ELLIPSE
+    ]
+    if len(elliptical_rims) != 2:
+        raise RuntimeError(
+            "Root extension must expose exactly two elliptical rim edges; "
+            f"found {len(elliptical_rims)}"
+        )
+    rounded_extension = fillet(elliptical_rims, fillet_radius)
+    positioned_extension = rounded_extension.moved(
+        Location(
+            (
+                float(ROOT_EXTENSION_CENTER_X_MM),
+                0.0,
+                float(ROOT_EXTENSION_CENTER_Z_MM),
+            )
+        )
+    )
+    return _one_valid_solid(
+        positioned_extension,
+        "st3215_servo_output_fork_root_extension",
+    )
 
 
 def retain_arm_side(body: Shape) -> Shape:
@@ -189,11 +265,19 @@ def output_axis_direction_local() -> tuple[float, float, float]:
     )
 
 
-def gen_step() -> Shape:
-    """Return the STEP-ready reusable ST3215 servo-output fork."""
+def gen_core_step() -> Shape:
+    """Return the legacy positive-X fork core without the fusion envelope."""
     fork_global = retain_fork_side(_load_reference_body())
     return _one_valid_solid(
         to_local_shape(fork_global),
+        "st3215_servo_output_fork_core",
+    )
+
+
+def gen_step() -> Shape:
+    """Return the STEP-ready reusable fork with its full-edge fusion envelope."""
+    return _one_valid_solid(
+        gen_core_step().fuse(make_root_extension()),
         "st3215_servo_output_fork",
     )
 

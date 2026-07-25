@@ -1,4 +1,4 @@
-"""Printable ST3215 hip made from the reusable fork and motor bay.
+"""Printable ST3215 hip made from the fork core and motor bay.
 
 The component preserves the user-approved orientation:
     - global +Z is up and global +X is right
@@ -8,9 +8,12 @@ The component preserves the user-approved orientation:
       screw-access holes
     - the bay and fork root left edges align
 
-The approved flush pose is retained as a public placement datum.  The printable
-part lowers the bay by a small, named seating overlap so the two unchanged
-source components form one robust B-rep solid.
+The hip deliberately retains the previously approved positive-X fork core.
+The reusable fork's optional negative-X fusion envelope is excluded here
+because its 30 mm extension maps upward in this pose and intersects the
+installed servo.  The approved flush pose is retained as a public placement
+datum.  The printable part lowers the bay by a small, named seating overlap so
+the two source components form one robust B-rep solid.
 """
 
 from __future__ import annotations
@@ -29,7 +32,7 @@ from robot_cad.parts.st3215_motor_bay import (
 )
 from robot_cad.parts.st3215_motor_bay import gen_step as gen_motor_bay
 from robot_cad.parts.st3215_servo_output_fork import (
-    gen_step as gen_servo_output_fork,
+    gen_core_step as gen_servo_output_fork,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -90,7 +93,7 @@ def motor_bay_fused_location() -> Location:
 
 
 def placed_fork() -> Shape:
-    """Return the unchanged fork in the approved face-down pose."""
+    """Return the collision-safe legacy fork core in the approved pose."""
     return gen_servo_output_fork().moved(fork_face_down_location())
 
 

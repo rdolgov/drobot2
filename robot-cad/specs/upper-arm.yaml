@@ -22,7 +22,7 @@ features:
   motor_bay_center_z_mm: -1.95
   motor_bay_join_overlap_mm: 0.8
   negative_x_extension_mm: 30.0
-  remove_positive_x_servo_output_fork: true
+  include_positive_x_servo_output_fork: true
   servo_output_fork_cut_plane_x_at_z0_mm: 12.0
   servo_output_fork_cut_plane_slope_x_per_z: 0.0
 
@@ -59,10 +59,10 @@ frames:
 generated_baseline:
   solid_count: 1
   bounds:
-    min_xyz_mm: [-74.2, -3.614304, -31.7]
-    max_xyz_mm: [12.0, 27.614304, 31.7]
-    size_xyz_mm: [86.2, 31.228608, 63.4]
-  volume_mm3: 80421.56167960436
+    min_xyz_mm: [-74.2, -3.614304, -35.6]
+    max_xyz_mm: [77.084989, 27.614304, 31.7]
+    size_xyz_mm: [151.284989, 31.228608, 67.3]
+  volume_mm3: 129142.6023015041
   kernel_tolerance_mm: 0.05
   volume_relative_tolerance: 1.0e-5
 
@@ -77,5 +77,5 @@ acceptance_tests:
   - the existing middle half-circle is enlarged through the full Y width
   - the enlarged opening remains clear of the motor-bay attachment datum
   - shared motor bay is imported rather than duplicated
-  - positive-X output fork is removed at the shared marked cut datum
+  - positive-X output fork is retained as integral upper-arm geometry
   - STEP and STL exports succeed

@@ -14,14 +14,6 @@ components:
     source: robot_cad/parts/upper_arm.py
     relationship: connected to upper_arm_link_1 at st3215_elbow_joint
     status: migrated
-  - id: st3215_servo_output_fork_1
-    source: robot_cad/parts/st3215_servo_output_fork.py
-    relationship: placed at upper_arm_link_1 frame_servo_output_fork_attachment
-    status: reusable_printable_component
-  - id: st3215_servo_output_fork_2
-    source: robot_cad/parts/st3215_servo_output_fork.py
-    relationship: placed at upper_arm_link_2 frame_servo_output_fork_attachment
-    status: reusable_printable_component
   - id: st3215_base_servo
     source: vendor/servos/waveshare_feetech_st3215_servo.step
     relationship: installed in upper_arm_link_1 rear motor bay
@@ -61,7 +53,7 @@ acceptance_tests:
   - fit previews preserve labeled bay/arm and catalog-servo occurrences
   - elbow servo output axis coincides with the root arm distal fork axis
   - final assembly preserves two labeled upper arms and two exact ST3215 servos
-  - final assembly preserves two reusable labeled servo-output forks
+  - each upper-arm occurrence retains its integral servo-output fork
   - vendor STEP checksums match vendor/README.md
   - generated bounds match the migrated geometry baselines
   - the exact servo variant is confirmed before production fabrication

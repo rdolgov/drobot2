@@ -3,7 +3,9 @@
 This file intentionally stops at an assembly-level orientation review.  The
 fork and motor bay remain separate labeled components until the pose is
 confirmed, so a printable transition cannot accidentally lock in the wrong
-handedness.
+handedness.  This approved pose uses the collision-safe legacy fork core; the
+reusable fork's 30 mm negative-X cap is incompatible with the installed servo
+after the face-down rotation.
 
 Hip review coordinates:
     - +Z is up, +X is right, and +Y is the shared transverse centerline.

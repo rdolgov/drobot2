@@ -15,8 +15,10 @@ coordinate_system:
 
 source_components:
   fork: robot_cad/parts/st3215_servo_output_fork.py
+  fork_configuration: legacy_core_without_negative_x_fusion_extension
   motor_bay: robot_cad/parts/st3215_motor_bay.py
-  geometry_policy: reuse unchanged source solids
+  geometry_policy: reuse the approved fork core and unchanged motor-bay solid
+  compatibility_note: the extended 30 mm fork cap intersects the installed servo in this pose
 
 placement:
   fork:

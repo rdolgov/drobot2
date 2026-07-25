@@ -1,4 +1,4 @@
-"""Two upper arms connected by an exact ST3215 servo at the elbow fork."""
+"""Two complete upper arms connected by an exact ST3215 servo at the elbow."""
 
 from __future__ import annotations
 
@@ -9,12 +9,6 @@ from build123d import Location, import_step
 
 from robot_cad.interfaces import UPPER_ARM_INTERFACES, InterfaceFrame
 from robot_cad.parts.st3215_motor_bay import ST3215_SERVO_STEP
-from robot_cad.parts.st3215_servo_output_fork import (
-    gen_step as gen_servo_output_fork,
-)
-from robot_cad.parts.st3215_servo_output_fork import (
-    placement_in_upper_arm_coordinates,
-)
 from robot_cad.parts.upper_arm import gen_step as gen_upper_arm
 from robot_cad.parts.upper_arm import st3215_preview_location
 
@@ -39,8 +33,6 @@ class RevoluteConnection:
 class RobotArmAssemblySpec:
     root_component: str = "upper_arm_link_1"
     child_component: str = "upper_arm_link_2"
-    root_fork_component: str = "st3215_servo_output_fork_1"
-    child_fork_component: str = "st3215_servo_output_fork_2"
     base_servo_component: str = "st3215_base_servo"
     elbow_servo_component: str = "st3215_elbow_servo"
     preview_angle_deg: float = ELBOW_PREVIEW_ANGLE_DEG
@@ -83,14 +75,10 @@ def gen_step():
 
     root_arm = gen_upper_arm()
     child_pose = child_arm_location()
-    root_fork = gen_servo_output_fork().moved(
-        placement_in_upper_arm_coordinates()
-    )
     catalog_servo = import_step(ST3215_SERVO_STEP)
 
     asm = AssemblyHelper("dual_upper_arm_st3215_final_assembly")
     asm.add(root_arm, FINAL_ASSEMBLY_SPEC.root_component)
-    asm.add(root_fork, FINAL_ASSEMBLY_SPEC.root_fork_component)
     asm.add(
         catalog_servo.moved(st3215_preview_location()),
         FINAL_ASSEMBLY_SPEC.base_servo_component,
@@ -98,10 +86,6 @@ def gen_step():
     asm.add(
         root_arm.moved(child_pose),
         FINAL_ASSEMBLY_SPEC.child_component,
-    )
-    asm.add(
-        root_fork.moved(child_pose),
-        FINAL_ASSEMBLY_SPEC.child_fork_component,
     )
     asm.add(
         catalog_servo.moved(elbow_servo_location()),
