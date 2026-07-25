@@ -52,19 +52,13 @@ def test_motor_bay_has_eight_diamond_vents_on_each_side_wall() -> None:
         and abs(face.normal_at().Y) > 0.99
         and abs(abs(face.center().Y) - outer_y / 2.0) < 1.0e-4
     ]
-    vent_count = (
-        len(st3215_motor_bay.VENT_DIAMOND_COLUMNS_X_MM)
-        * len(st3215_motor_bay.VENT_DIAMOND_ROWS_Z_MM)
+    vent_count = len(st3215_motor_bay.VENT_DIAMOND_COLUMNS_X_MM) * len(
+        st3215_motor_bay.VENT_DIAMOND_ROWS_Z_MM
     )
     vent_area = (
-        st3215_motor_bay.VENT_DIAMOND_WIDTH_X_MM
-        * st3215_motor_bay.VENT_DIAMOND_HEIGHT_Z_MM
-        / 2.0
+        st3215_motor_bay.VENT_DIAMOND_WIDTH_X_MM * st3215_motor_bay.VENT_DIAMOND_HEIGHT_Z_MM / 2.0
     )
-    expected_side_area = (
-        st3215_motor_bay.SOCKET_LENGTH_X_MM * outer_z
-        - vent_count * vent_area
-    )
+    expected_side_area = st3215_motor_bay.SOCKET_LENGTH_X_MM * outer_z - vent_count * vent_area
 
     assert len(side_faces) == 2
     for face in side_faces:

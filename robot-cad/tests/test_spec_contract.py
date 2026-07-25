@@ -25,9 +25,7 @@ def test_yaml_specs_are_valid_versioned_documents(filename: str) -> None:
 
 
 def test_motor_bay_yaml_matches_fit_critical_parameters() -> None:
-    document = yaml.safe_load(
-        (PROJECT_ROOT / "specs" / "st3215-motor-bay.yaml").read_text()
-    )
+    document = yaml.safe_load((PROJECT_ROOT / "specs" / "st3215-motor-bay.yaml").read_text())
     socket = document["socket"]
     ventilation = document["ventilation"]
 
@@ -38,20 +36,12 @@ def test_motor_bay_yaml_matches_fit_critical_parameters() -> None:
         st3215_motor_bay.SOCKET_CLEARANCE_Z_TOTAL_MM
     )
     assert socket["wall_mm"] == pytest.approx(st3215_motor_bay.SOCKET_WALL_MM)
-    assert socket["length_x_mm"] == pytest.approx(
-        st3215_motor_bay.SOCKET_LENGTH_X_MM
-    )
-    assert socket["stop_thickness_mm"] == pytest.approx(
-        st3215_motor_bay.SOCKET_STOP_THICKNESS_MM
-    )
+    assert socket["length_x_mm"] == pytest.approx(st3215_motor_bay.SOCKET_LENGTH_X_MM)
+    assert socket["stop_thickness_mm"] == pytest.approx(st3215_motor_bay.SOCKET_STOP_THICKNESS_MM)
     assert ventilation["side_walls"] == "both"
     assert ventilation["pattern"] == "diamond"
-    assert ventilation["columns_x_mm"] == pytest.approx(
-        st3215_motor_bay.VENT_DIAMOND_COLUMNS_X_MM
-    )
-    assert ventilation["rows_z_mm"] == pytest.approx(
-        st3215_motor_bay.VENT_DIAMOND_ROWS_Z_MM
-    )
+    assert ventilation["columns_x_mm"] == pytest.approx(st3215_motor_bay.VENT_DIAMOND_COLUMNS_X_MM)
+    assert ventilation["rows_z_mm"] == pytest.approx(st3215_motor_bay.VENT_DIAMOND_ROWS_Z_MM)
     assert ventilation["diamond_width_x_mm"] == pytest.approx(
         st3215_motor_bay.VENT_DIAMOND_WIDTH_X_MM
     )
@@ -80,6 +70,4 @@ def test_upper_arm_yaml_matches_migrated_feature_parameters() -> None:
     assert features["motor_bay_join_overlap_mm"] == pytest.approx(
         upper_arm.ST3215_MOTOR_BAY_JOIN_OVERLAP_MM
     )
-    assert transition["length_mm"] == pytest.approx(
-        upper_arm.SMOOTH_TRANSITION_LENGTH_MM
-    )
+    assert transition["length_mm"] == pytest.approx(upper_arm.SMOOTH_TRANSITION_LENGTH_MM)

@@ -136,12 +136,7 @@ def _servo_mount_access_cutters(
 
     if min(spacing_y, clearance_diameter) <= 0.0:
         raise ValueError("Mount-hole dimensions must be positive")
-    if not (
-        outer_bottom_z
-        < bottom_access_reach_z
-        < top_access_reach_z
-        < outer_top_z
-    ):
+    if not (outer_bottom_z < bottom_access_reach_z < top_access_reach_z < outer_top_z):
         raise ValueError("Mount-hole reach limits must lie inside the bay")
 
     cutters = []
@@ -151,9 +146,7 @@ def _servo_mount_access_cutters(
                 clearance_diameter / 2.0,
                 outer_top_z + overtravel - top_access_reach_z,
                 align=(Align.CENTER, Align.CENTER, Align.MIN),
-            ).moved(
-                Location((SERVO_TOP_MOUNT_HOLE_X_MM, y, top_access_reach_z))
-            )
+            ).moved(Location((SERVO_TOP_MOUNT_HOLE_X_MM, y, top_access_reach_z)))
         )
         cutters.append(
             Cylinder(
@@ -189,13 +182,16 @@ def _servo_mount_local_access_cleanup(
     bottom_cleanup_depth = bottom_access_reach_z - bottom_mount_face_z
     cavity_span_x = cavity_max_x - cavity_min_x
 
-    if min(
-        inner_y,
-        top_cleanup_depth,
-        bottom_cleanup_depth,
-        cleanup_size,
-        cavity_span_x,
-    ) <= 0.0:
+    if (
+        min(
+            inner_y,
+            top_cleanup_depth,
+            bottom_cleanup_depth,
+            cleanup_size,
+            cavity_span_x,
+        )
+        <= 0.0
+    ):
         raise ValueError("Local cleanup dimensions must be positive")
 
     top_clip = Box(
@@ -274,10 +270,7 @@ def _servo_top_profile_protrusion_cleanup(
     center_y = float(SERVO_TOP_PROFILE_PROTRUSION_CENTER_Y_MM)
     size_y = float(SERVO_TOP_PROFILE_PROTRUSION_SIZE_Y_MM)
     reach_z = float(SERVO_TOP_ACCESS_REACH_Z_MM)
-    floor_z = (
-        float(SERVO_TOP_MOUNT_FACE_Z_MM)
-        - float(SERVO_MOUNT_INNER_PILOT_DEPTH_MM)
-    )
+    floor_z = float(SERVO_TOP_MOUNT_FACE_Z_MM) - float(SERVO_MOUNT_INNER_PILOT_DEPTH_MM)
     min_x = max(requested_min_x, cavity_min_x)
     max_x = min(requested_max_x, cavity_max_x)
     span_x = max_x - min_x
@@ -339,9 +332,7 @@ def _add_servo_mount_step_sleeves(
             clearance_radius + radial_overlap,
             outer_top_z - top_mount_face_z,
             align=(Align.CENTER, Align.CENTER, Align.MIN),
-        ).moved(
-            Location((SERVO_TOP_MOUNT_HOLE_X_MM, y, top_mount_face_z))
-        )
+        ).moved(Location((SERVO_TOP_MOUNT_HOLE_X_MM, y, top_mount_face_z)))
         top_access_inner = Cylinder(
             access_radius,
             outer_top_z + 2.0 * overtravel - top_mount_face_z,
@@ -382,9 +373,7 @@ def _add_servo_mount_step_sleeves(
             )
         )
         sleeves.append(
-            (top_access_outer - top_access_inner).fuse(
-                top_pilot_outer - top_pilot_inner
-            )
+            (top_access_outer - top_access_inner).fuse(top_pilot_outer - top_pilot_inner)
         )
 
         bottom_access_outer = Cylinder(
@@ -470,9 +459,7 @@ def _extend_top_mount_contact_faces_to_floor(bay: Shape) -> Shape:
         and abs(face.center().Y) > 7.0
     ]
     if len(contact_faces) != 2:
-        raise RuntimeError(
-            "Could not resolve both top contact profiles for floor extension"
-        )
+        raise RuntimeError("Could not resolve both top contact profiles for floor extension")
 
     for face in contact_faces:
         extension = extrude(face, amount=extension_depth)
@@ -510,9 +497,7 @@ def _extend_rear_contact_face_to_lower_floor(bay: Shape) -> Shape:
         and face.bounding_box().size.Y > 20.0
     ]
     if len(rear_faces) != 1 or len(target_floors) != 1:
-        raise RuntimeError(
-            "Could not resolve the rear contact face and lower fitting floor"
-        )
+        raise RuntimeError("Could not resolve the rear contact face and lower fitting floor")
 
     rear_face = rear_faces[0]
     target_floor_z = target_floors[0].center().Z
@@ -523,9 +508,7 @@ def _extend_rear_contact_face_to_lower_floor(bay: Shape) -> Shape:
         raise RuntimeError("Rear contact face cannot be extended from a vertical plane")
 
     def plane_x_at(z: float) -> float:
-        return rear_center.X - (rear_normal.Z / rear_normal.X) * (
-            z - rear_center.Z
-        )
+        return rear_center.X - (rear_normal.Z / rear_normal.X) * (z - rear_center.Z)
 
     top_z = rear_bbox.min.Z
     top_x = plane_x_at(top_z)
@@ -539,9 +522,7 @@ def _extend_rear_contact_face_to_lower_floor(bay: Shape) -> Shape:
         ],
         close=True,
     )
-    profile_face = Face(profile_wire).moved(
-        Location((0.0, rear_bbox.min.Y, 0.0), (90.0, 0.0, 0.0))
-    )
+    profile_face = Face(profile_wire).moved(Location((0.0, rear_bbox.min.Y, 0.0), (90.0, 0.0, 0.0)))
     extension = extrude(profile_face, amount=rear_bbox.size.Y)
     return _largest_connected_solid(
         bay.fuse(extension),
@@ -580,12 +561,9 @@ def _extend_upper_side_pockets_to_main_wall(
         and face.normal_at().X < -0.99
         and abs(face.center().X - pocket_face_x) <= coordinate_tolerance
         and abs(abs(face.center().Y) - pocket_center_y) <= coordinate_tolerance
-        and abs(face.bounding_box().size.Y - pocket_size_y)
-        <= coordinate_tolerance
-        and abs(face.bounding_box().min.Z - pocket_min_z)
-        <= coordinate_tolerance
-        and abs(face.bounding_box().max.Z - pocket_max_z)
-        <= coordinate_tolerance
+        and abs(face.bounding_box().size.Y - pocket_size_y) <= coordinate_tolerance
+        and abs(face.bounding_box().min.Z - pocket_min_z) <= coordinate_tolerance
+        and abs(face.bounding_box().max.Z - pocket_max_z) <= coordinate_tolerance
     ]
     upper_side_wall_faces = [
         face
@@ -594,8 +572,7 @@ def _extend_upper_side_pockets_to_main_wall(
         and abs(face.normal_at().Y) > 0.99
         and abs(abs(face.center().Y) - side_wall_y) <= coordinate_tolerance
         and abs(face.bounding_box().min.Z - 14.0) <= coordinate_tolerance
-        and abs(face.bounding_box().max.Z - pocket_max_z)
-        <= coordinate_tolerance
+        and abs(face.bounding_box().max.Z - pocket_max_z) <= coordinate_tolerance
         and face.bounding_box().size.X > 1.5
     ]
     upper_recess_faces = [
@@ -603,8 +580,7 @@ def _extend_upper_side_pockets_to_main_wall(
         for face in bay.faces()
         if face.geom_type == GeomType.CYLINDER
         and abs(face.bounding_box().min.Z - 14.0) <= coordinate_tolerance
-        and abs(face.bounding_box().max.Z - pocket_max_z)
-        <= coordinate_tolerance
+        and abs(face.bounding_box().max.Z - pocket_max_z) <= coordinate_tolerance
         and abs(abs(face.center().Y) - 12.95) <= coordinate_tolerance
     ]
     upper_protrusion_faces = [
@@ -613,10 +589,8 @@ def _extend_upper_side_pockets_to_main_wall(
         if face.geom_type == GeomType.PLANE
         and abs(face.normal_at().Y) > 0.99
         and abs(abs(face.center().Y) - 12.5) <= coordinate_tolerance
-        and abs(face.bounding_box().min.Z - pocket_min_z)
-        <= coordinate_tolerance
-        and abs(face.bounding_box().max.Z - pocket_max_z)
-        <= coordinate_tolerance
+        and abs(face.bounding_box().min.Z - pocket_min_z) <= coordinate_tolerance
+        and abs(face.bounding_box().max.Z - pocket_max_z) <= coordinate_tolerance
         and face.bounding_box().size.X > 2.0
     ]
     if (
@@ -626,9 +600,7 @@ def _extend_upper_side_pockets_to_main_wall(
         or len(upper_recess_faces) != 2
         or len(upper_protrusion_faces) != 2
     ):
-        raise RuntimeError(
-            "Could not resolve both upper recesses and their neighboring walls"
-        )
+        raise RuntimeError("Could not resolve both upper recesses and their neighboring walls")
 
     main_wall = main_wall_faces[0]
     wall_center = main_wall.center()
@@ -637,9 +609,7 @@ def _extend_upper_side_pockets_to_main_wall(
         raise RuntimeError("Main wall cannot define an X position from height")
 
     def wall_x_at(z: float) -> float:
-        return wall_center.X - (wall_normal.Z / wall_normal.X) * (
-            z - wall_center.Z
-        )
+        return wall_center.X - (wall_normal.Z / wall_normal.X) * (z - wall_center.Z)
 
     for pocket_face in pocket_faces:
         pocket_bbox = pocket_face.bounding_box()
@@ -671,9 +641,7 @@ def _extend_upper_side_pockets_to_main_wall(
             "ST3215 upper side-pocket extension",
         )
 
-    recess_min_x = min(
-        face.bounding_box().min.X for face in upper_side_wall_faces
-    )
+    recess_min_x = min(face.bounding_box().min.X for face in upper_side_wall_faces)
     recess_outer_y = max(
         max(abs(face.bounding_box().min.Y), abs(face.bounding_box().max.Y))
         for face in upper_recess_faces
@@ -751,9 +719,7 @@ def _extend_bottom_mount_contact_faces_to_floor(bay: Shape) -> Shape:
         and abs(face.center().Y) > 7.0
     ]
     if len(contact_faces) != 2:
-        raise RuntimeError(
-            "Could not resolve both lower contact profiles for floor extension"
-        )
+        raise RuntimeError("Could not resolve both lower contact profiles for floor extension")
     if extension_height <= 0.0:
         raise ValueError("Lower contact-profile extension height must be positive")
 
@@ -772,10 +738,7 @@ def _replace_lower_side_recesses_with_wall_continuations(
 ) -> Shape:
     """Continue the lower rear, side, and rounded walls through both recesses."""
     top_z = float(SERVO_BOTTOM_ACCESS_REACH_Z_MM)
-    bottom_z = (
-        float(SERVO_BOTTOM_MOUNT_FACE_Z_MM)
-        + float(SERVO_MOUNT_INNER_PILOT_DEPTH_MM)
-    )
+    bottom_z = float(SERVO_BOTTOM_MOUNT_FACE_Z_MM) + float(SERVO_MOUNT_INNER_PILOT_DEPTH_MM)
     min_x = float(SERVO_LOWER_SIDE_RECESS_MIN_X_MM)
     inner_y = float(SERVO_LOWER_SIDE_RECESS_INNER_Y_MM)
     outer_side_y = outer_y / 2.0
@@ -787,10 +750,8 @@ def _replace_lower_side_recesses_with_wall_continuations(
         if face.geom_type == GeomType.PLANE
         and face.normal_at().X < -0.99
         and face.normal_at().Z > 0.01
-        and abs(face.bounding_box().min.Z + 14.675146)
-        <= coordinate_tolerance
-        and abs(face.bounding_box().max.Z + 4.675)
-        <= coordinate_tolerance
+        and abs(face.bounding_box().min.Z + 14.675146) <= coordinate_tolerance
+        and abs(face.bounding_box().max.Z + 4.675) <= coordinate_tolerance
         and face.bounding_box().size.Y > 20.0
     ]
     side_wall_faces = [
@@ -799,10 +760,8 @@ def _replace_lower_side_recesses_with_wall_continuations(
         if face.geom_type == GeomType.PLANE
         and abs(face.normal_at().Y) > 0.99
         and face.normal_at().Z > 0.01
-        and abs(face.bounding_box().min.Z + 14.675146)
-        <= coordinate_tolerance
-        and abs(face.bounding_box().max.Z + 4.675)
-        <= coordinate_tolerance
+        and abs(face.bounding_box().min.Z + 14.675146) <= coordinate_tolerance
+        and abs(face.bounding_box().max.Z + 4.675) <= coordinate_tolerance
         and face.bounding_box().size.X > 12.0
     ]
     corner_faces = [
@@ -810,19 +769,12 @@ def _replace_lower_side_recesses_with_wall_continuations(
         for face in bay.faces()
         if face.geom_type == GeomType.CYLINDER
         and abs(face.bounding_box().min.Z - top_z) <= coordinate_tolerance
-        and abs(face.bounding_box().max.Z + 4.675)
-        <= coordinate_tolerance
+        and abs(face.bounding_box().max.Z + 4.675) <= coordinate_tolerance
         and abs(face.center().Y) > 10.0
         and abs(float(face.radius) - 2.0) <= coordinate_tolerance
     ]
-    if (
-        len(main_wall_faces) != 1
-        or len(side_wall_faces) != 2
-        or len(corner_faces) != 2
-    ):
-        raise RuntimeError(
-            "Could not resolve the lower neighboring rear, side, and corner walls"
-        )
+    if len(main_wall_faces) != 1 or len(side_wall_faces) != 2 or len(corner_faces) != 2:
+        raise RuntimeError("Could not resolve the lower neighboring rear, side, and corner walls")
 
     main_wall = main_wall_faces[0]
     positive_side_wall = max(side_wall_faces, key=lambda face: face.center().Y)
@@ -935,15 +887,11 @@ def _side_wall_diamond_vent_cutters(
     outer_max_x = float(ATTACHMENT_DATUM_X_MM)
     outer_half_z = outer_z / 2.0
     for center_x in columns_x:
-        if not (
-            outer_min_x < center_x - half_width_x
-            and center_x + half_width_x < outer_max_x
-        ):
+        if not (outer_min_x < center_x - half_width_x and center_x + half_width_x < outer_max_x):
             raise ValueError("Diamond ventilation must stay inside the X walls")
     for center_z in rows_z:
         if not (
-            -outer_half_z < center_z - half_height_z
-            and center_z + half_height_z < outer_half_z
+            -outer_half_z < center_z - half_height_z and center_z + half_height_z < outer_half_z
         ):
             raise ValueError("Diamond ventilation must stay inside the Z walls")
 
@@ -967,9 +915,7 @@ def _side_wall_diamond_vent_cutters(
                 )
             )
             for start_y in side_start_y:
-                cutter_face = profile.moved(
-                    Location((0.0, start_y, 0.0), (90.0, 0.0, 0.0))
-                )
+                cutter_face = profile.moved(Location((0.0, start_y, 0.0), (90.0, 0.0, 0.0)))
                 cutters.append(
                     extrude(
                         cutter_face,
@@ -1018,17 +964,13 @@ def gen_step() -> Shape:
         align=(Align.CENTER, Align.CENTER, Align.CENTER),
     ).moved(Location(((cavity_min_x + cavity_max_x) / 2.0, 0.0, 0.0)))
 
-    installed_servo = import_step(ST3215_SERVO_STEP).moved(
-        st3215_installed_location()
-    )
+    installed_servo = import_step(ST3215_SERVO_STEP).moved(st3215_installed_location())
     rear_pieces = []
     for servo_solid in installed_servo.solids():
         trimmed = servo_solid & cavity_trim
         if trimmed is None:
             continue
-        rear_pieces.extend(
-            solid for solid in trimmed.solids() if float(solid.volume) > 1.0e-6
-        )
+        rear_pieces.extend(solid for solid in trimmed.solids() if float(solid.volume) > 1.0e-6)
     if not rear_pieces:
         raise RuntimeError("The ST3215 model did not intersect the bay capture zone")
 
@@ -1115,6 +1057,7 @@ def gen_step() -> Shape:
         raise RuntimeError("The ST3215 motor bay is not one valid solid")
     bay.label = "st3215_rear_motor_bay"
     return bay
+
 
 if __name__ == "__main__":
     from build123d import export_step

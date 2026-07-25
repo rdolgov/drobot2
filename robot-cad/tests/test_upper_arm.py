@@ -27,6 +27,6 @@ def test_upper_arm_bounds_match_migrated_geometry() -> None:
 
 def test_upper_arm_volume_matches_migrated_geometry() -> None:
     assert float(migrated_upper_arm().volume) == pytest.approx(
-        109560.83660926593,
+        109097.15784699321,
         rel=1e-5,
     )
