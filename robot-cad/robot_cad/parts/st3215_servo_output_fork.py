@@ -37,12 +37,13 @@ REFERENCE_STEP = (
     / "Upper_arm_SO101.step"
 )
 
-# The red front-view markup maps to a slightly sloped XZ cut.  The selected
-# plane stays within the rendered line width while retaining a connected root
-# ligament between the two fork prongs.
-CUT_PLANE_X_AT_Z0_MM = 14.7
+# The updated front-view markup requests a true vertical root face.  A constant
+# X=12 mm YZ split also moves the datum 2.7 mm into the arm-side material,
+# leaving at least the project's 3 mm structural-wall baseline at the narrow
+# centerline ligament between the two fork prongs.
+CUT_PLANE_X_AT_Z0_MM = 12.0
 CUT_PLANE_CENTER_Y_MM = 12.0
-CUT_PLANE_SLOPE_X_PER_Z = -0.09
+CUT_PLANE_SLOPE_X_PER_Z = 0.0
 CUT_HALFSPACE_MARGIN_MM = 10.0
 
 # Established positive-X fork/output-joint datum from the SO-101 reference.

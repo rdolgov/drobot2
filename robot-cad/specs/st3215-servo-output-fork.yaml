@@ -5,14 +5,15 @@ reference: vendor/references/so101/Upper_arm_SO101.step
 units: mm
 
 coordinate_system:
-  origin: marked cut-plane center
-  positive_x: cut-plane normal pointing into the fork
+  origin: perpendicular cut-plane center
+  positive_x: global positive X, normal to the YZ attachment face
   positive_y: original upper-arm positive Y
 
 marked_cut:
-  plane_x_at_z0_mm: 14.7
+  plane_x_at_z0_mm: 12.0
   plane_center_y_mm: 12.0
-  slope_x_per_z: -0.09
+  slope_x_per_z: 0.0
+  minimum_centerline_root_ligament_mm: 3.0
   source_view: front XZ, looking along positive Y
 
 frames:
@@ -20,16 +21,16 @@ frames:
     xyz_mm: [0.0, 0.0, 0.0]
     axis: [1.0, 0.0, 0.0]
   frame_st3215_output_axis:
-    xyz_mm: [50.182161, 0.0, -4.516395]
-    axis: [0.08963769949589058, 0.0, 0.9959744388432287]
+    xyz_mm: [53.084989, 0.0, 0.0]
+    axis: [0.0, 0.0, 1.0]
 
 generated_baseline:
   solid_count: 1
   bounds:
-    min_xyz_mm: [0.0, -12.0, -38.479892]
-    max_xyz_mm: [64.547309, 12.0, 31.828126]
-    size_xyz_mm: [64.547309, 24.0, 70.308018]
-  volume_mm3: 44746.41749445051
+    min_xyz_mm: [0.0, -12.0, -35.6]
+    max_xyz_mm: [65.084989, 12.0, 31.7]
+    size_xyz_mm: [65.084989, 24.0, 67.3]
+  volume_mm3: 48717.65301998467
   kernel_tolerance_mm: 0.05
   volume_relative_tolerance: 1.0e-5
 
@@ -37,5 +38,7 @@ acceptance_tests:
   - geometry is valid
   - model contains one connected solid
   - local cut attachment datum is at the origin
+  - attachment face is a YZ plane perpendicular to global X
+  - centerline root ligament extends at least 3.0 mm from the attachment plane
   - preserved distal fork axis matches the ST3215 output-joint datum
   - placing the fork at the upper-arm cut reconstructs the pre-split silhouette
