@@ -1,0 +1,52 @@
+schema_version: 1
+part_id: st3215_hip
+units:
+  length: mm
+  angle: deg
+
+status: approved_printable_part
+printable: true
+
+coordinate_system:
+  origin: fork attachment-datum center
+  positive_x: right
+  positive_y: shared transverse centerline
+  positive_z: up
+
+source_components:
+  fork: robot_cad/parts/st3215_servo_output_fork.py
+  motor_bay: robot_cad/parts/st3215_motor_bay.py
+  geometry_policy: reuse unchanged source solids
+
+placement:
+  fork:
+    xyz_mm: [0.0, 0.0, 0.0]
+    rotation_xyz_deg: [0.0, 90.0, 0.0]
+    intent: local positive X points down along global negative Z
+  motor_bay:
+    approved_xyz_mm: [-15.7, 0.0, 15.6117]
+    printable_xyz_mm: [-15.7, 0.0, 15.4117]
+    rotation_xyz_deg: [90.0, 0.0, 0.0]
+    intent: faces left and rolls 90 degrees around the screw-hole centerline
+
+join:
+  method: boolean_union
+  seating_overlap_mm: 0.2
+  contact_plane_z_mm: 0.0
+  left_edge_alignment_x_mm: -31.7
+  shared_centerline_y_mm: 0.0
+
+output:
+  source: robot_cad/parts/st3215_hip.py
+  step: exports/step/st3215_hip.step
+  stl: exports/stl/st3215_hip.stl
+
+acceptance_tests:
+  - fused result is one valid connected solid
+  - fork local positive X maps to global negative Z
+  - bay local negative X maps to global negative X
+  - bay local positive Y maps to global positive Z
+  - fork and bay longitudinal directions are perpendicular
+  - bay and fork root left edges align at global X=-31.7
+  - source parts overlap by the 0.2 mm seating depth
+  - exact installed ST3215 does not collide with the fork

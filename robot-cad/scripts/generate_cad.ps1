@@ -37,6 +37,8 @@ $targets = @(
     "robot_cad/parts/st3215_motor_bay.py=exports/step/st3215_motor_bay.step",
     "robot_cad/parts/upper_arm.py=exports/step/upper_arm.step",
     "robot_cad/parts/st3215_servo_output_fork.py=exports/step/st3215_servo_output_fork.step",
+    "robot_cad/parts/st3215_hip.py=exports/step/st3215_hip.step",
+    "robot_cad/assembly/hip_orientation_preview.py=exports/step/hip_orientation_preview.step",
     "robot_cad/assembly/st3215_motor_bay_fit_preview.py=exports/step/st3215_motor_bay_fit_preview.step",
     "robot_cad/assembly/upper_arm_st3215_fit_preview.py=exports/step/upper_arm_st3215_fit_preview.step",
     "robot_cad/assembly/robot_arm.py=exports/step/robot_arm.step"
@@ -58,6 +60,13 @@ try {
         --stl "exports/stl/st3215_motor_bay.stl"
     if ($LASTEXITCODE -ne 0) {
         throw "ST3215 motor-bay STL export failed with exit code $LASTEXITCODE."
+    }
+
+    & $python $stepTool `
+        "robot_cad/parts/st3215_hip.py=exports/step/st3215_hip.step" `
+        --stl "../stl/st3215_hip.stl"
+    if ($LASTEXITCODE -ne 0) {
+        throw "ST3215 hip STL export failed with exit code $LASTEXITCODE."
     }
 
     & $python $stepTool `

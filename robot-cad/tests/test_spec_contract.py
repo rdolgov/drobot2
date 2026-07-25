@@ -12,7 +12,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
     "filename",
     [
         "assembly.yaml",
+        "hip-orientation-preview.yaml",
         "mechanical-interfaces.yaml",
+        "st3215-hip.yaml",
         "st3215-motor-bay.yaml",
         "upper-arm.yaml",
     ],

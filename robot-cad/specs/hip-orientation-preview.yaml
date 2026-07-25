@@ -1,0 +1,67 @@
+schema_version: 1
+assembly_id: hip_orientation_preview
+units:
+  length: mm
+  angle: deg
+
+status: position_confirmation_required_before_final_part
+printable: false
+
+coordinate_system:
+  origin: fork attachment-datum center
+  positive_x: right
+  positive_y: shared transverse centerline
+  positive_z: up
+
+components:
+  - id: st3215_servo_output_fork_facing_down
+    source: robot_cad/parts/st3215_servo_output_fork.py
+    placement:
+      xyz_mm: [0.0, 0.0, 0.0]
+      rotation_xyz_deg: [0.0, 90.0, 0.0]
+    local_axis_mapping:
+      positive_x: [0.0, 0.0, -1.0]
+      positive_y: [0.0, 1.0, 0.0]
+      positive_z: [1.0, 0.0, 0.0]
+    intent: fork longitudinal direction and open end face down
+
+  - id: st3215_rear_motor_bay_facing_left_rolled_90
+    source: robot_cad/parts/st3215_motor_bay.py
+    placement:
+      xyz_mm: [-15.7, 0.0, 15.6117]
+      rotation_xyz_deg: [90.0, 0.0, 0.0]
+    local_axis_mapping:
+      positive_x: [1.0, 0.0, 0.0]
+      positive_y: [0.0, 0.0, 1.0]
+      positive_z: [0.0, -1.0, 0.0]
+    intent: bay extends left along global negative X and is rolled 90 degrees
+
+positioning:
+  longitudinal_axis_angle_deg: 90.0
+  shared_centerline_y_mm: 0.0
+  contact_plane_z_mm: 0.0
+  contact:
+    fork: rotated attachment root
+    motor_bay: rolled lower broad outer wall
+  left_edge_alignment_x_mm: -31.7
+  motor_bay_roll_axis:
+    point_xyz_mm: [-15.7, 0.0, 15.6117]
+    direction: [1.0, 0.0, 0.0]
+    role: centerline between the screw-access holes
+  installed_st3215_to_fork_collision_volume_mm3: 0.0
+  final_transition: intentionally_deferred_until_pose_confirmation
+
+output:
+  source: robot_cad/assembly/hip_orientation_preview.py
+  step: exports/step/hip_orientation_preview.step
+
+acceptance_tests:
+  - fork local positive X maps to global negative Z
+  - bay local negative X maps to global negative X
+  - fork and bay longitudinal directions are perpendicular
+  - bay receives a positive 90 degree roll about its central X axis
+  - bay lower wall and fork root meet at global Z=0
+  - bay and fork root left edges align at global X=-31.7
+  - components share the global Y=0 centerline
+  - exact installed ST3215 does not collide with the fork
+  - assembly remains two labeled solids pending position confirmation
