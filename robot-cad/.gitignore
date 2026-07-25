@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+.cad-viewer/
+!tools/cad-viewer-markup/runtime/dist/
+!tools/cad-viewer-markup/runtime/dist/**
+**/.*.step.glb
+**/.*.step.glb.json
+**/.*.stp.glb
+**/.*.stp.glb.json
+
+# Generated CAD artifacts. Keep the directory structure, regenerate the files.
+exports/step/*
+!exports/step/.gitkeep
+exports/stl/*
+!exports/stl/.gitkeep
+exports/renders/*
+!exports/renders/.gitkeep

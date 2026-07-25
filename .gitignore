@@ -1,0 +1,27 @@
+# Local environments and caches
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+**/.pytest_cache/
+.ruff_cache/
+**/.ruff_cache/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Generated root-level artifacts and local viewer state
+/exports/
+**/.cad-viewer/
+**/.git-nested-backup/
+
+# Build and package output
+build/
+dist/
+*.egg-info/
+node_modules/

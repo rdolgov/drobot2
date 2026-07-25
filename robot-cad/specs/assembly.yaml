@@ -1,0 +1,35 @@
+schema_version: 1
+assembly_id: simple_drobot_upper_arm
+units:
+  length: mm
+  angle: deg
+
+root_component: upper_arm
+
+components:
+  - id: upper_arm
+    source: robot_cad/parts/upper_arm.py
+    status: migrated
+  - id: st3215_motor_bay
+    source: robot_cad/parts/st3215_motor_bay.py
+    relationship: fused into upper_arm
+    status: migrated
+  - id: waveshare_feetech_st3215_servo
+    source: vendor/servos/waveshare_feetech_st3215_servo.step
+    relationship: immutable fit reference
+    status: exact_catalog_model
+
+fit_previews:
+  - id: st3215_motor_bay_fit_preview
+    source: robot_cad/assembly/st3215_motor_bay_fit_preview.py
+    printable: false
+  - id: upper_arm_st3215_fit_preview
+    source: robot_cad/assembly/upper_arm_st3215_fit_preview.py
+    printable: false
+
+acceptance_tests:
+  - printable generators each return one valid connected solid
+  - fit previews preserve labeled bay/arm and catalog-servo occurrences
+  - vendor STEP checksums match vendor/README.md
+  - generated bounds match the migrated geometry baselines
+  - the exact servo variant is confirmed before production fabrication

@@ -1,0 +1,62 @@
+schema_version: 1
+part_id: upper_arm
+source: robot_cad/parts/upper_arm.py
+reference: vendor/references/so101/Upper_arm_SO101.step
+units: mm
+
+coordinate_system:
+  convention: immutable SO-101 reference STEP coordinates
+  mount_panel_end: negative X
+  pose_order: rotate X, rotate Y, rotate Z, then translate
+
+reference_bounds:
+  min_xyz_mm: [-65.084989, 0.0, -35.6]
+  max_xyz_mm: [78.516747, 24.5, 31.7]
+
+features:
+  remove_perforated_mount_panel: true
+  mount_panel_cut_plane_x_mm: -29.0
+  mount_panel_cut_oversize_mm: 5.0
+  add_st3215_rear_motor_bay: true
+  motor_bay_center_y_mm: 12.0
+  motor_bay_center_z_mm: -1.95
+  motor_bay_join_overlap_mm: 0.8
+
+transition:
+  length_mm: 9.0
+  bay_embed_mm: 0.4
+  end_hold_mm: 1.0
+  start_radius_mm: 0.5
+  arm_size_y_mm: 24.0
+  arm_size_z_mm: 50.0
+  arm_radius_mm: 5.0
+
+frames:
+  frame_st3215_bay_attachment:
+    xyz_mm: [-28.2, 12.0, -1.95]
+    axis: [1.0, 0.0, 0.0]
+  frame_st3215_servo_install:
+    xyz_mm: [-39.3117, 12.0, 7.475]
+    rotation_xyz_deg: [90.0, 0.0, 0.0]
+    axis: [1.0, 0.0, 0.0]
+
+generated_baseline:
+  solid_count: 1
+  bounds:
+    min_xyz_mm: [-44.2, -3.645729, -35.6]
+    max_xyz_mm: [77.054028, 27.645729, 31.7]
+    size_xyz_mm: [121.254028, 31.291458, 67.3]
+  volume_mm3: 109560.83660926593
+  kernel_tolerance_mm: 0.05
+  volume_relative_tolerance: 1.0e-5
+
+known_follow_up:
+  - the shared bay attachment wall is closed and still needs a final cable route
+  - confirm ST3215 versus ST3215-HS and the user-supplied STS3212 name before production
+
+acceptance_tests:
+  - geometry is valid
+  - model contains one connected solid
+  - generated bounds match the migrated source
+  - shared motor bay is imported rather than duplicated
+  - STEP and STL exports succeed

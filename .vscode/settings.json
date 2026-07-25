@@ -1,0 +1,3 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/robot-cad/.venv/Scripts/python.exe"
+}

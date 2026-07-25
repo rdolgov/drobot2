@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "CAD: Preview current Build123d file in OCP",
+      "type": "process",
+      "command": "${workspaceFolder}/robot-cad/.venv/Scripts/python.exe",
+      "args": [
+        "${workspaceFolder}/robot-cad/scripts/preview_build123d.py",
+        "${file}"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/robot-cad"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}

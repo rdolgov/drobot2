@@ -1,0 +1,71 @@
+[CmdletBinding()]
+param(
+    [switch]$Force
+)
+
+$ErrorActionPreference = "Stop"
+$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$python = Join-Path $projectRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path -LiteralPath $python)) {
+    $python = "python"
+}
+
+$cadSkillRoot = $env:ROBOT_CAD_SKILL_ROOT
+if (-not $cadSkillRoot) {
+    $cacheRoot = Join-Path $env:USERPROFILE ".codex\plugins\cache\text-to-cad\cad"
+    $cadSkillRoot = Get-ChildItem -LiteralPath $cacheRoot -Directory -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending |
+        ForEach-Object { Join-Path $_.FullName "skills\cad" } |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_ "scripts\step") } |
+        Select-Object -First 1
+}
+
+$stepTool = Join-Path $cadSkillRoot "scripts\step"
+if (-not $cadSkillRoot -or -not (Test-Path -LiteralPath $stepTool)) {
+    throw "Could not find the installed CAD skill. Set ROBOT_CAD_SKILL_ROOT."
+}
+
+$cadpySource = Join-Path $cadSkillRoot "scripts\packages\cadpy\src"
+$previousPythonPath = $env:PYTHONPATH
+$pythonPathParts = @($projectRoot, $cadpySource)
+if ($previousPythonPath) {
+    $pythonPathParts += $previousPythonPath
+}
+$env:PYTHONPATH = $pythonPathParts -join [IO.Path]::PathSeparator
+
+$targets = @(
+    "robot_cad/parts/st3215_motor_bay.py=exports/step/st3215_motor_bay.step",
+    "robot_cad/parts/upper_arm.py=exports/step/upper_arm.step",
+    "robot_cad/assembly/st3215_motor_bay_fit_preview.py=exports/step/st3215_motor_bay_fit_preview.step",
+    "robot_cad/assembly/upper_arm_st3215_fit_preview.py=exports/step/upper_arm_st3215_fit_preview.step"
+)
+$arguments = @($stepTool) + $targets
+if ($Force) {
+    $arguments += "--force"
+}
+
+Push-Location $projectRoot
+try {
+    & $python @arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "CAD generation failed with exit code $LASTEXITCODE."
+    }
+
+    & $python $stepTool `
+        "robot_cad/parts/st3215_motor_bay.py=exports/step/st3215_motor_bay.step" `
+        --stl "exports/stl/st3215_motor_bay.stl"
+    if ($LASTEXITCODE -ne 0) {
+        throw "ST3215 motor-bay STL export failed with exit code $LASTEXITCODE."
+    }
+
+    & $python $stepTool `
+        "robot_cad/parts/upper_arm.py=exports/step/upper_arm.step" `
+        --stl "exports/stl/upper_arm.stl"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Upper-arm STL export failed with exit code $LASTEXITCODE."
+    }
+}
+finally {
+    Pop-Location
+    $env:PYTHONPATH = $previousPythonPath
+}

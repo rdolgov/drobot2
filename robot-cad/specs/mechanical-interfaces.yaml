@@ -1,0 +1,35 @@
+schema_version: 1
+units:
+  length: mm
+  angle: deg
+
+manufacturing_defaults:
+  process: fdm
+  minimum_structural_wall_mm: 3.0
+  minimum_boss_wall_mm: 2.5
+
+st3215_fit:
+  body_clearance_y_per_side_mm: 0.25
+  body_clearance_z_total_mm: 0.25
+  socket_wall_mm: 3.0
+  moving_component_clearance_mm: 1.0
+  cable_envelope_clearance_mm: 2.0
+  status: preliminary test-fit allowances
+
+named_frames:
+  st3215_motor_bay:
+    frame_attachment_datum:
+      xyz_mm: [0.0, 0.0, 0.0]
+      axis: [1.0, 0.0, 0.0]
+    frame_servo_install:
+      xyz_mm: [-11.1117, 0.0, 9.425]
+      rotation_xyz_deg: [90.0, 0.0, 0.0]
+      axis: [1.0, 0.0, 0.0]
+  upper_arm:
+    frame_st3215_bay_attachment:
+      xyz_mm: [-28.2, 12.0, -1.95]
+      axis: [1.0, 0.0, 0.0]
+    frame_st3215_servo_install:
+      xyz_mm: [-39.3117, 12.0, 7.475]
+      rotation_xyz_deg: [90.0, 0.0, 0.0]
+      axis: [1.0, 0.0, 0.0]
