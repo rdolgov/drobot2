@@ -20,10 +20,13 @@ LID_VENT_SLOT_LENGTH_X_MM = 30.0
 LID_VENT_SLOT_WIDTH_Y_MM = 4.0
 LID_VENT_X_MM = (-60.0, 0.0, 60.0)
 LID_VENT_Y_MM = (-42.0, 0.0, 42.0)
-LID_CABLE_PORT_LENGTH_X_MM = 18.0
-LID_CABLE_PORT_WIDTH_Y_MM = 12.0
+LID_CABLE_PORT_LENGTH_X_MM = 26.0
+LID_CABLE_PORT_WIDTH_Y_MM = 14.0
 LID_CABLE_PORT_X_MM = (-quadruped_body.HIP_MOUNT_CENTER_X_MM, quadruped_body.HIP_MOUNT_CENTER_X_MM)
 LID_CABLE_PORT_Y_MM = (-76.0, 76.0)
+LID_UTILITY_M2_X_MM = (-30.0, 30.0)
+LID_UTILITY_M3_X_MM = (-90.0, 90.0)
+LID_UTILITY_Y_MM = (-24.0, 24.0)
 
 
 def _one_valid_solid(shape: Shape, label: str) -> Shape:
@@ -176,32 +179,94 @@ def make_lid_vent_tools() -> tuple[Shape, ...]:
     )
 
 
+def _rounded_slot_tool_xy(
+    length_x_mm: float,
+    width_y_mm: float,
+    height_z_mm: float,
+    *,
+    center_x_mm: float,
+    center_y_mm: float,
+    minimum_z_mm: float,
+) -> Shape:
+    """Return a horizontal stadium-shaped through-cutter."""
+    radius = width_y_mm / 2.0
+    straight_length = length_x_mm - 2.0 * radius
+    center_box = Box(
+        straight_length,
+        width_y_mm,
+        height_z_mm,
+        align=(Align.CENTER, Align.CENTER, Align.MIN),
+    ).moved(Location((center_x_mm, center_y_mm, minimum_z_mm)))
+    cap_offset_x = straight_length / 2.0
+    caps = tuple(
+        Cylinder(
+            radius,
+            height_z_mm,
+            align=(Align.CENTER, Align.CENTER, Align.MIN),
+        ).moved(
+            Location(
+                (
+                    center_x_mm + side * cap_offset_x,
+                    center_y_mm,
+                    minimum_z_mm,
+                )
+            )
+        )
+        for side in (-1.0, 1.0)
+    )
+    return center_box.fuse(*caps)
+
+
 def make_lid_cable_port_tools() -> tuple[Shape, ...]:
-    """Return four provisional cable ports beside the hip locations."""
+    """Return four rounded cable ports, one beside each hip location."""
     cutter_height = (
         quadruped_body.BODY_LID_THICKNESS_Z_MM
         + LID_LOCATOR_DEPTH_MM
         + 2.0 * quadruped_body.BOOLEAN_OVERTRAVEL_MM
     )
     return tuple(
-        Box(
+        _rounded_slot_tool_xy(
             LID_CABLE_PORT_LENGTH_X_MM,
             LID_CABLE_PORT_WIDTH_Y_MM,
             cutter_height,
-            align=(Align.CENTER, Align.CENTER, Align.MIN),
-        ).moved(
-            Location(
-                (
-                    x_mm,
-                    y_mm,
-                    -LID_LOCATOR_DEPTH_MM
-                    - quadruped_body.BOOLEAN_OVERTRAVEL_MM,
-                )
-            )
+            center_x_mm=x_mm,
+            center_y_mm=y_mm,
+            minimum_z_mm=(
+                -LID_LOCATOR_DEPTH_MM
+                - quadruped_body.BOOLEAN_OVERTRAVEL_MM
+            ),
         )
         for x_mm in LID_CABLE_PORT_X_MM
         for y_mm in LID_CABLE_PORT_Y_MM
     )
+
+
+def make_lid_utility_mount_hole_tools() -> tuple[Shape, ...]:
+    """Return eight M2/M3 clearance cutters through the top plate."""
+    cutter_height = (
+        quadruped_body.BODY_LID_THICKNESS_Z_MM
+        + 2.0 * quadruped_body.BOOLEAN_OVERTRAVEL_MM
+    )
+    cutter_min_z = -quadruped_body.BOOLEAN_OVERTRAVEL_MM
+    m2_tools = tuple(
+        Cylinder(
+            quadruped_body.UTILITY_M2_CLEARANCE_DIAMETER_MM / 2.0,
+            cutter_height,
+            align=(Align.CENTER, Align.CENTER, Align.MIN),
+        ).moved(Location((x_mm, y_mm, cutter_min_z)))
+        for x_mm in LID_UTILITY_M2_X_MM
+        for y_mm in LID_UTILITY_Y_MM
+    )
+    m3_tools = tuple(
+        Cylinder(
+            quadruped_body.UTILITY_M3_CLEARANCE_DIAMETER_MM / 2.0,
+            cutter_height,
+            align=(Align.CENTER, Align.CENTER, Align.MIN),
+        ).moved(Location((x_mm, y_mm, cutter_min_z)))
+        for x_mm in LID_UTILITY_M3_X_MM
+        for y_mm in LID_UTILITY_Y_MM
+    )
+    return m2_tools + m3_tools
 
 
 def make_lid() -> Shape:
@@ -212,6 +277,7 @@ def make_lid() -> Shape:
         + make_lid_hole_tools()
         + make_lid_vent_tools()
         + make_lid_cable_port_tools()
+        + make_lid_utility_mount_hole_tools()
     )
     return _one_valid_solid(finished, "quadruped_body_lid")
 

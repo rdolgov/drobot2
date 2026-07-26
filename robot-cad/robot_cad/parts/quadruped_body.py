@@ -100,6 +100,20 @@ VENT_SLOT_HEIGHT_Z_MM = 4.0
 VENT_SLOT_Y_MM = (-45.0, -15.0, 15.0, 45.0)
 VENT_SLOT_Z_MM = (74.0, 86.0)
 
+# Symmetric service openings and utility mounting holes.  The side cable
+# opening fits in the 36 mm clear strip between the two 84 mm hip backing
+# pads, so neither body-side hip plate can cover it.  Bottom utility holes
+# stay outside the battery rail and clear the electronics-tray standoffs.
+SIDE_CABLE_PORT_LENGTH_X_MM = 24.0
+SIDE_CABLE_PORT_HEIGHT_Z_MM = 14.0
+SIDE_CABLE_PORT_CENTER_X_MM = 0.0
+SIDE_CABLE_PORT_CENTER_Z_MM = 50.0
+UTILITY_M2_CLEARANCE_DIAMETER_MM = 2.4
+UTILITY_M3_CLEARANCE_DIAMETER_MM = 3.4
+BASE_UTILITY_M2_X_MM = (-35.0, 35.0)
+BASE_UTILITY_M3_X_MM = (-75.0, 75.0)
+BASE_UTILITY_Y_MM = (-68.0, 68.0)
+
 # Current official Bambu Lab X2D print envelopes.
 X2D_MAIN_NOZZLE_VOLUME_MM = (256.0, 256.0, 260.0)
 X2D_DUAL_NOZZLE_SHARED_VOLUME_MM = (235.5, 256.0, 256.0)
@@ -290,6 +304,72 @@ def make_front_rear_vent_tools() -> tuple[Shape, ...]:
     )
 
 
+def make_side_cable_port_tool() -> Shape:
+    """Return one rounded cutter that opens a service port in each side wall."""
+    radius = SIDE_CABLE_PORT_HEIGHT_Z_MM / 2.0
+    straight_length = SIDE_CABLE_PORT_LENGTH_X_MM - 2.0 * radius
+    cutter_length_y = BODY_WIDTH_Y_MM + 2.0 * BOOLEAN_OVERTRAVEL_MM
+    center_box = Box(
+        straight_length,
+        cutter_length_y,
+        SIDE_CABLE_PORT_HEIGHT_Z_MM,
+        align=(Align.CENTER, Align.CENTER, Align.CENTER),
+    ).moved(
+        Location(
+            (
+                SIDE_CABLE_PORT_CENTER_X_MM,
+                0.0,
+                SIDE_CABLE_PORT_CENTER_Z_MM,
+            )
+        )
+    )
+    cap_offset_x = straight_length / 2.0
+    caps = tuple(
+        Cylinder(
+            radius,
+            cutter_length_y,
+            align=(Align.CENTER, Align.CENTER, Align.CENTER),
+        )
+        .rotate(Axis.X, 90.0)
+        .moved(
+            Location(
+                (
+                    SIDE_CABLE_PORT_CENTER_X_MM + side * cap_offset_x,
+                    0.0,
+                    SIDE_CABLE_PORT_CENTER_Z_MM,
+                )
+            )
+        )
+        for side in (-1.0, 1.0)
+    )
+    return center_box.fuse(*caps)
+
+
+def make_base_utility_mount_hole_tools() -> tuple[Shape, ...]:
+    """Return M2/M3 clearance cutters through the protected floor rails."""
+    cutter_height = BODY_FLOOR_MM + 2.0 * BOOLEAN_OVERTRAVEL_MM
+    cutter_min_z = -BOOLEAN_OVERTRAVEL_MM
+    m2_tools = tuple(
+        Cylinder(
+            UTILITY_M2_CLEARANCE_DIAMETER_MM / 2.0,
+            cutter_height,
+            align=(Align.CENTER, Align.CENTER, Align.MIN),
+        ).moved(Location((x_mm, y_mm, cutter_min_z)))
+        for x_mm in BASE_UTILITY_M2_X_MM
+        for y_mm in BASE_UTILITY_Y_MM
+    )
+    m3_tools = tuple(
+        Cylinder(
+            UTILITY_M3_CLEARANCE_DIAMETER_MM / 2.0,
+            cutter_height,
+            align=(Align.CENTER, Align.CENTER, Align.MIN),
+        ).moved(Location((x_mm, y_mm, cutter_min_z)))
+        for x_mm in BASE_UTILITY_M3_X_MM
+        for y_mm in BASE_UTILITY_Y_MM
+    )
+    return m2_tools + m3_tools
+
+
 def make_body_base() -> Shape:
     """Return the complete one-piece open-top structural tub."""
     shell = make_outer_shell_blank() - make_inner_cavity_tool()
@@ -304,6 +384,8 @@ def make_body_base() -> Shape:
         + make_tray_pilot_tools()
         + make_lid_insert_pilot_tools()
         + make_front_rear_vent_tools()
+        + (make_side_cable_port_tool(),)
+        + make_base_utility_mount_hole_tools()
     )
     return _one_valid_solid(finished, "quadruped_body_base")
 

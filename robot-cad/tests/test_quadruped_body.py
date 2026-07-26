@@ -120,3 +120,60 @@ def test_tray_and_lid_mount_holes_are_open() -> None:
         assert not tray.is_inside(Vector(x_mm, y_mm, 1.5))
     for x_mm, y_mm in quadruped_body.LID_BOSS_CENTERS_XY_MM:
         assert not lid.is_inside(Vector(x_mm, y_mm, 2.0))
+
+
+def test_symmetric_side_service_ports_are_open_between_hip_fields() -> None:
+    base = generated_base()
+    wall_center_offset = (
+        quadruped_body.BODY_WIDTH_Y_MM / 2.0
+        - quadruped_body.BODY_WALL_MM / 2.0
+    )
+
+    for side in (-1.0, 1.0):
+        wall_y = side * wall_center_offset
+        assert not base.is_inside(
+            Vector(
+                quadruped_body.SIDE_CABLE_PORT_CENTER_X_MM,
+                wall_y,
+                quadruped_body.SIDE_CABLE_PORT_CENTER_Z_MM,
+            )
+        )
+        assert base.is_inside(
+            Vector(
+                quadruped_body.SIDE_CABLE_PORT_LENGTH_X_MM / 2.0 + 3.0,
+                wall_y,
+                quadruped_body.SIDE_CABLE_PORT_CENTER_Z_MM,
+            )
+        )
+
+
+def test_bottom_utility_mounting_holes_are_open_and_clear_battery_rail() -> None:
+    base = generated_base()
+    test_z = quadruped_body.BODY_FLOOR_MM / 2.0
+
+    for x_mm in quadruped_body.BASE_UTILITY_M2_X_MM:
+        for y_mm in quadruped_body.BASE_UTILITY_Y_MM:
+            assert not base.is_inside(Vector(x_mm, y_mm, test_z))
+            assert abs(y_mm) > (
+                quadruped_body.BATTERY_CLEAR_WIDTH_Y_MM / 2.0
+                + quadruped_body.BATTERY_RAIL_CLEARANCE_PER_SIDE_MM
+                + quadruped_body.BATTERY_RAIL_THICKNESS_MM
+            )
+    for x_mm in quadruped_body.BASE_UTILITY_M3_X_MM:
+        for y_mm in quadruped_body.BASE_UTILITY_Y_MM:
+            assert not base.is_inside(Vector(x_mm, y_mm, test_z))
+
+
+def test_lid_leg_ports_and_utility_mounting_holes_are_open() -> None:
+    lid = generated_lid()
+    test_z = quadruped_body.BODY_LID_THICKNESS_Z_MM / 2.0
+
+    for x_mm in quadruped_body_lid.LID_CABLE_PORT_X_MM:
+        for y_mm in quadruped_body_lid.LID_CABLE_PORT_Y_MM:
+            assert not lid.is_inside(Vector(x_mm, y_mm, test_z))
+    for x_mm in quadruped_body_lid.LID_UTILITY_M2_X_MM:
+        for y_mm in quadruped_body_lid.LID_UTILITY_Y_MM:
+            assert not lid.is_inside(Vector(x_mm, y_mm, test_z))
+    for x_mm in quadruped_body_lid.LID_UTILITY_M3_X_MM:
+        for y_mm in quadruped_body_lid.LID_UTILITY_Y_MM:
+            assert not lid.is_inside(Vector(x_mm, y_mm, test_z))

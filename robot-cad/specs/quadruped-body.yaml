@@ -48,6 +48,53 @@ internal_layout:
     insert_pilot_diameter_mm: 4.2
     status: pilot_must_be_adjusted_to_selected_heat_set_insert
 
+wiring_access:
+  lid_leg_ports:
+    quantity: 4
+    shape: rounded_slot
+    overall_xy_mm: [26.0, 14.0]
+    centers_x_mm: [-60.0, 60.0]
+    centers_y_mm: [-76.0, 76.0]
+    note: one top-entry port beside each leg
+  side_service_ports:
+    quantity: 2
+    shape: rounded_slot
+    overall_xz_mm: [24.0, 14.0]
+    centers_xyz_mm:
+      - [0.0, -85.0, 50.0]
+      - [0.0, 85.0, 50.0]
+    note: centered between the front and rear hip backing pads
+
+utility_mounting:
+  fastening_note: clearance through-holes for bolts, washers, and nuts; not printed threads
+  lid_top:
+    m2_clearance_diameter_mm: 2.4
+    m2_centers_xy_mm:
+      - [-30.0, -24.0]
+      - [-30.0, 24.0]
+      - [30.0, -24.0]
+      - [30.0, 24.0]
+    m3_clearance_diameter_mm: 3.4
+    m3_centers_xy_mm:
+      - [-90.0, -24.0]
+      - [-90.0, 24.0]
+      - [90.0, -24.0]
+      - [90.0, 24.0]
+  body_bottom:
+    m2_clearance_diameter_mm: 2.4
+    m2_centers_xy_mm:
+      - [-35.0, -68.0]
+      - [-35.0, 68.0]
+      - [35.0, -68.0]
+      - [35.0, 68.0]
+    m3_clearance_diameter_mm: 3.4
+    m3_centers_xy_mm:
+      - [-75.0, -68.0]
+      - [-75.0, 68.0]
+      - [75.0, -68.0]
+      - [75.0, 68.0]
+    placement_note: outside the battery retaining rail and clear of tray standoffs
+
 x2d_print_fit:
   official_main_nozzle_volume_xyz_mm: [256.0, 256.0, 260.0]
   official_auxiliary_or_shared_volume_xyz_mm: [235.5, 256.0, 256.0]
@@ -90,6 +137,9 @@ outputs:
 acceptance_tests:
   - base, lid, and electronics tray are each one connected valid solid
   - base has sixteen body-side M4 clearance holes aligned to four hip plates
+  - two symmetric rounded body-side wiring ports remain clear of the hip plates
+  - lid has four rounded leg wiring ports and eight symmetric M2/M3 utility holes
+  - body floor has eight symmetric M2/M3 utility holes outside the battery rail
   - four leg root plates sit flush to the two body side faces
   - battery clear envelope and electronics tray fit inside the body
   - base with recommended brim fits the X2D shared dual-nozzle region
