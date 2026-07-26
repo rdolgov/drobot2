@@ -16,6 +16,14 @@ import traceback
 
 from isaacsim import SimulationApp
 
+PROJECT_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..")
+)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from robot_cad.urdf import quadruped_robot as urdf_model  # noqa: E402
+
 parser = argparse.ArgumentParser(
     description="Import the drobot quadruped URDF into an Isaac Sim USD asset."
 )
@@ -64,7 +72,90 @@ simulation_app = SimulationApp({"headless": True})
 
 # Omniverse imports must follow SimulationApp construction.
 from isaacsim.asset.importer.urdf import URDFImporter, URDFImporterConfig  # noqa: E402
-from pxr import Usd, UsdPhysics  # noqa: E402
+from omni.sensors.schema import OmniSensorAPI  # noqa: E402
+from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics  # noqa: E402
+
+
+def _author_lekiwi_camera(stage: Usd.Stage) -> dict[str, object]:
+    """Attach the RTX camera prim to the imported base rigid body."""
+    base_candidates = [
+        prim
+        for prim in stage.Traverse()
+        if prim.GetName() == "base_link"
+        and prim.HasAPI(UsdPhysics.RigidBodyAPI)
+    ]
+    if len(base_candidates) != 1:
+        raise AssertionError(
+            "Expected one imported base_link rigid body, found "
+            f"{[str(prim.GetPath()) for prim in base_candidates]}"
+        )
+
+    camera_path = base_candidates[0].GetPath().AppendChild("lekiwi_camera")
+    camera = UsdGeom.Camera.Define(stage, camera_path)
+    camera.CreateProjectionAttr().Set(UsdGeom.Tokens.perspective)
+    camera.CreateFocalLengthAttr().Set(urdf_model.CAMERA_FOCAL_LENGTH_MM)
+    camera.CreateHorizontalApertureAttr().Set(
+        urdf_model.CAMERA_HORIZONTAL_APERTURE_MM
+    )
+    camera.CreateVerticalApertureAttr().Set(
+        urdf_model.CAMERA_VERTICAL_APERTURE_MM
+    )
+    camera.CreateClippingRangeAttr().Set(
+        Gf.Vec2f(*urdf_model.CAMERA_CLIPPING_RANGE_M)
+    )
+    camera.CreateFocusDistanceAttr().Set(1.0)
+    camera.CreateFStopAttr().Set(0.0)
+
+    xform = UsdGeom.Xformable(camera.GetPrim())
+    xform.ClearXformOpOrder()
+    xform.AddTranslateOp().Set(
+        Gf.Vec3d(*urdf_model.CAMERA_OPTICAL_XYZ_FROM_BASE_M)
+    )
+    # USD cameras look along local -Z with +Y image-up.  This rotation makes
+    # -Z point along robot +X and +Y point along robot +Z.  Author the
+    # equivalent quaternion rather than rotateXYZ because PhysX/Fabric
+    # preserves the standard orient op on children of moving rigid bodies.
+    camera_orientation_wxyz = (0.5, 0.5, -0.5, -0.5)
+    xform.AddOrientOp().Set(
+        Gf.Quatf(
+            camera_orientation_wxyz[0],
+            Gf.Vec3f(*camera_orientation_wxyz[1:]),
+        )
+    )
+
+    sensor_api = OmniSensorAPI.Apply(camera.GetPrim())
+    sensor_api.CreateOmniSensorTickRateAttr().Set(
+        urdf_model.CAMERA_TICK_RATE_HZ
+    )
+    camera.GetPrim().CreateAttribute(
+        "drobot:resolutionHeight",
+        Sdf.ValueTypeNames.Int,
+    ).Set(urdf_model.CAMERA_RESOLUTION_HW[0])
+    camera.GetPrim().CreateAttribute(
+        "drobot:resolutionWidth",
+        Sdf.ValueTypeNames.Int,
+    ).Set(urdf_model.CAMERA_RESOLUTION_HW[1])
+    camera.GetPrim().CreateAttribute(
+        "drobot:rosOpticalFrame",
+        Sdf.ValueTypeNames.String,
+    ).Set("camera_optical_frame")
+
+    return {
+        "prim_path": str(camera_path),
+        "parent_link": str(base_candidates[0].GetPath()),
+        "translation_m": list(urdf_model.CAMERA_OPTICAL_XYZ_FROM_BASE_M),
+        "orientation_wxyz": list(camera_orientation_wxyz),
+        "equivalent_rotate_xyz_deg": [90.0, 0.0, -90.0],
+        "resolution_hw": list(urdf_model.CAMERA_RESOLUTION_HW),
+        "tick_rate_hz": urdf_model.CAMERA_TICK_RATE_HZ,
+        "horizontal_fov_deg": urdf_model.CAMERA_HORIZONTAL_FOV_DEG,
+        "focal_length_mm": urdf_model.CAMERA_FOCAL_LENGTH_MM,
+        "horizontal_aperture_mm": (
+            urdf_model.CAMERA_HORIZONTAL_APERTURE_MM
+        ),
+        "vertical_aperture_mm": urdf_model.CAMERA_VERTICAL_APERTURE_MM,
+        "clipping_range_m": list(urdf_model.CAMERA_CLIPPING_RANGE_M),
+    }
 
 
 def _stage_facts(stage: Usd.Stage) -> dict[str, int]:
@@ -82,6 +173,7 @@ def _stage_facts(stage: Usd.Stage) -> dict[str, int]:
         "angular_drives": sum(
             bool(UsdPhysics.DriveAPI.Get(prim, "angular")) for prim in prims
         ),
+        "cameras": sum(prim.IsA(UsdGeom.Camera) for prim in prims),
     }
 
 
@@ -185,6 +277,7 @@ try:
     stage = Usd.Stage.Open(root_usd)
     if stage is None:
         raise AssertionError(f"Isaac USD stage could not be opened: {root_usd}")
+    camera = _author_lekiwi_camera(stage)
     joint_neighbor_filters = (
         _author_joint_neighbor_filters(stage)
         if args.allow_self_collision
@@ -197,6 +290,7 @@ try:
         "rigid_bodies": 13,
         "revolute_joints": 12,
         "angular_drives": 12,
+        "cameras": 1,
     }
     if stage_facts != expected_stage_facts:
         raise AssertionError(
@@ -256,6 +350,7 @@ try:
             "stage_facts": stage_facts,
             "self_collision_facts": collision_facts,
             "joint_neighbor_filtered_pairs": joint_neighbor_filters,
+            "camera": camera,
             "settings": {
                 "merge_fixed_joints": config.merge_fixed_joints,
                 "merge_mesh": config.merge_mesh,

@@ -123,6 +123,16 @@ camera_mount:
     source: robot_cad/assembly/lekiwi_camera_body_fit_preview.py
     step: exports/step/lekiwi_camera_body_fit_preview.step
     note: green mount and purple camera are positioning envelopes, not manufacturing geometry
+  simulation:
+    camera_link_origin_xyz_m: [0.09, 0.0, 0.1]
+    optical_origin_from_camera_link_xyz_m: [0.0245, 0.0, 0.023]
+    optical_origin_from_base_xyz_m: [0.1145, 0.0, 0.123]
+    optical_frame_rpy_rad: [-1.570796327, 0.0, -1.570796327]
+    isaac_camera_prim: /World/Robot/Geometry/base_link/lekiwi_camera
+    resolution_hw: [480, 640]
+    tick_rate_hz: 30.0
+    horizontal_fov_deg: 95.0
+    annotators: [rgb, distance_to_image_plane]
 
 x2d_print_fit:
   official_main_nozzle_volume_xyz_mm: [256.0, 256.0, 260.0]

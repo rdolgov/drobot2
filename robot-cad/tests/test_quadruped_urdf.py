@@ -42,23 +42,40 @@ def test_urdf_has_expected_tree_and_physics_elements():
     joints = robot.findall("joint")
 
     assert robot.attrib["name"] == "st3215_quadruped"
-    assert len(links) == 13
-    assert len(joints) == 12
-    assert {link.attrib["name"] for link in links} >= {"base_link"}
+    assert len(links) == 15
+    assert len(joints) == 14
+    assert {link.attrib["name"] for link in links} >= {
+        "base_link",
+        "camera_link",
+        "camera_optical_frame",
+    }
 
     for link in links:
+        if link.attrib["name"] == "camera_optical_frame":
+            assert link.find("inertial") is None
+            assert not link.findall("visual")
+            assert not link.findall("collision")
+            continue
         assert link.find("inertial") is not None
         assert link.findall("visual")
         assert link.findall("collision")
 
     for joint in joints:
-        assert joint.attrib["type"] == "revolute"
         assert joint.find("parent") is not None
         assert joint.find("child") is not None
         assert joint.find("origin") is not None
-        assert joint.find("axis") is not None
-        assert joint.find("limit") is not None
-        assert joint.find("dynamics") is not None
+        if joint.attrib["type"] == "fixed":
+            assert joint.find("axis") is None
+            assert joint.find("limit") is None
+            assert joint.find("dynamics") is None
+        else:
+            assert joint.attrib["type"] == "revolute"
+            assert joint.find("axis") is not None
+            assert joint.find("limit") is not None
+            assert joint.find("dynamics") is not None
+
+    assert len(robot.findall("joint[@type='revolute']")) == 12
+    assert len(robot.findall("joint[@type='fixed']")) == 2
 
 
 def test_mesh_references_resolve_from_generated_urdf_directory():
@@ -66,7 +83,7 @@ def test_mesh_references_resolve_from_generated_urdf_directory():
     urdf_directory = PROJECT_ROOT / "exports" / "urdf"
     meshes = robot.findall(".//mesh")
 
-    assert len(meshes) == 31
+    assert len(meshes) == 33
     assert {mesh.attrib["filename"] for mesh in meshes} == {
         "../stl/quadruped_body_base.stl",
         "../stl/quadruped_body_lid.stl",
@@ -75,6 +92,8 @@ def test_mesh_references_resolve_from_generated_urdf_directory():
         "../stl/st3215_hip.stl",
         "../stl/upper_arm.stl",
         "../stl/st3215_servo_visual.stl",
+        "../../vendor/references/lekiwi/base_camera_mount.stl",
+        "../../vendor/references/lekiwi/arducam_5mp_camera_model.stl",
     }
     for mesh in meshes:
         mesh_path = (urdf_directory / mesh.attrib["filename"]).resolve()
@@ -85,7 +104,12 @@ def test_mesh_references_resolve_from_generated_urdf_directory():
 def test_all_moving_links_use_exact_servo_mesh_visuals():
     robot = quadruped_robot.gen_urdf()
     moving_links = [
-        link for link in robot.findall("link") if link.attrib["name"] != "base_link"
+        link
+        for link in robot.findall("link")
+        if any(
+            link.attrib["name"].endswith(suffix)
+            for suffix in ("_hip_link", "_proximal_link", "_distal_link")
+        )
     ]
 
     assert len(moving_links) == 12
@@ -105,7 +129,10 @@ def test_servo_mesh_and_collision_use_separately_audited_origins():
         quadruped_robot.SERVO_COLLISION_XYZ_M
     )
     for link in robot.findall("link"):
-        if link.attrib["name"] == "base_link":
+        if not any(
+            link.attrib["name"].endswith(suffix)
+            for suffix in ("_hip_link", "_proximal_link", "_distal_link")
+        ):
             continue
 
         visual_origin = link.find(
@@ -255,7 +282,53 @@ def test_mass_model_matches_ledger_total():
         quadruped_robot.TOTAL_ROBOT_MASS_KG,
         abs_tol=1e-9,
     )
-    assert math.isclose(total_mass, 4.449003, abs_tol=1e-6)
+    assert math.isclose(total_mass, 4.523638989, abs_tol=1e-6)
+
+
+def test_camera_payload_and_optical_frame_match_approved_cad_pose():
+    robot = quadruped_robot.gen_urdf()
+    camera = robot.find("link[@name='camera_link']")
+    optical = robot.find("link[@name='camera_optical_frame']")
+    mount_joint = robot.find("joint[@name='base_to_camera_mount']")
+    optical_joint = robot.find("joint[@name='camera_to_optical']")
+
+    assert camera is not None
+    assert optical is not None
+    assert mount_joint is not None
+    assert optical_joint is not None
+    assert mount_joint.attrib["type"] == "fixed"
+    assert optical_joint.attrib["type"] == "fixed"
+    assert _numbers(mount_joint.find("origin").attrib["xyz"]) == pytest.approx(
+        quadruped_robot.BASE_TO_CAMERA_LINK_XYZ_M
+    )
+    assert _numbers(optical_joint.find("origin").attrib["xyz"]) == pytest.approx(
+        quadruped_robot.CAMERA_LINK_TO_OPTICAL_XYZ_M
+    )
+    assert _numbers(optical_joint.find("origin").attrib["rpy"]) == pytest.approx(
+        quadruped_robot.CAMERA_LINK_TO_OPTICAL_RPY_RAD
+    )
+    assert quadruped_robot.CAMERA_OPTICAL_XYZ_FROM_BASE_M == pytest.approx(
+        (0.1145, 0.0, 0.123)
+    )
+    assert float(camera.find("inertial/mass").attrib["value"]) == pytest.approx(
+        quadruped_robot.CAMERA_ASSEMBLY_MASS_KG
+    )
+
+
+def test_camera_intrinsics_match_lightweight_lekiwi_profile():
+    assert quadruped_robot.CAMERA_RESOLUTION_HW == (480, 640)
+    assert quadruped_robot.CAMERA_TICK_RATE_HZ == pytest.approx(30.0)
+    assert quadruped_robot.CAMERA_HORIZONTAL_FOV_DEG == pytest.approx(95.0)
+    calculated_hfov = math.degrees(
+        2.0
+        * math.atan(
+            quadruped_robot.CAMERA_HORIZONTAL_APERTURE_MM
+            / (2.0 * quadruped_robot.CAMERA_FOCAL_LENGTH_MM)
+        )
+    )
+    assert calculated_hfov == pytest.approx(
+        quadruped_robot.CAMERA_HORIZONTAL_FOV_DEG
+    )
 
 
 def test_each_distal_link_discloses_virtual_contact_proxy():

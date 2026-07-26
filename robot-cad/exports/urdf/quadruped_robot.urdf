@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <!-- cadpy:sourcePath=../../robot_cad/urdf/quadruped_robot.py -->
-<!-- cadpy:sourceHash=978cc42e774e92aec402933888b4b153d7007b9d475c64cdfa6e2f2d4c704a28 -->
+<!-- cadpy:sourceHash=8859cb27ee69aea78ae56efa7705df11cdfe00f4579c4f3814a29fec36bc5bc5 -->
 <robot name="st3215_quadruped">
   <!--Mass model: solid PLA, 0.45 kg battery, 0.15 kg electronics; magenta fork-tip contacts are simulation-only.-->
   <material name="body_dark">
@@ -14,6 +14,12 @@
   </material>
   <material name="mount_light">
     <color rgba="0.65 0.68 0.74 1" />
+  </material>
+  <material name="camera_mount_green">
+    <color rgba="0.25 0.72 0.38 1" />
+  </material>
+  <material name="camera_body_purple">
+    <color rgba="0.62 0.28 0.78 1" />
   </material>
   <material name="servo_black">
     <color rgba="0.025 0.03 0.04 1" />
@@ -95,6 +101,50 @@
       </geometry>
     </collision>
   </link>
+  <link name="camera_link">
+    <inertial>
+      <origin xyz="0.009261819 -2.1765e-05 0.022460669" rpy="0 0 0" />
+      <mass value="0.074635989" />
+      <inertia ixx="1.9829381e-05" ixy="-9.911e-09" ixz="-2.45577e-07" iyy="1.3126569e-05" iyz="-3.592e-09" izz="1.3357698e-05" />
+    </inertial>
+    <visual name="lekiwi_base_camera_mount">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../../vendor/references/lekiwi/base_camera_mount.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="camera_mount_green" />
+    </visual>
+    <visual name="arducam_5mp_camera">
+      <origin xyz="0 0 0.023" rpy="0 1.570796327 0" />
+      <geometry>
+        <mesh filename="../../vendor/references/lekiwi/arducam_5mp_camera_model.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="camera_body_purple" />
+    </visual>
+    <collision name="camera_mount_proxy">
+      <origin xyz="0.003330537 0 0.022592295" rpy="0 0 0" />
+      <geometry>
+        <box size="0.016661073 0.048 0.045184589" />
+      </geometry>
+    </collision>
+    <collision name="camera_body_proxy">
+      <origin xyz="0.01075 0 0.023" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0215 0.038 0.038" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="camera_optical_frame" />
+  <joint name="base_to_camera_mount" type="fixed">
+    <parent link="base_link" />
+    <child link="camera_link" />
+    <origin xyz="0.09 0 0.1" rpy="0 0 0" />
+  </joint>
+  <joint name="camera_to_optical" type="fixed">
+    <parent link="camera_link" />
+    <child link="camera_optical_frame" />
+    <origin xyz="0.0245 0 0.023" rpy="-1.570796327 0 -1.570796327" />
+  </joint>
   <link name="front_left_hip_link">
     <inertial>
       <origin xyz="0.023744808 -0.031777881 -0.001911095" rpy="0 0 0" />

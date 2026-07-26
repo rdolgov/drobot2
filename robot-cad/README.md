@@ -41,23 +41,31 @@ Arducam 5 MP wide-angle USB option (ASIN `B0972KK7BC`), retained under
 
 | Target | Purpose |
 | --- | --- |
-| `exports/urdf/quadruped_robot.urdf` | SI-unit 13-link/12-joint robot description using current printable meshes and exact ST3215 visual geometry |
-| `exports/isaac/quadruped_robot_fixed.usdc` | Self-contained fixed-base articulation for safe joint commissioning |
-| `exports/isaac/quadruped_robot_floating.usdc` | Self-contained floating-base articulation with guarded inter-leg collision |
-| `exports/isaac/quadruped_robot_manual_world.usda` | Portable Isaac world referencing the self-collision-enabled floating asset, with Earth gravity, floor contact, rated-torque caps, and standing targets |
+| `exports/urdf/quadruped_robot.urdf` | SI-unit description with 14 physical links, one optical frame, 12 actuated joints, and two fixed camera joints |
+| `exports/isaac/quadruped_robot_fixed.usdc` | Self-contained fixed-base articulation with the mounted RTX camera |
+| `exports/isaac/quadruped_robot_floating.usdc` | Self-contained floating-base articulation with guarded inter-leg collision and the mounted RTX camera |
+| `exports/isaac/quadruped_robot_manual_world.usda` | Portable Isaac world with gravity, floor contact, rated-torque caps, standing targets, and onboard camera |
 
 For manual control, launch the prepared world:
 
 ```powershell
 & C:\isaacsim\python.bat simulation\isaac\open_articulation.py `
-  --world exports\isaac\quadruped_robot_manual_world.usda
+  --world exports\isaac\quadruped_robot_manual_world.usda `
+  --onboard-camera
 ```
 
 Isaac opens the robot at `/World/Robot`. Press **Play**, open
 **Physics > Articulation Inspector**, select `/World/Robot`, and command the
-12 joints by name. The launcher applies the sustainable ST3215 rated cap
+12 joints by name. The camera prim is
+`/World/Robot/Geometry/base_link/lekiwi_camera`; omit `--onboard-camera` for
+the external orbit view. The launcher applies the sustainable ST3215 rated cap
 (`0.980665 N·m`) once; the imported hard limit remains the verified
 `2.941995 N·m` stall torque.
+
+The camera uses Isaac Sim 6.0's current
+`isaacsim.sensors.experimental.rtx` API at 640 x 480, 30 Hz, with RGB and
+depth available. Run `simulation/isaac/validate_camera.py` to verify both
+render buffers and capture an onboard frame.
 
 STEP is the primary output. STL, 3MF, and intentional GLB files are secondary
 manufacturing or interchange exports. Commit these 3D deliverables and regenerate

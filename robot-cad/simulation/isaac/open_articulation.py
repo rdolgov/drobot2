@@ -28,6 +28,15 @@ parser = argparse.ArgumentParser(
 parser.add_argument("--world", required=True, help="Manual-world USDA")
 parser.add_argument("--headless", action="store_true")
 parser.add_argument(
+    "--onboard-camera",
+    action="store_true",
+    help="Open the viewport through the mounted LeKiwi-compatible camera",
+)
+parser.add_argument(
+    "--camera-prim",
+    default="/World/Robot/Geometry/base_link/lekiwi_camera",
+)
+parser.add_argument(
     "--smoke-seconds",
     type=float,
     default=2.0,
@@ -52,6 +61,8 @@ import isaacsim.core.experimental.utils.app as app_utils  # noqa: E402
 import isaacsim.core.experimental.utils.stage as stage_utils  # noqa: E402
 from isaacsim.core.experimental.prims import Articulation  # noqa: E402
 from isaacsim.core.utils.viewports import set_camera_view  # noqa: E402
+from omni.kit.viewport.utility import get_active_viewport  # noqa: E402
+from pxr import UsdGeom  # noqa: E402
 
 APPLICATION_HZ = 60
 
@@ -77,6 +88,9 @@ try:
     opened, stage = stage_utils.open_stage(world_path)
     if not opened or stage is None:
         raise RuntimeError(f"Isaac Sim could not open world: {world_path}")
+    camera_prim = stage.GetPrimAtPath(args.camera_prim)
+    if not camera_prim.IsValid() or not camera_prim.IsA(UsdGeom.Camera):
+        raise AssertionError(f"Mounted camera is missing: {args.camera_prim}")
 
     robot = Articulation("/World/Robot", reset_xform_op_properties=True)
     app_utils.play()
@@ -119,9 +133,13 @@ try:
             "dof_names": dof_names,
             "link_count": robot.num_links,
             "rated_effort_cap_nm": RATED_TORQUE_NM,
+            "camera_prim_path": args.camera_prim,
+            "onboard_camera_view": args.onboard_camera,
             "instructions": (
                 "Press Play if needed, open Physics > Articulation Inspector, "
-                "select /World/Robot, and command the 12 named joints."
+                "select /World/Robot, and command the 12 named joints. "
+                "Use the viewport camera menu or --onboard-camera for the "
+                "robot-mounted RGB view."
             ),
         }
     )
@@ -131,10 +149,16 @@ try:
         for _ in range(round(args.smoke_seconds * APPLICATION_HZ)):
             simulation_app.update()
     else:
-        set_camera_view(
-            eye=[1.05, -1.05, 0.78],
-            target=[0.0, 0.0, 0.24],
-        )
+        if args.onboard_camera:
+            viewport = get_active_viewport()
+            if viewport is None:
+                raise RuntimeError("Isaac Sim has no active viewport")
+            viewport.camera_path = args.camera_prim
+        else:
+            set_camera_view(
+                eye=[1.05, -1.05, 0.78],
+                target=[0.0, 0.0, 0.24],
+            )
         print(report["instructions"])
         print("Joint order:")
         for name in dof_names:

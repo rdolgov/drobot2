@@ -39,10 +39,13 @@ and [Waveshare wiki](https://www.waveshare.com/wiki/ST3215_Servo).
 
 ## Topology
 
-The URDF contains 13 physical links and 12 revolute joints:
+The URDF contains 14 physical links, one massless optical frame, 12 revolute
+joints, and two fixed camera joints:
 
 ```text
 base_link
+|- camera_link
+|  `- camera_optical_frame
 |- front_left_hip_link
 |  `- front_left_proximal_link
 |     `- front_left_distal_link
@@ -60,7 +63,11 @@ base_link
 The body tub, lid, tray, four fixed body-side mounts, battery, and electronics
 are collapsed into `base_link`. Each servo case belongs to the moving child
 that contains its motor bay: hip servo in the hip link, hip-flexion servo in
-the proximal link, and knee servo in the distal link.
+the proximal link, and knee servo in the distal link. `camera_link` owns the
+unchanged LeKiwi printable mount, the Arducam reference mesh, their approximate
+mass properties, and two simple collision boxes. `camera_optical_frame` is
+frame-only and uses the standard `+Z` forward, `+X` right, `+Y` down optical
+convention.
 
 For each full leg prefix (`front_left`, `rear_left`, `front_right`,
 `rear_right`), the joint names are:
@@ -102,6 +109,10 @@ zero flexion and knee, each arm's local `+X` points downward in the body frame.
 | base | tray mesh | `(0,0,0.056) / (0,0,0)` | `exports/stl/quadruped_electronics_tray.stl` |
 | base | four mount meshes | centres `(+-0.060,+-0.117,0.050)`; `rpy=(1.570796,0,+-1.570796)` | `exports/stl/st3215_hip_body_mount.stl` |
 | base | collision box | `(0,0,0.050) / (0,0,0)` | `0.220 x 0.170 x 0.100 m` |
+| camera link | LeKiwi mount mesh | `(0,0,0) / (0,0,0)` | `vendor/references/lekiwi/base_camera_mount.stl` |
+| camera link | Arducam mesh | `(0,0,0.023) / (0,1.570796,0)` | `vendor/references/lekiwi/arducam_5mp_camera_model.stl` |
+| camera link | mount collision box | `(0.003330537,0,0.022592295) / (0,0,0)` | `0.016661073 x 0.048 x 0.045184589 m` |
+| camera link | camera collision box | `(0.01075,0,0.023) / (0,0,0)` | `0.0215 x 0.038 x 0.038 m` |
 | every hip | printable mesh | `(0.0286117,-0.0426117,-0.00195) / (-1.570796,0,0)` | `exports/stl/st3215_hip.stl` |
 | every arm | printable mesh | `(0.0948117,-0.012,0) / (0,0,0)` | `exports/stl/upper_arm.stl` |
 | every hip | guarded printable collision box | `(0.0266617,-0.0460425,-0.00195) / (0,0,0)` | `0.0713 x 0.127308 x 0.04805 m` |
@@ -134,6 +145,8 @@ Input assumptions:
 | each ST3215 | verified `0.055 kg`; uniform box-envelope inertia |
 | battery | provisional `0.450 kg`, centred low in the battery bay |
 | electronics and wiring | provisional `0.150 kg`, centred on the tray |
+| Arducam camera | provisional listed product weight `0.060 kg`, including its attached cable |
+| LeKiwi camera mount | `0.014635989 kg` from upstream STL signed volume at solid-PLA density |
 | omitted | bolts, horns, nuts, loose wiring, and future feet |
 
 Solid-PLA component estimates are: base 0.610 kg, lid 0.178 kg, tray
@@ -148,10 +161,35 @@ Inertias are about the listed COM, expressed in link axes, with inertial
 | Link class | Mass (kg) | COM xyz (m) | Inertia |
 |---|---:|---:|---|
 | base | `2.049119` | `(0,0,0.046485537)` | `(0.0132456004, 0.0000110328, 0, 0.0097442040, 0, 0.0196972212)` |
+| fixed camera assembly | `0.074635989` | `(0.009261819,-0.000021765,0.022460669)` in `camera_link` | `(0.000019829381,-0.000000009911,-0.000000245577,0.000013126569,-0.000000003592,0.000013357698)` |
 | each hip | `0.169697` | `(0.023744808,-0.031777881,-0.001911095)` | `(0.0001832517,0.0000248550,0.0000002392,0.0000718098,-0.0000002529,0.0002314034)` |
 | each proximal/distal arm | `0.215137` | `(0.073011680,-0.000021551,-0.000924466)` | `(0.0000747088,0.0000005653,-0.0000069897,0.0005598933,0.0000000356,0.0005075793)` |
 
-The rounded total model mass is `4.449003 kg`.
+The rounded total model mass is `4.523639 kg`.
+
+## Camera frames and sensor profile
+
+The fixed transform from `base_link` to `camera_link` is
+`xyz=(0.090,0,0.100) m`, `rpy=(0,0,0)`. The optical frame is
+`xyz=(0.0245,0,0.023) m`,
+`rpy=(-1.570796327,0,-1.570796327)`, placing the lens centre at
+`(0.1145,0,0.123) m` in `base_link` and pointing it along robot `+X`.
+
+Isaac authors `/World/Robot/Geometry/base_link/lekiwi_camera` as a child of
+the imported base rigid body. USD cameras look along local `-Z`, so the
+authored quaternion is `wxyz=(0.5,0.5,-0.5,-0.5)`, equivalent to
+`rotateXYZ=(90,0,-90) deg`. A quaternion `xformOp:orient` is required because
+PhysX/Fabric preserves it when the parent rigid body moves.
+
+The lightweight simulation profile is:
+
+- resolution: `480 x 640` pixels in `(height,width)` order;
+- tick rate: `30 Hz`;
+- pinhole horizontal field of view: `95 deg`;
+- focal length: `1.686049360 mm`;
+- aperture: `3.68 x 2.76 mm`;
+- clipping range: `0.05 to 100 m`;
+- available validated annotators: `rgb` and `distance_to_image_plane`.
 
 ## Joint and actuator ledger
 
@@ -194,8 +232,9 @@ The generated handoff artifacts are:
   conservative standing targets, and the rated ST3215 effort cap.
 
 Both USDC assets contain one articulation root, 13 rigid bodies, 12 revolute
-joints, and 12 angular position drives. The manual articulation path is
-`/World/Robot`. The generated world is intended for Isaac Sim's standard
+joints, 12 angular position drives, and one RTX camera. Fixed camera links are
+merged into `base_link` at import, preserving the articulation body count. The
+manual articulation path is `/World/Robot`. The generated world is intended for Isaac Sim's standard
 **Physics > Articulation Inspector**; its launcher sets the initial stand only
 once and does not continuously overwrite manual joint commands.
 
@@ -212,20 +251,29 @@ once and does not continuously overwrite manual joint commands.
    servo/fork overlaps are already known in the source assembly.
 7. There is no electrical or thermal model. Mechanically possible motion may
    still demand unsafe current or duty cycle.
-8. The body lid includes the LeKiwi-compatible camera mount pattern and cable
-   opening, but the optional mount, camera mass, optical frame, and simulated
-   camera sensor are not yet part of the 13-link dynamics model.
+8. The 95-degree camera field of view is a product-profile approximation, not
+   a lens calibration. Distortion, rolling shutter, exposure, microphone,
+   USB latency, and sensor noise are not modeled.
 
 ## Validation and Isaac acceptance criteria
 
 Generation:
 
 - the URDF generator and validator pass;
-- exactly 13 links, 12 revolute joints, one root, no cycles, and no missing
-  mesh references;
+- exactly 15 URDF links, 12 revolute joints, two fixed joints, one root, no
+  cycles, and no missing mesh references;
 - every physical link has inertial, visual, and collision elements;
-- total mass is within numerical tolerance of `4.449003 kg`;
+- total mass is within numerical tolerance of `4.523639 kg`;
 - fixed-base joint sweeps confirm axes, mirrored signs, and continuous poses.
+
+Camera:
+
+- one mounted USD camera survives fixed and floating import;
+- the camera remains a child of `base_link` and points along robot `+X` with
+  image-up along robot `+Z` after PhysX/Fabric starts;
+- a 640 x 480 RGB frame and depth frame are both retrievable through
+  `isaacsim.sensors.experimental.rtx.CameraSensor`;
+- a forward calibration target is visible at the expected depth.
 
 Gravity and standing:
 

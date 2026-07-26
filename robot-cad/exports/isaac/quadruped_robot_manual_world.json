@@ -3,7 +3,7 @@
   "isaac_sim_version": "6.0.1",
   "source_usd": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_floating.usdc",
   "output_world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_manual_world.usda",
-  "world_bytes": 17767,
+  "world_bytes": 18446,
   "source_reference": "./quadruped_robot_floating.usdc",
   "stage_facts": {
     "articulation_roots": 1,
@@ -12,6 +12,7 @@
     "angular_drives": 12,
     "fixed_joints": 0,
     "physics_scenes": 1,
+    "cameras": 1,
     "self_collision_enabled_roots": 1,
     "filtered_pair_targets": 12
   },
@@ -30,6 +31,7 @@
     "rear_right_hip_flexion": 8.8517161698667,
     "rear_right_knee": -26.924730977054622
   },
-  "bound_robot_collision_count": 29,
-  "instructions": "Open the world in Isaac Sim, press Play, then open Physics > Articulation Inspector and select /World/Robot."
+  "bound_robot_collision_count": 31,
+  "camera_prim_path": "/World/Robot/Geometry/base_link/lekiwi_camera",
+  "instructions": "Open the world in Isaac Sim, press Play, then open Physics > Articulation Inspector and select /World/Robot. Select /World/Robot/Geometry/base_link/lekiwi_camera from the viewport camera menu for the onboard RGB view."
 }

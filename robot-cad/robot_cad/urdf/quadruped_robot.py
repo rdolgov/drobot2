@@ -26,6 +26,66 @@ SERVO_NO_LOAD_VELOCITY_RAD_S = 4.712389
 SERVO_BOX_SIZE_M = (0.045223408, 0.0378, 0.024723408)
 SERVO_VISUAL_MESH = "../stl/st3215_servo_visual.stl"
 
+# LeKiwi-compatible Arducam 5 MP wide-angle camera integration.  The fixed
+# camera_link frame is the published mount origin on the lid.  The
+# camera_optical_frame follows the standard +Z forward, +X right, +Y down
+# convention.  Isaac's USD camera uses its own -Z-forward transform, authored
+# from these constants during URDF import.
+CAMERA_MOUNT_VISUAL_MESH = (
+    "../../vendor/references/lekiwi/base_camera_mount.stl"
+)
+CAMERA_BODY_VISUAL_MESH = (
+    "../../vendor/references/lekiwi/arducam_5mp_camera_model.stl"
+)
+BASE_TO_CAMERA_LINK_XYZ_M = (0.090, 0.0, 0.100)
+BASE_TO_CAMERA_LINK_RPY_RAD = (0.0, 0.0, 0.0)
+CAMERA_BODY_VISUAL_XYZ_M = (0.0, 0.0, 0.023)
+CAMERA_BODY_VISUAL_RPY_RAD = (0.0, math.pi / 2.0, 0.0)
+CAMERA_LINK_TO_OPTICAL_XYZ_M = (0.0245, 0.0, 0.023)
+CAMERA_LINK_TO_OPTICAL_RPY_RAD = (-math.pi / 2.0, 0.0, -math.pi / 2.0)
+CAMERA_OPTICAL_XYZ_FROM_BASE_M = tuple(
+    parent + child
+    for parent, child in zip(
+        BASE_TO_CAMERA_LINK_XYZ_M,
+        CAMERA_LINK_TO_OPTICAL_XYZ_M,
+        strict=True,
+    )
+)
+CAMERA_MOUNT_COLLISION_SIZE_M = (0.016661073, 0.048, 0.045184589)
+CAMERA_MOUNT_COLLISION_XYZ_M = (0.003330537, 0.0, 0.022592295)
+CAMERA_BODY_COLLISION_SIZE_M = (0.0215, 0.038, 0.038)
+CAMERA_BODY_COLLISION_XYZ_M = (0.01075, 0.0, 0.023)
+
+# Camera weight is the listed 60 g product weight.  The 14.636 g mount mass is
+# computed from the immutable upstream STL signed volume at 1240 kg/m^3.
+# Inertia is a documented two-box approximation about the combined COM.
+CAMERA_BODY_MASS_KG = 0.060
+CAMERA_MOUNT_MASS_KG = 0.014635989
+CAMERA_ASSEMBLY_MASS_KG = CAMERA_BODY_MASS_KG + CAMERA_MOUNT_MASS_KG
+CAMERA_ASSEMBLY_COM_M = (0.009261819, -0.000021765, 0.022460669)
+CAMERA_ASSEMBLY_INERTIA_KG_M2 = (
+    0.000019829381,
+    -0.000000009911,
+    -0.000000245577,
+    0.000013126569,
+    -0.000000003592,
+    0.000013357698,
+)
+
+# Arducam UB0233 / ASIN B0972KK7BC target.  The 640 x 480 simulation stream is
+# deliberately lighter than the physical 5 MP sensor.  Its 95-degree
+# horizontal field of view yields this pinhole focal length for a 3.68 mm
+# active width.
+CAMERA_RESOLUTION_HW = (480, 640)
+CAMERA_TICK_RATE_HZ = 30.0
+CAMERA_HORIZONTAL_FOV_DEG = 95.0
+CAMERA_HORIZONTAL_APERTURE_MM = 3.68
+CAMERA_VERTICAL_APERTURE_MM = 2.76
+CAMERA_FOCAL_LENGTH_MM = CAMERA_HORIZONTAL_APERTURE_MM / (
+    2.0 * math.tan(math.radians(CAMERA_HORIZONTAL_FOV_DEG) / 2.0)
+)
+CAMERA_CLIPPING_RANGE_M = (0.05, 100.0)
+
 # These safe initial ranges are assumptions pending physical cable-routing and
 # CAD collision sweeps.  Only the knee's +/-90 degree range was pre-specified.
 HIP_ABDUCTION_LIMIT_RAD = math.radians(25.0)
@@ -49,8 +109,10 @@ VIRTUAL_FORK_TIP_RADIUS_M = 0.0125
 BASE_MASS_KG = 2.049119
 HIP_LINK_MASS_KG = 0.169697
 ARM_LINK_MASS_KG = 0.215137
-TOTAL_ROBOT_MASS_KG = BASE_MASS_KG + 4.0 * (
-    HIP_LINK_MASS_KG + 2.0 * ARM_LINK_MASS_KG
+TOTAL_ROBOT_MASS_KG = (
+    BASE_MASS_KG
+    + CAMERA_ASSEMBLY_MASS_KG
+    + 4.0 * (HIP_LINK_MASS_KG + 2.0 * ARM_LINK_MASS_KG)
 )
 
 # Inertias are about each listed COM and expressed in its link frame.
@@ -271,6 +333,20 @@ def _add_revolute_joint(
     )
 
 
+def _add_fixed_joint(
+    robot,
+    name: str,
+    parent_link: str,
+    child_link: str,
+    xyz,
+    rpy=(0.0, 0.0, 0.0),
+):
+    joint = ET.SubElement(robot, "joint", {"name": name, "type": "fixed"})
+    ET.SubElement(joint, "parent", {"link": parent_link})
+    ET.SubElement(joint, "child", {"link": child_link})
+    _origin(joint, xyz, rpy)
+
+
 def _add_base(robot):
     base = ET.SubElement(robot, "link", {"name": "base_link"})
     _add_inertial(base, BASE_MASS_KG, BASE_COM_M, BASE_INERTIA_KG_M2)
@@ -318,6 +394,62 @@ def _add_base(robot):
         "body_enclosure_collision",
         (0.220, 0.170, 0.100),
         (0.0, 0.0, 0.050),
+    )
+
+
+def _add_camera(robot):
+    camera = ET.SubElement(robot, "link", {"name": "camera_link"})
+    _add_inertial(
+        camera,
+        CAMERA_ASSEMBLY_MASS_KG,
+        CAMERA_ASSEMBLY_COM_M,
+        CAMERA_ASSEMBLY_INERTIA_KG_M2,
+    )
+    _add_mesh_visual(
+        camera,
+        "lekiwi_base_camera_mount",
+        CAMERA_MOUNT_VISUAL_MESH,
+        "camera_mount_green",
+    )
+    _add_mesh_visual(
+        camera,
+        "arducam_5mp_camera",
+        CAMERA_BODY_VISUAL_MESH,
+        "camera_body_purple",
+        xyz=CAMERA_BODY_VISUAL_XYZ_M,
+        rpy=CAMERA_BODY_VISUAL_RPY_RAD,
+    )
+    _add_box_collision(
+        camera,
+        "camera_mount_proxy",
+        CAMERA_MOUNT_COLLISION_SIZE_M,
+        CAMERA_MOUNT_COLLISION_XYZ_M,
+    )
+    _add_box_collision(
+        camera,
+        "camera_body_proxy",
+        CAMERA_BODY_COLLISION_SIZE_M,
+        CAMERA_BODY_COLLISION_XYZ_M,
+    )
+
+    # This frame carries no mass or geometry; it exposes the camera's optical
+    # convention to ROS-style consumers and downstream calibration tooling.
+    ET.SubElement(robot, "link", {"name": "camera_optical_frame"})
+    _add_fixed_joint(
+        robot,
+        "base_to_camera_mount",
+        "base_link",
+        "camera_link",
+        BASE_TO_CAMERA_LINK_XYZ_M,
+        BASE_TO_CAMERA_LINK_RPY_RAD,
+    )
+    _add_fixed_joint(
+        robot,
+        "camera_to_optical",
+        "camera_link",
+        "camera_optical_frame",
+        CAMERA_LINK_TO_OPTICAL_XYZ_M,
+        CAMERA_LINK_TO_OPTICAL_RPY_RAD,
     )
 
 
@@ -465,6 +597,8 @@ def gen_urdf():
     _add_material(robot, "lid_blue", (0.22, 0.36, 0.50, 1.0))
     _add_material(robot, "tray_gold", (0.95, 0.65, 0.12, 1.0))
     _add_material(robot, "mount_light", (0.65, 0.68, 0.74, 1.0))
+    _add_material(robot, "camera_mount_green", (0.25, 0.72, 0.38, 1.0))
+    _add_material(robot, "camera_body_purple", (0.62, 0.28, 0.78, 1.0))
     _add_material(robot, "servo_black", (0.025, 0.03, 0.04, 1.0))
     _add_material(robot, "virtual_contact_magenta", (0.95, 0.05, 0.48, 1.0))
     _add_material(robot, "front_left_plastic", (0.95, 0.38, 0.08, 1.0))
@@ -473,6 +607,7 @@ def gen_urdf():
     _add_material(robot, "rear_right_plastic", (0.50, 0.28, 0.82, 1.0))
 
     _add_base(robot)
+    _add_camera(robot)
     for leg in LEGS:
         _add_leg(robot, leg)
     return robot

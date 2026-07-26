@@ -24,7 +24,9 @@ $urdf = (Resolve-Path 'exports\urdf\quadruped_robot.urdf').Path
 ```
 
 Each import report must show one articulation root, 13 rigid bodies, 12
-revolute joints, and 12 angular drives. Use its `root_usd` value for validation.
+revolute joints, 12 angular drives, and one RTX camera. The camera's two fixed
+URDF joints are merged into `base_link`, preserving the proven 13-body
+articulation. Use the report's `root_usd` value for validation.
 `--asset-layout packaged` remains available when a multi-file, multi-physics
 payload package is specifically needed; keep that entire generated directory.
 
@@ -100,6 +102,30 @@ The present model has no printed feet. Its distal fork-tip collision contacts
 are intentionally recorded as an approximation in every report, so a simulated
 pass does not replace printed-foot, floor-friction, or endurance testing.
 
+## Mounted camera
+
+The LeKiwi-compatible Arducam model is represented by `camera_link` plus the
+massless `camera_optical_frame`. The Isaac asset contains a camera at:
+
+```text
+/World/Robot/Geometry/base_link/lekiwi_camera
+```
+
+The default simulation profile is 640 x 480 RGB and depth at 30 Hz, with a
+95-degree horizontal field of view. Validate the actual RTX render buffers:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\validate_camera.py `
+  --usd exports\isaac\quadruped_robot_fixed.usdc `
+  --output reviews\isaac-lekiwi-camera-rgb.png `
+  --report simulation\isaac\output\camera-validation.json
+```
+
+The validator uses Isaac Sim 6.0's
+`isaacsim.sensors.experimental.rtx.CameraSensor`, reads both `rgb` and
+`distance_to_image_plane`, checks the mounted orientation, and writes an
+onboard RGB frame.
+
 ## Manual articulation
 
 The portable handoff files are:
@@ -115,10 +141,12 @@ ST3215 cap.
 
 ```powershell
 & C:\isaacsim\python.bat simulation\isaac\open_articulation.py `
-  --world exports\isaac\quadruped_robot_manual_world.usda
+  --world exports\isaac\quadruped_robot_manual_world.usda `
+  --onboard-camera
 ```
 
 When Isaac opens, press **Play**, open **Physics > Articulation Inspector**,
 select `/World/Robot`, and move the named joints. The launcher sets the initial
 stand once and then leaves control to Isaac; it does not continuously overwrite
-Inspector commands.
+Inspector commands. Omit `--onboard-camera` to start with the external orbit
+view; the onboard camera remains selectable from the viewport camera menu.
