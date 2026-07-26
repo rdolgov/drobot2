@@ -17,6 +17,7 @@ __pycache__/
 
 # Generated root-level artifacts and local viewer state
 /exports/
+/public-cad-reviews/
 **/.cad-viewer/
 **/.git-nested-backup/
 
