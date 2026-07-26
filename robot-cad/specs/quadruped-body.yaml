@@ -1,0 +1,96 @@
+schema_version: 1
+assembly_id: four_leg_st3215_quadruped
+units:
+  length: mm
+  angle: deg
+
+coordinate_system:
+  origin: center of body footprint at bottom surface
+  positive_x: robot front
+  positive_y: robot left
+  positive_z: up
+
+body:
+  exterior_xyz_mm: [220.0, 170.0, 100.0]
+  base_height_mm: 96.0
+  wall_mm: 3.2
+  floor_mm: 4.0
+  corner_radius_mm: 12.0
+  structural_split_required: false
+  separately_printed_parts:
+    - open_top_body_base
+    - removable_lid
+    - removable_electronics_tray
+
+hip_interfaces:
+  plate_source: robot_cad/parts/st3215_hip_body_mount.py
+  plate_size_mm: [76.0, 76.0, 6.0]
+  plate_centers_x_mm: [-60.0, 60.0]
+  body_side_faces_y_mm: [-85.0, 85.0]
+  center_z_mm: 50.0
+  body_hole_diameter_mm: 4.8
+  hole_rows_x_mm: [-90.0, -30.0, 30.0, 90.0]
+  hole_rows_z_mm: [20.0, 80.0]
+  local_backing_thickness_mm: 6.0
+
+internal_layout:
+  battery_clear_envelope_xyz_mm: [168.0, 68.0, 46.0]
+  battery_status: provisional_until_exact_pack_is_selected
+  battery_rail_clearance_per_side_mm: 1.0
+  battery_retaining_rail_height_mm: 8.0
+  electronics_tray_xyz_mm: [180.0, 132.0, 3.0]
+  electronics_tray_bottom_z_mm: 56.0
+  electronics_clear_height_below_lid_mm: 34.0
+  electronics_status: provisional_until_boards_and_connectors_are_selected
+  lid_fasteners:
+    nominal: M3
+    boss_quantity: 4
+    insert_pilot_diameter_mm: 4.2
+    status: pilot_must_be_adjusted_to_selected_heat_set_insert
+
+x2d_print_fit:
+  official_main_nozzle_volume_xyz_mm: [256.0, 256.0, 260.0]
+  official_auxiliary_or_shared_volume_xyz_mm: [235.5, 256.0, 256.0]
+  official_source: https://blog.bambulab.com/xcellence-made-simple-bambu-lab-presents-the-x2d/
+  official_area_explanation: https://blog.bambulab.com/two-extruders-one-purpose-what-is-x2d-direct-drive-extrusion-and-auxiliary-extrusion/
+  recommended_brim_mm: 5.0
+  base_with_brim_xyz_mm: [230.0, 180.0, 96.0]
+  fits_main_nozzle: true
+  fits_shared_dual_nozzle_region: true
+  structural_body_split_required: false
+
+preview_stance:
+  note: preview angles are not validated joint limits
+  front_left_deg: [15.0, -20.0, -35.0]
+  rear_left_deg: [15.0, 20.0, 35.0]
+  front_right_deg: [15.0, 20.0, 35.0]
+  rear_right_deg: [15.0, -20.0, -35.0]
+
+outputs:
+  body_base:
+    source: robot_cad/parts/quadruped_body.py
+    step: exports/step/quadruped_body_base.step
+    stl: exports/stl/quadruped_body_base.stl
+    3mf: exports/3mf/quadruped_body_base.3mf
+  lid:
+    source: robot_cad/parts/quadruped_body_lid.py
+    step: exports/step/quadruped_body_lid.step
+    stl: exports/stl/quadruped_body_lid.stl
+    3mf: exports/3mf/quadruped_body_lid.3mf
+  electronics_tray:
+    source: robot_cad/parts/quadruped_electronics_tray.py
+    step: exports/step/quadruped_electronics_tray.step
+    stl: exports/stl/quadruped_electronics_tray.stl
+    3mf: exports/3mf/quadruped_electronics_tray.3mf
+  complete_assembly:
+    source: robot_cad/assembly/quadruped_robot.py
+    step: exports/step/quadruped_robot.step
+    printable: false
+
+acceptance_tests:
+  - base, lid, and electronics tray are each one connected valid solid
+  - base has sixteen body-side M4 clearance holes aligned to four hip plates
+  - four leg root plates sit flush to the two body side faces
+  - battery clear envelope and electronics tray fit inside the body
+  - base with recommended brim fits the X2D shared dual-nozzle region
+  - complete assembly preserves four labeled seven-component leg modules

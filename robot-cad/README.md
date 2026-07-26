@@ -23,6 +23,11 @@ assemblies.
 | `exports/step/st3215_motor_bay_fit_preview.step` | `robot_cad/assembly/st3215_motor_bay_fit_preview.py` | Bay plus exact catalog servo |
 | `exports/step/upper_arm_st3215_fit_preview.step` | `robot_cad/assembly/upper_arm_st3215_fit_preview.py` | Complete upper arm and installed servo |
 | `exports/step/robot_arm.step` | `robot_cad/assembly/robot_arm.py` | Two complete upper arms joined by the elbow ST3215 |
+| `exports/step/robot_leg.step` | `robot_cad/assembly/robot_leg.py` | Body hip mount, perpendicular hip, three exact ST3215 servos, and two linked upper arms |
+| `exports/step/quadruped_body_base.step` | `robot_cad/parts/quadruped_body.py` | One-piece X2D-safe body tub with hip reinforcement and battery bay |
+| `exports/step/quadruped_body_lid.step` | `robot_cad/parts/quadruped_body_lid.py` | Removable ventilated body lid |
+| `exports/step/quadruped_electronics_tray.step` | `robot_cad/parts/quadruped_electronics_tray.py` | Removable electronics tray above the battery |
+| `exports/step/quadruped_robot.step` | `robot_cad/assembly/quadruped_robot.py` | Complete body with four mirrored seven-component ST3215 legs |
 
 STEP is the primary output. STL files are secondary manufacturing exports.
 Everything under `exports/` is generated and intentionally ignored by Git.
@@ -63,7 +68,7 @@ run from PowerShell:
 ## Generate the migrated models
 
 The generation helper discovers the installed text-to-cad CAD skill, makes its
-assembly runtime available, and regenerates all five explicit targets.
+assembly runtime available, and regenerates every explicit target above.
 
 ```powershell
 .\scripts\generate_cad.ps1 -Force

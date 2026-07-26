@@ -1,0 +1,122 @@
+from functools import lru_cache
+
+import pytest
+from build123d import Align, Box, Location, Vector
+
+from robot_cad.parts import (
+    quadruped_body,
+    quadruped_body_lid,
+    quadruped_electronics_tray,
+)
+
+
+@lru_cache(maxsize=1)
+def generated_base():
+    return quadruped_body.gen_step()
+
+
+@lru_cache(maxsize=1)
+def generated_lid():
+    return quadruped_body_lid.gen_step()
+
+
+@lru_cache(maxsize=1)
+def generated_tray():
+    return quadruped_electronics_tray.gen_step()
+
+
+@pytest.mark.parametrize(
+    "shape_factory",
+    [generated_base, generated_lid, generated_tray],
+)
+def test_each_printable_body_piece_is_one_valid_solid(shape_factory) -> None:
+    shape = shape_factory()
+
+    assert shape.is_valid
+    assert len(shape.solids()) == 1
+
+
+def test_body_base_has_expected_x2d_safe_bounds() -> None:
+    bounds = generated_base().bounding_box()
+
+    assert tuple(bounds.size) == pytest.approx((220.0, 170.0, 96.0))
+    assert tuple(bounds.min) == pytest.approx((-110.0, -85.0, 0.0))
+    assert quadruped_body.x2d_print_footprint_with_brim() == pytest.approx(
+        (230.0, 180.0, 96.0)
+    )
+    assert (
+        quadruped_body.x2d_print_footprint_with_brim()[0]
+        <= quadruped_body.X2D_DUAL_NOZZLE_SHARED_VOLUME_MM[0]
+    )
+    assert (
+        quadruped_body.x2d_print_footprint_with_brim()[1]
+        <= quadruped_body.X2D_DUAL_NOZZLE_SHARED_VOLUME_MM[1]
+    )
+
+
+def test_all_sixteen_hip_holes_pass_through_reinforced_side_walls() -> None:
+    base = generated_base()
+
+    for x_mm in quadruped_body.HIP_MOUNT_HOLE_X_MM:
+        for z_mm in quadruped_body.HIP_MOUNT_HOLE_Z_MM:
+            for side in (-1.0, 1.0):
+                wall_y = side * (
+                    quadruped_body.BODY_WIDTH_Y_MM / 2.0
+                    - quadruped_body.BODY_WALL_MM / 2.0
+                )
+                assert not base.is_inside(Vector(x_mm, wall_y, z_mm))
+                assert base.is_inside(Vector(x_mm + 4.0, wall_y, z_mm))
+
+
+def test_battery_clear_envelope_is_open_inside_the_retaining_rail() -> None:
+    base = generated_base()
+    battery_envelope = Box(
+        quadruped_body.BATTERY_CLEAR_LENGTH_X_MM,
+        quadruped_body.BATTERY_CLEAR_WIDTH_Y_MM,
+        quadruped_body.BATTERY_CLEAR_HEIGHT_Z_MM,
+        align=(Align.CENTER, Align.CENTER, Align.MIN),
+    ).moved(Location((0.0, 0.0, quadruped_body.BODY_FLOOR_MM)))
+    intersection = base.intersect(battery_envelope)
+
+    assert intersection is None or intersection.volume == pytest.approx(
+        0.0, abs=1e-6
+    )
+
+
+def test_lid_locator_has_declared_per_side_clearance() -> None:
+    cavity_length = (
+        quadruped_body.BODY_LENGTH_X_MM - 2.0 * quadruped_body.BODY_WALL_MM
+    )
+    cavity_width = (
+        quadruped_body.BODY_WIDTH_Y_MM - 2.0 * quadruped_body.BODY_WALL_MM
+    )
+    lip = quadruped_body_lid.make_locator_lip().bounding_box()
+
+    assert cavity_length - lip.size.X == pytest.approx(
+        2.0 * quadruped_body_lid.LID_LOCATOR_CLEARANCE_PER_SIDE_MM
+    )
+    assert cavity_width - lip.size.Y == pytest.approx(
+        2.0 * quadruped_body_lid.LID_LOCATOR_CLEARANCE_PER_SIDE_MM
+    )
+
+
+def test_seated_lid_has_no_volume_intersection_with_body_base() -> None:
+    base = generated_base()
+    seated_lid = generated_lid().moved(
+        Location((0.0, 0.0, quadruped_body.BODY_BASE_HEIGHT_Z_MM))
+    )
+    intersection = base.intersect(seated_lid)
+
+    assert intersection is None or intersection.volume == pytest.approx(
+        0.0, abs=1e-6
+    )
+
+
+def test_tray_and_lid_mount_holes_are_open() -> None:
+    tray = generated_tray()
+    lid = generated_lid()
+
+    for x_mm, y_mm in quadruped_body.TRAY_STANDOFF_CENTERS_XY_MM:
+        assert not tray.is_inside(Vector(x_mm, y_mm, 1.5))
+    for x_mm, y_mm in quadruped_body.LID_BOSS_CENTERS_XY_MM:
+        assert not lid.is_inside(Vector(x_mm, y_mm, 2.0))

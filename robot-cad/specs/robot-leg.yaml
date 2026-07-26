@@ -1,0 +1,71 @@
+schema_version: 1
+assembly_id: complete_st3215_robot_leg
+units:
+  length: mm
+  angle: deg
+
+root_component: body_side_hip_mount
+printable: false
+preview_orientation: body mount is rigidly oriented so the approved hip hangs downward at zero degrees
+
+components:
+  - id: body_side_hip_mount
+    source: robot_cad/parts/st3215_hip_body_mount.py
+    role: fixed robot-body mounting plate and first output fork
+  - id: hip_abduction_st3215_servo
+    source: vendor/servos/waveshare_feetech_st3215_servo.step
+    relationship: installed in st3215_hip and captured by body_side_hip_mount
+    status: exact_catalog_model
+  - id: st3215_hip
+    source: robot_cad/parts/st3215_hip.py
+    role: perpendicular two-axis hip link
+  - id: hip_flexion_st3215_servo
+    source: vendor/servos/waveshare_feetech_st3215_servo.step
+    relationship: installed in proximal_upper_arm and captured by st3215_hip
+    status: exact_catalog_model
+  - id: proximal_upper_arm
+    source: robot_cad/parts/upper_arm.py
+    role: first long leg link
+  - id: knee_st3215_servo
+    source: vendor/servos/waveshare_feetech_st3215_servo.step
+    relationship: installed in distal_upper_arm and captured by proximal_upper_arm
+    status: exact_catalog_model
+  - id: distal_upper_arm
+    source: robot_cad/parts/upper_arm.py
+    role: second long leg link
+
+connections:
+  - id: body_hip_abduction_joint
+    type: revolute
+    parent_component: body_side_hip_mount
+    parent_frame: frame_st3215_output_axis
+    child_component: st3215_hip
+    child_frame: frame_installed_st3215_output_axis
+    preview_angle_deg: 15.0
+  - id: hip_flexion_joint
+    type: revolute
+    parent_component: st3215_hip
+    parent_frame: frame_distal_fork_axis
+    child_component: proximal_upper_arm
+    child_frame: frame_st3215_output_axis
+    preview_angle_deg: 20.0
+  - id: knee_joint
+    type: revolute
+    parent_component: proximal_upper_arm
+    parent_frame: frame_distal_fork_axis
+    child_component: distal_upper_arm
+    child_frame: frame_st3215_output_axis
+    preview_angle_deg: 35.0
+    minimum_deg: -90.0
+    maximum_deg: 90.0
+
+output:
+  source: robot_cad/assembly/robot_leg.py
+  step: exports/step/robot_leg.step
+
+acceptance_tests:
+  - assembly preserves seven labeled occurrences in body-to-foot order
+  - assembly contains three occurrences of the immutable exact ST3215 model
+  - all three child servo shaft origins coincide with their parent fork origins
+  - all three child servo shaft directions align with their parent fork directions
+  - printable component bodies are unchanged by preview joint angles
