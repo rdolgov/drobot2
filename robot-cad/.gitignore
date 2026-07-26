@@ -22,3 +22,4 @@ exports/snapshots/
 exports/step/_baseline/
 exports/step/exports/
 exports/step/*.tmp
+simulation/isaac/output/

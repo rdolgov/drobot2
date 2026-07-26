@@ -35,6 +35,7 @@ $env:PYTHONPATH = $pythonPathParts -join [IO.Path]::PathSeparator
 
 $targets = @(
     "robot_cad/parts/st3215_motor_bay.py=exports/step/st3215_motor_bay.step",
+    "robot_cad/parts/st3215_servo_visual.py=exports/step/st3215_servo_visual.step",
     "robot_cad/parts/upper_arm.py=exports/step/upper_arm.step",
     "robot_cad/parts/st3215_servo_output_fork.py=exports/step/st3215_servo_output_fork.step",
     "robot_cad/parts/st3215_hip.py=exports/step/st3215_hip.step",
@@ -63,9 +64,16 @@ try {
 
     & $python $stepTool `
         "robot_cad/parts/st3215_motor_bay.py=exports/step/st3215_motor_bay.step" `
-        --stl "exports/stl/st3215_motor_bay.stl"
+        --stl "../stl/st3215_motor_bay.stl"
     if ($LASTEXITCODE -ne 0) {
         throw "ST3215 motor-bay STL export failed with exit code $LASTEXITCODE."
+    }
+
+    & $python $stepTool `
+        "robot_cad/parts/st3215_servo_visual.py=exports/step/st3215_servo_visual.step" `
+        --stl "../stl/st3215_servo_visual.stl"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Exact ST3215 visual STL export failed with exit code $LASTEXITCODE."
     }
 
     & $python $stepTool `
@@ -77,9 +85,16 @@ try {
 
     & $python $stepTool `
         "robot_cad/parts/upper_arm.py=exports/step/upper_arm.step" `
-        --stl "exports/stl/upper_arm.stl"
+        --stl "../stl/upper_arm.stl"
     if ($LASTEXITCODE -ne 0) {
         throw "Upper-arm STL export failed with exit code $LASTEXITCODE."
+    }
+
+    & $python $stepTool `
+        "robot_cad/parts/st3215_hip_body_mount.py=exports/step/st3215_hip_body_mount.step" `
+        --stl "../stl/st3215_hip_body_mount.stl"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Body-side hip-mount STL export failed with exit code $LASTEXITCODE."
     }
 
     & $python $stepTool `

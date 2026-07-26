@@ -15,6 +15,7 @@ assemblies.
 | Target | Generator | Purpose |
 | --- | --- | --- |
 | `exports/step/st3215_motor_bay.step` | `robot_cad/parts/st3215_motor_bay.py` | Printable keyed rear motor bay |
+| `exports/step/st3215_servo_visual.step` | `robot_cad/parts/st3215_servo_visual.py` | Unmodified exact catalog ST3215 geometry for URDF/Isaac visuals |
 | `exports/step/upper_arm.step` | `robot_cad/parts/upper_arm.py` | Complete printable SO-101 upper arm with fused bay and integral output fork |
 | `exports/step/st3215_servo_output_fork.step` | `robot_cad/parts/st3215_servo_output_fork.py` | Reusable ST3215 output fork with a 30 mm negative-X full-edge fusion cap |
 | `exports/step/st3215_hip.step` | `robot_cad/parts/st3215_hip.py` | Printable fused hip in the approved left/down perpendicular pose |
@@ -28,6 +29,28 @@ assemblies.
 | `exports/step/quadruped_body_lid.step` | `robot_cad/parts/quadruped_body_lid.py` | Removable ventilated body lid |
 | `exports/step/quadruped_electronics_tray.step` | `robot_cad/parts/quadruped_electronics_tray.py` | Removable electronics tray above the battery |
 | `exports/step/quadruped_robot.step` | `robot_cad/assembly/quadruped_robot.py` | Complete body with four mirrored seven-component ST3215 legs |
+
+## Robot description and Isaac articulation
+
+| Target | Purpose |
+| --- | --- |
+| `exports/urdf/quadruped_robot.urdf` | SI-unit 13-link/12-joint robot description using current printable meshes and exact ST3215 visual geometry |
+| `exports/isaac/quadruped_robot_fixed.usdc` | Self-contained fixed-base articulation for safe joint commissioning |
+| `exports/isaac/quadruped_robot_floating.usdc` | Self-contained floating-base articulation for gravity and gait work |
+| `exports/isaac/quadruped_robot_manual_world.usda` | Portable Isaac world with Earth gravity, floor contact, rated-torque caps, and standing targets |
+
+For manual control, launch the prepared world:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\open_articulation.py `
+  --world exports\isaac\quadruped_robot_manual_world.usda
+```
+
+Isaac opens the robot at `/World/Robot`. Press **Play**, open
+**Physics > Articulation Inspector**, select `/World/Robot`, and command the
+12 joints by name. The launcher applies the sustainable ST3215 rated cap
+(`0.980665 N·m`) once; the imported hard limit remains the verified
+`2.941995 N·m` stall torque.
 
 STEP is the primary output. STL, 3MF, and intentional GLB files are secondary
 manufacturing or interchange exports. Commit these 3D deliverables and regenerate
@@ -111,8 +134,10 @@ robot-cad/
 |-- vendor/                Immutable catalog/reference STEP models
 |-- robot_cad/
 |   |-- parts/             Printable part generators
-|   `-- assembly/          Labeled, non-printable fit previews
+|   |-- assembly/          Labeled, non-printable fit previews
+|   `-- urdf/              Generated robot-description source
 |-- scripts/               CAD generation and Viewer launch helpers
+|-- simulation/isaac/      Import, validation, gait, and manual-control runners
 |-- tools/                 Project-owned markup patch and Viewer runtime
 |-- reviews/               Editable markup and retained design intent
 |-- tests/                 Mechanical and provenance checks
