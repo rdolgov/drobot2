@@ -1,0 +1,33 @@
+{
+  "status": "PASS",
+  "isaac_sim_version": "6.0.1",
+  "source_usd": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_floating.usdc",
+  "output_world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_manual_world.usda",
+  "world_bytes": 17767,
+  "source_reference": "./quadruped_robot_floating.usdc",
+  "stage_facts": {
+    "articulation_roots": 1,
+    "rigid_bodies": 13,
+    "revolute_joints": 12,
+    "angular_drives": 12,
+    "fixed_joints": 0,
+    "physics_scenes": 1
+  },
+  "rated_effort_cap_nm": 0.980665,
+  "standing_targets_deg_by_joint": {
+    "front_left_hip_abduction": 0.0,
+    "front_left_hip_flexion": -8.8517161698667,
+    "front_left_knee": 26.924730977054622,
+    "rear_left_hip_abduction": 0.0,
+    "rear_left_hip_flexion": 8.8517161698667,
+    "rear_left_knee": -26.924730977054622,
+    "front_right_hip_abduction": 0.0,
+    "front_right_hip_flexion": -8.8517161698667,
+    "front_right_knee": 26.924730977054622,
+    "rear_right_hip_abduction": 0.0,
+    "rear_right_hip_flexion": 8.8517161698667,
+    "rear_right_knee": -26.924730977054622
+  },
+  "bound_robot_collision_count": 29,
+  "instructions": "Open the world in Isaac Sim, press Play, then open Physics > Articulation Inspector and select /World/Robot."
+}
