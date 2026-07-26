@@ -33,7 +33,12 @@ CAD work in this repository.
   Other parts must import and place it rather than copy its cavity geometry.
 - Do not silently substitute ST3215 for STS3212 or ST3215-HS. Require an exact,
   verified STEP before changing the configured servo variant.
-- Generated files under `exports/` are disposable and should not be committed.
+- Commit intentional 3D deliverables under `exports/`: STEP/STP as the primary
+  artifacts and STL/3MF/GLB as secondary artifacts. Regenerate every affected
+  deliverable whenever its corresponding Python generator or YAML specification
+  changes.
+- Do not commit PNGs, snapshots, renders, CAD Viewer caches, temporary files, or
+  other review-only output under `exports/`.
 
 The original SO-101 STEP coordinate system is intentionally preserved. Read
 `specs/coordinate-system.md` and the relevant YAML specification before

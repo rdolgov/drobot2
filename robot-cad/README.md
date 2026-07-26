@@ -29,8 +29,11 @@ assemblies.
 | `exports/step/quadruped_electronics_tray.step` | `robot_cad/parts/quadruped_electronics_tray.py` | Removable electronics tray above the battery |
 | `exports/step/quadruped_robot.step` | `robot_cad/assembly/quadruped_robot.py` | Complete body with four mirrored seven-component ST3215 legs |
 
-STEP is the primary output. STL files are secondary manufacturing exports.
-Everything under `exports/` is generated and intentionally ignored by Git.
+STEP is the primary output. STL, 3MF, and intentional GLB files are secondary
+manufacturing or interchange exports. Commit these 3D deliverables and regenerate
+every affected file whenever its Python generator or YAML specification changes.
+Review-only renders, snapshots, Viewer caches, and temporary files stay local and
+are ignored by Git.
 
 ## Setup
 
@@ -113,7 +116,7 @@ robot-cad/
 |-- tools/                 Project-owned markup patch and Viewer runtime
 |-- reviews/               Editable markup and retained design intent
 |-- tests/                 Mechanical and provenance checks
-`-- exports/               Regenerated STEP, STL, and snapshots
+`-- exports/               Versioned 3D deliverables; local review output
 ```
 
 ## Vendor-model warning

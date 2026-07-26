@@ -14,10 +14,11 @@ dist/
 **/.*.stp.glb
 **/.*.stp.glb.json
 
-# Generated CAD artifacts. Keep the directory structure, regenerate the files.
-exports/step/*
-!exports/step/.gitkeep
-exports/stl/*
-!exports/stl/.gitkeep
+# Commit intentional 3D deliverables; regenerate them when their source changes.
+# Keep review-only output and CAD Viewer caches local.
 exports/renders/*
 !exports/renders/.gitkeep
+exports/snapshots/
+exports/step/_baseline/
+exports/step/exports/
+exports/step/*.tmp
