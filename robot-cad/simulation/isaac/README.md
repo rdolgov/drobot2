@@ -24,9 +24,9 @@ $urdf = (Resolve-Path 'exports\urdf\quadruped_robot.urdf').Path
 ```
 
 Each import report must show one articulation root, 13 rigid bodies, 12
-revolute joints, 12 angular drives, and one RTX camera. The camera's two fixed
-URDF joints are merged into `base_link`, preserving the proven 13-body
-articulation. Use the report's `root_usd` value for validation.
+revolute joints, 12 angular drives, one RTX camera, and one IMU sensor. The
+camera and IMU fixed URDF joints are merged into `base_link`, preserving the
+proven 13-body articulation. Use the report's `root_usd` value for validation.
 `--asset-layout packaged` remains available when a multi-file, multi-physics
 payload package is specifically needed; keep that entire generated directory.
 
@@ -125,6 +125,33 @@ The validator uses Isaac Sim 6.0's
 `isaacsim.sensors.experimental.rtx.CameraSensor`, reads both `rgb` and
 `distance_to_image_plane`, checks the mounted orientation, and writes an
 onboard RGB frame.
+
+## Body IMU
+
+The exact Adafruit BNO085 board is mounted on the electronics tray with its
+sensing element at the body centre. Its URDF and Isaac axes are the robot body
+axes: `+X` forward, `+Y` left, and `+Z` up. The Isaac prim is:
+
+```text
+/World/Robot/Geometry/base_link/body_imu
+```
+
+Validate the experimental-physics sensor, gravity direction, quaternion, and
+nine-value walking-policy observation:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\validate_imu.py `
+  --world exports\isaac\quadruped_robot_manual_world.usda `
+  --settle-seconds 3 `
+  --sample-seconds 1 `
+  --report simulation\isaac\output\imu-validation.json
+```
+
+The output order is body angular velocity, projected unit gravity, and linear
+acceleration divided by `9.81 m/s^2`. Concatenate that block with commands,
+joint state, and previous actions for walking training. Add measured bias,
+latency, vibration, quantization, and dropout as domain randomization before
+claiming sim-to-real fidelity.
 
 ## Manual articulation
 

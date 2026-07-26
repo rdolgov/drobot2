@@ -86,6 +86,32 @@ CAMERA_FOCAL_LENGTH_MM = CAMERA_HORIZONTAL_APERTURE_MM / (
 )
 CAMERA_CLIPPING_RANGE_M = (0.05, 100.0)
 
+# Adafruit product-4754 BNO085 board.  imu_link is located at the measured
+# sensing-package centre, not the PCB centre, and is aligned to base_link so
+# real and simulated observations share +X forward, +Y left, +Z up.
+IMU_VISUAL_MESH = "../stl/adafruit_bno085_stemma_qt.stl"
+BASE_TO_IMU_LINK_XYZ_M = (0.0, 0.0, 0.065160)
+BASE_TO_IMU_LINK_RPY_RAD = (0.0, 0.0, 0.0)
+IMU_VISUAL_XYZ_M = (0.0, 0.0, -0.002160)
+IMU_BOARD_SIZE_M = (0.0254, 0.02286, 0.00453)
+IMU_BOARD_ENVELOPE_CENTER_FROM_SENSOR_M = (
+    -0.000003,
+    -0.000805,
+    0.000105,
+)
+IMU_MASS_KG = 0.0025
+IMU_INERTIA_KG_M2 = (
+    0.0000001131459375,
+    0.0,
+    0.0,
+    0.0000001386835208,
+    0.0,
+    0.0000002432790833,
+)
+IMU_LINEAR_ACCELERATION_FILTER_SIZE = 3
+IMU_ANGULAR_VELOCITY_FILTER_SIZE = 3
+IMU_ORIENTATION_FILTER_SIZE = 3
+
 # These safe initial ranges are assumptions pending physical cable-routing and
 # CAD collision sweeps.  Only the knee's +/-90 degree range was pre-specified.
 HIP_ABDUCTION_LIMIT_RAD = math.radians(25.0)
@@ -112,6 +138,7 @@ ARM_LINK_MASS_KG = 0.215137
 TOTAL_ROBOT_MASS_KG = (
     BASE_MASS_KG
     + CAMERA_ASSEMBLY_MASS_KG
+    + IMU_MASS_KG
     + 4.0 * (HIP_LINK_MASS_KG + 2.0 * ARM_LINK_MASS_KG)
 )
 
@@ -453,6 +480,38 @@ def _add_camera(robot):
     )
 
 
+def _add_imu(robot):
+    """Add the fixed physical board and its sensing-element frame."""
+    imu = ET.SubElement(robot, "link", {"name": "imu_link"})
+    _add_inertial(
+        imu,
+        IMU_MASS_KG,
+        IMU_BOARD_ENVELOPE_CENTER_FROM_SENSOR_M,
+        IMU_INERTIA_KG_M2,
+    )
+    _add_mesh_visual(
+        imu,
+        "exact_adafruit_bno085_stemma_qt",
+        IMU_VISUAL_MESH,
+        "imu_board_blue",
+        xyz=IMU_VISUAL_XYZ_M,
+    )
+    _add_box_collision(
+        imu,
+        "bno085_board_envelope",
+        IMU_BOARD_SIZE_M,
+        IMU_BOARD_ENVELOPE_CENTER_FROM_SENSOR_M,
+    )
+    _add_fixed_joint(
+        robot,
+        "base_to_imu",
+        "base_link",
+        "imu_link",
+        BASE_TO_IMU_LINK_XYZ_M,
+        BASE_TO_IMU_LINK_RPY_RAD,
+    )
+
+
 def _add_leg(robot, leg: LegSpec):
     hip_name = f"{leg.name}_hip_link"
     proximal_name = f"{leg.name}_proximal_link"
@@ -590,7 +649,8 @@ def gen_urdf():
     robot.append(
         ET.Comment(
             "Mass model: solid PLA, 0.45 kg battery, 0.15 kg electronics; "
-            "magenta fork-tip contacts are simulation-only."
+            "the 2.5 g BNO085 is separate; magenta fork-tip contacts are "
+            "simulation-only."
         )
     )
     _add_material(robot, "body_dark", (0.08, 0.13, 0.20, 1.0))
@@ -599,6 +659,7 @@ def gen_urdf():
     _add_material(robot, "mount_light", (0.65, 0.68, 0.74, 1.0))
     _add_material(robot, "camera_mount_green", (0.25, 0.72, 0.38, 1.0))
     _add_material(robot, "camera_body_purple", (0.62, 0.28, 0.78, 1.0))
+    _add_material(robot, "imu_board_blue", (0.12, 0.30, 0.62, 1.0))
     _add_material(robot, "servo_black", (0.025, 0.03, 0.04, 1.0))
     _add_material(robot, "virtual_contact_magenta", (0.95, 0.05, 0.48, 1.0))
     _add_material(robot, "front_left_plastic", (0.95, 0.38, 0.08, 1.0))
@@ -607,6 +668,7 @@ def gen_urdf():
     _add_material(robot, "rear_right_plastic", (0.50, 0.28, 0.82, 1.0))
 
     _add_base(robot)
+    _add_imu(robot)
     _add_camera(robot)
     for leg in LEGS:
         _add_leg(robot, leg)

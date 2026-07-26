@@ -6,7 +6,7 @@ from pathlib import Path
 
 from build123d import Align, Box, Cylinder, Location, Shape
 
-from robot_cad.parts import quadruped_body
+from robot_cad.parts import adafruit_bno085, quadruped_body
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -16,6 +16,20 @@ TRAY_VENT_SLOT_LENGTH_X_MM = 28.0
 TRAY_VENT_SLOT_WIDTH_Y_MM = 4.0
 TRAY_VENT_X_MM = (-52.0, 0.0, 52.0)
 TRAY_VENT_Y_MM = (-34.0, 0.0, 34.0)
+
+# Rigid, body-axis-aligned IMU interface.  M2 nylon hardware avoids putting
+# steel fasteners beside the BNO085 magnetometer.  The sensing package, rather
+# than the asymmetric PCB outline, is centred on the robot body origin.
+IMU_M2_CLEARANCE_DIAMETER_MM = 2.4
+IMU_STANDOFF_OUTER_DIAMETER_MM = 6.0
+IMU_STANDOFF_HEIGHT_MM = 4.0
+IMU_STANDOFF_FUSION_OVERLAP_MM = 0.5
+IMU_BOARD_BOTTOM_Z_MM = (
+    quadruped_body.ELECTRONICS_TRAY_THICKNESS_Z_MM + IMU_STANDOFF_HEIGHT_MM
+)
+IMU_MOUNT_CENTERS_XY_MM = (
+    adafruit_bno085.MOUNT_HOLE_CENTERS_SENSOR_XY_MM
+)
 
 
 def _one_valid_solid(shape: Shape, label: str) -> Shape:
@@ -90,10 +104,57 @@ def make_vent_tools() -> tuple[Shape, ...]:
     )
 
 
+def make_imu_standoffs() -> tuple[Shape, ...]:
+    """Return four tray-connected standoffs for the exact BNO085 pattern."""
+    return tuple(
+        Cylinder(
+            IMU_STANDOFF_OUTER_DIAMETER_MM / 2.0,
+            IMU_STANDOFF_HEIGHT_MM + IMU_STANDOFF_FUSION_OVERLAP_MM,
+            align=(Align.CENTER, Align.CENTER, Align.MIN),
+        ).moved(
+            Location(
+                (
+                    x_mm,
+                    y_mm,
+                    quadruped_body.ELECTRONICS_TRAY_THICKNESS_Z_MM
+                    - IMU_STANDOFF_FUSION_OVERLAP_MM,
+                )
+            )
+        )
+        for x_mm, y_mm in IMU_MOUNT_CENTERS_XY_MM
+    )
+
+
+def make_imu_mount_hole_tools() -> tuple[Shape, ...]:
+    """Return four M2 clearance cutters through tray and IMU standoffs."""
+    cutter_height = (
+        IMU_BOARD_BOTTOM_Z_MM + 2.0 * quadruped_body.BOOLEAN_OVERTRAVEL_MM
+    )
+    return tuple(
+        Cylinder(
+            IMU_M2_CLEARANCE_DIAMETER_MM / 2.0,
+            cutter_height,
+            align=(Align.CENTER, Align.CENTER, Align.MIN),
+        ).moved(
+            Location(
+                (
+                    x_mm,
+                    y_mm,
+                    -quadruped_body.BOOLEAN_OVERTRAVEL_MM,
+                )
+            )
+        )
+        for x_mm, y_mm in IMU_MOUNT_CENTERS_XY_MM
+    )
+
+
 def make_electronics_tray() -> Shape:
     """Return the complete removable electronics tray."""
-    finished = make_tray_blank() - (
-        make_mount_hole_tools() + make_vent_tools()
+    reinforced_blank = make_tray_blank().fuse(*make_imu_standoffs())
+    finished = reinforced_blank - (
+        make_mount_hole_tools()
+        + make_vent_tools()
+        + make_imu_mount_hole_tools()
     )
     return _one_valid_solid(finished, "quadruped_electronics_tray")
 

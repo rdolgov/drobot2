@@ -42,6 +42,27 @@ internal_layout:
   electronics_tray_bottom_z_mm: 56.0
   electronics_clear_height_below_lid_mm: 34.0
   electronics_status: provisional_until_boards_and_connectors_are_selected
+  body_imu:
+    selected_board: Adafruit BNO085 STEMMA QT product 4754
+    exact_reference: vendor/sensors/adafruit_bno085_stemma_qt.step
+    product_envelope_xyz_mm: [25.4, 22.86, 4.53]
+    product_mass_kg: 0.0025
+    sensing_element_center_xyz_mm: [0.0, 0.0, 65.16]
+    board_bottom_z_mm: 63.0
+    connector_direction: front_and_rear
+    body_axis_alignment: [+X, +Y, +Z]
+    fastener_nominal: M2_nylon
+    tray_clearance_diameter_mm: 2.4
+    board_hole_diameter_mm: 2.5
+    mount_pattern_xy_mm:
+      - [-10.163, -9.695]
+      - [-10.163, 8.085]
+      - [10.157, -9.695]
+      - [10.157, 8.085]
+    standoff_outer_diameter_mm: 6.0
+    standoff_height_mm: 4.0
+    clearance_below_lid_mm: 25.47
+    note: sensing package is centred; use a no-magnetometer game rotation vector near servo power wiring
   lid_fasteners:
     nominal: M3
     boss_quantity: 4
@@ -168,6 +189,15 @@ outputs:
     step: exports/step/quadruped_electronics_tray.step
     stl: exports/stl/quadruped_electronics_tray.stl
     3mf: exports/3mf/quadruped_electronics_tray.3mf
+  body_imu_reference:
+    source: robot_cad/parts/adafruit_bno085.py
+    step: exports/step/adafruit_bno085_stemma_qt.step
+    stl: exports/stl/adafruit_bno085_stemma_qt.stl
+    printable: false
+  body_imu_fit_preview:
+    source: robot_cad/assembly/quadruped_imu_tray_fit_preview.py
+    step: exports/step/quadruped_imu_tray_fit_preview.step
+    printable: false
   complete_assembly:
     source: robot_cad/assembly/quadruped_robot.py
     step: exports/step/quadruped_robot.step
@@ -182,5 +212,7 @@ acceptance_tests:
   - body floor has eight symmetric M2/M3 utility holes outside the battery rail
   - four leg root plates sit flush to the two body side faces
   - battery clear envelope and electronics tray fit inside the body
+  - BNO085 sensing element is body-centred, axis-aligned, and clear of the lid
+  - four M2 tray holes align to the exact Adafruit BNO085 mounting pattern
   - base with recommended brim fits the X2D shared dual-nozzle region
   - complete assembly preserves four labeled seven-component leg modules

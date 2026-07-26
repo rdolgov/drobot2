@@ -69,6 +69,9 @@ def _stage_facts(stage: Usd.Stage) -> dict[str, int]:
             prim.IsA(UsdPhysics.Scene) for prim in prims
         ),
         "cameras": sum(prim.IsA(UsdGeom.Camera) for prim in prims),
+        "imu_sensors": sum(
+            prim.GetTypeName() == "IsaacImuSensor" for prim in prims
+        ),
         "self_collision_enabled_roots": sum(
             bool(
                 prim.GetAttribute("newton:selfCollisionEnabled").Get()
@@ -218,6 +221,7 @@ try:
         "fixed_joints": 0,
         "physics_scenes": 1,
         "cameras": 1,
+        "imu_sensors": 1,
         "self_collision_enabled_roots": 1,
         "filtered_pair_targets": 12,
     }
@@ -246,6 +250,14 @@ try:
         raise AssertionError(
             f"Unexpected mounted camera paths: {camera_paths}"
         )
+    imu_paths = [
+        str(prim.GetPath())
+        for prim in reopened.Traverse()
+        if prim.GetTypeName() == "IsaacImuSensor"
+    ]
+    expected_imu_path = "/World/Robot/Geometry/base_link/body_imu"
+    if imu_paths != [expected_imu_path]:
+        raise AssertionError(f"Unexpected body IMU paths: {imu_paths}")
 
     report.update(
         {
@@ -257,11 +269,14 @@ try:
             "standing_targets_deg_by_joint": authored_joints,
             "bound_robot_collision_count": bound_robot_collisions,
             "camera_prim_path": expected_camera_path,
+            "imu_prim_path": expected_imu_path,
             "instructions": (
                 "Open the world in Isaac Sim, press Play, then open "
                 "Physics > Articulation Inspector and select /World/Robot. "
                 "Select /World/Robot/Geometry/base_link/lekiwi_camera from "
-                "the viewport camera menu for the onboard RGB view."
+                "the viewport camera menu for the onboard RGB view. Read "
+                "/World/Robot/Geometry/base_link/body_imu with "
+                "isaacsim.sensors.experimental.physics.IMUSensor."
             ),
         }
     )

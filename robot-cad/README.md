@@ -28,6 +28,8 @@ assemblies.
 | `exports/step/quadruped_body_base.step` | `robot_cad/parts/quadruped_body.py` | One-piece X2D-safe body tub with hip reinforcement and battery bay |
 | `exports/step/quadruped_body_lid.step` | `robot_cad/parts/quadruped_body_lid.py` | Removable ventilated body lid with direct LeKiwi camera-mount pattern |
 | `exports/step/quadruped_electronics_tray.step` | `robot_cad/parts/quadruped_electronics_tray.py` | Removable electronics tray above the battery |
+| `exports/step/adafruit_bno085_stemma_qt.step` | `robot_cad/parts/adafruit_bno085.py` | Exact Adafruit BNO085 reference centred on its sensing package |
+| `exports/step/quadruped_imu_tray_fit_preview.step` | `robot_cad/assembly/quadruped_imu_tray_fit_preview.py` | Installed BNO085/tray fit and orientation preview |
 | `exports/step/quadruped_robot.step` | `robot_cad/assembly/quadruped_robot.py` | Complete body with four mirrored seven-component ST3215 legs |
 | `exports/step/lekiwi_camera_body_fit_preview.step` | `robot_cad/assembly/lekiwi_camera_body_fit_preview.py` | Lid positioning preview for the upstream LeKiwi mount and Arducam envelope |
 
@@ -41,10 +43,10 @@ Arducam 5 MP wide-angle USB option (ASIN `B0972KK7BC`), retained under
 
 | Target | Purpose |
 | --- | --- |
-| `exports/urdf/quadruped_robot.urdf` | SI-unit description with 14 physical links, one optical frame, 12 actuated joints, and two fixed camera joints |
-| `exports/isaac/quadruped_robot_fixed.usdc` | Self-contained fixed-base articulation with the mounted RTX camera |
-| `exports/isaac/quadruped_robot_floating.usdc` | Self-contained floating-base articulation with guarded inter-leg collision and the mounted RTX camera |
-| `exports/isaac/quadruped_robot_manual_world.usda` | Portable Isaac world with gravity, floor contact, rated-torque caps, standing targets, and onboard camera |
+| `exports/urdf/quadruped_robot.urdf` | SI-unit description with 15 physical links, one optical frame, 12 actuated joints, camera frames, and the body-centred BNO085 frame |
+| `exports/isaac/quadruped_robot_fixed.usdc` | Self-contained fixed-base articulation with mounted RTX camera and IMU |
+| `exports/isaac/quadruped_robot_floating.usdc` | Self-contained floating-base articulation with guarded inter-leg collision, camera, and IMU |
+| `exports/isaac/quadruped_robot_manual_world.usda` | Portable Isaac world with gravity, floor contact, rated-torque caps, standing targets, onboard camera, and body IMU |
 
 For manual control, launch the prepared world:
 
@@ -66,6 +68,18 @@ The camera uses Isaac Sim 6.0's current
 `isaacsim.sensors.experimental.rtx` API at 640 x 480, 30 Hz, with RGB and
 depth available. Run `simulation/isaac/validate_camera.py` to verify both
 render buffers and capture an onboard frame.
+
+The body IMU prim is
+`/World/Robot/Geometry/base_link/body_imu`. It uses Isaac Sim 6.0's current
+`isaacsim.sensors.experimental.physics.IMUSensor` API and provides linear
+acceleration, angular velocity, orientation, and a nine-value walking-policy
+observation. Validate the live stream with:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\validate_imu.py `
+  --world exports\isaac\quadruped_robot_manual_world.usda `
+  --report simulation\isaac\output\imu-validation.json
+```
 
 STEP is the primary output. STL, 3MF, and intentional GLB files are secondary
 manufacturing or interchange exports. Commit these 3D deliverables and regenerate

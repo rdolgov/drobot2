@@ -42,10 +42,11 @@ def test_urdf_has_expected_tree_and_physics_elements():
     joints = robot.findall("joint")
 
     assert robot.attrib["name"] == "st3215_quadruped"
-    assert len(links) == 15
-    assert len(joints) == 14
+    assert len(links) == 16
+    assert len(joints) == 15
     assert {link.attrib["name"] for link in links} >= {
         "base_link",
+        "imu_link",
         "camera_link",
         "camera_optical_frame",
     }
@@ -75,7 +76,7 @@ def test_urdf_has_expected_tree_and_physics_elements():
             assert joint.find("dynamics") is not None
 
     assert len(robot.findall("joint[@type='revolute']")) == 12
-    assert len(robot.findall("joint[@type='fixed']")) == 2
+    assert len(robot.findall("joint[@type='fixed']")) == 3
 
 
 def test_mesh_references_resolve_from_generated_urdf_directory():
@@ -83,11 +84,12 @@ def test_mesh_references_resolve_from_generated_urdf_directory():
     urdf_directory = PROJECT_ROOT / "exports" / "urdf"
     meshes = robot.findall(".//mesh")
 
-    assert len(meshes) == 33
+    assert len(meshes) == 34
     assert {mesh.attrib["filename"] for mesh in meshes} == {
         "../stl/quadruped_body_base.stl",
         "../stl/quadruped_body_lid.stl",
         "../stl/quadruped_electronics_tray.stl",
+        "../stl/adafruit_bno085_stemma_qt.stl",
         "../stl/st3215_hip_body_mount.stl",
         "../stl/st3215_hip.stl",
         "../stl/upper_arm.stl",
@@ -282,7 +284,39 @@ def test_mass_model_matches_ledger_total():
         quadruped_robot.TOTAL_ROBOT_MASS_KG,
         abs_tol=1e-9,
     )
-    assert math.isclose(total_mass, 4.523638989, abs_tol=1e-6)
+    assert math.isclose(total_mass, 4.526138989, abs_tol=1e-6)
+
+
+def test_imu_frame_matches_the_cad_sensing_element_and_board_envelope():
+    robot = quadruped_robot.gen_urdf()
+    imu = robot.find("link[@name='imu_link']")
+    imu_joint = robot.find("joint[@name='base_to_imu']")
+
+    assert imu is not None
+    assert imu_joint is not None
+    assert imu_joint.attrib["type"] == "fixed"
+    assert _numbers(imu_joint.find("origin").attrib["xyz"]) == pytest.approx(
+        quadruped_robot.BASE_TO_IMU_LINK_XYZ_M
+    )
+    assert _numbers(imu_joint.find("origin").attrib["rpy"]) == pytest.approx(
+        (0.0, 0.0, 0.0)
+    )
+    assert float(imu.find("inertial/mass").attrib["value"]) == pytest.approx(
+        quadruped_robot.IMU_MASS_KG
+    )
+    visual = imu.find("visual[@name='exact_adafruit_bno085_stemma_qt']")
+    collision = imu.find("collision[@name='bno085_board_envelope']")
+    assert visual is not None
+    assert collision is not None
+    assert _numbers(visual.find("origin").attrib["xyz"]) == pytest.approx(
+        quadruped_robot.IMU_VISUAL_XYZ_M
+    )
+    assert _numbers(collision.find("origin").attrib["xyz"]) == pytest.approx(
+        quadruped_robot.IMU_BOARD_ENVELOPE_CENTER_FROM_SENSOR_M
+    )
+    assert _numbers(collision.find("geometry/box").attrib["size"]) == pytest.approx(
+        quadruped_robot.IMU_BOARD_SIZE_M
+    )
 
 
 def test_camera_payload_and_optical_frame_match_approved_cad_pose():

@@ -9,6 +9,7 @@ from build123d import Color, Location, Shape, import_step
 
 from robot_cad.assembly import robot_leg
 from robot_cad.parts import (
+    adafruit_bno085,
     quadruped_body,
     quadruped_body_lid,
     quadruped_electronics_tray,
@@ -37,6 +38,7 @@ class QuadrupedAssemblySpec:
     component_order: tuple[str, ...] = (
         "body_base",
         "electronics_tray",
+        "body_imu",
         "body_lid",
         "front_left_leg",
         "rear_left_leg",
@@ -176,6 +178,20 @@ def gen_step():
         ),
         "electronics_tray",
         color=Color(0.95, 0.70, 0.18),
+    )
+    asm.add(
+        adafruit_bno085.gen_step().moved(
+            Location(
+                (
+                    0.0,
+                    0.0,
+                    quadruped_body.ELECTRONICS_TRAY_BOTTOM_Z_MM
+                    + quadruped_electronics_tray.IMU_BOARD_BOTTOM_Z_MM,
+                )
+            )
+        ),
+        "body_imu",
+        color=Color(0.12, 0.30, 0.62),
     )
     asm.add(
         quadruped_body_lid.gen_step().moved(

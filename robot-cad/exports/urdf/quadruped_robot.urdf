@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <!-- cadpy:sourcePath=../../robot_cad/urdf/quadruped_robot.py -->
-<!-- cadpy:sourceHash=8859cb27ee69aea78ae56efa7705df11cdfe00f4579c4f3814a29fec36bc5bc5 -->
+<!-- cadpy:sourceHash=6e560c790a762e2889068dd94c27149ec0c7c37e0b63085fec47a50cd712d4c3 -->
 <robot name="st3215_quadruped">
-  <!--Mass model: solid PLA, 0.45 kg battery, 0.15 kg electronics; magenta fork-tip contacts are simulation-only.-->
+  <!--Mass model: solid PLA, 0.45 kg battery, 0.15 kg electronics; the 2.5 g BNO085 is separate; magenta fork-tip contacts are simulation-only.-->
   <material name="body_dark">
     <color rgba="0.08 0.13 0.2 1" />
   </material>
@@ -20,6 +20,9 @@
   </material>
   <material name="camera_body_purple">
     <color rgba="0.62 0.28 0.78 1" />
+  </material>
+  <material name="imu_board_blue">
+    <color rgba="0.12 0.3 0.62 1" />
   </material>
   <material name="servo_black">
     <color rgba="0.025 0.03 0.04 1" />
@@ -101,6 +104,31 @@
       </geometry>
     </collision>
   </link>
+  <link name="imu_link">
+    <inertial>
+      <origin xyz="-3e-06 -0.000805 0.000105" rpy="0 0 0" />
+      <mass value="0.0025" />
+      <inertia ixx="1.131459375e-07" ixy="0" ixz="0" iyy="1.386835208e-07" iyz="0" izz="2.432790833e-07" />
+    </inertial>
+    <visual name="exact_adafruit_bno085_stemma_qt">
+      <origin xyz="0 0 -0.00216" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/adafruit_bno085_stemma_qt.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="imu_board_blue" />
+    </visual>
+    <collision name="bno085_board_envelope">
+      <origin xyz="-3e-06 -0.000805 0.000105" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0254 0.02286 0.00453" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="base_to_imu" type="fixed">
+    <parent link="base_link" />
+    <child link="imu_link" />
+    <origin xyz="0 0 0.06516" rpy="0 0 0" />
+  </joint>
   <link name="camera_link">
     <inertial>
       <origin xyz="0.009261819 -2.1765e-05 0.022460669" rpy="0 0 0" />

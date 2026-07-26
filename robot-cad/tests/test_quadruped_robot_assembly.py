@@ -20,6 +20,7 @@ def test_four_leg_modules_are_declared_in_body_order() -> None:
     assert quadruped_robot.FINAL_ASSEMBLY_SPEC.component_order == (
         "body_base",
         "electronics_tray",
+        "body_imu",
         "body_lid",
         "front_left_leg",
         "rear_left_leg",
@@ -104,7 +105,7 @@ def test_generated_quadruped_has_body_and_four_nested_leg_modules() -> None:
     assert tuple(child.label for child in assembly.children) == (
         quadruped_robot.FINAL_ASSEMBLY_SPEC.component_order
     )
-    for leg_module in assembly.children[3:]:
+    for leg_module in assembly.children[4:]:
         assert tuple(child.label for child in leg_module.children) == (
             quadruped_robot.robot_leg.FINAL_ASSEMBLY_SPEC.component_order
         )

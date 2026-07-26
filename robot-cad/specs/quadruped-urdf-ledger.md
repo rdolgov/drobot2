@@ -39,11 +39,12 @@ and [Waveshare wiki](https://www.waveshare.com/wiki/ST3215_Servo).
 
 ## Topology
 
-The URDF contains 14 physical links, one massless optical frame, 12 revolute
-joints, and two fixed camera joints:
+The URDF contains 15 physical links, one massless optical frame, 12 revolute
+joints, two fixed camera joints, and one fixed IMU joint:
 
 ```text
 base_link
+|- imu_link
 |- camera_link
 |  `- camera_optical_frame
 |- front_left_hip_link
@@ -60,8 +61,10 @@ base_link
       `- rear_right_distal_link
 ```
 
-The body tub, lid, tray, four fixed body-side mounts, battery, and electronics
-are collapsed into `base_link`. Each servo case belongs to the moving child
+The body tub, lid, tray, four fixed body-side mounts, battery, and remaining
+electronics are collapsed into `base_link`. The selected 2.5 g BNO085 board
+is kept as `imu_link`, with its frame at the measured sensing-package centre.
+Each servo case belongs to the moving child
 that contains its motor bay: hip servo in the hip link, hip-flexion servo in
 the proximal link, and knee servo in the distal link. `camera_link` owns the
 unchanged LeKiwi printable mount, the Arducam reference mesh, their approximate
@@ -107,6 +110,8 @@ zero flexion and knee, each arm's local `+X` points downward in the body frame.
 | base | body tub mesh | `(0,0,0) / (0,0,0)` | `exports/stl/quadruped_body_base.stl` |
 | base | lid mesh | `(0,0,0.096) / (0,0,0)` | `exports/stl/quadruped_body_lid.stl` |
 | base | tray mesh | `(0,0,0.056) / (0,0,0)` | `exports/stl/quadruped_electronics_tray.stl` |
+| IMU link | exact BNO085 board mesh | `(0,0,-0.002160) / (0,0,0)` | `exports/stl/adafruit_bno085_stemma_qt.stl` |
+| IMU link | board collision box | `(-0.000003,-0.000805,0.000105) / (0,0,0)` | `0.0254 x 0.02286 x 0.00453 m` |
 | base | four mount meshes | centres `(+-0.060,+-0.117,0.050)`; `rpy=(1.570796,0,+-1.570796)` | `exports/stl/st3215_hip_body_mount.stl` |
 | base | collision box | `(0,0,0.050) / (0,0,0)` | `0.220 x 0.170 x 0.100 m` |
 | camera link | LeKiwi mount mesh | `(0,0,0) / (0,0,0)` | `vendor/references/lekiwi/base_camera_mount.stl` |
@@ -145,6 +150,7 @@ Input assumptions:
 | each ST3215 | verified `0.055 kg`; uniform box-envelope inertia |
 | battery | provisional `0.450 kg`, centred low in the battery bay |
 | electronics and wiring | provisional `0.150 kg`, centred on the tray |
+| Adafruit BNO085 board | listed product weight `0.0025 kg`; separate from the provisional electronics payload |
 | Arducam camera | provisional listed product weight `0.060 kg`, including its attached cable |
 | LeKiwi camera mount | `0.014635989 kg` from upstream STL signed volume at solid-PLA density |
 | omitted | bolts, horns, nuts, loose wiring, and future feet |
@@ -162,10 +168,11 @@ Inertias are about the listed COM, expressed in link axes, with inertial
 |---|---:|---:|---|
 | base | `2.049119` | `(0,0,0.046485537)` | `(0.0132456004, 0.0000110328, 0, 0.0097442040, 0, 0.0196972212)` |
 | fixed camera assembly | `0.074635989` | `(0.009261819,-0.000021765,0.022460669)` in `camera_link` | `(0.000019829381,-0.000000009911,-0.000000245577,0.000013126569,-0.000000003592,0.000013357698)` |
+| fixed BNO085 board | `0.0025` | `(-0.000003,-0.000805,0.000105)` in `imu_link` | uniform-envelope estimate `(0.000000113145938,0,0,0.000000138683521,0,0.000000243279083)` |
 | each hip | `0.169697` | `(0.023744808,-0.031777881,-0.001911095)` | `(0.0001832517,0.0000248550,0.0000002392,0.0000718098,-0.0000002529,0.0002314034)` |
 | each proximal/distal arm | `0.215137` | `(0.073011680,-0.000021551,-0.000924466)` | `(0.0000747088,0.0000005653,-0.0000069897,0.0005598933,0.0000000356,0.0005075793)` |
 
-The rounded total model mass is `4.523639 kg`.
+The rounded total model mass is `4.526139 kg`.
 
 ## Camera frames and sensor profile
 
@@ -190,6 +197,32 @@ The lightweight simulation profile is:
 - aperture: `3.68 x 2.76 mm`;
 - clipping range: `0.05 to 100 m`;
 - available validated annotators: `rgb` and `distance_to_image_plane`.
+
+## IMU frame and training observation profile
+
+`imu_link` is fixed to `base_link` at
+`xyz=(0,0,0.065160) m`, `rpy=(0,0,0)`. Its origin is the sensing-package
+centre from Adafruit's official product-4754 STEP, not the PCB centre. The
+installed frame therefore uses the body convention directly: `+X` forward,
+`+Y` left, and `+Z` up. The board bottom is at `z=0.063 m`; its Qwiic
+connectors face robot front/rear.
+
+Isaac authors `/World/Robot/Geometry/base_link/body_imu` as an
+`IsaacImuSensor` child of the imported base rigid body. Isaac Sim 6 uses
+`isaacsim.sensors.experimental.physics.IMUSensor`; it reads every physics
+step. Acceleration, angular velocity, and orientation each use a three-sample
+rolling average in the asset. Training code packs the following body-frame
+observation:
+
+- angular velocity in `rad/s` (3 values);
+- projected unit gravity in the IMU/body frame (3 values);
+- linear acceleration divided by `9.81 m/s^2` (3 values).
+
+This nine-value sensor block is intended to be concatenated with commands,
+joint positions/velocities, and previous actions. The BNO085 game rotation
+vector should be used on hardware so servo-current magnetic fields do not
+enter the walking state estimate. Bias, latency, quantization, dropout, and
+mount vibration are domain-randomization inputs, not yet physical truth.
 
 ## Joint and actuator ledger
 
@@ -232,8 +265,9 @@ The generated handoff artifacts are:
   conservative standing targets, and the rated ST3215 effort cap.
 
 Both USDC assets contain one articulation root, 13 rigid bodies, 12 revolute
-joints, 12 angular position drives, and one RTX camera. Fixed camera links are
-merged into `base_link` at import, preserving the articulation body count. The
+joints, 12 angular position drives, one RTX camera, and one body IMU sensor.
+Fixed camera and IMU links are merged into `base_link` at import, preserving
+the articulation body count. The
 manual articulation path is `/World/Robot`. The generated world is intended for Isaac Sim's standard
 **Physics > Articulation Inspector**; its launcher sets the initial stand only
 once and does not continuously overwrite manual joint commands.
@@ -254,16 +288,20 @@ once and does not continuously overwrite manual joint commands.
 8. The 95-degree camera field of view is a product-profile approximation, not
    a lens calibration. Distortion, rolling shutter, exposure, microphone,
    USB latency, and sensor noise are not modeled.
+9. The simulated IMU is clean physics-engine data with a short rolling
+   average. Real BNO085 bias, vibration, latency, saturation, mounting
+   compliance, clock drift, calibration quality, and packet loss still need
+   measurement and domain randomization.
 
 ## Validation and Isaac acceptance criteria
 
 Generation:
 
 - the URDF generator and validator pass;
-- exactly 15 URDF links, 12 revolute joints, two fixed joints, one root, no
+- exactly 16 URDF links, 12 revolute joints, three fixed joints, one root, no
   cycles, and no missing mesh references;
 - every physical link has inertial, visual, and collision elements;
-- total mass is within numerical tolerance of `4.523639 kg`;
+- total mass is within numerical tolerance of `4.526139 kg`;
 - fixed-base joint sweeps confirm axes, mirrored signs, and continuous poses.
 
 Camera:
@@ -274,6 +312,15 @@ Camera:
 - a 640 x 480 RGB frame and depth frame are both retrievable through
   `isaacsim.sensors.experimental.rtx.CameraSensor`;
 - a forward calibration target is visible at the expected depth.
+
+IMU:
+
+- one `IsaacImuSensor` survives fixed and floating import at the documented
+  body-centred path;
+- runtime reads are valid, quaternion norm is one, and a stationary
+  gravity-included reading is approximately `+9.81 m/s^2` along local `+Z`;
+- the nine-value walking observation is finite and uses the documented field
+  order and normalization.
 
 Gravity and standing:
 

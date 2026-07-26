@@ -14,6 +14,7 @@ import sys
 import traceback
 
 import numpy as np
+from _imu_observation import IMU_OBSERVATION_FIELDS, pack_imu_frame
 from _quadruped_runtime import (
     EXPECTED_DOF_NAMES,
     RATED_TORQUE_NM,
@@ -35,6 +36,10 @@ parser.add_argument(
 parser.add_argument(
     "--camera-prim",
     default="/World/Robot/Geometry/base_link/lekiwi_camera",
+)
+parser.add_argument(
+    "--imu-prim",
+    default="/World/Robot/Geometry/base_link/body_imu",
 )
 parser.add_argument(
     "--smoke-seconds",
@@ -61,6 +66,7 @@ import isaacsim.core.experimental.utils.app as app_utils  # noqa: E402
 import isaacsim.core.experimental.utils.stage as stage_utils  # noqa: E402
 from isaacsim.core.experimental.prims import Articulation  # noqa: E402
 from isaacsim.core.utils.viewports import set_camera_view  # noqa: E402
+from isaacsim.sensors.experimental.physics import IMUSensor  # noqa: E402
 from omni.kit.viewport.utility import get_active_viewport  # noqa: E402
 from pxr import UsdGeom  # noqa: E402
 
@@ -91,8 +97,15 @@ try:
     camera_prim = stage.GetPrimAtPath(args.camera_prim)
     if not camera_prim.IsValid() or not camera_prim.IsA(UsdGeom.Camera):
         raise AssertionError(f"Mounted camera is missing: {args.camera_prim}")
+    imu_prim = stage.GetPrimAtPath(args.imu_prim)
+    if (
+        not imu_prim.IsValid()
+        or imu_prim.GetTypeName() != "IsaacImuSensor"
+    ):
+        raise AssertionError(f"Mounted body IMU is missing: {args.imu_prim}")
 
     robot = Articulation("/World/Robot", reset_xform_op_properties=True)
+    imu_sensor = IMUSensor(args.imu_prim)
     app_utils.play()
     for _ in range(10):
         simulation_app.update()
@@ -125,6 +138,19 @@ try:
         raise AssertionError(
             f"Rated ST3215 effort cap was not applied: {applied_efforts}"
         )
+    imu_frame = imu_sensor.get_data(read_gravity=True)
+    imu_observation = pack_imu_frame(imu_frame)
+    if float(imu_frame["time"]) <= 0.0:
+        raise AssertionError(f"Body IMU did not advance: {imu_frame}")
+    if not np.all(np.isfinite(imu_observation)):
+        raise AssertionError(
+            f"Body IMU observation is not finite: {imu_observation}"
+        )
+    orientation_norm = float(np.linalg.norm(imu_frame["orientation"]))
+    if not np.isclose(orientation_norm, 1.0, atol=1e-3):
+        raise AssertionError(
+            f"Body IMU quaternion is not normalized: {imu_frame['orientation']}"
+        )
 
     report.update(
         {
@@ -134,12 +160,29 @@ try:
             "link_count": robot.num_links,
             "rated_effort_cap_nm": RATED_TORQUE_NM,
             "camera_prim_path": args.camera_prim,
+            "imu_prim_path": args.imu_prim,
+            "imu_frame": {
+                "time_s": float(imu_frame["time"]),
+                "physics_step": float(imu_frame["physics_step"]),
+                "linear_acceleration_m_s2": _numpy(
+                    imu_frame["linear_acceleration"]
+                ).tolist(),
+                "angular_velocity_rad_s": _numpy(
+                    imu_frame["angular_velocity"]
+                ).tolist(),
+                "orientation_wxyz": _numpy(
+                    imu_frame["orientation"]
+                ).tolist(),
+            },
+            "imu_observation_fields": list(IMU_OBSERVATION_FIELDS),
+            "imu_observation": imu_observation.tolist(),
             "onboard_camera_view": args.onboard_camera,
             "instructions": (
                 "Press Play if needed, open Physics > Articulation Inspector, "
                 "select /World/Robot, and command the 12 named joints. "
                 "Use the viewport camera menu or --onboard-camera for the "
-                "robot-mounted RGB view."
+                "robot-mounted RGB view. The body IMU is live at "
+                f"{args.imu_prim}."
             ),
         }
     )

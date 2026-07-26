@@ -4,6 +4,7 @@ import pytest
 from build123d import Align, Box, Location, Vector
 
 from robot_cad.parts import (
+    adafruit_bno085,
     quadruped_body,
     quadruped_body_lid,
     quadruped_electronics_tray,
@@ -120,6 +121,42 @@ def test_tray_and_lid_mount_holes_are_open() -> None:
         assert not tray.is_inside(Vector(x_mm, y_mm, 1.5))
     for x_mm, y_mm in quadruped_body.LID_BOSS_CENTERS_XY_MM:
         assert not lid.is_inside(Vector(x_mm, y_mm, 2.0))
+
+
+def test_exact_bno085_mount_is_centred_open_and_lid_clear() -> None:
+    tray = generated_tray()
+
+    for actual, expected in zip(
+        quadruped_electronics_tray.IMU_MOUNT_CENTERS_XY_MM,
+        adafruit_bno085.MOUNT_HOLE_CENTERS_SENSOR_XY_MM,
+        strict=True,
+    ):
+        assert actual == pytest.approx(expected)
+    for x_mm, y_mm in quadruped_electronics_tray.IMU_MOUNT_CENTERS_XY_MM:
+        assert not tray.is_inside(
+            Vector(
+                x_mm,
+                y_mm,
+                quadruped_electronics_tray.IMU_BOARD_BOTTOM_Z_MM / 2.0,
+            )
+        )
+        assert tray.is_inside(
+            Vector(
+                x_mm + quadruped_electronics_tray.IMU_STANDOFF_OUTER_DIAMETER_MM
+                / 2.0
+                - 0.3,
+                y_mm,
+                quadruped_body.ELECTRONICS_TRAY_THICKNESS_Z_MM + 1.0,
+            )
+        )
+
+    board_top_z_mm = (
+        quadruped_body.ELECTRONICS_TRAY_BOTTOM_Z_MM
+        + quadruped_electronics_tray.IMU_BOARD_BOTTOM_Z_MM
+        + adafruit_bno085.BOARD_SIZE_XYZ_MM[2]
+    )
+    lid_locator_bottom_z_mm = quadruped_body.BODY_BASE_HEIGHT_Z_MM - 3.0
+    assert lid_locator_bottom_z_mm - board_top_z_mm > 25.0
 
 
 def test_symmetric_side_service_ports_are_open_between_hip_fields() -> None:

@@ -71,13 +71,14 @@ if args.drive_stiffness < 0.0 or args.drive_damping < 0.0:
 simulation_app = SimulationApp({"headless": True})
 
 # Omniverse imports must follow SimulationApp construction.
+import omni.isaac.IsaacSensorSchema as IsaacSensorSchema  # noqa: E402
 from isaacsim.asset.importer.urdf import URDFImporter, URDFImporterConfig  # noqa: E402
 from omni.sensors.schema import OmniSensorAPI  # noqa: E402
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics  # noqa: E402
 
 
-def _author_lekiwi_camera(stage: Usd.Stage) -> dict[str, object]:
-    """Attach the RTX camera prim to the imported base rigid body."""
+def _base_rigid_body(stage: Usd.Stage) -> Usd.Prim:
+    """Return the single imported base_link rigid body."""
     base_candidates = [
         prim
         for prim in stage.Traverse()
@@ -89,8 +90,14 @@ def _author_lekiwi_camera(stage: Usd.Stage) -> dict[str, object]:
             "Expected one imported base_link rigid body, found "
             f"{[str(prim.GetPath()) for prim in base_candidates]}"
         )
+    return base_candidates[0]
 
-    camera_path = base_candidates[0].GetPath().AppendChild("lekiwi_camera")
+
+def _author_lekiwi_camera(stage: Usd.Stage) -> dict[str, object]:
+    """Attach the RTX camera prim to the imported base rigid body."""
+    base = _base_rigid_body(stage)
+
+    camera_path = base.GetPath().AppendChild("lekiwi_camera")
     camera = UsdGeom.Camera.Define(stage, camera_path)
     camera.CreateProjectionAttr().Set(UsdGeom.Tokens.perspective)
     camera.CreateFocalLengthAttr().Set(urdf_model.CAMERA_FOCAL_LENGTH_MM)
@@ -142,7 +149,7 @@ def _author_lekiwi_camera(stage: Usd.Stage) -> dict[str, object]:
 
     return {
         "prim_path": str(camera_path),
-        "parent_link": str(base_candidates[0].GetPath()),
+        "parent_link": str(base.GetPath()),
         "translation_m": list(urdf_model.CAMERA_OPTICAL_XYZ_FROM_BASE_M),
         "orientation_wxyz": list(camera_orientation_wxyz),
         "equivalent_rotate_xyz_deg": [90.0, 0.0, -90.0],
@@ -155,6 +162,55 @@ def _author_lekiwi_camera(stage: Usd.Stage) -> dict[str, object]:
         ),
         "vertical_aperture_mm": urdf_model.CAMERA_VERTICAL_APERTURE_MM,
         "clipping_range_m": list(urdf_model.CAMERA_CLIPPING_RANGE_M),
+    }
+
+
+def _author_body_imu(stage: Usd.Stage) -> dict[str, object]:
+    """Attach an Isaac Sim 6 experimental-physics IMU to base_link."""
+    base = _base_rigid_body(stage)
+    imu_path = base.GetPath().AppendChild("body_imu")
+    imu = IsaacSensorSchema.IsaacImuSensor.Define(stage, imu_path)
+    imu.CreateEnabledAttr().Set(True)
+    imu.CreateLinearAccelerationFilterWidthAttr().Set(
+        urdf_model.IMU_LINEAR_ACCELERATION_FILTER_SIZE
+    )
+    imu.CreateAngularVelocityFilterWidthAttr().Set(
+        urdf_model.IMU_ANGULAR_VELOCITY_FILTER_SIZE
+    )
+    imu.CreateOrientationFilterWidthAttr().Set(
+        urdf_model.IMU_ORIENTATION_FILTER_SIZE
+    )
+    xform = UsdGeom.Xformable(imu.GetPrim())
+    xform.ClearXformOpOrder()
+    xform.AddTranslateOp().Set(
+        Gf.Vec3d(*urdf_model.BASE_TO_IMU_LINK_XYZ_M)
+    )
+    xform.AddOrientOp().Set(Gf.Quatf(1.0, Gf.Vec3f(0.0, 0.0, 0.0)))
+    imu.GetPrim().CreateAttribute(
+        "drobot:urdfFrame",
+        Sdf.ValueTypeNames.String,
+    ).Set("imu_link")
+    imu.GetPrim().CreateAttribute(
+        "drobot:hardware",
+        Sdf.ValueTypeNames.String,
+    ).Set("Adafruit BNO085 STEMMA QT product 4754")
+    return {
+        "prim_path": str(imu_path),
+        "parent_link": str(base.GetPath()),
+        "translation_m": list(urdf_model.BASE_TO_IMU_LINK_XYZ_M),
+        "orientation_wxyz": [1.0, 0.0, 0.0, 0.0],
+        "frame": "imu_link",
+        "axis_convention": "+X forward, +Y left, +Z up",
+        "linear_acceleration_filter_size": (
+            urdf_model.IMU_LINEAR_ACCELERATION_FILTER_SIZE
+        ),
+        "angular_velocity_filter_size": (
+            urdf_model.IMU_ANGULAR_VELOCITY_FILTER_SIZE
+        ),
+        "orientation_filter_size": urdf_model.IMU_ORIENTATION_FILTER_SIZE,
+        "runtime_api": (
+            "isaacsim.sensors.experimental.physics.IMUSensor"
+        ),
     }
 
 
@@ -174,6 +230,9 @@ def _stage_facts(stage: Usd.Stage) -> dict[str, int]:
             bool(UsdPhysics.DriveAPI.Get(prim, "angular")) for prim in prims
         ),
         "cameras": sum(prim.IsA(UsdGeom.Camera) for prim in prims),
+        "imu_sensors": sum(
+            prim.GetTypeName() == "IsaacImuSensor" for prim in prims
+        ),
     }
 
 
@@ -278,6 +337,7 @@ try:
     if stage is None:
         raise AssertionError(f"Isaac USD stage could not be opened: {root_usd}")
     camera = _author_lekiwi_camera(stage)
+    imu = _author_body_imu(stage)
     joint_neighbor_filters = (
         _author_joint_neighbor_filters(stage)
         if args.allow_self_collision
@@ -291,6 +351,7 @@ try:
         "revolute_joints": 12,
         "angular_drives": 12,
         "cameras": 1,
+        "imu_sensors": 1,
     }
     if stage_facts != expected_stage_facts:
         raise AssertionError(
@@ -351,6 +412,7 @@ try:
             "self_collision_facts": collision_facts,
             "joint_neighbor_filtered_pairs": joint_neighbor_filters,
             "camera": camera,
+            "imu": imu,
             "settings": {
                 "merge_fixed_joints": config.merge_fixed_joints,
                 "merge_mesh": config.merge_mesh,
