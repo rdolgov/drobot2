@@ -153,6 +153,44 @@ joint state, and previous actions for walking training. Add measured bias,
 latency, vibration, quantization, and dropout as domain randomization before
 claiming sim-to-real fidelity.
 
+## PPO reinforcement-learning task
+
+The executable `Drobot-Quadruped-Walk-v1` task is under
+`simulation/isaac/rl/`. It uses the same manual world, 13-body articulation,
+rated ST3215 effort cap, and mounted IMU validated above.
+
+Install the tested Isaac Python dependencies once:
+
+```powershell
+.\scripts\setup_isaac_rl.ps1
+```
+
+Run a short end-to-end smoke test:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\train_ppo.py `
+  --smoke-test `
+  --output-dir simulation\isaac\output\rl\smoke-v1
+```
+
+Run the configured 500,000-step training job:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\train_ppo.py `
+  --output-dir simulation\isaac\output\rl\ppo-walk-v1
+```
+
+The version-1 policy has 12 normalized joint-offset actions and a 48-value
+hardware-reproducible observation: command (3), IMU (9), joint-position error
+(12), normalized joint velocity (12), and previous action (12). Base linear
+velocity is simulator-only reward information and is not exposed to the
+policy. The camera is present for evaluation but is not a training input.
+
+Full configuration, reward terms, termination conditions, checkpoints,
+TensorBoard, evaluation commands, limitations, and the Isaac Lab migration
+rationale are documented in
+[`docs/rl-training.md`](../../docs/rl-training.md).
+
 ## Manual articulation
 
 The portable handoff files are:

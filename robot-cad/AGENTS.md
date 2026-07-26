@@ -3,6 +3,15 @@
 Use the installed `cad:cad`, `cad:cad-viewer`, and `cad:step-parts` skills for
 CAD work in this repository.
 
+- Keep the topic documentation indexed in `docs/README.md` current. Every CAD,
+  electronics, URDF, simulator, sensor, controls, or learning change must
+  update its owning Markdown file in the same change. Record what changed,
+  source-of-truth inputs, exact reproduction commands, validation performed,
+  generated outputs, assumptions, and known limitations. Add a new topic
+  document and index entry when no existing document owns the subject.
+- Do not describe an unrun simulation or training command as validated. Label
+  short pipeline smoke tests separately from converged policies, endurance
+  runs, or hardware results.
 - Treat Python generators and YAML specifications as the editable source.
 - Treat STEP as the primary generated artifact; STL/3MF/GLB are secondary.
 - Generate explicit targets only through the CAD skill's STEP workflow.

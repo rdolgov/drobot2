@@ -1,0 +1,29 @@
+# Project documentation index
+
+This index assigns one Markdown owner to each design and simulation topic.
+Keep the owning document current in the same commit as its source, generated
+artifact, or validation change.
+
+| Topic | Owning document | Required update trigger |
+| --- | --- | --- |
+| CAD generation and visual review | [`cad-workflow.md`](cad-workflow.md) | CAD workflow, tooling, snapshot, or Viewer changes |
+| Imported design history | [`migration.md`](migration.md) | Source migration or provenance changes |
+| Coordinate conventions | [`../specs/coordinate-system.md`](../specs/coordinate-system.md) | Datum, axis, handedness, or unit changes |
+| Body, battery, wiring, camera, and IMU mechanics | [`../specs/quadruped-body.yaml`](../specs/quadruped-body.yaml) and root [`README.md`](../README.md) | Enclosure, mounting, clearance, or physical component changes |
+| URDF physics and sensor contract | [`../specs/quadruped-urdf-ledger.md`](../specs/quadruped-urdf-ledger.md) | Link, joint, mass, inertia, collision, sensor, or actuator changes |
+| Isaac import, camera, IMU, standing, and gait checks | [`../simulation/isaac/README.md`](../simulation/isaac/README.md) | Simulator scripts, APIs, worlds, validation, or acceptance changes |
+| Reinforcement-learning walking task | [`rl-training.md`](rl-training.md) | Observation, action, reward, reset, PPO, dependency, training, or evaluation changes |
+| Purchasable/reference geometry provenance | [`../vendor/README.md`](../vendor/README.md) | New or replaced vendor assets |
+
+Every topic update should state:
+
+1. what changed and why;
+2. editable source-of-truth inputs;
+3. exact commands needed to reproduce it;
+4. validation that was actually run and its result;
+5. generated or logged outputs;
+6. assumptions, approximations, and work still required.
+
+A smoke test proves that a pipeline executes. It does not prove that a
+walking policy converged, that simulation transfers to hardware, or that a
+printed robot is safe.

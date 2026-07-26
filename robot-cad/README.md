@@ -81,6 +81,28 @@ observation. Validate the live stream with:
   --report simulation\isaac\output\imu-validation.json
 ```
 
+## Reinforcement-learning walking
+
+The first executable RL task trains Stable-Baselines3 PPO against the same
+validated floating Isaac world. Its versioned 48-value policy observation uses
+velocity commands, the body IMU, joint feedback, and previous actions; the
+mounted camera remains available for evaluation without slowing every rollout.
+
+Install the tested dependencies and run the end-to-end smoke test:
+
+```powershell
+.\scripts\setup_isaac_rl.ps1
+
+& C:\isaacsim\python.bat simulation\isaac\rl\train_ppo.py `
+  --smoke-test `
+  --output-dir simulation\isaac\output\rl\smoke-v1
+```
+
+See [`docs/rl-training.md`](docs/rl-training.md) for the action, observation,
+reward, termination, full training, resume, TensorBoard, evaluation, and
+safety contracts. A smoke test proves the pipeline runs; it is not a converged
+walking policy.
+
 STEP is the primary output. STL, 3MF, and intentional GLB files are secondary
 manufacturing or interchange exports. Commit these 3D deliverables and regenerate
 every affected file whenever its Python generator or YAML specification changes.
@@ -153,7 +175,8 @@ orthographic views. Save editable markup as JSON and review sheets as PNG under
 See [docs/cad-workflow.md](docs/cad-workflow.md) for the complete generation,
 inspection, snapshot, and markup workflow. See
 [docs/migration.md](docs/migration.md) for source-history and geometry
-provenance.
+provenance. The [documentation index](docs/README.md) identifies the Markdown
+owner that must be updated with each design, simulation, or learning change.
 
 ## Layout
 
