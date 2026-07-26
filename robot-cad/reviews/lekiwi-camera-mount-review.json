@@ -1,0 +1,78 @@
+{
+  "jobs": [
+    {
+      "input": "exports/step/quadruped_body_lid.step",
+      "mode": "view",
+      "outputs": [
+        {
+          "path": "reviews/lekiwi-camera-lid-top.png",
+          "camera": "top"
+        },
+        {
+          "path": "reviews/lekiwi-camera-lid-iso.png",
+          "camera": "iso"
+        },
+        {
+          "path": "reviews/lekiwi-camera-lid-opposite.png",
+          "camera": {
+            "direction": [
+              -1,
+              1,
+              -0.8
+            ]
+          }
+        }
+      ],
+      "render": {
+        "viewLabels": true,
+        "padding": 0.12,
+        "sizeProfile": "diagnostic"
+      },
+      "display": {
+        "mode": "solid",
+        "projection": "orthographic"
+      }
+    },
+    {
+      "input": "exports/step/quadruped_robot.step",
+      "mode": "view",
+      "outputs": [
+        {
+          "path": "reviews/quadruped-lekiwi-camera-interface.png",
+          "camera": "iso"
+        }
+      ],
+      "render": {
+        "viewLabels": true,
+        "padding": 0.1,
+        "sizeProfile": "assembly-large"
+      },
+      "display": {
+        "mode": "solid"
+      }
+    },
+    {
+      "input": "exports/step/lekiwi_camera_body_fit_preview.step",
+      "mode": "view",
+      "outputs": [
+        {
+          "path": "reviews/lekiwi-camera-body-fit-preview.png",
+          "camera": "iso"
+        },
+        {
+          "path": "reviews/lekiwi-camera-body-fit-preview-front.png",
+          "camera": "front"
+        }
+      ],
+      "render": {
+        "viewLabels": true,
+        "padding": 0.12,
+        "sizeProfile": "assembly"
+      },
+      "display": {
+        "mode": "solid",
+        "projection": "orthographic"
+      }
+    }
+  ]
+}

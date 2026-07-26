@@ -78,8 +78,10 @@ utility_mounting:
     m3_centers_xy_mm:
       - [-90.0, -24.0]
       - [-90.0, 24.0]
-      - [90.0, -24.0]
-      - [90.0, 24.0]
+      - [90.0, -20.0]
+      - [90.0, 0.0]
+      - [90.0, 20.0]
+    front_pattern_note: three-hole LeKiwi camera-mount row at 20 mm pitch
   body_bottom:
     m2_clearance_diameter_mm: 2.4
     m2_centers_xy_mm:
@@ -94,6 +96,33 @@ utility_mounting:
       - [75.0, -68.0]
       - [75.0, 68.0]
     placement_note: outside the battery retaining rail and clear of tray standoffs
+
+camera_mount:
+  target_camera: Arducam 5MP Wide Angle USB Camera, ASIN B0972KK7BC
+  compatibility: SIGRobotics-UIUC LeKiwi base_camera_mount.stl
+  robot_side_interface:
+    fastener_nominal: M3
+    clearance_diameter_mm: 3.4
+    center_x_mm: 90.0
+    centers_y_mm: [-20.0, 0.0, 20.0]
+    pitch_y_mm: 20.0
+  camera_side_interface:
+    fastener_nominal: M2.5
+    quantity: 2
+    note: retained unchanged in the upstream LeKiwi mount
+  cable_port:
+    shape: rounded_slot
+    overall_xy_mm: [20.0, 12.0]
+    center_xy_mm: [65.0, 0.0]
+    note: replaces the overlapping front-center 30 x 4 mm ventilation slot
+  reference_mount:
+    file: vendor/references/lekiwi/base_camera_mount.stl
+    bounds_xyz_mm: [16.661073, 48.0, 45.184589]
+    status: immutable upstream printable reference
+  fit_preview:
+    source: robot_cad/assembly/lekiwi_camera_body_fit_preview.py
+    step: exports/step/lekiwi_camera_body_fit_preview.step
+    note: green mount and purple camera are positioning envelopes, not manufacturing geometry
 
 x2d_print_fit:
   official_main_nozzle_volume_xyz_mm: [256.0, 256.0, 260.0]
@@ -138,7 +167,8 @@ acceptance_tests:
   - base, lid, and electronics tray are each one connected valid solid
   - base has sixteen body-side M4 clearance holes aligned to four hip plates
   - two symmetric rounded body-side wiring ports remain clear of the hip plates
-  - lid has four rounded leg wiring ports and eight symmetric M2/M3 utility holes
+  - lid has four rounded leg wiring ports, four M2 utility holes, two rear M3 utility holes, and a three-hole LeKiwi camera row
+  - LeKiwi camera row has 20 mm pitch and the dedicated 20 x 12 mm cable slot is open
   - body floor has eight symmetric M2/M3 utility holes outside the battery rail
   - four leg root plates sit flush to the two body side faces
   - battery clear envelope and electronics tray fit inside the body

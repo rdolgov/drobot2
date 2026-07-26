@@ -25,8 +25,26 @@ LID_CABLE_PORT_WIDTH_Y_MM = 14.0
 LID_CABLE_PORT_X_MM = (-quadruped_body.HIP_MOUNT_CENTER_X_MM, quadruped_body.HIP_MOUNT_CENTER_X_MM)
 LID_CABLE_PORT_Y_MM = (-76.0, 76.0)
 LID_UTILITY_M2_X_MM = (-30.0, 30.0)
-LID_UTILITY_M3_X_MM = (-90.0, 90.0)
 LID_UTILITY_Y_MM = (-24.0, 24.0)
+LID_REAR_UTILITY_M3_CENTERS_XY_MM = (
+    (-90.0, -24.0),
+    (-90.0, 24.0),
+)
+
+# The official LeKiwi base camera mount has three M3 clearance holes on a
+# 20 mm pitch.  This front row accepts that published mount without modifying
+# it.  The dedicated cable port replaces the otherwise-overlapping +X/center
+# ventilation slot.
+LEKIWI_CAMERA_MOUNT_CENTER_X_MM = 90.0
+LEKIWI_CAMERA_MOUNT_HOLE_PITCH_Y_MM = 20.0
+LEKIWI_CAMERA_MOUNT_HOLE_CENTERS_XY_MM = tuple(
+    (LEKIWI_CAMERA_MOUNT_CENTER_X_MM, y_mm)
+    for y_mm in (-20.0, 0.0, 20.0)
+)
+LEKIWI_CAMERA_CABLE_PORT_LENGTH_X_MM = 20.0
+LEKIWI_CAMERA_CABLE_PORT_WIDTH_Y_MM = 12.0
+LEKIWI_CAMERA_CABLE_PORT_CENTER_X_MM = 65.0
+LEKIWI_CAMERA_CABLE_PORT_CENTER_Y_MM = 0.0
 
 
 def _one_valid_solid(shape: Shape, label: str) -> Shape:
@@ -154,7 +172,7 @@ def make_locator_relief_tools() -> tuple[Shape, ...]:
 
 
 def make_lid_vent_tools() -> tuple[Shape, ...]:
-    """Return a nine-slot electronics ventilation pattern."""
+    """Return vents clear of the dedicated front-camera cable opening."""
     cutter_height = (
         quadruped_body.BODY_LID_THICKNESS_Z_MM
         + 2.0 * quadruped_body.BOOLEAN_OVERTRAVEL_MM
@@ -176,6 +194,7 @@ def make_lid_vent_tools() -> tuple[Shape, ...]:
         )
         for x_mm in LID_VENT_X_MM
         for y_mm in LID_VENT_Y_MM
+        if not (x_mm == 60.0 and y_mm == 0.0)
     )
 
 
@@ -241,8 +260,27 @@ def make_lid_cable_port_tools() -> tuple[Shape, ...]:
     )
 
 
+def make_lekiwi_camera_cable_port_tool() -> Shape:
+    """Return the top-entry cable slot behind the LeKiwi camera mount."""
+    cutter_height = (
+        quadruped_body.BODY_LID_THICKNESS_Z_MM
+        + LID_LOCATOR_DEPTH_MM
+        + 2.0 * quadruped_body.BOOLEAN_OVERTRAVEL_MM
+    )
+    return _rounded_slot_tool_xy(
+        LEKIWI_CAMERA_CABLE_PORT_LENGTH_X_MM,
+        LEKIWI_CAMERA_CABLE_PORT_WIDTH_Y_MM,
+        cutter_height,
+        center_x_mm=LEKIWI_CAMERA_CABLE_PORT_CENTER_X_MM,
+        center_y_mm=LEKIWI_CAMERA_CABLE_PORT_CENTER_Y_MM,
+        minimum_z_mm=(
+            -LID_LOCATOR_DEPTH_MM - quadruped_body.BOOLEAN_OVERTRAVEL_MM
+        ),
+    )
+
+
 def make_lid_utility_mount_hole_tools() -> tuple[Shape, ...]:
-    """Return eight M2/M3 clearance cutters through the top plate."""
+    """Return utility holes plus the LeKiwi-compatible camera mount row."""
     cutter_height = (
         quadruped_body.BODY_LID_THICKNESS_Z_MM
         + 2.0 * quadruped_body.BOOLEAN_OVERTRAVEL_MM
@@ -257,14 +295,17 @@ def make_lid_utility_mount_hole_tools() -> tuple[Shape, ...]:
         for x_mm in LID_UTILITY_M2_X_MM
         for y_mm in LID_UTILITY_Y_MM
     )
+    m3_centers = (
+        LID_REAR_UTILITY_M3_CENTERS_XY_MM
+        + LEKIWI_CAMERA_MOUNT_HOLE_CENTERS_XY_MM
+    )
     m3_tools = tuple(
         Cylinder(
             quadruped_body.UTILITY_M3_CLEARANCE_DIAMETER_MM / 2.0,
             cutter_height,
             align=(Align.CENTER, Align.CENTER, Align.MIN),
         ).moved(Location((x_mm, y_mm, cutter_min_z)))
-        for x_mm in LID_UTILITY_M3_X_MM
-        for y_mm in LID_UTILITY_Y_MM
+        for x_mm, y_mm in m3_centers
     )
     return m2_tools + m3_tools
 
@@ -277,6 +318,7 @@ def make_lid() -> Shape:
         + make_lid_hole_tools()
         + make_lid_vent_tools()
         + make_lid_cable_port_tools()
+        + (make_lekiwi_camera_cable_port_tool(),)
         + make_lid_utility_mount_hole_tools()
     )
     return _one_valid_solid(finished, "quadruped_body_lid")

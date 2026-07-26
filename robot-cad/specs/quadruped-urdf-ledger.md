@@ -212,6 +212,9 @@ once and does not continuously overwrite manual joint commands.
    servo/fork overlaps are already known in the source assembly.
 7. There is no electrical or thermal model. Mechanically possible motion may
    still demand unsafe current or duty cycle.
+8. The body lid includes the LeKiwi-compatible camera mount pattern and cable
+   opening, but the optional mount, camera mass, optical frame, and simulated
+   camera sensor are not yet part of the 13-link dynamics model.
 
 ## Validation and Isaac acceptance criteria
 

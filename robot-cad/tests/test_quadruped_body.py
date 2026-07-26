@@ -174,6 +174,45 @@ def test_lid_leg_ports_and_utility_mounting_holes_are_open() -> None:
     for x_mm in quadruped_body_lid.LID_UTILITY_M2_X_MM:
         for y_mm in quadruped_body_lid.LID_UTILITY_Y_MM:
             assert not lid.is_inside(Vector(x_mm, y_mm, test_z))
-    for x_mm in quadruped_body_lid.LID_UTILITY_M3_X_MM:
-        for y_mm in quadruped_body_lid.LID_UTILITY_Y_MM:
-            assert not lid.is_inside(Vector(x_mm, y_mm, test_z))
+    for x_mm, y_mm in (
+        quadruped_body_lid.LID_REAR_UTILITY_M3_CENTERS_XY_MM
+        + quadruped_body_lid.LEKIWI_CAMERA_MOUNT_HOLE_CENTERS_XY_MM
+    ):
+        assert not lid.is_inside(Vector(x_mm, y_mm, test_z))
+
+
+def test_lid_lekiwi_camera_interface_is_open_and_on_20_mm_pitch() -> None:
+    lid = generated_lid()
+    test_z = quadruped_body.BODY_LID_THICKNESS_Z_MM / 2.0
+    camera_holes = quadruped_body_lid.LEKIWI_CAMERA_MOUNT_HOLE_CENTERS_XY_MM
+
+    assert camera_holes == (
+        (quadruped_body_lid.LEKIWI_CAMERA_MOUNT_CENTER_X_MM, -20.0),
+        (quadruped_body_lid.LEKIWI_CAMERA_MOUNT_CENTER_X_MM, 0.0),
+        (quadruped_body_lid.LEKIWI_CAMERA_MOUNT_CENTER_X_MM, 20.0),
+    )
+    assert camera_holes[1][1] - camera_holes[0][1] == pytest.approx(
+        quadruped_body_lid.LEKIWI_CAMERA_MOUNT_HOLE_PITCH_Y_MM
+    )
+    assert camera_holes[2][1] - camera_holes[1][1] == pytest.approx(
+        quadruped_body_lid.LEKIWI_CAMERA_MOUNT_HOLE_PITCH_Y_MM
+    )
+    for x_mm, y_mm in camera_holes:
+        assert not lid.is_inside(Vector(x_mm, y_mm, test_z))
+
+    assert not lid.is_inside(
+        Vector(
+            quadruped_body_lid.LEKIWI_CAMERA_CABLE_PORT_CENTER_X_MM,
+            quadruped_body_lid.LEKIWI_CAMERA_CABLE_PORT_CENTER_Y_MM,
+            test_z,
+        )
+    )
+    assert lid.is_inside(
+        Vector(
+            quadruped_body_lid.LEKIWI_CAMERA_CABLE_PORT_CENTER_X_MM
+            - quadruped_body_lid.LEKIWI_CAMERA_CABLE_PORT_LENGTH_X_MM / 2.0
+            - 2.0,
+            quadruped_body_lid.LEKIWI_CAMERA_CABLE_PORT_CENTER_Y_MM,
+            test_z,
+        )
+    )

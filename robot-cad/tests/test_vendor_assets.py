@@ -33,3 +33,20 @@ def test_immutable_so101_reference_is_present() -> None:
     assert file_sha256(REFERENCE_STEP) == (
         "efa19a6dd2ccb459248500c76629cfa840630e7e15d9e146394d31da1525dd61"
     )
+
+
+def test_lekiwi_camera_references_are_present() -> None:
+    camera_reference_dir = PROJECT_ROOT / "vendor" / "references" / "lekiwi"
+    expected_hashes = {
+        "base_camera_mount.stl": (
+            "631ed680e524b90dcb59dd315830ed1bac842dfd5e77c412ef4c52ff4da2e854"
+        ),
+        "arducam_5mp_camera_model.stl": (
+            "f5ff94543c19e91a6d5ffb540e2d25347d813d191793405ff2e4178230dec21e"
+        ),
+    }
+
+    for filename, expected_hash in expected_hashes.items():
+        reference_path = camera_reference_dir / filename
+        assert reference_path.is_file()
+        assert file_sha256(reference_path) == expected_hash
