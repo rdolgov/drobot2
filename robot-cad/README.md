@@ -18,6 +18,7 @@ assemblies.
 | `exports/step/upper_arm.step` | `robot_cad/parts/upper_arm.py` | Complete printable SO-101 upper arm with fused bay and integral output fork |
 | `exports/step/st3215_servo_output_fork.step` | `robot_cad/parts/st3215_servo_output_fork.py` | Reusable ST3215 output fork with a 30 mm negative-X full-edge fusion cap |
 | `exports/step/st3215_hip.step` | `robot_cad/parts/st3215_hip.py` | Printable fused hip in the approved left/down perpendicular pose |
+| `exports/step/st3215_hip_body_mount.step` | `robot_cad/parts/st3215_hip_body_mount.py` | Body-side hip fork with oversized four-bolt mounting plate |
 | `exports/step/hip_orientation_preview.step` | `robot_cad/assembly/hip_orientation_preview.py` | Two-body left/down hip pose checkpoint before printable fusion |
 | `exports/step/st3215_motor_bay_fit_preview.step` | `robot_cad/assembly/st3215_motor_bay_fit_preview.py` | Bay plus exact catalog servo |
 | `exports/step/upper_arm_st3215_fit_preview.step` | `robot_cad/assembly/upper_arm_st3215_fit_preview.py` | Complete upper arm and installed servo |

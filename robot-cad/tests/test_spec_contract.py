@@ -15,6 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
         "hip-orientation-preview.yaml",
         "mechanical-interfaces.yaml",
         "st3215-hip.yaml",
+        "st3215-hip-body-mount.yaml",
         "st3215-motor-bay.yaml",
         "st3215-servo-output-fork.yaml",
         "upper-arm.yaml",
