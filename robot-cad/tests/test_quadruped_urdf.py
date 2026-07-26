@@ -135,6 +135,54 @@ def test_servo_mesh_and_collision_use_separately_audited_origins():
         )
 
 
+def test_printable_collision_boxes_include_visible_surface_guard():
+    robot = quadruped_robot.gen_urdf()
+
+    assert quadruped_robot.PRINTABLE_COLLISION_GUARD_PER_SIDE_M == pytest.approx(
+        0.002
+    )
+    for leg in quadruped_robot.LEGS:
+        hip = robot.find(f"link[@name='{leg.name}_hip_link']")
+        assert hip is not None
+        hip_proxy = hip.find(
+            "collision[@name='hip_printable_proxy']/geometry/box"
+        )
+        assert hip_proxy is not None
+        assert _numbers(hip_proxy.attrib["size"]) == pytest.approx(
+            quadruped_robot.HIP_PRINTABLE_COLLISION_SIZE_M
+        )
+
+        for role in ("proximal", "distal"):
+            arm = robot.find(f"link[@name='{leg.name}_{role}_link']")
+            assert arm is not None
+            arm_proxy = arm.find(
+                f"collision[@name='{role}_arm_printable_proxy']/geometry/box"
+            )
+            assert arm_proxy is not None
+            assert _numbers(arm_proxy.attrib["size"]) == pytest.approx(
+                quadruped_robot.ARM_PRINTABLE_COLLISION_SIZE_M
+            )
+
+    for guarded, exact in (
+        (
+            quadruped_robot.HIP_PRINTABLE_COLLISION_SIZE_M,
+            quadruped_robot.HIP_PRINTABLE_BOUNDS_SIZE_M,
+        ),
+        (
+            quadruped_robot.ARM_PRINTABLE_COLLISION_SIZE_M,
+            quadruped_robot.ARM_PRINTABLE_BOUNDS_SIZE_M,
+        ),
+    ):
+        assert tuple(
+            guarded_value - exact_value
+            for guarded_value, exact_value in zip(
+                guarded,
+                exact,
+                strict=True,
+            )
+        ) == pytest.approx((0.004, 0.004, 0.004))
+
+
 def test_upper_arm_stl_matches_current_step_bounds():
     step = import_step(PROJECT_ROOT / "exports" / "step" / "upper_arm.step")
     stl = import_stl(PROJECT_ROOT / "exports" / "stl" / "upper_arm.stl")

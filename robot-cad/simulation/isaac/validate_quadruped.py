@@ -207,15 +207,42 @@ def _apply_contact_material() -> dict:
 
 def _stage_counts() -> dict[str, int]:
     stage = stage_utils.get_current_stage()
+    prims = list(stage.Traverse())
     return {
         "articulation_roots": sum(
-            prim.HasAPI(UsdPhysics.ArticulationRootAPI) for prim in stage.Traverse()
+            prim.HasAPI(UsdPhysics.ArticulationRootAPI) for prim in prims
         ),
-        "rigid_bodies": sum(prim.HasAPI(UsdPhysics.RigidBodyAPI) for prim in stage.Traverse()),
-        "collision_prims": sum(prim.HasAPI(UsdPhysics.CollisionAPI) for prim in stage.Traverse()),
-        "revolute_joints": sum(prim.IsA(UsdPhysics.RevoluteJoint) for prim in stage.Traverse()),
-        "fixed_joints": sum(prim.IsA(UsdPhysics.FixedJoint) for prim in stage.Traverse()),
-        "physics_scenes": sum(prim.IsA(UsdPhysics.Scene) for prim in stage.Traverse()),
+        "self_collision_enabled_roots": sum(
+            bool(
+                prim.GetAttribute("newton:selfCollisionEnabled").Get()
+            )
+            for prim in prims
+            if prim.HasAPI(UsdPhysics.ArticulationRootAPI)
+        ),
+        "filtered_pair_targets": sum(
+            len(
+                UsdPhysics.FilteredPairsAPI(prim)
+                .GetFilteredPairsRel()
+                .GetTargets()
+            )
+            for prim in prims
+            if prim.HasAPI(UsdPhysics.FilteredPairsAPI)
+        ),
+        "rigid_bodies": sum(
+            prim.HasAPI(UsdPhysics.RigidBodyAPI) for prim in prims
+        ),
+        "collision_prims": sum(
+            prim.HasAPI(UsdPhysics.CollisionAPI) for prim in prims
+        ),
+        "revolute_joints": sum(
+            prim.IsA(UsdPhysics.RevoluteJoint) for prim in prims
+        ),
+        "fixed_joints": sum(
+            prim.IsA(UsdPhysics.FixedJoint) for prim in prims
+        ),
+        "physics_scenes": sum(
+            prim.IsA(UsdPhysics.Scene) for prim in prims
+        ),
     }
 
 
@@ -700,6 +727,12 @@ try:
         raise AssertionError(f"Expected 12 revolute joints: {counts}")
     if counts["collision_prims"] < 13:
         raise AssertionError(f"Every link requires collision geometry: {counts}")
+    if counts["self_collision_enabled_roots"] != 1:
+        raise AssertionError(f"Self-collision is not enabled: {counts}")
+    if counts["filtered_pair_targets"] != 12:
+        raise AssertionError(
+            f"Adjacent-link collision filter policy differs: {counts}"
+        )
     if args.mode == "fixed" and counts["fixed_joints"] < 1:
         raise AssertionError(f"Fixed asset has no world constraint: {counts}")
     if args.mode == "floating" and counts["fixed_joints"] != 0:

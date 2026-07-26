@@ -28,6 +28,12 @@ revolute joints, and 12 angular drives. Use its `root_usd` value for validation.
 `--asset-layout packaged` remains available when a multi-file, multi-physics
 payload package is specifically needed; keep that entire generated directory.
 
+Self-collision is enabled by default. The importer preserves collision between
+different legs and between non-adjacent robot links, while authoring exactly
+12 filtered pairs for directly connected joint neighbors whose CAD envelopes
+overlap at their pivots. Use `--disable-self-collision` only as a troubleshooting
+comparison; it permits legs to pass through each other.
+
 ```powershell
 & $isaacPython simulation\isaac\validate_quadruped.py `
   --usd <fixed-root.usda> `

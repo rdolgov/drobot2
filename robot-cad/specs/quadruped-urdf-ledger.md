@@ -104,6 +104,8 @@ zero flexion and knee, each arm's local `+X` points downward in the body frame.
 | base | collision box | `(0,0,0.050) / (0,0,0)` | `0.220 x 0.170 x 0.100 m` |
 | every hip | printable mesh | `(0.0286117,-0.0426117,-0.00195) / (-1.570796,0,0)` | `exports/stl/st3215_hip.stl` |
 | every arm | printable mesh | `(0.0948117,-0.012,0) / (0,0,0)` | `exports/stl/upper_arm.stl` |
+| every hip | guarded printable collision box | `(0.0266617,-0.0460425,-0.00195) / (0,0,0)` | `0.0713 x 0.127308 x 0.04805 m` |
+| every arm | guarded printable collision box | `(0.096254,0,-0.00195) / (0,0,0)` | `0.155285 x 0.035229 x 0.0713 m` |
 | every moving link | exact ST3215 visual mesh | `(0.0255,0,0.007475) / (1.570796,0,0)` | `exports/stl/st3215_servo_visual.stl` |
 | every moving link | ST3215 collision box | `(0.0125,0,-0.001825) / (1.570796,0,0)` | source-axis size `0.045223408 x 0.0378 x 0.024723408 m` |
 | every distal link | fork-tip sphere | `(0.159896689,0,0) / (0,0,0)` | radius `0.0125 m` |
@@ -113,6 +115,14 @@ stable dynamic contact. The magenta distal spheres are explicitly named
 `simulation_only_fork_tip_contact_proxy`. The current CAD has no foot or
 ankle; these spheres only permit a preliminary contact experiment and cannot
 establish that the printable hardware can walk.
+
+Printable hip and arm boxes include a `2 mm` guard on every side so PhysX
+contact begins before rendered PLA surfaces visibly overlap. Isaac
+self-collision is enabled. The 12 directly connected joint-neighbor pairs are
+explicitly filtered with `UsdPhysics.FilteredPairsAPI` because their servo and
+fork geometry intentionally overlaps at the pivot. All inter-leg pairs,
+non-adjacent same-leg pairs, and body-versus-non-adjacent-leg pairs remain
+collision-enabled.
 
 ## Mass and inertia model
 
@@ -178,7 +188,7 @@ The generated handoff artifacts are:
 - `exports/isaac/quadruped_robot_fixed.usdc`: self-contained fixed-base
   commissioning articulation;
 - `exports/isaac/quadruped_robot_floating.usdc`: self-contained floating-base
-  dynamics articulation;
+  dynamics articulation with guarded inter-leg collision;
 - `exports/isaac/quadruped_robot_manual_world.usda`: portable world referencing
   the floating USDC beside it, with Earth gravity, floor contact, the
   conservative standing targets, and the rated ST3215 effort cap.
@@ -194,11 +204,12 @@ once and does not continuously overwrite manual joint commands.
 1. Battery and electronics are placeholders; the actual parts are not selected.
 2. Fully solid PLA is a mass upper bound, not a sliced Bambu estimate.
 3. There are no physical feet, compliant pads, or measured friction.
-4. Servo wires, bolts, horns, and self-collision have not been clearance-swept.
+4. Servo wires, bolts, and horns have not been clearance-swept.
 5. Rigid links omit PLA flex, anisotropy, creep, fork fatigue, fastener
    pull-out, gearbox compliance, backlash, play, and wear.
-6. Self-collision is initially disabled because exact servo/fork overlaps are
-   already known in the source assembly.
+6. Self-collision uses conservative guarded boxes rather than exact convex CAD
+   hulls. Directly connected joint neighbors are filtered because exact
+   servo/fork overlaps are already known in the source assembly.
 7. There is no electrical or thermal model. Mechanically possible motion may
    still demand unsafe current or duty cycle.
 

@@ -94,6 +94,25 @@ SERVO_MESH_RPY_RAD = (math.pi / 2.0, 0.0, 0.0)
 SERVO_COLLISION_XYZ_M = (0.0125, 0.0, -0.001825)
 SERVO_COLLISION_RPY_RAD = SERVO_MESH_RPY_RAD
 
+# Printable-link collision envelopes use their audited CAD bounding boxes plus
+# a small per-side guard.  The guard makes contact begin before two rendered
+# PLA surfaces visibly overlap.  Isaac filters only directly connected joint
+# neighbors, whose fork/servo geometry intentionally overlaps at each pivot;
+# other links, including links from different legs, retain self-collision.
+PRINTABLE_COLLISION_GUARD_PER_SIDE_M = 0.002
+HIP_PRINTABLE_BOUNDS_SIZE_M = (0.0673, 0.123308, 0.04405)
+HIP_PRINTABLE_COLLISION_SIZE_M = tuple(
+    dimension + 2.0 * PRINTABLE_COLLISION_GUARD_PER_SIDE_M
+    for dimension in HIP_PRINTABLE_BOUNDS_SIZE_M
+)
+HIP_PRINTABLE_COLLISION_XYZ_M = (0.0266617, -0.0460425, -0.00195)
+ARM_PRINTABLE_BOUNDS_SIZE_M = (0.151285, 0.031229, 0.0673)
+ARM_PRINTABLE_COLLISION_SIZE_M = tuple(
+    dimension + 2.0 * PRINTABLE_COLLISION_GUARD_PER_SIDE_M
+    for dimension in ARM_PRINTABLE_BOUNDS_SIZE_M
+)
+ARM_PRINTABLE_COLLISION_XYZ_M = (0.096254, 0.0, -0.00195)
+
 
 @dataclass(frozen=True)
 class LegSpec:
@@ -329,8 +348,8 @@ def _add_leg(robot, leg: LegSpec):
     _add_box_collision(
         hip,
         "hip_printable_proxy",
-        (0.0673, 0.123308, 0.04405),
-        (0.0266617, -0.0460425, -0.00195),
+        HIP_PRINTABLE_COLLISION_SIZE_M,
+        HIP_PRINTABLE_COLLISION_XYZ_M,
     )
     _add_box_collision(
         hip,
@@ -369,8 +388,8 @@ def _add_leg(robot, leg: LegSpec):
         _add_box_collision(
             arm,
             f"{role}_arm_printable_proxy",
-            (0.151285, 0.031229, 0.0673),
-            (0.096254, 0.0, -0.00195),
+            ARM_PRINTABLE_COLLISION_SIZE_M,
+            ARM_PRINTABLE_COLLISION_XYZ_M,
         )
         _add_box_collision(
             arm,

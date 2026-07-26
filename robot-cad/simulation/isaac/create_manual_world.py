@@ -68,6 +68,22 @@ def _stage_facts(stage: Usd.Stage) -> dict[str, int]:
         "physics_scenes": sum(
             prim.IsA(UsdPhysics.Scene) for prim in prims
         ),
+        "self_collision_enabled_roots": sum(
+            bool(
+                prim.GetAttribute("newton:selfCollisionEnabled").Get()
+            )
+            for prim in prims
+            if prim.HasAPI(UsdPhysics.ArticulationRootAPI)
+        ),
+        "filtered_pair_targets": sum(
+            len(
+                UsdPhysics.FilteredPairsAPI(prim)
+                .GetFilteredPairsRel()
+                .GetTargets()
+            )
+            for prim in prims
+            if prim.HasAPI(UsdPhysics.FilteredPairsAPI)
+        ),
     }
 
 
@@ -200,6 +216,8 @@ try:
         "angular_drives": 12,
         "fixed_joints": 0,
         "physics_scenes": 1,
+        "self_collision_enabled_roots": 1,
+        "filtered_pair_targets": 12,
     }
     facts = _stage_facts(stage)
     if facts != expected_facts:

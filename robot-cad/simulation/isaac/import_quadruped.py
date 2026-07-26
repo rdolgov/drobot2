@@ -38,10 +38,22 @@ parser.add_argument(
         "one self-contained binary USDC, which is simpler to move and open manually."
     ),
 )
-parser.add_argument(
+self_collision_group = parser.add_mutually_exclusive_group()
+self_collision_group.add_argument(
     "--allow-self-collision",
+    dest="allow_self_collision",
     action="store_true",
-    help="Enable only for a dedicated collision audit; normal tests keep it off",
+    default=True,
+    help=(
+        "Enable collision between non-adjacent robot links (default). "
+        "Directly connected joint neighbors are filtered after import."
+    ),
+)
+self_collision_group.add_argument(
+    "--disable-self-collision",
+    dest="allow_self_collision",
+    action="store_false",
+    help="Disable all articulation self-collision for troubleshooting only.",
 )
 args, _ = parser.parse_known_args()
 
@@ -71,6 +83,68 @@ def _stage_facts(stage: Usd.Stage) -> dict[str, int]:
             bool(UsdPhysics.DriveAPI.Get(prim, "angular")) for prim in prims
         ),
     }
+
+
+def _self_collision_facts(stage: Usd.Stage) -> dict[str, int]:
+    prims = list(stage.Traverse())
+    articulation_roots = [
+        prim
+        for prim in prims
+        if prim.HasAPI(UsdPhysics.ArticulationRootAPI)
+    ]
+    return {
+        "enabled_articulation_roots": sum(
+            bool(
+                prim.GetAttribute("newton:selfCollisionEnabled").Get()
+            )
+            for prim in articulation_roots
+        ),
+        "filtered_pair_targets": sum(
+            len(
+                UsdPhysics.FilteredPairsAPI(prim)
+                .GetFilteredPairsRel()
+                .GetTargets()
+            )
+            for prim in prims
+            if prim.HasAPI(UsdPhysics.FilteredPairsAPI)
+        ),
+    }
+
+
+def _author_joint_neighbor_filters(stage: Usd.Stage) -> list[dict[str, str]]:
+    """Filter intentional overlap only across directly connected link pairs."""
+    filtered_pairs: list[dict[str, str]] = []
+    seen_pairs: set[tuple[str, str]] = set()
+    for prim in stage.Traverse():
+        if not prim.IsA(UsdPhysics.RevoluteJoint):
+            continue
+        joint = UsdPhysics.Joint(prim)
+        body0_targets = joint.GetBody0Rel().GetTargets()
+        body1_targets = joint.GetBody1Rel().GetTargets()
+        if len(body0_targets) != 1 or len(body1_targets) != 1:
+            continue
+        body0_path = body0_targets[0]
+        body1_path = body1_targets[0]
+        pair_key = tuple(sorted((str(body0_path), str(body1_path))))
+        if pair_key in seen_pairs:
+            continue
+        body0 = stage.GetPrimAtPath(body0_path)
+        body1 = stage.GetPrimAtPath(body1_path)
+        if not body0.HasAPI(UsdPhysics.RigidBodyAPI):
+            raise AssertionError(f"Joint body0 is not rigid: {body0_path}")
+        if not body1.HasAPI(UsdPhysics.RigidBodyAPI):
+            raise AssertionError(f"Joint body1 is not rigid: {body1_path}")
+        filtered_api = UsdPhysics.FilteredPairsAPI.Apply(body0)
+        filtered_api.CreateFilteredPairsRel().AddTarget(body1_path)
+        seen_pairs.add(pair_key)
+        filtered_pairs.append(
+            {
+                "joint": prim.GetName(),
+                "body0": str(body0_path),
+                "body1": str(body1_path),
+            }
+        )
+    return filtered_pairs
 
 
 report = {
@@ -111,6 +185,12 @@ try:
     stage = Usd.Stage.Open(root_usd)
     if stage is None:
         raise AssertionError(f"Isaac USD stage could not be opened: {root_usd}")
+    joint_neighbor_filters = (
+        _author_joint_neighbor_filters(stage)
+        if args.allow_self_collision
+        else []
+    )
+    stage.GetRootLayer().Save()
     stage_facts = _stage_facts(stage)
     expected_stage_facts = {
         "articulation_roots": 1,
@@ -122,6 +202,21 @@ try:
         raise AssertionError(
             "Imported USD articulation facts differ from the URDF contract: "
             f"{stage_facts} != {expected_stage_facts}"
+        )
+    collision_facts = _self_collision_facts(stage)
+    expected_collision_facts = {
+        "enabled_articulation_roots": 1 if args.allow_self_collision else 0,
+        "filtered_pair_targets": 12 if args.allow_self_collision else 0,
+    }
+    if collision_facts != expected_collision_facts:
+        raise AssertionError(
+            "Imported USD self-collision facts differ from policy: "
+            f"{collision_facts} != {expected_collision_facts}"
+        )
+    if args.allow_self_collision and len(joint_neighbor_filters) != 12:
+        raise AssertionError(
+            "Expected one adjacent-link filter for every revolute joint: "
+            f"{joint_neighbor_filters}"
         )
 
     if args.asset_layout == "monolithic":
@@ -146,6 +241,12 @@ try:
                 "Binary Isaac USD articulation facts differ from the URDF "
                 f"contract: {stage_facts} != {expected_stage_facts}"
             )
+        collision_facts = _self_collision_facts(stage)
+        if collision_facts != expected_collision_facts:
+            raise AssertionError(
+                "Binary Isaac USD self-collision facts differ from policy: "
+                f"{collision_facts} != {expected_collision_facts}"
+            )
 
     report.update(
         {
@@ -153,6 +254,8 @@ try:
             "root_usd": root_usd,
             "root_usd_bytes": os.path.getsize(root_usd),
             "stage_facts": stage_facts,
+            "self_collision_facts": collision_facts,
+            "joint_neighbor_filtered_pairs": joint_neighbor_filters,
             "settings": {
                 "merge_fixed_joints": config.merge_fixed_joints,
                 "merge_mesh": config.merge_mesh,

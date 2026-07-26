@@ -11,7 +11,9 @@
     "revolute_joints": 12,
     "angular_drives": 12,
     "fixed_joints": 0,
-    "physics_scenes": 1
+    "physics_scenes": 1,
+    "self_collision_enabled_roots": 1,
+    "filtered_pair_targets": 12
   },
   "rated_effort_cap_nm": 0.980665,
   "standing_targets_deg_by_joint": {

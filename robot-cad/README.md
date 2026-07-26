@@ -36,8 +36,8 @@ assemblies.
 | --- | --- |
 | `exports/urdf/quadruped_robot.urdf` | SI-unit 13-link/12-joint robot description using current printable meshes and exact ST3215 visual geometry |
 | `exports/isaac/quadruped_robot_fixed.usdc` | Self-contained fixed-base articulation for safe joint commissioning |
-| `exports/isaac/quadruped_robot_floating.usdc` | Self-contained floating-base articulation for gravity and gait work |
-| `exports/isaac/quadruped_robot_manual_world.usda` | Portable Isaac world with Earth gravity, floor contact, rated-torque caps, and standing targets |
+| `exports/isaac/quadruped_robot_floating.usdc` | Self-contained floating-base articulation with guarded inter-leg collision |
+| `exports/isaac/quadruped_robot_manual_world.usda` | Portable Isaac world referencing the self-collision-enabled floating asset, with Earth gravity, floor contact, rated-torque caps, and standing targets |
 
 For manual control, launch the prepared world:
 
