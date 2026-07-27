@@ -74,6 +74,14 @@ def test_exact_waveshare_adapter_uses_official_board_envelope() -> None:
     )
 
 
+def test_controller_fit_proxy_matches_exact_reference_bounds() -> None:
+    exact_bounds = generated_adapter().bounding_box()
+    proxy_bounds = waveshare_bus_servo_adapter_a.make_fit_proxy().bounding_box()
+
+    assert tuple(proxy_bounds.min) == pytest.approx(tuple(exact_bounds.min))
+    assert tuple(proxy_bounds.max) == pytest.approx(tuple(exact_bounds.max))
+
+
 def test_servo_adapter_standoff_pattern_matches_official_mount() -> None:
     center_x, center_y = quadruped_electronics_tray.SERVO_ADAPTER_CENTER_XY_MM
     local_centers = tuple(
@@ -83,9 +91,12 @@ def test_servo_adapter_standoff_pattern_matches_official_mount() -> None:
         )
     )
 
-    assert local_centers == pytest.approx(
-        waveshare_bus_servo_adapter_a.MOUNT_HOLE_CENTERS_XY_MM
-    )
+    for actual, expected in zip(
+        local_centers,
+        waveshare_bus_servo_adapter_a.MOUNT_HOLE_CENTERS_XY_MM,
+        strict=True,
+    ):
+        assert actual == pytest.approx(expected)
     assert waveshare_bus_servo_adapter_a.MOUNT_HOLE_SPACING_XY_MM == pytest.approx(
         (37.0, 28.0)
     )
@@ -117,7 +128,7 @@ def test_servo_adapter_mount_holes_are_open_in_tray_standoffs() -> None:
 
 
 def test_installed_adapter_clears_tray_lid_and_body_imu() -> None:
-    adapter_bounds = generated_adapter().moved(
+    adapter_bounds = waveshare_bus_servo_adapter_a.make_fit_proxy().moved(
         Location(
             (
                 *quadruped_electronics_tray.SERVO_ADAPTER_CENTER_XY_MM,

@@ -56,6 +56,7 @@ internal_layout:
     selected_board: Waveshare Bus Servo Adapter (A)
     protocol: USB_or_UART_half_duplex_serial_bus_not_CAN
     exact_reference: vendor/electronics/waveshare_bus_servo_adapter_a.step
+    full_assembly_geometry: measured_exact_envelope_proxy
     nominal_board_xy_mm: [42.0, 33.0]
     detailed_envelope_xyz_mm: [42.02417808, 33.81628938, 14.59999982]
     product_mass_kg: 0.016
@@ -69,7 +70,7 @@ internal_layout:
     standoff_height_mm: 4.0
     underside_clearance_above_tray_mm: 0.4
     clearance_below_lid_locator_mm: 19.0
-    note: connector access and cable bend radii remain to be checked with selected cables
+    note: exact standalone STEP is retained; full robot uses its measured envelope because the 117-solid board cannot be nested reliably in the 290-solid XCAF assembly
   body_imu:
     selected_board: Adafruit BNO085 STEMMA QT product 4754
     exact_reference: vendor/sensors/adafruit_bno085_stemma_qt.step
@@ -234,9 +235,14 @@ outputs:
     source: robot_cad/assembly/quadruped_imu_tray_fit_preview.py
     step: exports/step/quadruped_imu_tray_fit_preview.step
     printable: false
+  body_hardware_fit_preview:
+    source: robot_cad/assembly/quadruped_body_hardware_fit_preview.py
+    step: exports/step/quadruped_body_hardware_fit_preview.step
+    printable: false
   complete_assembly:
     source: robot_cad/assembly/quadruped_robot.py
-    step: exports/step/quadruped_robot.step
+    fusion_step: exports/step/quadruped_robot_fusion360.step
+    compatibility_step: exports/step/quadruped_robot.step
     printable: false
 
 acceptance_tests:

@@ -53,7 +53,8 @@ $targets = @(
     "robot_cad/assembly/robot_leg.py=exports/step/robot_leg.step",
     "robot_cad/assembly/lekiwi_camera_body_fit_preview.py=exports/step/lekiwi_camera_body_fit_preview.step",
     "robot_cad/assembly/quadruped_imu_tray_fit_preview.py=exports/step/quadruped_imu_tray_fit_preview.step",
-    "robot_cad/assembly/quadruped_robot.py=exports/step/quadruped_robot.step"
+    "robot_cad/assembly/quadruped_body_hardware_fit_preview.py=exports/step/quadruped_body_hardware_fit_preview.step",
+    "robot_cad/assembly/quadruped_robot.py=exports/step/quadruped_robot_fusion360.step"
 )
 $arguments = @($stepTool) + $targets
 if ($Force) {
@@ -65,6 +66,20 @@ try {
     & $python @arguments
     if ($LASTEXITCODE -ne 0) {
         throw "CAD generation failed with exit code $LASTEXITCODE."
+    }
+
+    # The XCAF writer can fail when force-overwriting the large existing
+    # quadruped file on Windows. Generate to a fresh Fusion-specific target,
+    # then make the historical filename a byte-identical compatibility copy.
+    Copy-Item `
+        -LiteralPath "exports/step/quadruped_robot_fusion360.step" `
+        -Destination "exports/step/quadruped_robot.step" `
+        -Force
+    if (Test-Path -LiteralPath "exports/step/.quadruped_robot_fusion360.step.glb") {
+        Copy-Item `
+            -LiteralPath "exports/step/.quadruped_robot_fusion360.step.glb" `
+            -Destination "exports/step/.quadruped_robot.step.glb" `
+            -Force
     }
 
     & $python $stepTool `

@@ -239,7 +239,7 @@ def gen_step():
         color=Color(0.95, 0.70, 0.18),
     )
     asm.add(
-        waveshare_bus_servo_adapter_a.gen_step().moved(
+        waveshare_bus_servo_adapter_a.make_fit_proxy().moved(
             servo_bus_adapter_location()
         ),
         "body_servo_bus_adapter",

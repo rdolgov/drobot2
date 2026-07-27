@@ -130,6 +130,6 @@ def test_generated_quadruped_has_body_and_four_nested_leg_modules() -> None:
 def test_complete_stance_has_expected_proportional_envelope() -> None:
     bounds = generated_quadruped().bounding_box()
 
-    assert bounds.size.X == pytest.approx(519.25, abs=0.2)
-    assert bounds.size.Y == pytest.approx(635.4, abs=0.2)
-    assert bounds.size.Z == pytest.approx(387.5, abs=0.2)
+    assert bounds.size.X == pytest.approx(519.235, abs=0.2)
+    assert bounds.size.Y == pytest.approx(635.397, abs=0.2)
+    assert bounds.size.Z == pytest.approx(432.609, abs=0.2)

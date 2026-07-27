@@ -28,9 +28,13 @@ assemblies.
 | `exports/step/quadruped_body_base.step` | `robot_cad/parts/quadruped_body.py` | One-piece X2D-safe body tub with hip reinforcement and battery bay |
 | `exports/step/quadruped_body_lid.step` | `robot_cad/parts/quadruped_body_lid.py` | Removable ventilated body lid with direct LeKiwi camera-mount pattern |
 | `exports/step/quadruped_electronics_tray.step` | `robot_cad/parts/quadruped_electronics_tray.py` | Removable electronics tray above the battery |
+| `exports/step/lekiwi_12v_battery_reference.step` | `robot_cad/parts/lekiwi_12v_battery_reference.py` | Measured 70 x 66 x 40 mm LeKiwi 12 V pack fit proxy |
+| `exports/step/waveshare_bus_servo_adapter_a.step` | `robot_cad/parts/waveshare_bus_servo_adapter_a.py` | Exact Waveshare USB/UART serial-bus controller reference |
 | `exports/step/adafruit_bno085_stemma_qt.step` | `robot_cad/parts/adafruit_bno085.py` | Exact Adafruit BNO085 reference centred on its sensing package |
 | `exports/step/quadruped_imu_tray_fit_preview.step` | `robot_cad/assembly/quadruped_imu_tray_fit_preview.py` | Installed BNO085/tray fit and orientation preview |
-| `exports/step/quadruped_robot.step` | `robot_cad/assembly/quadruped_robot.py` | Complete body with four mirrored seven-component ST3215 legs |
+| `exports/step/quadruped_body_hardware_fit_preview.step` | `robot_cad/assembly/quadruped_body_hardware_fit_preview.py` | Lighter body, internals, lid, and camera review at full-assembly placements |
+| `exports/step/quadruped_robot_fusion360.step` | `robot_cad/assembly/quadruped_robot.py` | Primary Fusion-ready body, battery, controller, IMU, camera, and four mirrored seven-component ST3215 legs |
+| `exports/step/quadruped_robot.step` | `robot_cad/assembly/quadruped_robot.py` | Byte-identical compatibility copy of the Fusion handoff |
 | `exports/step/lekiwi_camera_body_fit_preview.step` | `robot_cad/assembly/lekiwi_camera_body_fit_preview.py` | Lid positioning preview for the upstream LeKiwi mount and Arducam envelope |
 
 The front lid interface accepts the unchanged LeKiwi
@@ -38,6 +42,26 @@ The front lid interface accepts the unchanged LeKiwi
 20 x 12 mm cable opening.  The selected compatibility target is LeKiwi's
 Arducam 5 MP wide-angle USB option (ASIN `B0972KK7BC`), retained under
 `vendor/references/lekiwi/` with upstream license and checksums.
+
+The body fit assembly includes the LeKiwi 12 V battery reference and a measured
+envelope of the Waveshare Bus Servo Adapter (A). The exact 117-solid controller
+is also exported as its own STEP. The battery proxy is 70 x 66 x 40 mm and
+sits on the body floor with 1 mm side clearance and 12 mm below the electronics
+tray. The adapter sits on four M2 tray standoffs at the official 37 x 28 mm
+pattern. LeKiwi calls this a motor control board; electrically it is a USB/UART
+half-duplex serial-bus adapter, not a CAN controller. Pack discharge current,
+BMS behavior, connector bend radii, and twelve-servo electrical suitability
+remain unvalidated.
+
+## Review the full assembly in Fusion
+
+Download `exports/step/quadruped_robot_fusion360.step`, then in Fusion use
+**File > Open > Open from my computer**, or upload the STEP through the Data
+Panel. Fusion translates the STEP into a Fusion design; expand the browser
+tree to hide the body lid and inspect the battery, electronics tray,
+controller, IMU, and camera references. The STEP contains resolved static
+placements and component labels, but not the source-level parametric history
+or active servo joints.
 
 ## Robot description and Isaac articulation
 
