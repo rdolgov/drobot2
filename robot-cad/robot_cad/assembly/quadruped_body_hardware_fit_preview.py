@@ -13,6 +13,7 @@ from robot_cad.parts import (
     quadruped_body,
     quadruped_body_lid,
     quadruped_electronics_tray,
+    quadruped_imu_cover,
     waveshare_bus_servo_adapter_a,
 )
 
@@ -24,6 +25,7 @@ COMPONENT_ORDER = (
     "electronics_tray",
     "body_servo_bus_adapter",
     "body_imu",
+    "body_imu_cover",
     "body_lid",
     "lekiwi_camera_assembly",
 )
@@ -75,6 +77,13 @@ def gen_step():
         ),
         "body_imu",
         color=Color(0.12, 0.30, 0.62),
+    )
+    asm.add(
+        quadruped_imu_cover.gen_step().moved(
+            quadruped_robot.imu_cover_location()
+        ),
+        "body_imu_cover",
+        color=Color(0.72, 0.78, 0.84),
     )
     asm.add(
         quadruped_body_lid.gen_step().moved(

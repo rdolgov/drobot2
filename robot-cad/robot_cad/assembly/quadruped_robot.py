@@ -14,6 +14,7 @@ from robot_cad.parts import (
     quadruped_body,
     quadruped_body_lid,
     quadruped_electronics_tray,
+    quadruped_imu_cover,
     st3215_hip,
     st3215_hip_body_mount,
     st3215_motor_bay,
@@ -43,6 +44,7 @@ class QuadrupedAssemblySpec:
         "electronics_tray",
         "body_servo_bus_adapter",
         "body_imu",
+        "body_imu_cover",
         "body_lid",
         "lekiwi_camera_assembly",
         "front_left_leg",
@@ -185,6 +187,21 @@ def servo_bus_adapter_location() -> Location:
     )
 
 
+def imu_cover_location() -> Location:
+    """Return the cover with its sleeves seated on the BNO085 PCB."""
+    return Location(
+        (
+            0.0,
+            0.0,
+            (
+                quadruped_body.ELECTRONICS_TRAY_BOTTOM_Z_MM
+                + quadruped_electronics_tray.IMU_BOARD_BOTTOM_Z_MM
+                + adafruit_bno085.PCB_THICKNESS_MM
+            ),
+        )
+    )
+
+
 def camera_assembly_location() -> Location:
     """Return the LeKiwi camera reference pose on the seated body lid."""
     return Location((0.0, 0.0, quadruped_body.BODY_BASE_HEIGHT_Z_MM)) * (
@@ -258,6 +275,11 @@ def gen_step():
         ),
         "body_imu",
         color=Color(0.12, 0.30, 0.62),
+    )
+    asm.add(
+        quadruped_imu_cover.gen_step().moved(imu_cover_location()),
+        "body_imu_cover",
+        color=Color(0.72, 0.78, 0.84),
     )
     asm.add(
         quadruped_body_lid.gen_step().moved(

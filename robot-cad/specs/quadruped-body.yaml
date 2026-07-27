@@ -92,6 +92,25 @@ internal_layout:
     standoff_height_mm: 4.0
     clearance_below_lid_mm: 25.47
     note: sensing package is centred; use a no-magnetometer game rotation vector near servo power wiring
+  body_imu_cover:
+    type: separate_open_sided_printed_roof
+    envelope_xyz_mm: [28.4, 25.86, 8.36]
+    datum: xy_at_bno085_sensor_center_z_at_pcb_top
+    roof_thickness_mm: 2.4
+    modeled_component_clearance_mm: 3.0
+    spacer_outer_diameter_mm: 5.0
+    mounting_centers_xy_mm:
+      - [-10.163, -9.695]
+      - [-10.163, 8.085]
+      - [10.157, -9.695]
+      - [10.157, 8.085]
+    clearance_hole_diameter_mm: 2.4
+    recommended_fastener: M2_x_20_mm_nylon_through_bolt_and_nylon_nut
+    fastener_quantity: 4
+    fastener_model_status: exact_M2x20_nylon_fastener_not_found_in_step.parts_catalog
+    connector_access: all_sides_open_below_roof
+    clearance_below_lid_locator_mm: 20.07
+    note: sleeves seat on PCB mounting zones; do not use magnetic steel hardware beside the magnetometer
   lid_fasteners:
     nominal: M3
     boss_quantity: 4
@@ -223,6 +242,12 @@ outputs:
     step: exports/step/adafruit_bno085_stemma_qt.step
     stl: exports/stl/adafruit_bno085_stemma_qt.stl
     printable: false
+  body_imu_cover:
+    source: robot_cad/parts/quadruped_imu_cover.py
+    step: exports/step/quadruped_imu_cover.step
+    stl: exports/stl/quadruped_imu_cover.stl
+    3mf: exports/3mf/quadruped_imu_cover.3mf
+    printable: true
   body_battery_reference:
     source: robot_cad/parts/lekiwi_12v_battery_reference.py
     step: exports/step/lekiwi_12v_battery_reference.step
@@ -259,5 +284,6 @@ acceptance_tests:
   - servo adapter clears the tray, lid locator, and body-centred IMU
   - BNO085 sensing element is body-centred, axis-aligned, and clear of the lid
   - four M2 tray holes align to the exact Adafruit BNO085 mounting pattern
+  - removable IMU cover shares all four M2 axes, leaves 3 mm modeled component clearance, and clears the lid locator
   - base with recommended brim fits the X2D shared dual-nozzle region
   - complete assembly preserves the battery, controller, IMU, camera, and four labeled seven-component leg modules

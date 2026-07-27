@@ -23,6 +23,7 @@ def test_four_leg_modules_are_declared_in_body_order() -> None:
         "electronics_tray",
         "body_servo_bus_adapter",
         "body_imu",
+        "body_imu_cover",
         "body_lid",
         "lekiwi_camera_assembly",
         "front_left_leg",

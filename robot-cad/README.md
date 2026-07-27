@@ -31,7 +31,8 @@ assemblies.
 | `exports/step/lekiwi_12v_battery_reference.step` | `robot_cad/parts/lekiwi_12v_battery_reference.py` | Measured 70 x 66 x 40 mm LeKiwi 12 V pack fit proxy |
 | `exports/step/waveshare_bus_servo_adapter_a.step` | `robot_cad/parts/waveshare_bus_servo_adapter_a.py` | Exact Waveshare USB/UART serial-bus controller reference |
 | `exports/step/adafruit_bno085_stemma_qt.step` | `robot_cad/parts/adafruit_bno085.py` | Exact Adafruit BNO085 reference centred on its sensing package |
-| `exports/step/quadruped_imu_tray_fit_preview.step` | `robot_cad/assembly/quadruped_imu_tray_fit_preview.py` | Installed BNO085/tray fit and orientation preview |
+| `exports/step/quadruped_imu_cover.step` | `robot_cad/parts/quadruped_imu_cover.py` | Printable open-sided BNO085 roof with four aligned M2 nylon through-bolt sleeves |
+| `exports/step/quadruped_imu_tray_fit_preview.step` | `robot_cad/assembly/quadruped_imu_tray_fit_preview.py` | Installed tray, BNO085, and removable protection-cover fit preview |
 | `exports/step/quadruped_body_hardware_fit_preview.step` | `robot_cad/assembly/quadruped_body_hardware_fit_preview.py` | Lighter body, internals, lid, and camera review at full-assembly placements |
 | `exports/step/quadruped_robot_fusion360.step` | `robot_cad/assembly/quadruped_robot.py` | Primary Fusion-ready body, battery, controller, IMU, camera, and four mirrored seven-component ST3215 legs |
 | `exports/step/quadruped_robot.step` | `robot_cad/assembly/quadruped_robot.py` | Byte-identical compatibility copy of the Fusion handoff |
@@ -53,15 +54,24 @@ half-duplex serial-bus adapter, not a CAN controller. Pack discharge current,
 BMS behavior, connector bend radii, and twelve-servo electrical suitability
 remain unvalidated.
 
+The body-centred BNO085 now has a separate printable roof cover. Four
+`2.4 mm` holes share the board and tray mounting axes, so four M2 x 20 mm
+nylon through bolts and nylon nuts clamp the cover, board, and tray standoffs
+as one removable stack. Integrated sleeves seat on the PCB mounting zones,
+the roof clears the tallest modeled component by `3.0 mm`, and all four sides
+remain open for STEMMA QT wiring and airflow. Use non-magnetic nylon hardware;
+an exact M2 x 20 nylon fastener was not available in the checked step.parts
+catalog, so fastener geometry is not included in the assembly.
+
 ## Review the full assembly in Fusion
 
 Download `exports/step/quadruped_robot_fusion360.step`, then in Fusion use
 **File > Open > Open from my computer**, or upload the STEP through the Data
 Panel. Fusion translates the STEP into a Fusion design; expand the browser
 tree to hide the body lid and inspect the battery, electronics tray,
-controller, IMU, and camera references. The STEP contains resolved static
-placements and component labels, but not the source-level parametric history
-or active servo joints.
+controller, IMU cover, IMU, and camera references. The STEP contains resolved
+static placements and component labels, but not the source-level parametric
+history or active servo joints.
 
 ## Robot description and Isaac articulation
 

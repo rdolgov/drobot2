@@ -43,6 +43,7 @@ $targets = @(
     "robot_cad/parts/quadruped_body.py=exports/step/quadruped_body_base.step",
     "robot_cad/parts/quadruped_body_lid.py=exports/step/quadruped_body_lid.step",
     "robot_cad/parts/quadruped_electronics_tray.py=exports/step/quadruped_electronics_tray.step",
+    "robot_cad/parts/quadruped_imu_cover.py=exports/step/quadruped_imu_cover.step",
     "robot_cad/parts/lekiwi_12v_battery_reference.py=exports/step/lekiwi_12v_battery_reference.step",
     "robot_cad/parts/waveshare_bus_servo_adapter_a.py=exports/step/waveshare_bus_servo_adapter_a.step",
     "robot_cad/parts/adafruit_bno085.py=exports/step/adafruit_bno085_stemma_qt.step",
@@ -139,6 +140,14 @@ try {
         --3mf "../3mf/quadruped_electronics_tray.3mf"
     if ($LASTEXITCODE -ne 0) {
         throw "Quadruped electronics-tray mesh export failed with exit code $LASTEXITCODE."
+    }
+
+    & $python $stepTool `
+        "robot_cad/parts/quadruped_imu_cover.py=exports/step/quadruped_imu_cover.step" `
+        --stl "../stl/quadruped_imu_cover.stl" `
+        --3mf "../3mf/quadruped_imu_cover.3mf"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Quadruped IMU-cover mesh export failed with exit code $LASTEXITCODE."
     }
 }
 finally {
