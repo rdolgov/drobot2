@@ -35,13 +35,41 @@ hip_interfaces:
 
 internal_layout:
   battery_clear_envelope_xyz_mm: [168.0, 68.0, 46.0]
-  battery_status: provisional_until_exact_pack_is_selected
+  battery_reference:
+    target: LeKiwi 12 V battery
+    bom_label: 12 V 5 Ah KBT pack
+    upstream_mesh_label: Battery 5.2 Ah DC5521 Plug v2
+    immutable_mesh: vendor/references/lekiwi/lekiwi_12v_5ah_battery_reference.stl
+    installed_envelope_xyz_mm: [70.0, 66.0, 40.0]
+    installed_center_xyz_mm: [0.0, 0.0, 24.0]
+    source_mesh_bounds_xyz_mm: [40.0000002, 66.0000002, 70.0000002]
+    side_clearance_per_side_mm: 1.0
+    clearance_below_electronics_tray_mm: 12.0
+    status: geometry_reference_only_electrical_and_bms_rating_not_validated
   battery_rail_clearance_per_side_mm: 1.0
   battery_retaining_rail_height_mm: 8.0
   electronics_tray_xyz_mm: [180.0, 132.0, 3.0]
   electronics_tray_bottom_z_mm: 56.0
   electronics_clear_height_below_lid_mm: 34.0
-  electronics_status: provisional_until_boards_and_connectors_are_selected
+  electronics_status: servo_adapter_and_imu_selected_other_compute_and_power_parts_provisional
+  servo_bus_adapter:
+    selected_board: Waveshare Bus Servo Adapter (A)
+    protocol: USB_or_UART_half_duplex_serial_bus_not_CAN
+    exact_reference: vendor/electronics/waveshare_bus_servo_adapter_a.step
+    nominal_board_xy_mm: [42.0, 33.0]
+    detailed_envelope_xyz_mm: [42.02417808, 33.81628938, 14.59999982]
+    product_mass_kg: 0.016
+    board_center_xy_mm: [-48.0, 32.0]
+    board_datum_z_mm: 63.0
+    mounting_hole_diameter_mm: 2.5
+    mounting_pattern_xy_mm: [37.0, 28.0]
+    fastener_nominal: M2
+    tray_clearance_diameter_mm: 2.4
+    standoff_outer_diameter_mm: 6.0
+    standoff_height_mm: 4.0
+    underside_clearance_above_tray_mm: 0.4
+    clearance_below_lid_locator_mm: 19.0
+    note: connector access and cable bend radii remain to be checked with selected cables
   body_imu:
     selected_board: Adafruit BNO085 STEMMA QT product 4754
     exact_reference: vendor/sensors/adafruit_bno085_stemma_qt.step
@@ -194,6 +222,14 @@ outputs:
     step: exports/step/adafruit_bno085_stemma_qt.step
     stl: exports/stl/adafruit_bno085_stemma_qt.stl
     printable: false
+  body_battery_reference:
+    source: robot_cad/parts/lekiwi_12v_battery_reference.py
+    step: exports/step/lekiwi_12v_battery_reference.step
+    printable: false
+  servo_bus_adapter_reference:
+    source: robot_cad/parts/waveshare_bus_servo_adapter_a.py
+    step: exports/step/waveshare_bus_servo_adapter_a.step
+    printable: false
   body_imu_fit_preview:
     source: robot_cad/assembly/quadruped_imu_tray_fit_preview.py
     step: exports/step/quadruped_imu_tray_fit_preview.step
@@ -212,7 +248,10 @@ acceptance_tests:
   - body floor has eight symmetric M2/M3 utility holes outside the battery rail
   - four leg root plates sit flush to the two body side faces
   - battery clear envelope and electronics tray fit inside the body
+  - LeKiwi battery reference has 1 mm side clearance and 12 mm tray clearance
+  - exact Waveshare serial-bus adapter seats on a 37 x 28 mm four-hole pattern
+  - servo adapter clears the tray, lid locator, and body-centred IMU
   - BNO085 sensing element is body-centred, axis-aligned, and clear of the lid
   - four M2 tray holes align to the exact Adafruit BNO085 mounting pattern
   - base with recommended brim fits the X2D shared dual-nozzle region
-  - complete assembly preserves four labeled seven-component leg modules
+  - complete assembly preserves the battery, controller, IMU, camera, and four labeled seven-component leg modules

@@ -7,9 +7,10 @@ from pathlib import Path
 
 from build123d import Color, Location, Shape, import_step
 
-from robot_cad.assembly import robot_leg
+from robot_cad.assembly import lekiwi_camera_body_fit_preview, robot_leg
 from robot_cad.parts import (
     adafruit_bno085,
+    lekiwi_12v_battery_reference,
     quadruped_body,
     quadruped_body_lid,
     quadruped_electronics_tray,
@@ -17,6 +18,7 @@ from robot_cad.parts import (
     st3215_hip_body_mount,
     st3215_motor_bay,
     upper_arm,
+    waveshare_bus_servo_adapter_a,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -37,9 +39,12 @@ class QuadrupedAssemblySpec:
     name: str = "four_leg_st3215_quadruped"
     component_order: tuple[str, ...] = (
         "body_base",
+        "body_battery",
         "electronics_tray",
+        "body_servo_bus_adapter",
         "body_imu",
         "body_lid",
+        "lekiwi_camera_assembly",
         "front_left_leg",
         "rear_left_leg",
         "front_right_leg",
@@ -162,8 +167,57 @@ def _placed_leg_children(
     return children
 
 
+def battery_location() -> Location:
+    """Return the LeKiwi reference pack centered on the body floor."""
+    return Location((0.0, 0.0, quadruped_body.BODY_FLOOR_MM))
+
+
+def servo_bus_adapter_location() -> Location:
+    """Return the exact controller seated on its electronics-tray standoffs."""
+    return Location(
+        (
+            *quadruped_electronics_tray.SERVO_ADAPTER_CENTER_XY_MM,
+            (
+                quadruped_body.ELECTRONICS_TRAY_BOTTOM_Z_MM
+                + quadruped_electronics_tray.SERVO_ADAPTER_BOARD_DATUM_Z_MM
+            ),
+        )
+    )
+
+
+def camera_assembly_location() -> Location:
+    """Return the LeKiwi camera reference pose on the seated body lid."""
+    return Location((0.0, 0.0, quadruped_body.BODY_BASE_HEIGHT_Z_MM)) * (
+        lekiwi_camera_body_fit_preview.mount_world_location()
+    )
+
+
+def _camera_reference_children() -> list[Shape]:
+    """Return labeled mount and camera references for a nested Fusion module."""
+    from cadpy.assembly import label_shape
+
+    location = camera_assembly_location()
+    mount = lekiwi_camera_body_fit_preview.make_mount_reference_proxy().moved(
+        location
+    )
+    camera = lekiwi_camera_body_fit_preview.make_camera_reference_proxy().moved(
+        location
+    )
+    label_shape(
+        mount,
+        "lekiwi_base_camera_mount_reference",
+        color=Color(0.25, 0.72, 0.38),
+    )
+    label_shape(
+        camera,
+        "arducam_5mp_reference",
+        color=Color(0.62, 0.28, 0.78),
+    )
+    return [mount, camera]
+
+
 def gen_step():
-    """Return the labeled body, internals, and four complete leg modules."""
+    """Return all CAD references in one Fusion-ready labeled assembly."""
     from cadpy.assembly import AssemblyHelper
 
     asm = AssemblyHelper(FINAL_ASSEMBLY_SPEC.name)
@@ -173,11 +227,23 @@ def gen_step():
         color=Color(0.16, 0.23, 0.32),
     )
     asm.add(
+        lekiwi_12v_battery_reference.gen_step().moved(battery_location()),
+        "body_battery",
+        color=Color(0.12, 0.14, 0.16),
+    )
+    asm.add(
         quadruped_electronics_tray.gen_step().moved(
             Location((0.0, 0.0, quadruped_body.ELECTRONICS_TRAY_BOTTOM_Z_MM))
         ),
         "electronics_tray",
         color=Color(0.95, 0.70, 0.18),
+    )
+    asm.add(
+        waveshare_bus_servo_adapter_a.gen_step().moved(
+            servo_bus_adapter_location()
+        ),
+        "body_servo_bus_adapter",
+        color=Color(0.12, 0.48, 0.24),
     )
     asm.add(
         adafruit_bno085.gen_step().moved(
@@ -199,6 +265,10 @@ def gen_step():
         ),
         "body_lid",
         color=Color(0.38, 0.48, 0.60),
+    )
+    asm.add_module(
+        "lekiwi_camera_assembly",
+        _camera_reference_children(),
     )
 
     prototypes = _leg_prototypes()

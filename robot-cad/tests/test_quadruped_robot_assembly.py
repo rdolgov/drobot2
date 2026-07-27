@@ -19,9 +19,12 @@ def generated_quadruped():
 def test_four_leg_modules_are_declared_in_body_order() -> None:
     assert quadruped_robot.FINAL_ASSEMBLY_SPEC.component_order == (
         "body_base",
+        "body_battery",
         "electronics_tray",
+        "body_servo_bus_adapter",
         "body_imu",
         "body_lid",
+        "lekiwi_camera_assembly",
         "front_left_leg",
         "rear_left_leg",
         "front_right_leg",
@@ -105,7 +108,20 @@ def test_generated_quadruped_has_body_and_four_nested_leg_modules() -> None:
     assert tuple(child.label for child in assembly.children) == (
         quadruped_robot.FINAL_ASSEMBLY_SPEC.component_order
     )
-    for leg_module in assembly.children[4:]:
+    camera_module = next(
+        child
+        for child in assembly.children
+        if child.label == "lekiwi_camera_assembly"
+    )
+    assert tuple(child.label for child in camera_module.children) == (
+        "lekiwi_base_camera_mount_reference",
+        "arducam_5mp_reference",
+    )
+    leg_modules = [
+        child for child in assembly.children if child.label.endswith("_leg")
+    ]
+    assert len(leg_modules) == 4
+    for leg_module in leg_modules:
         assert tuple(child.label for child in leg_module.children) == (
             quadruped_robot.robot_leg.FINAL_ASSEMBLY_SPEC.component_order
         )

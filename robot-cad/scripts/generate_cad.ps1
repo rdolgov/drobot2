@@ -43,11 +43,16 @@ $targets = @(
     "robot_cad/parts/quadruped_body.py=exports/step/quadruped_body_base.step",
     "robot_cad/parts/quadruped_body_lid.py=exports/step/quadruped_body_lid.step",
     "robot_cad/parts/quadruped_electronics_tray.py=exports/step/quadruped_electronics_tray.step",
+    "robot_cad/parts/lekiwi_12v_battery_reference.py=exports/step/lekiwi_12v_battery_reference.step",
+    "robot_cad/parts/waveshare_bus_servo_adapter_a.py=exports/step/waveshare_bus_servo_adapter_a.step",
+    "robot_cad/parts/adafruit_bno085.py=exports/step/adafruit_bno085_stemma_qt.step",
     "robot_cad/assembly/hip_orientation_preview.py=exports/step/hip_orientation_preview.step",
     "robot_cad/assembly/st3215_motor_bay_fit_preview.py=exports/step/st3215_motor_bay_fit_preview.step",
     "robot_cad/assembly/upper_arm_st3215_fit_preview.py=exports/step/upper_arm_st3215_fit_preview.step",
     "robot_cad/assembly/robot_arm.py=exports/step/robot_arm.step",
     "robot_cad/assembly/robot_leg.py=exports/step/robot_leg.step",
+    "robot_cad/assembly/lekiwi_camera_body_fit_preview.py=exports/step/lekiwi_camera_body_fit_preview.step",
+    "robot_cad/assembly/quadruped_imu_tray_fit_preview.py=exports/step/quadruped_imu_tray_fit_preview.step",
     "robot_cad/assembly/quadruped_robot.py=exports/step/quadruped_robot.step"
 )
 $arguments = @($stepTool) + $targets

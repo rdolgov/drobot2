@@ -6,7 +6,11 @@ from pathlib import Path
 
 from build123d import Align, Box, Cylinder, Location, Shape
 
-from robot_cad.parts import adafruit_bno085, quadruped_body
+from robot_cad.parts import (
+    adafruit_bno085,
+    quadruped_body,
+    waveshare_bus_servo_adapter_a,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -29,6 +33,29 @@ IMU_BOARD_BOTTOM_Z_MM = (
 )
 IMU_MOUNT_CENTERS_XY_MM = (
     adafruit_bno085.MOUNT_HOLE_CENTERS_SENSOR_XY_MM
+)
+
+# Rear-left controller position leaves the body-centred IMU clear while
+# keeping the USB, power, and servo connectors inside the serviceable tray
+# area.  The exact controller's underside components stop 0.4 mm above the
+# tray when its PCB datum is seated on these 4 mm standoffs.
+SERVO_ADAPTER_CENTER_XY_MM = (-48.0, 32.0)
+SERVO_ADAPTER_M2_CLEARANCE_DIAMETER_MM = 2.4
+SERVO_ADAPTER_STANDOFF_OUTER_DIAMETER_MM = 6.0
+SERVO_ADAPTER_STANDOFF_HEIGHT_MM = 4.0
+SERVO_ADAPTER_STANDOFF_FUSION_OVERLAP_MM = 0.5
+SERVO_ADAPTER_BOARD_DATUM_Z_MM = (
+    quadruped_body.ELECTRONICS_TRAY_THICKNESS_Z_MM
+    + SERVO_ADAPTER_STANDOFF_HEIGHT_MM
+)
+SERVO_ADAPTER_MOUNT_CENTERS_XY_MM = tuple(
+    (
+        SERVO_ADAPTER_CENTER_XY_MM[0] + local_x_mm,
+        SERVO_ADAPTER_CENTER_XY_MM[1] + local_y_mm,
+    )
+    for local_x_mm, local_y_mm in (
+        waveshare_bus_servo_adapter_a.MOUNT_HOLE_CENTERS_XY_MM
+    )
 )
 
 
@@ -148,13 +175,67 @@ def make_imu_mount_hole_tools() -> tuple[Shape, ...]:
     )
 
 
+def make_servo_adapter_standoffs() -> tuple[Shape, ...]:
+    """Return tray-connected standoffs for the exact Waveshare board."""
+    return tuple(
+        Cylinder(
+            SERVO_ADAPTER_STANDOFF_OUTER_DIAMETER_MM / 2.0,
+            (
+                SERVO_ADAPTER_STANDOFF_HEIGHT_MM
+                + SERVO_ADAPTER_STANDOFF_FUSION_OVERLAP_MM
+            ),
+            align=(Align.CENTER, Align.CENTER, Align.MIN),
+        ).moved(
+            Location(
+                (
+                    x_mm,
+                    y_mm,
+                    (
+                        quadruped_body.ELECTRONICS_TRAY_THICKNESS_Z_MM
+                        - SERVO_ADAPTER_STANDOFF_FUSION_OVERLAP_MM
+                    ),
+                )
+            )
+        )
+        for x_mm, y_mm in SERVO_ADAPTER_MOUNT_CENTERS_XY_MM
+    )
+
+
+def make_servo_adapter_mount_hole_tools() -> tuple[Shape, ...]:
+    """Return four M2 clearance cutters through the controller standoffs."""
+    cutter_height = (
+        SERVO_ADAPTER_BOARD_DATUM_Z_MM
+        + 2.0 * quadruped_body.BOOLEAN_OVERTRAVEL_MM
+    )
+    return tuple(
+        Cylinder(
+            SERVO_ADAPTER_M2_CLEARANCE_DIAMETER_MM / 2.0,
+            cutter_height,
+            align=(Align.CENTER, Align.CENTER, Align.MIN),
+        ).moved(
+            Location(
+                (
+                    x_mm,
+                    y_mm,
+                    -quadruped_body.BOOLEAN_OVERTRAVEL_MM,
+                )
+            )
+        )
+        for x_mm, y_mm in SERVO_ADAPTER_MOUNT_CENTERS_XY_MM
+    )
+
+
 def make_electronics_tray() -> Shape:
     """Return the complete removable electronics tray."""
-    reinforced_blank = make_tray_blank().fuse(*make_imu_standoffs())
+    reinforced_blank = make_tray_blank().fuse(
+        *make_imu_standoffs(),
+        *make_servo_adapter_standoffs(),
+    )
     finished = reinforced_blank - (
         make_mount_hole_tools()
         + make_vent_tools()
         + make_imu_mount_hole_tools()
+        + make_servo_adapter_mount_hole_tools()
     )
     return _one_valid_solid(finished, "quadruped_electronics_tray")
 

@@ -50,3 +50,25 @@ def test_lekiwi_camera_references_are_present() -> None:
         reference_path = camera_reference_dir / filename
         assert reference_path.is_file()
         assert file_sha256(reference_path) == expected_hash
+
+
+def test_lekiwi_battery_and_servo_adapter_references_are_present() -> None:
+    expected_assets = {
+        (
+            PROJECT_ROOT
+            / "vendor"
+            / "references"
+            / "lekiwi"
+            / "lekiwi_12v_5ah_battery_reference.stl"
+        ): "f0cd9200f80ff3a75c8b0447eb2e80cd649a6ac86271ff5003571a9f5d94d42c",
+        (
+            PROJECT_ROOT
+            / "vendor"
+            / "electronics"
+            / "waveshare_bus_servo_adapter_a.step"
+        ): "5b04c6802fe661c3f3f2ed02c4decdb2f557bc0d8a85376b6ad6c38db2bb667f",
+    }
+
+    for asset_path, expected_hash in expected_assets.items():
+        assert asset_path.is_file()
+        assert file_sha256(asset_path) == expected_hash
