@@ -13,6 +13,7 @@ artifact, or validation change.
 | URDF physics and sensor contract | [`../specs/quadruped-urdf-ledger.md`](../specs/quadruped-urdf-ledger.md) | Link, joint, mass, inertia, collision, sensor, or actuator changes |
 | Isaac import, camera, IMU, standing, and gait checks | [`../simulation/isaac/README.md`](../simulation/isaac/README.md) | Simulator scripts, APIs, worlds, validation, or acceptance changes |
 | Reinforcement-learning walking task | [`rl-training.md`](rl-training.md) | Observation, action, reward, reset, PPO, dependency, training, or evaluation changes |
+| Three-motor one-leg ST3215 hardware testbed | [`../hardware/one-leg-testbed/README.md`](../hardware/one-leg-testbed/README.md) | macOS USB setup, motor ID assignment, position control, neutral calibration, telemetry, or hardware-test safety changes |
 | Purchasable/reference geometry provenance | [`../vendor/README.md`](../vendor/README.md) | New or replaced vendor assets |
 
 Every topic update should state:

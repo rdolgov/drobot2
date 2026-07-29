@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drobot-one-leg-testbed"
+version = "0.1.0"
+description = "Safe three-motor Feetech ST3215 one-leg testbed for Drobot"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "ftservo-python-sdk==2.0.0",
+  "pyserial>=3.5,<4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0,<9.0",
+  "ruff>=0.12,<1.0",
+]
+
+[project.scripts]
+drobot-leg = "drobot_leg_testbed.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

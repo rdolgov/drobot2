@@ -1,0 +1,34 @@
+[bus]
+baudrate = 1000000
+torque_limit = 300
+speed = 40
+acceleration = 10
+max_command_step_deg = 5.0
+
+# These are deliberately conservative test-bench limits, not validated
+# mechanical limits for the complete robot. Positive hip abduction is expected
+# to move the leg outward, but confirm the installed horn and cable direction.
+
+[[motors]]
+number = 1
+name = "hip_abduction"
+id = 1
+direction = 1
+min_deg = -15.0
+max_deg = 30.0
+
+[[motors]]
+number = 2
+name = "hip_flexion"
+id = 2
+direction = 1
+min_deg = -30.0
+max_deg = 30.0
+
+[[motors]]
+number = 3
+name = "knee"
+id = 3
+direction = 1
+min_deg = -45.0
+max_deg = 45.0
