@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#101517">
+    <title>Drobot Leg Control</title>
+    <link rel="stylesheet" href="/app.css">
+  </head>
+  <body data-control-token="__CONTROL_TOKEN__">
+    <div class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <p class="eyebrow">ONE-LEG TESTBED</p>
+            <h1>Drobot Control</h1>
+          </div>
+        </div>
+        <div class="top-actions">
+          <div class="connection" id="connection">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="connectionText">Connecting…</span>
+          </div>
+          <button class="stop-button" id="disarmAll" type="button">
+            DISARM ALL
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <section class="safety-panel" aria-labelledby="safetyTitle">
+          <div>
+            <p class="eyebrow">ARMING INTERLOCK</p>
+            <h2 id="safetyTitle">Hardware ready?</h2>
+            <p>Fixture secure, hands and cables clear, physical cutoff in reach.</p>
+          </div>
+          <label class="safety-check">
+            <input id="safetyAck" type="checkbox">
+            <span class="check-box" aria-hidden="true"></span>
+            <span>I confirm the test area is clear</span>
+          </label>
+        </section>
+
+        <section class="summary-row" aria-label="Controller status">
+          <div>
+            <span class="summary-label">Motion ramp</span>
+            <strong id="rampRate">—</strong>
+          </div>
+          <div>
+            <span class="summary-label">Watchdog</span>
+            <strong id="watchdog">—</strong>
+          </div>
+          <div class="event-cell">
+            <span class="summary-label">Last event</span>
+            <strong id="lastEvent">Starting controller…</strong>
+          </div>
+        </section>
+
+        <section class="motor-grid" id="motorGrid" aria-live="polite"></section>
+
+        <div class="notice" id="notice" role="status" aria-live="polite"></div>
+      </main>
+
+      <footer>
+        <span>Local machine only · COM bus control</span>
+        <span>Closing this page triggers automatic disarm</span>
+      </footer>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>

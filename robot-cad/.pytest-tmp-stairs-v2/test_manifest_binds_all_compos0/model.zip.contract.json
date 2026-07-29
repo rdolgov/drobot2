@@ -1,0 +1,83 @@
+{
+  "schema_version": 2,
+  "task_id": "Drobot-Quadruped-Stairs-v1",
+  "model": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\.pytest-tmp-stairs-v2\\test_manifest_binds_all_compos0\\model.zip",
+  "model_sha256": "9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4",
+  "config": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\.pytest-tmp-stairs-v2\\test_manifest_binds_all_compos0\\task.yaml",
+  "config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+  "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\.pytest-tmp-stairs-v2\\test_manifest_binds_all_compos0\\stairs.usda",
+  "world_sha256": "0eeea780b063634befb947bc6800a8caddfd18270140d4bdad037f50d72130fb",
+  "world_dependencies": [
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\.pytest-tmp-stairs-v2\\test_manifest_binds_all_compos0\\base.usda",
+      "sha256": "cae662172fd450bb0cd710a769079c05bfc5d8e35efa6576edc7d0377afdd4a2"
+    },
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\.pytest-tmp-stairs-v2\\test_manifest_binds_all_compos0\\robot.usdc",
+      "sha256": "18d63be10ad544a04a22c944dee01d6d864ec69b797a58edae92e6a44ad8fdbf"
+    }
+  ],
+  "training_seed": 142,
+  "environment_contract": {
+    "task_id": "Drobot-Quadruped-Stairs-v1",
+    "dof_names": [
+      "joint"
+    ],
+    "observation_fields": [
+      "field"
+    ],
+    "observation_size": 57,
+    "action_size": 12,
+    "physics_steps_per_control": 2,
+    "staircase": {
+      "start_x_m": 0.55,
+      "step_count": 4,
+      "tread_depth_m": 0.23,
+      "rise_m": 0.04,
+      "width_m": 1.0,
+      "top_platform_depth_m": 0.5,
+      "terrain_sample_offsets_m": [
+        -0.15,
+        0.0,
+        0.1,
+        0.2,
+        0.3,
+        0.45,
+        0.6,
+        0.85
+      ],
+      "terrain_height_normalization_m": 0.12,
+      "goal_distance_normalization_m": 2.4,
+      "goal_margin_m": 0.1
+    }
+  },
+  "algorithm_contract": {
+    "algorithm": "stable_baselines3.PPO",
+    "policy_class": "ActorCriticPolicy",
+    "training_mode": "full",
+    "observation_shape": [
+      57
+    ],
+    "action_shape": [
+      12
+    ],
+    "policy_hidden_layers": [
+      256,
+      256
+    ],
+    "activation": "ELU",
+    "rollout_steps": 2048,
+    "batch_size": 256,
+    "epochs": 10,
+    "learning_rate": 0.00025,
+    "gamma": 0.995,
+    "gae_lambda": 0.95,
+    "clip_range": 0.2,
+    "entropy_coefficient": 0.012,
+    "value_coefficient": 0.5,
+    "maximum_gradient_norm": 0.5,
+    "normalize_advantage": true
+  },
+  "transferred_from": null,
+  "resumed_from": null
+}

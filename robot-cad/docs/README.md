@@ -13,6 +13,10 @@ artifact, or validation change.
 | URDF physics and sensor contract | [`../specs/quadruped-urdf-ledger.md`](../specs/quadruped-urdf-ledger.md) | Link, joint, mass, inertia, collision, sensor, or actuator changes |
 | Isaac import, camera, IMU, standing, and gait checks | [`../simulation/isaac/README.md`](../simulation/isaac/README.md) | Simulator scripts, APIs, worlds, validation, or acceptance changes |
 | Reinforcement-learning walking task | [`rl-training.md`](rl-training.md) | Observation, action, reward, reset, PPO, dependency, training, or evaluation changes |
+| Separate reinforcement-learning stair task | [`rl-stairs/README.md`](rl-stairs/README.md) | Stair geometry, terrain observation, curriculum, reward, PPO, transfer, training, evaluation, or recording changes |
+| Corrected close-start stair task, progress watchdog, and perception plan | [`rl-stairs-v2/README.md`](rl-stairs-v2/README.md) and [`rl-stairs-v2/perception-plan.md`](rl-stairs-v2/perception-plan.md) | V2 reset, navigation/terrain observation, sensor choice, physical-height or foot-placement reward, mastery curriculum, early-abort threshold, or progress-report changes |
+| Real-stair scripted kinematic, support, collision, and torque feasibility | [`stair-feasibility/README.md`](stair-feasibility/README.md) | Scripted stair geometry, IK trajectory, contact/support gates, actuator limits, physical-feasibility result, or decision to authorize stair RL |
+| Three-motor one-leg ST3215 hardware testbed | [`../hardware/one-leg-testbed/README.md`](../hardware/one-leg-testbed/README.md) | macOS USB setup, motor ID assignment, position control, neutral calibration, telemetry, or hardware-test safety changes |
 | Purchasable/reference geometry provenance | [`../vendor/README.md`](../vendor/README.md) | New or replaced vendor assets |
 
 Every topic update should state:

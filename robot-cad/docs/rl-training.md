@@ -4,11 +4,13 @@
 
 The first trainable locomotion pipeline is implemented as
 `Drobot-Quadruped-Walk-v1`. It runs Stable-Baselines3 PPO directly against the
-validated Isaac Sim 6.0.1 manual world. A short smoke run has exercised the
-real floating articulation, body IMU, joint controller, reward, resets,
-TensorBoard logging, checkpointing, and model serialization.
+validated Isaac Sim 6.0.1 manual world. A `2,002,944`-step checkpoint now
+demonstrates repeatable simulated walking: a 20-episode deterministic
+evaluation completed every eight-second episode without tipping and averaged
+`0.1445 m/s` forward speed against the `0.15 m/s` command.
 
-This is an executable training baseline, not a converged walking result.
+This is a useful simulated walking result, not evidence of sim-to-real
+transfer. The policy still drifts consistently toward negative lateral Y.
 
 Isaac Lab is NVIDIA's preferred high-throughput robot-learning framework, but
 the Isaac Sim 6.0-compatible Isaac Lab 3 line is still beta. The current
@@ -25,6 +27,7 @@ train much more slowly than a future vectorized Isaac Lab task.
 | `simulation/isaac/rl/_quadruped_rl_env.py` | Gymnasium environment bound to the Isaac articulation |
 | `simulation/isaac/rl/train_ppo.py` | PPO training, checkpoints, TensorBoard, and run report |
 | `simulation/isaac/rl/play_ppo.py` | Deterministic evaluation and optional camera screenshot |
+| `simulation/isaac/rl/record_ppo.py` | One-episode deterministic external or onboard H.264 recording |
 | `scripts/setup_isaac_rl.ps1` | Tested Isaac Python dependency installation |
 | `exports/isaac/quadruped_robot_manual_world.usda` | Validated gravity, contact, servo, camera, and IMU world |
 
@@ -189,6 +192,45 @@ It remains available for monitoring and evaluation. Image-based locomotion
 would require rendering every rollout, a feature encoder, substantially more
 VRAM/time, and a separately documented reward/observation version.
 
+Record one deterministic episode from a static external review camera:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\record_ppo.py `
+  --model simulation\isaac\output\rl\ppo-walk-v1-2m\drobot_walk_ppo_final.zip `
+  --video reviews\ppo-walk-v1-2m-evaluation.mp4 `
+  --thumbnail reviews\ppo-walk-v1-2m-evaluation.png `
+  --report simulation\isaac\output\rl\ppo-walk-v1-2m\recording_report.json
+```
+
+The recorder runs the same deterministic policy loop as `play_ppo.py`, reads
+an offscreen RTX camera at 30 FPS, and encodes H.264 directly through Isaac's
+video encoder. The external camera is static so forward progress and lateral
+drift remain visible. Use `--camera-view onboard` to record the mounted camera
+instead.
+
+### Recorded two-million-step evaluation: 2026-07-27
+
+The final `ppo-walk-v1-2m` checkpoint passed a 20-episode deterministic
+evaluation from seed `43`:
+
+- all `20/20` episodes reached the eight-second time limit without tipping;
+- mean forward displacement was `1.156212 m`, or `0.144527 m/s`;
+- mean lateral displacement was `-0.249181 m`, exposing a repeatable left
+  drift that still needs correction;
+- mean maximum body tilt was `7.985806 degrees`, with a `9.159999 degree`
+  worst case;
+- minimum base height across the evaluation was `0.357794 m`;
+- mean episode return was `1130.111581`.
+
+The [external review video](../reviews/ppo-walk-v1-2m-evaluation.mp4) records
+one representative deterministic episode. It contains `240` decoded H.264
+frames at `960 x 540`, `30 FPS`, and eight seconds. That episode moved
+`1.160433 m` forward, drifted `-0.199756 m` laterally, reached
+`8.378761 degrees` maximum tilt, and did not tip. The adjacent
+[thumbnail](../reviews/ppo-walk-v1-2m-evaluation.png) captures the camera
+framing. The ignored `recording_report.json` retains the exact runtime
+contract without publishing workstation-local paths.
+
 ## Acceptance before calling a policy useful
 
 A full run should be evaluated across multiple seeds and should show:
@@ -208,8 +250,10 @@ A full run should be evaluated across multiple seeds and should show:
 - Motor backlash, battery voltage sag, thermal derating, communication delay,
   dropped packets, and measured IMU noise are not yet randomized.
 - The reset pose always starts on flat ground with zero body velocity.
-- No useful walking-policy convergence or sim-to-real transfer has yet been
-  demonstrated.
+- The two-million-step policy demonstrates useful flat-ground walking in the
+  exact training simulator, but it has only been evaluated in one seeded reset
+  stream and retains about `0.25 m` of left drift per eight-second episode.
+- No sim-to-real transfer has yet been demonstrated.
 - A trained checkpoint must be tested first in simulation at rated torque,
   then on suspended/guarded hardware with an emergency stop before floor use.
 

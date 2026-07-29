@@ -139,6 +139,27 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/_quadruped_rl_env.py` | Implements Gymnasium `reset()`/`step()` against the real Isaac articulation and IMU | manual world and task config | actions, observations, rewards, episode state |
 | `simulation/isaac/rl/train_ppo.py` | Creates `SimulationApp`, wraps the environment, trains/resumes PPO, checkpoints, and records provenance | YAML, manual world, optional checkpoint | model ZIP, TensorBoard, monitor CSV, training JSON |
 | `simulation/isaac/rl/play_ppo.py` | Reloads a saved policy and runs deterministic evaluation episodes | YAML, manual world, model ZIP | evaluation JSON and optional PNG |
+| `simulation/isaac/rl/record_ppo.py` | Records one deterministic flat-policy episode through an external or onboard RTX camera | YAML, manual world, model ZIP | H.264 MP4, thumbnail PNG, recording JSON |
+| `simulation/isaac/rl/stairs/__init__.py` | Marks the stair experiment as a separate Python source package | no runtime input | no generated data |
+| `simulation/isaac/rl/stairs/quadruped_stairs_v1.yaml` | Versions the stair geometry, terrain inputs, curriculum, reward, reset, termination, action, and PPO settings | edited by stair runners | no generated data |
+| `simulation/isaac/rl/stairs/quadruped_stairs_v2.yaml` | Corrects the stair task with a close reset, navigation observations, physical-height reward, mastery curriculum, bounded exploration, and progress watchdog | edited by stair runners | no generated data |
+| `simulation/isaac/rl/stairs/_stair_geometry.py` | Defines the crack-free stacked collision layers for the four-step staircase | stair YAML values | pure Python geometry facts |
+| `simulation/isaac/rl/stairs/_stair_rl_contract.py` | Defines analytic terrain sampling, 57/60-value observation contracts, progress gates, curriculum goals, physical-height reward terms, and failure reasons | walking observation and stair YAML values | observations and scalar contract results |
+| `simulation/isaac/rl/stairs/_quadruped_stairs_env.py` | Extends the walking environment with exact DOF order, two physics updates per action, stair-relative state, curriculum, and episode metrics | stair world and task config | actions, observations, rewards, episode state |
+| `simulation/isaac/rl/stairs/_policy_transfer.py` | Strictly copies 11 tensors and expands two input matrices from a verified 48/12 ELU flat policy, with no skipped tensors | source and target policy tensors | transferred policy state and report |
+| `simulation/isaac/rl/stairs/_run_support.py` | Creates/verifies schema-2 model, config, world/dependency, environment, PPO-mode, transfer, and resume contracts | model, YAML, composed world files, runtime/PPO contracts | adjacent `.contract.json` manifests |
+| `simulation/isaac/rl/stairs/create_stairs_world.py` | Sublayers the validated manual world and authors static stair collision layers | base world and stair YAML | stair-world USDA and static validation JSON |
+| `simulation/isaac/rl/stairs/train_stairs_ppo.py` | Trains, transfers, or resumes the separate stairs PPO policy with timestep/mastery curriculum, checkpoint manifests, live stair metrics, and automatic no-progress abort reports | stair YAML/world and optional model | model ZIPs, manifests, TensorBoard, monitor CSV, progress watchdog, training JSON |
+| `simulation/isaac/rl/stairs/evaluate_stairs_ppo.py` | Runs deterministic stair episodes at a pinned curriculum level and verifies the model contract | stair YAML/world, model, manifest | evaluation JSON and optional PNG |
+| `simulation/isaac/rl/stairs/record_stairs_ppo.py` | Records one deterministic stair-policy episode through an external or onboard RTX camera | stair YAML/world, model, manifest | H.264 MP4, thumbnail PNG, recording JSON |
+| `simulation/isaac/experiments/stair_feasibility/__init__.py` | Marks the scripted real-stair feasibility experiment as a separate Python package | no runtime input | no generated data |
+| `simulation/isaac/experiments/stair_feasibility/real_stair_feasibility.yaml` | Versions the isolated block geometry, scripted motion, contact model, rated torque cap, and pass/fail thresholds | edited feasibility configuration | no generated data |
+| `simulation/isaac/experiments/stair_feasibility/_contract.py` | Defines pure IK targets, support-triangle margin, configuration validation, and trial gates | feasibility YAML and measured metrics | analytic targets and gate failures |
+| `simulation/isaac/experiments/stair_feasibility/run_real_stair_feasibility.py` | Runs non-RL front-foot placement against `100-196 mm` risers under floating-base dynamics | YAML and floating robot USDC | JSON report and per-height screenshots |
+| `simulation/isaac/experiments/stair_feasibility/_manual_control.py` | Defines safe selectable-leg foot targets, held-key motion, IK rejection, and reset state without simulator imports | feasibility YAML and keyboard state | named joint-position targets |
+| `simulation/isaac/experiments/stair_feasibility/manual_180mm_stair.py` | Opens a GUI beside one `180 mm` riser for direct keyboard leg control with all floating-base physics active | feasibility YAML, floating robot USDC, and keyboard input | live viewport and manual-session JSON |
+| `simulation/isaac/experiments/stair_feasibility/manual_180mm_motor_angles.py` | Selects the direct numbered-motor mode of the interactive `180 mm` runner | command-line arguments and shared runner | live motor-angle control panel and session JSON |
+| `simulation/isaac/experiments/stair_feasibility/probe_motor_physics.py` | Measures one fixed- or floating-base motor with zero gravity and no environment contacts | curated robot USDC and drive parameters | sampled response JSON |
 
 ## What happens during one commanded step
 
@@ -388,6 +409,168 @@ Full configuration, reward terms, termination conditions, checkpoints,
 TensorBoard, evaluation commands, limitations, and the Isaac Lab migration
 rationale are documented in
 [`docs/rl-training.md`](../../docs/rl-training.md).
+
+## Separate stair-climbing PPO task
+
+`Drobot-Quadruped-Stairs-v1` lives under
+`simulation/isaac/rl/stairs/` and writes separate models under
+`simulation/isaac/output/rl/ppo-stairs-*`. It composes a fixed four-step
+staircase over the validated manual world: four `40 mm` rises, `230 mm`
+treads, `1.00 m` width, and a `0.50 m` top platform.
+
+The policy has 12 normalized joint-offset actions and 57 observations: the
+48-value walking input plus eight analytic forward terrain-height deltas and
+one goal-distance value. The MLP uses separate `256 x 256` ELU actor and
+critic paths. Physics runs at 120 Hz, control at 60 Hz, and this environment
+explicitly performs two physics updates per action. Its curriculum moves the
+success goal from one through four stairs while keeping the whole staircase
+present. The last 12 base-observation values describe the action just applied;
+the action-rate reward compares that action with a separately saved prior
+action. Completion earns `+400`, chosen to beat discounted stationary
+loitering at `gamma = 0.995`.
+
+Generate the stair world, then run the tested transfer smoke:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\create_stairs_world.py
+
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --smoke-test `
+  --initialize-from-flat simulation\isaac\output\rl\ppo-walk-v1-2m\drobot_walk_ppo_final.zip `
+  --output-dir simulation\isaac\output\rl\ppo-stairs-v1-smoke
+```
+
+Recorded on 2026-07-27, world generation passed with four static collision
+layers, expected robot/sensor prim counts, and both composed dependency hashes.
+The corrected 512-step smoke run passed in 13.950 seconds, saved a
+164,633-parameter model plus schema-2 manifest, copied 11 flat-policy tensors,
+expanded exactly two input layers, and skipped none. A two-episode
+deterministic level-1 reload passed manifest and loaded-algorithm checks but
+completed `0/2` stairs: both episodes tipped and mean highest step was `0.0`.
+The corrected level-1 recording passed the same checks and encoded 660 H.264
+frames at `960 x 540`, 30 FPS, but timed out at 22 seconds without reaching a
+stair. These validate the pipeline, not stair learning.
+
+The v1 full run was stopped at 964,608 steps after a five-episode audit of its
+950k checkpoint found `0/5` first-step reaches. Mean forward displacement was
+`0.735 m`, lateral drift reached `0.410-0.504 m`, and three episodes left the
+corridor despite a high mean return. This proves the v1 reward/curriculum
+optimized approach walking without stair contact; its checkpoints are retained
+for diagnosis, not continued as a stair solution.
+
+`Drobot-Quadruped-Stairs-v2` is the corrected experiment. It resets the base at
+`x=0.18-0.24 m`, only `0.31-0.37 m` before the first riser; adds normalized
+lateral position and heading sine/cosine for a 60-value observation; rewards
+actual base-height change at `150 x delta-z`; reduces inherited exploration to
+an initial standard deviation near `0.50`; tightens the approach corridor; and
+advances curriculum levels only after a 70% recent success rate. A progress
+watchdog writes `progress_watchdog.json`, requires at least three physically
+elevated first-step reaches by 100k steps, and returns
+`ABORTED_NO_PROGRESS` if the gate fails.
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\create_stairs_world.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v2.yaml `
+  --report simulation\isaac\output\rl\ppo-stairs-v2\world_report.json
+
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v2.yaml `
+  --initialize-from-flat simulation\isaac\output\rl\ppo-walk-v1-2m\drobot_walk_ppo_final.zip `
+  --output-dir simulation\isaac\output\rl\ppo-stairs-v2
+```
+
+The v2 world-generation and 512-step transfer smoke paths passed on
+2026-07-27. The smoke is pipeline validation only; the 100k progress gate is
+the first behavioral decision point.
+
+The source map, complete commands, reward/termination formulas, manifest
+rules, measured smoke results, evaluation guidance, and sim-to-real limits are
+owned by [`docs/rl-stairs/README.md`](../../docs/rl-stairs/README.md), with
+the corrected experiment recorded separately in
+[`docs/rl-stairs-v2/README.md`](../../docs/rl-stairs-v2/README.md).
+
+## Real-stair feasibility gate
+
+Before more stair PPO training, run the isolated non-RL foot-placement test:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\experiments\stair_feasibility\run_real_stair_feasibility.py `
+  --config simulation\isaac\experiments\stair_feasibility\real_stair_feasibility.yaml `
+  --output-dir simulation\isaac\output\stair-feasibility-v1 `
+  --headless
+```
+
+It places one `280 mm`-deep block in front of the floating robot and commands
+scripted inverse-kinematics front-foot placement at `100`, `140`, `180`, and
+`196 mm` riser heights. It evaluates ideal joint-limit reachability, physical
+foot lift, collision, three-foot support, slip, body stability, tracking error,
+and rated-torque saturation. No RL model is loaded.
+
+The 2026-07-27 run returned `FAIL` for all four heights and set
+`curriculum_authorized` to `false`. Ideal targets fit the URDF hard limits, but
+the robot achieved only `16.0`, `20.8`, `26.2`, and `36.7 mm` of foot lift,
+respectively; none cleared the edge or contacted the tread. The taller cases
+lost support and tipped into the block. This blocks further stair PPO training
+until foot contact, weight transfer, and sustainable actuator capability are
+revised and the rated-torque physical gate passes.
+
+The complete contract, measured table, report locations, exact tests,
+limitations, and revision order are owned by
+[`docs/stair-feasibility/README.md`](../../docs/stair-feasibility/README.md).
+
+To challenge the scripted-controller result directly, launch the interactive
+`180 mm` scene:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\experiments\stair_feasibility\manual_180mm_stair.py
+```
+
+Click the viewport, select a leg with `1-4`, and hold `W/S` for
+forward/backward, `E/D` for up/down, or `Q/A` for hip abduction. `R` resets the
+floating robot, `Space` pauses or resumes physics, `C` prints the measured
+state, and `X` or `Esc` saves and exits. Other legs stay at their last commanded
+targets but remain fully dynamic; the script does not teleport links or fix
+the base. Gravity, collisions, friction, hard joint limits, speed limits, and
+the `0.980665 N m` rated effort cap remain active.
+
+The optional `--torque-profile stall` comparison applies `2.941995 N m`.
+Use it only as a short simulator diagnostic: stall torque is not a sustainable
+hardware operating point. The session report is written to
+`simulation/isaac/output/stair-feasibility-manual-180mm/session.json`.
+Its `PASS` status means the interactive runner executed; tread-contact and
+stability fields record what the human-controlled attempt actually achieved.
+
+For direct motor targets instead of foot-space IK:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\experiments\stair_feasibility\manual_180mm_motor_angles.py
+```
+
+Type a motor number `1-12` and press `Enter`, then hold `Up` or `Down` to
+change that motor's target angle. `Backspace` edits the entered number and `Z`
+sets the selected motor target to zero. The panel continuously displays the
+selected motor number and full joint name, target angle, measured angle, and
+the live gravity setting. This distinguishes joint tracking from movement of
+the floating body when gravity is manually disabled.
+
+For a contact-free check of the same drive, run:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\experiments\stair_feasibility\probe_motor_physics.py `
+  --base-mode floating `
+  --joint front_left_hip_abduction `
+  --target-deg 20 `
+  --duration-s 1.5
+```
+
+The probe explicitly uses zero gravity and omits the floor and stair while
+retaining self-collision, joint and speed limits, drive gains, and the selected
+effort cap. Its default JSON output is under
+`simulation/isaac/output/motor-physics-audit/`.
 
 ## Manual articulation
 
