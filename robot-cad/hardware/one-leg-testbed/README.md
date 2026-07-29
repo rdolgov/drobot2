@@ -59,6 +59,11 @@ jump. Each subsequent target change is limited to 5 degrees by default.
 The code does not silently support STS3212, ST3215-HS, PWM servos, or a mixed
 bus of different protocol families.
 
+## Platform setup guides
+
+- Windows 10/11 PowerShell: [`WINDOWS.md`](WINDOWS.md)
+- macOS: continue with the installation section below
+
 ## macOS installation
 
 Open Terminal:
