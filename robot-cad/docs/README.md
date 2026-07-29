@@ -17,6 +17,7 @@ artifact, or validation change.
 | Corrected close-start stair task, progress watchdog, and perception plan | [`rl-stairs-v2/README.md`](rl-stairs-v2/README.md) and [`rl-stairs-v2/perception-plan.md`](rl-stairs-v2/perception-plan.md) | V2 reset, navigation/terrain observation, sensor choice, physical-height or foot-placement reward, mastery curriculum, early-abort threshold, or progress-report changes |
 | Real-stair scripted kinematic, support, collision, and torque feasibility | [`stair-feasibility/README.md`](stair-feasibility/README.md) | Scripted stair geometry, IK trajectory, contact/support gates, actuator limits, physical-feasibility result, or decision to authorize stair RL |
 | Three-motor one-leg ST3215 hardware testbed | [`../hardware/one-leg-testbed/README.md`](../hardware/one-leg-testbed/README.md) | macOS USB setup, motor ID assignment, position control, neutral calibration, telemetry, or hardware-test safety changes |
+| Battery, fusing, power distribution, Raspberry Pi power, and four-leg servo bus | [`../electrical/README.md`](../electrical/README.md) | Battery, fuse, wire, connector, controller, compute-power, servo-bus topology, BOM, or power-budget changes |
 | Purchasable/reference geometry provenance | [`../vendor/README.md`](../vendor/README.md) | New or replaced vendor assets |
 
 Every topic update should state:

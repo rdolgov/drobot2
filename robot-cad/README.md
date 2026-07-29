@@ -52,7 +52,9 @@ tray. The adapter sits on four M2 tray standoffs at the official 37 x 28 mm
 pattern. LeKiwi calls this a motor control board; electrically it is a USB/UART
 half-duplex serial-bus adapter, not a CAN controller. Pack discharge current,
 BMS behavior, connector bend radii, and twelve-servo electrical suitability
-remain unvalidated.
+remain unvalidated. The proposed fused power, Raspberry Pi, and four-leg data
+architecture is documented separately in
+[`electrical/README.md`](electrical/README.md).
 
 The body-centred BNO085 now has a separate printable roof cover. Four
 `2.4 mm` holes share the board and tray mounting axes, so four M2 x 20 mm
@@ -217,6 +219,7 @@ owner that must be updated with each design, simulation, or learning change.
 ```text
 robot-cad/
 |-- specs/                 Mechanical design contracts
+|-- electrical/            Power, fusing, wiring, BOM, schematics, and budget
 |-- vendor/                Immutable catalog/reference STEP models
 |-- robot_cad/
 |   |-- parts/             Printable part generators

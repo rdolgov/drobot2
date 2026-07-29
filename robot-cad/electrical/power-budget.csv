@@ -1,0 +1,7 @@
+scenario,servo_bus_current_A,servo_bus_power_W,pi_camera_adapter_power_W,total_battery_power_W,planning_usable_energy_Wh,estimated_runtime_min,confidence,notes
+Pi_camera_adapter_only,0.0,0.0,15.0,15.0,46.2,184.8,low,"Servos torque-disabled; Pi model and workload not yet selected"
+all_servos_moving_no_load,2.4,28.8,15.0,43.8,46.2,63.3,medium,"Uses Waveshare 0.2 A no-load current at 12 V for each of 12 servos"
+light_standing_and_slow_motion,3.0,33.3,17.0,50.3,46.2,55.1,low,"Planning assumption; holding current depends strongly on posture and robot mass"
+normal_walking_planning_case,7.5,83.3,17.0,100.3,46.2,27.6,low,"Central planning case; must be replaced with measured battery power"
+aggressive_gait_or_obstacle,14.0,155.4,20.0,175.4,46.2,15.8,low,"Near protection envelope; fuse heating and voltage sag become important"
+all_twelve_servos_locked,32.4,388.8,25.0,413.8,46.2,,specification_bound,"2.7 A locked-rotor current per servo; fault condition, not a runtime case"
