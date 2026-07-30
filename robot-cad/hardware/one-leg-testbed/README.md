@@ -331,6 +331,22 @@ hardware:
 The local `leg.toml` remains the source of truth for joint direction and range.
 The browser never writes configuration or calibration files.
 
+## Physical range run recorded 2026-07-28
+
+The current local testbed was centered at raw tick `2048` on all three motors
+and physically exercised while fixed to the wall. The tested local
+configuration used hip abduction `-45 to +45 deg`, hip flexion
+`-90 to +90 deg`, and knee `-120 to +120 deg`; hip flexion and knee use
+`direction = -1`. The operator reported that the unloaded leg moved freely
+through this useful range.
+
+This is an operator-observed isolated-fixture result, not an endurance,
+payload, current, thermal, or complete-robot collision qualification. The
+machine-local `leg.toml` and `calibration.json` remain ignored. A reproducible
+simulation snapshot of their kinematic values is maintained in
+`robot_cad/urdf/one_leg_wall_testbed.py` and exercised by
+`simulation/isaac/run_one_leg_wall.py`.
+
 ## Configuration reference
 
 `leg.toml` owns the testbed mapping and software limits:
@@ -368,9 +384,10 @@ explicit disarming. They do not communicate with real motors.
 
 ## Known limitations
 
-- No real one-leg hardware run has been completed yet.
-- The example joint ranges are conservative assumptions, not collision-sweep
-  results or approved mechanical limits.
+- One unloaded wall-mounted range run has been completed, but no endurance,
+  payload, current, thermal, or cable-wear run has been completed.
+- The tracked example ranges remain conservative startup assumptions. The
+  wider machine-local tested ranges are not complete-robot mechanical limits.
 - USB disconnect, interpreter termination, or operating-system failure may
   prevent software disarm; use a physical power cutoff.
 - Browser heartbeat and page-close disarm are best-effort software safeguards,

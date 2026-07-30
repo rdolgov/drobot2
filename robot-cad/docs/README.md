@@ -32,3 +32,7 @@ Every topic update should state:
 A smoke test proves that a pipeline executes. It does not prove that a
 walking policy converged, that simulation transfers to hardware, or that a
 printed robot is safe.
+
+Supplemental, review-oriented engineering records are indexed in
+[`../conversations/README.md`](../conversations/README.md). Topic-owning
+documents in this index remain authoritative.

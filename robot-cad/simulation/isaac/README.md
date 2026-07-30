@@ -46,6 +46,7 @@ Use the two imported variants for different questions:
 | --- | --- | --- |
 | fixed | base is attached to the world | joint structure and camera validation |
 | floating | base responds to gravity and contact | standing, gait, IMU, manual control, and RL |
+| one-leg wall testbed | the physical 76 mm hip plate is fixed flush to a vertical wall | isolated three-joint range, wall clearance, gravity load, and direct joint control |
 
 All robot coordinates are SI units with `+X` forward, `+Y` left, and `+Z` up.
 Joint positions are radians in Python even though USD angular-drive target
@@ -80,6 +81,109 @@ python -m pytest `
   tests\test_quadruped_imu_observation.py `
   tests\test_quadruped_rl_contract.py
 ```
+
+## One-leg wall testbed
+
+The isolated wall setup answers the same question as the physical home test
+without the quadruped body, other legs, ground, or stair contacts. Its fixture
+frame uses `+X` forward along the wall, `+Y` away from the wall, and `+Z` up.
+The exact printable body-side mount is shown with its 76 x 76 mm plate back
+face flush to the vertical wall. The moving hip and two arm links reuse the
+quadruped URDF geometry, collision proxies, joint frames, masses, and
+inertias. There is deliberately no virtual foot sphere.
+
+The tracked model records the locally calibrated 2026-07-28 physical setup:
+
+| Motor | Logical testbed range | Encoder direction | Positive model motion |
+| --- | ---: | ---: | --- |
+| 1 hip abduction | `-45 to +45 deg` | `+1` | leg moves away from the wall |
+| 2 hip flexion | `-90 to +90 deg` | `-1` | hanging leg moves toward wall-frame `+X` |
+| 3 knee | `-120 to +120 deg` | `-1` | distal link bends toward wall-frame `+X` at zero flexion |
+
+All three captured center ticks are `2048`. These are physically exercised
+isolated-testbed ranges, not automatically approved whole-robot limits. Body
+interference, four-leg cable routing, support contact, loaded current, and
+continuous thermal behavior still require separate checks.
+
+Generate, import, and sweep the explicit artifacts from `robot-cad`:
+
+```powershell
+$projectPython = '.\.venv\Scripts\python.exe'
+$urdfTool = 'C:\Users\roman\.codex\plugins\cache\text-to-cad\cad\0.3.9\skills\urdf\scripts\urdf'
+$isaacPython = 'C:\isaacsim\python.bat'
+
+& $projectPython $urdfTool `
+  robot_cad\urdf\one_leg_wall_testbed.py `
+  -o exports\urdf\one_leg_wall_testbed.urdf
+
+& $isaacPython simulation\isaac\import_one_leg_wall.py `
+  --urdf exports\urdf\one_leg_wall_testbed.urdf `
+  --output exports\isaac\one_leg_wall_testbed.usdc `
+  --report simulation\isaac\output\one-leg-wall\import_report.json
+
+& $isaacPython simulation\isaac\run_one_leg_wall.py `
+  --gravity both `
+  --screenshot reviews\isaac-one-leg-wall-range.png
+```
+
+The automatic runner verifies the local `leg.toml` ranges/directions and
+`calibration.json` centers when those ignored machine-local files exist. It
+then checks each joint at two degrees inside both hard endpoints and checks
+two combined poses, first with zero gravity and then with Earth gravity.
+The default `0.8825985 N*m` effort cap is 30% of published stall torque to
+mirror the hardware register value of 300 only nominally; the ST3215 register
+is not a calibrated linear joint-torque sensor.
+
+For direct viewport control of the same articulation:
+
+```powershell
+& $isaacPython simulation\isaac\run_one_leg_wall.py --interactive
+```
+
+Use `1`, `2`, or `3` to select the joint, hold `Up`/`Down` to move its target,
+press `Z` to zero it, `G` to toggle gravity, `R` to reset all targets, `C` to
+print state, and `X` or `Esc` to save the session report and exit. Wall
+contact, hard joint limits, velocity limits, moving-link self-collision, drive
+gains, and the selected effort cap remain active.
+
+The 2026-07-28 Isaac 6.0.1 run imported one articulation root, four rigid
+bodies, three revolute drives, and two filtered moving-pivot pairs. With wall
+contact active, the isolated leg produced:
+
+| Test | Zero gravity | Earth gravity |
+| --- | ---: | ---: |
+| hip abduction toward wall, target `-43 deg` | stopped at `-10.250 deg` | stopped at `-10.250 deg` |
+| hip abduction away from wall, target `+43 deg` | `42.999 deg` | `41.377 deg` after 2 s |
+| hip flexion, targets `+/-88 deg` | max error `0.0019 deg` | max error `1.4932 deg` after 2 s |
+| knee, targets `+/-118 deg` | max error `0.0038 deg` | max error `0.3519 deg` after 2 s |
+| combined `(30, 60, -90) deg` | max error `0.0020 deg` | max error `1.0537 deg` after 2 s |
+
+The reverse combined pose also stopped only on inward hip abduction. Repeating
+the zero-gravity sweep with `--disable-wall-contact` made all eight endpoint
+and combined poses pass; the worst error was `0.00382 deg`. This diagnostic
+proves the negative-abduction stop is the flush wall envelope, not a frozen
+Isaac drive. Keep wall contact enabled for the physical fixture; use the
+option only to compare a clamp, stand, or wall-edge setup that gives the leg
+clearance behind the plate.
+
+Two follow-up probes on the unchanged full quadruped fixed asset also passed:
+front-left hip flexion reached `40 deg` with `0.00093 deg` error and the knee
+reached `70 deg` with `0.00196 deg` error, both reaching 90% motion in about
+`0.383 s` under zero gravity. The prior full-scene failure therefore did not
+show that Isaac was unable to move the arm. The stair gate remains a loaded
+floating-base support/contact problem: its IK targets were already inside the
+old limits, while the previous run saturated rated effort, lost three-foot
+support, slipped, and tipped before achieving the requested foot lift.
+
+Local reports are:
+
+- `simulation/isaac/output/one-leg-wall/import_report.json`
+- `simulation/isaac/output/one-leg-wall/range_report.json`
+- `simulation/isaac/output/one-leg-wall/range_report_no_wall_contact.json`
+- `simulation/isaac/output/motor-physics-audit/wall-followup-hip-flexion.json`
+- `simulation/isaac/output/motor-physics-audit/wall-followup-knee.json`
+
+The reviewed render is `reviews/isaac-one-leg-wall-range.png`.
 
 ## First interactive run
 
@@ -125,6 +229,8 @@ an underscore are imported helpers and are not launched directly.
 | --- | --- | --- | --- |
 | `scripts/setup_isaac_rl.ps1` | Installs and verifies the pinned PPO dependencies in Isaac's Python | `simulation/isaac/rl/requirements.txt` | Isaac Python environment |
 | `simulation/isaac/import_quadruped.py` | Imports fixed or floating URDF, authors camera/IMU/self-collision metadata, validates structure, optionally flattens to one USDC | generated URDF and its meshes | imported USD plus import JSON |
+| `simulation/isaac/import_one_leg_wall.py` | Imports the physically configured fixed wall-mounted one-leg URDF and preserves wall contact while filtering two intentional moving-pivot overlaps | generated one-leg URDF and its meshes | monolithic one-leg USDC plus import JSON |
+| `simulation/isaac/run_one_leg_wall.py` | Runs zero/Earth-gravity endpoint and combined-pose sweeps or opens direct 1/2/3 joint viewport control | one-leg USDC and optional local hardware config/calibration | range or interactive JSON and optional PNG |
 | `simulation/isaac/create_manual_world.py` | Builds the portable gravity/contact world around the floating asset | floating USDC | manual-world USDA plus JSON |
 | `simulation/isaac/open_articulation.py` | Starts the GUI or a headless smoke run and leaves manual GUI control unopposed | manual-world USDA | optional open-run JSON |
 | `simulation/isaac/validate_quadruped.py` | Checks fixed structure or floating standing stability, joint tracking, effort, tilt, and height | fixed or floating USD | validation JSON and optional PNG |

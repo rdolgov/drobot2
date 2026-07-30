@@ -223,6 +223,30 @@ base pose. The default report path is
 `simulation/isaac/output/motor-physics-audit/zero-gravity-fixed-probe.json`;
 use `--report` to keep fixed- and floating-base trials separately.
 
+### Wall-mounted hardware follow-up
+
+The dedicated wall fixture added after the physical one-leg check uses the
+same moving-link geometry, axes, inertias, collision proxies, and drive model
+as the quadruped. At zero gravity it reached hip flexion `+/-88 deg` within
+`0.0019 deg` and knee `+/-118 deg` within `0.0038 deg`. With Earth gravity and
+the nominal 30%-stall comparison cap, endpoint error after two seconds was at
+most `1.4932 deg` for flexion and `0.3519 deg` for the knee. The matching
+full-quadruped fixed-asset probes also reached `40 deg` hip flexion and
+`70 deg` knee targets with errors below `0.002 deg` in zero gravity.
+
+Negative hip abduction stopped at `-10.25 deg` because the long hanging leg
+contacted the modeled flush wall. With only wall contact disabled, the full
+zero-gravity `-43/+43`, `-88/+88`, and `-118/+118 deg` endpoint sweep passed
+with a worst error of `0.00382 deg`. This distinguishes fixture clearance from
+drive response; it is not permission to disable wall, body, or stair contact
+in a feasibility result.
+
+These results do not overturn the stair decision below. The stair IK targets
+already fit the narrower whole-robot limits. The failed floating trials instead
+showed rated-effort saturation, support loss, slip, and body tipping while one
+leg was unloaded. An unloaded wall-mounted range pass cannot establish that
+three supporting legs can hold and transfer the `4.53 kg` robot.
+
 ## Measured result
 
 | Riser | IK target in limits | Achieved / required lift | Support contact | Minimum support margin | Maximum tilt | Non-foot collision | Result |
