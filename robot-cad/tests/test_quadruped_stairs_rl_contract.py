@@ -56,6 +56,15 @@ def v2_config() -> dict:
         return yaml.safe_load(stream)
 
 
+@pytest.fixture
+def v3_config() -> dict:
+    with (STAIRS_DIR / "quadruped_stairs_v3.yaml").open(
+        "r",
+        encoding="utf-8",
+    ) as stream:
+        return yaml.safe_load(stream)
+
+
 def test_stair_layers_match_the_reviewed_four_step_profile(config: dict) -> None:
     staircase = config["task"]["staircase"]
     boxes = stair_layer_boxes(staircase)
@@ -376,6 +385,38 @@ def test_v2_ppo_contract_caps_policy_update_size(v2_config: dict) -> None:
 
     assert contract["learning_rate"] == 0.00005
     assert contract["target_kl"] == 0.03
+
+
+def test_v3_applies_the_physically_exercised_one_leg_profile(
+    v3_config: dict,
+    v2_config: dict,
+) -> None:
+    task = v3_config["task"]
+    profile = task["robot_hardware_profile"]
+
+    assert task["id"] == "Drobot-Quadruped-Stairs-v3"
+    assert profile["center_tick"] == 2048
+    assert profile["encoder_directions"] == {
+        "hip_abduction": 1,
+        "hip_flexion": -1,
+        "knee": -1,
+    }
+    assert profile["joint_limits_deg"] == {
+        "hip_abduction": [-45.0, 45.0],
+        "hip_flexion": [-90.0, 90.0],
+        "knee": [-120.0, 120.0],
+    }
+    assert profile["effort_cap_nm"] == pytest.approx(
+        profile["torque_limit_fraction"] * profile["stall_torque_nm"]
+    )
+    assert profile["speed_register"] == 350
+    assert profile["speed_register_applied_as_rad_s"] is False
+    assert task["action_scale_rad"]["hip_flexion"] > 0.36
+    assert task["action_scale_rad"]["knee"] > 0.48
+    assert (
+        v3_config["ppo"]["initial_log_std"]
+        < v2_config["ppo"]["initial_log_std"]
+    )
 
 
 def test_manifest_binds_all_composed_world_dependencies(

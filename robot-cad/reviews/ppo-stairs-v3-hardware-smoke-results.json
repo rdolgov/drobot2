@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "status": "BASELINE_FAILURE_RECORDED",
+  "task_id": "Drobot-Quadruped-Stairs-v3",
+  "scope": "4096-step pipeline smoke training; not a converged policy",
+  "training": {
+    "status": "PASS",
+    "timesteps": 4096,
+    "elapsed_seconds": 117.9049022999825,
+    "completed_episodes": 23,
+    "first_step_climb_episodes": 0,
+    "maximum_base_elevation_gain_m": 0.001264810562133789,
+    "model_bytes": 2026640,
+    "model_sha256": "d6204c496127dc3d463d6110555d409973635b8916b2de7959f0857d3e4f3955",
+    "model_committed": false,
+    "initialized_from": "simulation/isaac/output/rl/ppo-walk-v1-2m/drobot_walk_ppo_final.zip"
+  },
+  "evaluation": {
+    "status": "PASS",
+    "episodes": 2,
+    "active_steps": 1,
+    "success_count": 0,
+    "success_rate": 0.0,
+    "failure_reason_counts": {
+      "body_tipped": 2
+    },
+    "mean_return": -2.7342678040896558,
+    "mean_highest_step_reached": 0.0,
+    "mean_forward_displacement_m": -0.0060246288776397705,
+    "mean_elevation_gain_m": -0.07139347493648529,
+    "maximum_body_tilt_deg": 48.1631722017327
+  },
+  "recording": {
+    "status": "PASS",
+    "active_steps": 1,
+    "recorded_frames": 15,
+    "episode_steps": 31,
+    "episode_duration_s": 0.5166666666666667,
+    "highest_step_reached": 0,
+    "stairs_completed": false,
+    "forward_displacement_m": 0.003493666648864746,
+    "maximum_base_elevation_gain_m": 0.0005881786346435547,
+    "maximum_body_tilt_deg": 46.18266334382549,
+    "failure_reasons": [
+      "body_tipped"
+    ]
+  },
+  "applied_robot_profile": {
+    "center_tick": 2048,
+    "joint_limits_deg": {
+      "hip_abduction": [
+        -45.0,
+        45.0
+      ],
+      "hip_flexion": [
+        -90.0,
+        90.0
+      ],
+      "knee": [
+        -120.0,
+        120.0
+      ]
+    },
+    "effort_cap_nm": 0.8825985,
+    "speed_register": 350,
+    "speed_register_applied_as_rad_s": false
+  },
+  "artifacts": [
+    {
+      "path": "reviews/ppo-stairs-v3-hardware-smoke.mp4",
+      "bytes": 398713,
+      "sha256": "85482c49e8dddfcd00c6c281e8f5682d90af72d2a8a6dfba98822c3d627cd3c4"
+    },
+    {
+      "path": "reviews/ppo-stairs-v3-hardware-smoke.png",
+      "bytes": 442244,
+      "sha256": "1e315e327ddb0a039a5ca75068908e6b851abb76981ab88457dcb4cb66efe83e"
+    },
+    {
+      "path": "reviews/ppo-stairs-v3-hardware-smoke-recording.png",
+      "bytes": 157253,
+      "sha256": "3acd77d94c0fb9a8f487067e2f79f7ad8998d5c9f57c7db05580a77fbac0ba05"
+    }
+  ]
+}
