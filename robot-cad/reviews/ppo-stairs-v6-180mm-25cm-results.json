@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "task_id": "Drobot-Quadruped-Stairs-v6-180mm",
+  "date": "2026-07-31",
+  "geometry": {
+    "step_count": 4,
+    "rise_m": 0.18,
+    "tread_depth_m": 0.25,
+    "total_rise_m": 0.72
+  },
+  "hardware_profile": {
+    "source": "one-leg-real-test-2026-07-28",
+    "effort_cap_nm": 0.8825985,
+    "joint_limits_deg": {
+      "hip_abduction": [-45.0, 45.0],
+      "hip_flexion": [-90.0, 90.0],
+      "knee": [-120.0, 120.0]
+    },
+    "physics_hz": 120,
+    "control_hz": 120
+  },
+  "policy_input": {
+    "camera_used_by_policy": false,
+    "imu_used_by_policy": true,
+    "proprioception_used_by_policy": true,
+    "analytic_simulator_terrain_height_used_by_policy": true,
+    "camera_use": "external evaluation recording only",
+    "hardware_perception_ready": false
+  },
+  "static_world_validation": {
+    "status": "PASS",
+    "stair_collision_layers": 4,
+    "stair_rigid_bodies": 0,
+    "config_sha256": "277f73e0ce80eb46be00af3efea1a39be83581262d2386c043743d6711c220df",
+    "entry_010mm_world_sha256": "ed02ff56d1d81db03c4c42002e94cdc3afab7872c0d5273a59e608021d5c3404",
+    "final_180mm_world_sha256": "ba1b7a8335be38bbc32d68f87dbd5c48a5bcc266f16649b1d499b01b626a43b4"
+  },
+  "bounded_training": {
+    "status": "PIPELINE_PASS_OBJECTIVE_FAIL",
+    "entry_010mm": {
+      "ppo_steps": 20480,
+      "completed_episodes": 10,
+      "successes": 0,
+      "maximum_step_reached": 1,
+      "maximum_base_elevation_gain_m": 0.014070779085159302
+    },
+    "final_180mm": {
+      "ppo_steps": 10240,
+      "completed_episodes": 40,
+      "successes": 0,
+      "maximum_step_reached": 1,
+      "maximum_base_elevation_gain_m": 0.1721956729888916
+    }
+  },
+  "deterministic_evaluation": {
+    "status": "OBJECTIVE_FAIL",
+    "model_contract": "PASS",
+    "ppo_algorithm_contract": "PASS",
+    "episodes": 10,
+    "successes": 0,
+    "success_rate": 0.0,
+    "maximum_step_reached": 1,
+    "maximum_base_elevation_gain_m": 0.103512823581696,
+    "mean_highest_step_reached": 0.3,
+    "mean_forward_displacement_m": 0.2554160669445992,
+    "maximum_body_tilt_deg": 42.71640369746957,
+    "failure_reason_counts": {
+      "base_clearance_too_low": 2,
+      "body_tipped": 2,
+      "left_stair_corridor": 1,
+      "no_foot_tread_progress": 3,
+      "no_forward_progress": 2
+    }
+  },
+  "recording": {
+    "status": "PASS",
+    "seed": 6480,
+    "deterministic": true,
+    "active_steps": 4,
+    "camera_view": "external",
+    "resolution": [960, 540],
+    "fps": 30,
+    "frames": 75,
+    "duration_s": 2.5083333333333333,
+    "stairs_completed": false,
+    "highest_step_reached": 1,
+    "maximum_base_elevation_gain_m": 0.005679726600646973,
+    "forward_displacement_m": 0.375410795211792,
+    "maximum_body_tilt_deg": 18.770009430821094,
+    "failure_reasons": ["base_clearance_too_low"],
+    "video": "reviews/ppo-stairs-v6-180mm-25cm-small-training.mp4",
+    "video_bytes": 1908213,
+    "video_sha256": "22770a235c67f0a09c789530fb23367928240c919087de18af225ab163eeba82"
+  },
+  "release_model": {
+    "path": "simulation/isaac/models/ppo-stairs-v6-180mm-25cm-small/drobot_stairs_ppo_initialized.zip",
+    "sha256": "c29cb71ab596392c36292a57ca98473e7c4807a9de700bc7824bf2e0d73f91bc",
+    "deployable_to_hardware": false
+  },
+  "conclusion": "The small training and recording pipelines passed, but the four-step 180 mm-rise objective did not. This checkpoint is for evaluation only and must not be deployed to the robot."
+}

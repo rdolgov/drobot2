@@ -16,9 +16,12 @@ from _quadruped_runtime import LEGS, LINK_LENGTH_M
 from _rl_contract import POLICY_OBSERVATION_CLIP
 from _stair_rl_contract import (
     curriculum_active_steps,
+    foot_tread_progress,
     goal_x_for_active_steps,
+    next_foot_target_index,
     pack_stair_policy_observation,
     stair_failure_reasons,
+    stair_goal_reached,
     stair_height_at_x,
     stair_index_at_x,
     stair_observation_fields,
@@ -182,6 +185,16 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.foot_prim = RigidPrim(
             [link_path_by_name[f"{leg}_distal_link"] for leg in LEGS]
         )
+        configured_sequence = tuple(
+            str(value)
+            for value in self.config.get("foot_placement_sequence", LEGS)
+        )
+        if sorted(configured_sequence) != sorted(LEGS):
+            raise ValueError("foot_placement_sequence must contain every leg once")
+        self.foot_placement_sequence = configured_sequence
+        self.foot_placement_sequence_indices = tuple(
+            LEGS.index(name) for name in configured_sequence
+        )
 
         offsets = tuple(
             float(value)
@@ -190,9 +203,15 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.include_navigation_observation = bool(
             self.config.get("include_navigation_observation", False)
         )
+        self.include_foot_progress_observation = bool(
+            self.config.get("include_foot_progress_observation", False)
+        )
         self.observation_fields = stair_observation_fields(
             offsets,
             include_navigation_observation=self.include_navigation_observation,
+            include_foot_progress_observation=(
+                self.include_foot_progress_observation
+            ),
         )
         self.observation_size = len(self.observation_fields)
         self.observation_space = spaces.Box(
@@ -217,6 +236,11 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.initial_foot_bottom_z_m = np.zeros(len(LEGS), dtype=np.float32)
         self.maximum_foot_lift_m = np.zeros(len(LEGS), dtype=np.float32)
         self.highest_foot_step = np.zeros(len(LEGS), dtype=np.int32)
+        self.maximum_foot_tread_progress = np.zeros(
+            len(LEGS),
+            dtype=np.float32,
+        )
+        self.next_foot_target_index: int | None = 0
 
     def _validate_stair_prims(self) -> None:
         expected = int(self.staircase_config["step_count"])
@@ -259,7 +283,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
     def _foot_progress(
         self,
         foot_tips: np.ndarray,
-    ) -> tuple[float, int, np.ndarray, np.ndarray]:
+    ) -> tuple[float, int, float, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         rise = float(self.staircase_config["rise_m"])
         lift_cap = 2.0 * rise
         foot_lifts = np.maximum(
@@ -282,7 +306,18 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             np.minimum(foot_lifts, lift_cap),
             prior_maximum,
         )
-        new_maximum = np.maximum(prior_maximum, capped_lifts)
+        prior_steps = self.highest_foot_step.copy()
+        target_index = next_foot_target_index(
+            prior_steps,
+            active_steps=self.active_step_count,
+            sequence_indices=self.foot_placement_sequence_indices,
+        )
+        new_maximum = prior_maximum.copy()
+        if target_index is not None:
+            new_maximum[target_index] = max(
+                prior_maximum[target_index],
+                capped_lifts[target_index],
+            )
         lift_progress = float(np.sum(new_maximum - prior_maximum))
 
         placement_tolerance = min(
@@ -301,14 +336,47 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             )
             if (
                 step_index > 0
-                and float(foot_tip[2])
-                >= surface_height - placement_tolerance
+                and surface_height - placement_tolerance
+                <= float(foot_tip[2])
+                <= surface_height + placement_tolerance
             ):
                 current_steps[index] = step_index
-        prior_steps = self.highest_foot_step.copy()
         new_steps = np.maximum(prior_steps, current_steps)
-        placement_progress = int(np.sum(new_steps - prior_steps))
-        return lift_progress, placement_progress, new_maximum, new_steps
+        placement_progress = (
+            0
+            if target_index is None
+            else int(new_steps[target_index] - prior_steps[target_index])
+        )
+        current_tread_progress = foot_tread_progress(
+            foot_tip_positions_m=foot_tips,
+            highest_foot_steps=new_steps,
+            staircase=self.staircase_config,
+            active_steps=self.active_step_count,
+            approach_distance_m=float(
+                self.config.get("foot_tread_approach_distance_m", 0.20)
+            ),
+        )
+        next_maximum_tread_progress = self.maximum_foot_tread_progress.copy()
+        if target_index is not None:
+            next_maximum_tread_progress[target_index] = max(
+                self.maximum_foot_tread_progress[target_index],
+                current_tread_progress[target_index],
+            )
+        tread_progress_gain = float(
+            np.sum(
+                next_maximum_tread_progress
+                - self.maximum_foot_tread_progress
+            )
+        )
+        return (
+            lift_progress,
+            placement_progress,
+            tread_progress_gain,
+            new_maximum,
+            new_steps,
+            current_steps,
+            next_maximum_tread_progress,
+        )
 
     def set_training_progress(self, progress_fraction: float) -> None:
         """Schedule a curriculum level; it becomes active at the next reset."""
@@ -373,6 +441,35 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         ).copy()
         base_position = np.asarray(state["base_position"])
         heading_error = _yaw_from_wxyz(state["base_orientation"])
+        foot_progress_normalized = None
+        next_target_one_hot = None
+        if self.include_foot_progress_observation:
+            foot_tips = self._sample_foot_tips()
+            raw_foot_progress = foot_tread_progress(
+                foot_tip_positions_m=foot_tips,
+                highest_foot_steps=self.highest_foot_step,
+                staircase=self.staircase_config,
+                active_steps=self.active_step_count,
+                approach_distance_m=float(
+                    self.config.get("foot_tread_approach_distance_m", 0.20)
+                ),
+            )
+            foot_progress_normalized = np.clip(
+                raw_foot_progress / max(1, self.active_step_count),
+                0.0,
+                1.0,
+            )
+            target_index = next_foot_target_index(
+                self.highest_foot_step,
+                active_steps=self.active_step_count,
+                sequence_indices=self.foot_placement_sequence_indices,
+            )
+            next_target_one_hot = np.zeros(len(LEGS), dtype=np.float32)
+            if target_index is not None:
+                next_target_one_hot[target_index] = 1.0
+            else:
+                next_target_one_hot[0] = 1.0
+            self.next_foot_target_index = target_index
         state["observation"] = pack_stair_policy_observation(
             walking_observation=state["observation"],
             base_world_x_m=float(base_position[0]),
@@ -381,6 +478,11 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             goal_world_x_m=self.current_goal_x_m,
             staircase=self.staircase_config,
             include_navigation_observation=self.include_navigation_observation,
+            include_foot_progress_observation=(
+                self.include_foot_progress_observation
+            ),
+            foot_progress_normalized=foot_progress_normalized,
+            next_foot_target_one_hot=next_target_one_hot,
         )
         state["heading_error_rad"] = heading_error
         return state
@@ -443,6 +545,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             self.staircase_config,
             self.active_step_count,
         )
+        self.maximum_foot_lift_m.fill(0.0)
+        self.highest_foot_step.fill(0)
+        self.maximum_foot_tread_progress.fill(0.0)
+        self.next_foot_target_index = self.foot_placement_sequence_indices[0]
         observation, info = super().reset(seed=seed, options=options)
         self.previous_base_x_m = float(self.episode_origin[0])
         self.previous_base_z_m = float(self.episode_origin[2])
@@ -465,6 +571,15 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.initial_foot_bottom_z_m = foot_tips[:, 2].copy()
         self.maximum_foot_lift_m.fill(0.0)
         self.highest_foot_step.fill(0)
+        self.maximum_foot_tread_progress = foot_tread_progress(
+            foot_tip_positions_m=foot_tips,
+            highest_foot_steps=self.highest_foot_step,
+            staircase=self.staircase_config,
+            active_steps=self.active_step_count,
+            approach_distance_m=float(
+                self.config.get("foot_tread_approach_distance_m", 0.20)
+            ),
+        )
         info.update(
             {
                 "task_id": self.config["id"],
@@ -534,8 +649,11 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         (
             foot_lift_progress,
             foot_placement_progress,
+            foot_tread_progress_gain,
             next_maximum_foot_lift,
             next_highest_foot_step,
+            current_foot_steps,
+            next_maximum_foot_tread_progress,
         ) = self._foot_progress(foot_tips)
         imu_observation = np.asarray(state["imu_observation"])
         projected_gravity = imu_observation[3:6]
@@ -568,12 +686,22 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 )
             )
             forward_displacement = float(base_x - self.episode_origin[0])
-            if (
-                self.episode_step + 1 >= stall_step
-                and forward_displacement
-                < float(stall_config["minimum_forward_progress_m"])
-            ):
-                failure_reasons.append("no_forward_progress")
+            if self.episode_step + 1 >= stall_step:
+                if forward_displacement < float(
+                    stall_config["minimum_forward_progress_m"]
+                ):
+                    failure_reasons.append("no_forward_progress")
+                minimum_tread_progress = float(
+                    stall_config.get(
+                        "minimum_any_foot_tread_progress",
+                        0.0,
+                    )
+                )
+                if (
+                    float(np.max(next_maximum_foot_tread_progress))
+                    < minimum_tread_progress
+                ):
+                    failure_reasons.append("no_foot_tread_progress")
         failure_reasons = tuple(failure_reasons)
         failed = bool(failure_reasons)
         minimum_success_elevation = (
@@ -589,10 +717,17 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         current_base_elevation = float(
             base_position[2] - self.episode_origin[2]
         )
-        if (
-            base_x >= self.current_goal_x_m
-            and current_base_elevation >= minimum_success_elevation
-            and not failed
+        required_feet_on_goal_tread = int(
+            self.config.get("success_required_feet_on_goal_tread", 0)
+        )
+        if not failed and stair_goal_reached(
+            base_world_x_m=base_x,
+            base_elevation_gain_m=current_base_elevation,
+            goal_world_x_m=self.current_goal_x_m,
+            minimum_base_elevation_gain_m=minimum_success_elevation,
+            current_foot_steps=current_foot_steps,
+            active_steps=self.active_step_count,
+            required_feet_on_goal_tread=required_feet_on_goal_tread,
         ):
             self.goal_hold_step_count += 1
         else:
@@ -630,6 +765,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ),
             foot_step_placement_progress=(
                 0 if failed else foot_placement_progress
+            ),
+            foot_tread_progress=(
+                0.0 if failed else foot_tread_progress_gain
+            ),
+            foot_tread_support_count=(
+                0 if failed else int(np.count_nonzero(current_foot_steps))
             ),
         )
         reward = float(reward_terms["total"])
@@ -676,6 +817,21 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             "highest_foot_step_by_leg": dict(
                 zip(LEGS, next_highest_foot_step.tolist(), strict=True)
             ),
+            "current_foot_step_by_leg": dict(
+                zip(LEGS, current_foot_steps.tolist(), strict=True)
+            ),
+            "next_foot_target": (
+                None
+                if self.next_foot_target_index is None
+                else LEGS[self.next_foot_target_index]
+            ),
+            "maximum_foot_tread_progress_by_leg": dict(
+                zip(
+                    LEGS,
+                    next_maximum_foot_tread_progress.tolist(),
+                    strict=True,
+                )
+            ),
             "target_joint_positions_rad": target.copy(),
             "base_policy_action": base_action.copy(),
             "residual_policy_action": clipped_action.copy(),
@@ -700,6 +856,16 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "highest_foot_step_by_leg": dict(
                     zip(LEGS, next_highest_foot_step.tolist(), strict=True)
                 ),
+                "final_foot_step_by_leg": dict(
+                    zip(LEGS, current_foot_steps.tolist(), strict=True)
+                ),
+                "maximum_foot_tread_progress_by_leg": dict(
+                    zip(
+                        LEGS,
+                        next_maximum_foot_tread_progress.tolist(),
+                        strict=True,
+                    )
+                ),
                 "final_terrain_height_m": terrain_height,
                 "maximum_terrain_height_m": self.maximum_terrain_height_m,
                 "minimum_base_clearance_m": self.minimum_base_clearance_m,
@@ -722,6 +888,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.previous_residual_action = clipped_action.copy()
         self.maximum_foot_lift_m = next_maximum_foot_lift
         self.highest_foot_step = next_highest_foot_step
+        self.maximum_foot_tread_progress = next_maximum_foot_tread_progress
         return (
             np.asarray(state["observation"]).copy(),
             reward,
@@ -743,6 +910,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "include_navigation_observation": (
                     self.include_navigation_observation
                 ),
+                "include_foot_progress_observation": (
+                    self.include_foot_progress_observation
+                ),
+                "foot_placement_sequence": list(self.foot_placement_sequence),
                 "terrain_input_note": (
                     "Analytic forward terrain profile; replace with a "
                     "camera/depth estimator before hardware deployment."
@@ -767,6 +938,21 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 ),
                 "staircase": self.staircase_config,
                 "curriculum_levels": list(self.curriculum_levels),
+                "success_requirements": {
+                    "minimum_base_elevation_fraction": float(
+                        self.config.get(
+                            "success_minimum_base_elevation_fraction",
+                            0.0,
+                        )
+                    ),
+                    "required_feet_on_goal_tread": int(
+                        self.config.get(
+                            "success_required_feet_on_goal_tread",
+                            0,
+                        )
+                    ),
+                    "hold_seconds": float(self.config["success_hold_seconds"]),
+                },
             }
         )
         return contract

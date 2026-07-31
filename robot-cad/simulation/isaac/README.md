@@ -252,8 +252,9 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/quadruped_stairs_v3.yaml` | Applies the exercised one-leg joint ranges and nominal 30%-of-stall torque cap while widening the stair action box | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/quadruped_stairs_v4.yaml` | Corrects flat-policy action scaling and matches its effective 120 Hz action cadence | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/quadruped_stairs_v5.yaml` | Defines the frozen-flat residual controller, staged 10-40 mm worlds, physical fork-tip shaping, strict elevation/hold success, and measured hardware limits | edited by stair runners | no generated data |
+| `simulation/isaac/rl/stairs/quadruped_stairs_v6_180mm.yaml` | Defines the fixed-250 mm-depth height curriculum through the exact 180 mm stage, 68-value foot-sequence input, strict four-foot landing gate, and measured hardware limits | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/_stair_geometry.py` | Defines the crack-free stacked collision layers for the four-step staircase | stair YAML values | pure Python geometry facts |
-| `simulation/isaac/rl/stairs/_stair_rl_contract.py` | Defines analytic terrain sampling, 57/60-value observation contracts, progress gates, curriculum goals, physical-height reward terms, and failure reasons | walking observation and stair YAML values | observations and scalar contract results |
+| `simulation/isaac/rl/stairs/_stair_rl_contract.py` | Defines analytic terrain sampling, 57/60/68-value observation contracts, progress gates, strict stair/foot goals, foot-sequence progress, physical-height reward terms, and failure reasons | walking observation and stair YAML values | observations and scalar contract results |
 | `simulation/isaac/rl/stairs/_quadruped_stairs_env.py` | Extends the walking environment with exact DOF order, configured control cadence, optional frozen-base residual actions, physical fork-tip progress, stair-relative state, curriculum, and episode metrics | stair world and task config | actions, observations, rewards, episode state |
 | `simulation/isaac/rl/stairs/_policy_transfer.py` | Strictly expands the verified 48/12 ELU flat policy and can rescale output means to preserve physical actions across action boxes | source and target policy tensors | transferred policy state and report |
 | `simulation/isaac/rl/stairs/_run_support.py` | Creates/verifies schema-2 model, config, world/dependency, environment, PPO-mode, transfer, and resume contracts | model, YAML, composed world files, runtime/PPO contracts | adjacent `.contract.json` manifests |
@@ -262,11 +263,13 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/train_stairs_v3_ppo.py` | Runs the generic stair trainer with hardware-informed v3 config/output defaults while preserving all trainer overrides | v3 stair YAML/world and optional model | v3 model ZIPs, manifests, TensorBoard, monitor CSV, progress watchdog, training JSON |
 | `simulation/isaac/rl/stairs/train_stairs_v4_ppo.py` | Selects the transfer-safe v4 stair defaults | v4 stair YAML/world and optional model | v4 training outputs |
 | `simulation/isaac/rl/stairs/train_stairs_v5_ppo.py` | Selects the residual-policy v5 defaults and staged-height configuration | v5 stair YAML/world and optional model | v5 training outputs |
+| `simulation/isaac/rl/stairs/train_stairs_v6_180mm_ppo.py` | Selects the v6 exact-180 mm task and release output defaults | v6 stair YAML/world and optional model | v6 training outputs |
 | `simulation/isaac/rl/stairs/distill_successful_stairs.py` | Collects physically successful stochastic rollouts and behavior-clones their residual actions into the actor mean | v5 world, model, manifest | distilled model, rebound manifest, and collection report |
 | `simulation/isaac/rl/stairs/evaluate_stairs_ppo.py` | Runs deterministic stair episodes at a pinned curriculum level and verifies the model contract | stair YAML/world, model, manifest | evaluation JSON and optional PNG |
 | `simulation/isaac/rl/stairs/record_stairs_ppo.py` | Records deterministic or stochastic stair episodes, optionally replaying seeded precursor episodes so policy RNG and PhysX reset history remain exact | stair YAML/world, model, manifest | H.264 MP4, thumbnail PNG, optional trajectory, recording JSON |
 | `simulation/isaac/models/ppo-walk-v1-2m/` | Tracks the frozen flat-walking dependency used by v5 residual control | validated flat PPO ZIP | release dependency |
 | `simulation/isaac/models/ppo-stairs-v5-10mm-four-step/` | Tracks the source-equivalent shallow-stair policy, schema-2 manifest, and deterministic evaluation | v5 config/world and source policy | evaluable release package |
+| `simulation/isaac/models/ppo-stairs-v6-180mm-25cm-small/` | Tracks the bounded 180 mm x 250 mm evaluation policy, schema-2 manifest, training/evaluation/recording reports, and explicit failure result | v6 config/world and bounded policy | non-deployable evaluation package |
 | `simulation/isaac/experiments/stair_feasibility/__init__.py` | Marks the scripted real-stair feasibility experiment as a separate Python package | no runtime input | no generated data |
 | `simulation/isaac/experiments/stair_feasibility/real_stair_feasibility.yaml` | Versions the isolated block geometry, scripted motion, contact model, rated torque cap, and pass/fail thresholds | edited feasibility configuration | no generated data |
 | `simulation/isaac/experiments/stair_feasibility/_contract.py` | Defines pure IK targets, support-triangle margin, configuration validation, and trial gates | feasibility YAML and measured metrics | analytic targets and gate failures |
@@ -610,13 +613,26 @@ mean still scored `0/10` deterministic successes, and no taller stage
 completed. This is a verified shallow-stair simulator episode, not convergence
 or hardware-transfer evidence.
 
+V6 keeps every tread at the requested `250 mm` depth and adds height stages
+through the exact four-step `180 mm` task. It expands the observation to 68
+values with sequenced physical-foot progress, retains the measured
+`0.8825985 N m` cap, and requires all four stairs plus all four feet on the
+landing. A bounded `20,480`-step `10 mm` entry transfer followed by `10,240`
+steps on `180 mm` produced no success. The final training peak was `172.196 mm`
+body rise at stair one; the tracked model scored `0/10` deterministically and
+never passed stair one. This validates the exact-world/training/recording
+pipeline while reinforcing, not overturning, the existing rated-torque
+feasibility failure.
+
 The source map, complete commands, reward/termination formulas, manifest
 rules, measured smoke results, evaluation guidance, and sim-to-real limits are
 owned by [`docs/rl-stairs/README.md`](../../docs/rl-stairs/README.md), with
 the corrected experiment recorded separately in
 [`docs/rl-stairs-v2/README.md`](../../docs/rl-stairs-v2/README.md), and the
 hardware-informed residual result in
-[`docs/rl-stairs-v5/README.md`](../../docs/rl-stairs-v5/README.md).
+[`docs/rl-stairs-v5/README.md`](../../docs/rl-stairs-v5/README.md), with the
+full-size bounded result in
+[`docs/rl-stairs-v6-180mm/README.md`](../../docs/rl-stairs-v6-180mm/README.md).
 
 ## Real-stair feasibility gate
 

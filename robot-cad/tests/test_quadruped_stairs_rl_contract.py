@@ -32,10 +32,13 @@ from _stair_geometry import stair_layer_boxes  # noqa: E402
 from _stair_rl_contract import (  # noqa: E402
     config_for_height_stage,
     curriculum_active_steps,
+    foot_tread_progress,
     goal_x_for_active_steps,
+    next_foot_target_index,
     pack_stair_policy_observation,
     progress_gate_failures,
     stair_failure_reasons,
+    stair_goal_reached,
     stair_height_at_x,
     stair_observation_fields,
     stair_reward_terms,
@@ -81,6 +84,15 @@ def v4_config() -> dict:
 @pytest.fixture
 def v5_config() -> dict:
     with (STAIRS_DIR / "quadruped_stairs_v5.yaml").open(
+        "r",
+        encoding="utf-8",
+    ) as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v6_config() -> dict:
+    with (STAIRS_DIR / "quadruped_stairs_v6_180mm.yaml").open(
         "r",
         encoding="utf-8",
     ) as stream:
@@ -162,6 +174,88 @@ def test_curriculum_reaches_the_top_platform_goal(config: dict) -> None:
     ) == 4
     assert goal_x_for_active_steps(staircase, 1) == pytest.approx(0.68)
     assert goal_x_for_active_steps(staircase, 4) == pytest.approx(1.57)
+
+
+def test_strict_stair_goal_requires_simultaneous_foot_placement() -> None:
+    common = {
+        "base_world_x_m": 1.80,
+        "base_elevation_gain_m": 0.68,
+        "goal_world_x_m": 1.77,
+        "minimum_base_elevation_gain_m": 0.648,
+        "active_steps": 4,
+        "required_feet_on_goal_tread": 4,
+    }
+
+    assert stair_goal_reached(
+        **common,
+        current_foot_steps=(4, 4, 4, 4),
+    )
+    assert not stair_goal_reached(
+        **common,
+        current_foot_steps=(4, 4, 4, 3),
+    )
+    assert not stair_goal_reached(
+        **{**common, "base_elevation_gain_m": 0.40},
+        current_foot_steps=(4, 4, 4, 4),
+    )
+    with pytest.raises(ValueError, match="required_feet_on_goal_tread"):
+        stair_goal_reached(
+            **{**common, "required_feet_on_goal_tread": 5},
+            current_foot_steps=(4, 4, 4, 4),
+        )
+
+
+def test_foot_tread_progress_requires_forward_and_vertical_motion(
+    v6_config: dict,
+) -> None:
+    staircase = v6_config["task"]["staircase"]
+    common = {
+        "highest_foot_steps": (0,),
+        "staircase": staircase,
+        "active_steps": 1,
+        "approach_distance_m": 0.22,
+    }
+    no_lift = foot_tread_progress(
+        **common,
+        foot_tip_positions_m=((0.60, 0.0, 0.0),),
+    )
+    lift_too_early = foot_tread_progress(
+        **common,
+        foot_tip_positions_m=((0.20, 0.0, 0.18),),
+    )
+    coordinated = foot_tread_progress(
+        **common,
+        foot_tip_positions_m=((0.60, 0.0, 0.18),),
+    )
+
+    assert no_lift[0] == pytest.approx(0.0)
+    assert lift_too_early[0] == pytest.approx(0.0)
+    assert coordinated[0] > 0.8
+
+
+def test_next_foot_target_advances_one_tread_in_configured_sequence() -> None:
+    sequence = (0, 1, 2, 3)
+
+    assert next_foot_target_index(
+        (0, 0, 0, 0),
+        active_steps=4,
+        sequence_indices=sequence,
+    ) == 0
+    assert next_foot_target_index(
+        (1, 0, 0, 0),
+        active_steps=4,
+        sequence_indices=sequence,
+    ) == 1
+    assert next_foot_target_index(
+        (1, 1, 1, 1),
+        active_steps=4,
+        sequence_indices=sequence,
+    ) == 0
+    assert next_foot_target_index(
+        (4, 4, 4, 4),
+        active_steps=4,
+        sequence_indices=sequence,
+    ) is None
 
 
 def test_forward_ascent_and_success_outscore_no_progress(config: dict) -> None:
@@ -598,6 +692,85 @@ def test_v5_learns_residuals_around_the_flat_gait(v5_config: dict) -> None:
     assert stage_10["task"]["world"].endswith("v5_10mm_world.usda")
     assert stage_40["task"]["staircase"]["rise_m"] == pytest.approx(0.04)
     assert stage_40["task"]["world"].endswith("stairs_v2_world.usda")
+
+
+def test_v6_uses_exact_180mm_geometry_and_strict_success(
+    v6_config: dict,
+) -> None:
+    task = v6_config["task"]
+    staircase = task["staircase"]
+    stage = config_for_height_stage(v6_config, "180mm")
+    boxes = stair_layer_boxes(stage["task"]["staircase"])
+
+    assert task["id"] == "Drobot-Quadruped-Stairs-v6-180mm"
+    assert stage["task"]["id"] == "Drobot-Quadruped-Stairs-v6-180mm"
+    assert staircase["rise_m"] == pytest.approx(0.18)
+    assert staircase["tread_depth_m"] == pytest.approx(0.25)
+    assert [stage["id"] for stage in v6_config["stair_height_stages"]] == [
+        "10mm",
+        "20mm",
+        "30mm",
+        "40mm",
+        "60mm",
+        "80mm",
+        "100mm",
+        "120mm",
+        "140mm",
+        "150mm",
+        "160mm",
+        "180mm",
+    ]
+    for height_stage in v6_config["stair_height_stages"]:
+        staged_task = config_for_height_stage(v6_config, height_stage["id"])[
+            "task"
+        ]
+        assert staged_task["staircase"]["tread_depth_m"] == pytest.approx(
+            0.25
+        )
+    assert boxes[-1]["exposed_top_z_m"] == pytest.approx(0.72)
+    assert task["success_required_feet_on_goal_tread"] == 4
+    assert task["success_minimum_base_elevation_fraction"] >= 0.90
+    assert task["robot_hardware_profile"]["effort_cap_nm"] == pytest.approx(
+        0.8825985
+    )
+    assert task["action_scale_rad"]["hip_flexion"] >= 0.60
+    assert task["action_scale_rad"]["knee"] >= 0.90
+    fields = stair_observation_fields(
+        staircase["terrain_sample_offsets_m"],
+        include_navigation_observation=True,
+        include_foot_progress_observation=True,
+    )
+    observation = pack_stair_policy_observation(
+        walking_observation=np.zeros(48, dtype=np.float32),
+        base_world_x_m=0.20,
+        base_world_y_m=0.0,
+        heading_error_rad=0.0,
+        goal_world_x_m=0.70,
+        staircase=staircase,
+        include_navigation_observation=True,
+        include_foot_progress_observation=True,
+        foot_progress_normalized=(0.0, 0.0, 0.0, 0.0),
+        next_foot_target_one_hot=(1.0, 0.0, 0.0, 0.0),
+    )
+    assert len(fields) == observation.shape[0] == 68
+    assert task["foot_placement_sequence"] == [
+        "front_left",
+        "front_right",
+        "rear_left",
+        "rear_right",
+    ]
+    assert task["reward"]["upright_deviation"] < 0.0
+    assert abs(task["reward"]["failure"]) > (
+        2
+        * (
+            task["reward"]["foot_tread_progress"]
+            + task["reward"]["foot_step_placement"]
+        )
+    )
+    assert task["reward"]["foot_tread_support"] > 0.0
+    assert task["stall_termination"][
+        "minimum_any_foot_tread_progress"
+    ] > 0.0
 
 
 def test_manifest_binds_all_composed_world_dependencies(

@@ -13,6 +13,13 @@ from _rl_contract import (
     POLICY_OBSERVATION_SIZE,
 )
 
+STAIR_FOOT_NAMES = (
+    "front_left",
+    "front_right",
+    "rear_left",
+    "rear_right",
+)
+
 
 def config_for_height_stage(
     config: Mapping[str, object],
@@ -213,10 +220,121 @@ def goal_x_for_active_steps(
     return tread_end - margin
 
 
+def stair_goal_reached(
+    *,
+    base_world_x_m: float,
+    base_elevation_gain_m: float,
+    goal_world_x_m: float,
+    minimum_base_elevation_gain_m: float,
+    current_foot_steps: Sequence[int],
+    active_steps: int,
+    required_feet_on_goal_tread: int = 0,
+) -> bool:
+    """Return whether the body and required feet simultaneously reached the goal."""
+
+    foot_steps = np.asarray(current_foot_steps, dtype=np.int32).reshape(-1)
+    required_feet = int(required_feet_on_goal_tread)
+    if int(active_steps) < 1:
+        raise ValueError("active_steps must be positive")
+    if required_feet < 0 or required_feet > foot_steps.size:
+        raise ValueError(
+            "required_feet_on_goal_tread must be within the foot-step vector"
+        )
+    feet_on_goal = int(np.count_nonzero(foot_steps >= int(active_steps)))
+    return bool(
+        float(base_world_x_m) >= float(goal_world_x_m)
+        and float(base_elevation_gain_m)
+        >= float(minimum_base_elevation_gain_m)
+        and feet_on_goal >= required_feet
+    )
+
+
+def foot_tread_progress(
+    *,
+    foot_tip_positions_m,
+    highest_foot_steps: Sequence[int],
+    staircase: Mapping[str, object],
+    active_steps: int,
+    approach_distance_m: float,
+    landing_fraction: float = 0.35,
+) -> np.ndarray:
+    """Return continuous per-foot progress toward each next stair tread."""
+
+    validate_staircase_config(staircase)
+    tips = np.asarray(foot_tip_positions_m, dtype=np.float32)
+    if tips.ndim != 2 or tips.shape[1] != 3 or not np.all(np.isfinite(tips)):
+        raise ValueError("foot_tip_positions_m must have finite shape (N, 3)")
+    completed = np.asarray(highest_foot_steps, dtype=np.int32).reshape(-1)
+    if completed.shape != (tips.shape[0],):
+        raise ValueError("highest_foot_steps must match the foot-tip count")
+    maximum_steps = int(staircase["step_count"])
+    active = int(active_steps)
+    if active < 1 or active > maximum_steps:
+        raise ValueError("active_steps is outside the staircase")
+    approach = float(approach_distance_m)
+    landing = float(landing_fraction)
+    if approach <= 0.0:
+        raise ValueError("approach_distance_m must be positive")
+    if not 0.0 < landing < 1.0:
+        raise ValueError("landing_fraction must be within (0, 1)")
+
+    start = float(staircase["start_x_m"])
+    tread = float(staircase["tread_depth_m"])
+    rise = float(staircase["rise_m"])
+    progress = np.zeros(tips.shape[0], dtype=np.float32)
+    for index, tip in enumerate(tips):
+        completed_steps = int(np.clip(completed[index], 0, active))
+        if completed_steps >= active:
+            progress[index] = float(active)
+            continue
+        next_step = completed_steps + 1
+        riser_x = start + (next_step - 1) * tread
+        target_x = riser_x + landing * tread
+        lower_surface_z = completed_steps * rise
+        x_fraction = np.clip(
+            (float(tip[0]) - (riser_x - approach))
+            / (target_x - (riser_x - approach)),
+            0.0,
+            1.0,
+        )
+        z_fraction = np.clip(
+            (float(tip[2]) - lower_surface_z) / rise,
+            0.0,
+            1.0,
+        )
+        progress[index] = completed_steps + min(x_fraction, z_fraction)
+    return progress
+
+
+def next_foot_target_index(
+    highest_foot_steps: Sequence[int],
+    *,
+    active_steps: int,
+    sequence_indices: Sequence[int],
+) -> int | None:
+    """Choose the next foot in a repeatable one-tread-at-a-time sequence."""
+
+    completed = np.asarray(highest_foot_steps, dtype=np.int32).reshape(-1)
+    if completed.size == 0:
+        raise ValueError("highest_foot_steps cannot be empty")
+    active = int(active_steps)
+    if active < 1:
+        raise ValueError("active_steps must be positive")
+    sequence = tuple(int(value) for value in sequence_indices)
+    if sorted(sequence) != list(range(completed.size)):
+        raise ValueError("sequence_indices must be a permutation of the feet")
+    target_step = min(int(np.min(completed)) + 1, active)
+    for index in sequence:
+        if int(completed[index]) < target_step:
+            return index
+    return None
+
+
 def stair_observation_fields(
     terrain_sample_offsets_m: Sequence[float],
     *,
     include_navigation_observation: bool = False,
+    include_foot_progress_observation: bool = False,
 ) -> tuple[str, ...]:
     terrain_fields = tuple(
         f"terrain_height_delta_at_{float(offset):+.3f}_m"
@@ -231,6 +349,13 @@ def stair_observation_fields(
             "heading_error_sin",
             "heading_error_cos",
         )
+    if include_foot_progress_observation:
+        fields += tuple(
+            f"foot_tread_progress_{name}" for name in STAIR_FOOT_NAMES
+        )
+        fields += tuple(
+            f"next_foot_target_{name}" for name in STAIR_FOOT_NAMES
+        )
     return fields
 
 
@@ -243,6 +368,9 @@ def pack_stair_policy_observation(
     goal_world_x_m: float,
     staircase: Mapping[str, object],
     include_navigation_observation: bool = False,
+    include_foot_progress_observation: bool = False,
+    foot_progress_normalized=None,
+    next_foot_target_one_hot=None,
 ) -> np.ndarray:
     """Append a compact forward terrain scan and curriculum goal distance."""
 
@@ -278,6 +406,25 @@ def pack_stair_policy_observation(
         lateral_offset = np.clip(float(base_world_y_m) / half_width, -2.0, 2.0)
         heading = float(heading_error_rad)
         appended.extend((lateral_offset, np.sin(heading), np.cos(heading)))
+    if include_foot_progress_observation:
+        progress = _finite_vector(
+            foot_progress_normalized,
+            len(STAIR_FOOT_NAMES),
+            "foot_progress_normalized",
+        )
+        target = _finite_vector(
+            next_foot_target_one_hot,
+            len(STAIR_FOOT_NAMES),
+            "next_foot_target_one_hot",
+        )
+        if np.any(progress < 0.0) or np.any(progress > 1.0):
+            raise ValueError("foot_progress_normalized must be within [0, 1]")
+        if np.any(target < 0.0) or np.any(target > 1.0):
+            raise ValueError("next_foot_target_one_hot must be within [0, 1]")
+        if not np.isclose(float(np.sum(target)), 1.0, atol=1e-6):
+            raise ValueError("next_foot_target_one_hot must select exactly one foot")
+        appended.extend(progress.tolist())
+        appended.extend(target.tolist())
     observation = np.concatenate(
         (base, np.asarray(appended, dtype=np.float32))
     ).astype(np.float32)
@@ -308,6 +455,8 @@ def stair_reward_terms(
     reward_config: Mapping[str, float],
     foot_lift_progress_m: float = 0.0,
     foot_step_placement_progress: int = 0,
+    foot_tread_progress: float = 0.0,
+    foot_tread_support_count: int = 0,
 ) -> dict[str, float]:
     """Return individually reviewable stair-climbing reward terms."""
 
@@ -363,6 +512,10 @@ def stair_reward_terms(
             * float(terrain_height_gain_m)
         ),
         "upright": float(reward_config["upright"]) * upright_cosine,
+        "upright_deviation": (
+            float(reward_config.get("upright_deviation", 0.0))
+            * (1.0 - upright_cosine)
+        ),
         "alive": float(reward_config["alive"]),
         "centerline": (
             float(reward_config["centerline"]) * float(lateral_position_m**2)
@@ -408,6 +561,14 @@ def stair_reward_terms(
         "foot_step_placement": (
             float(reward_config.get("foot_step_placement", 0.0))
             * max(0, int(foot_step_placement_progress))
+        ),
+        "foot_tread_progress": (
+            float(reward_config.get("foot_tread_progress", 0.0))
+            * max(0.0, float(foot_tread_progress))
+        ),
+        "foot_tread_support": (
+            float(reward_config.get("foot_tread_support", 0.0))
+            * max(0, int(foot_tread_support_count))
         ),
         "failure": float(reward_config["failure"]) if failed else 0.0,
         "success": float(reward_config["success"]) if succeeded else 0.0,

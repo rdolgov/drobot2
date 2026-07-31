@@ -166,6 +166,9 @@ policy_observation_size = len(
         include_navigation_observation=bool(
             task_config.get("include_navigation_observation", False)
         ),
+        include_foot_progress_observation=bool(
+            task_config.get("include_foot_progress_observation", False)
+        ),
     )
 )
 world_path = _resolve_project_path(args.world or task_config["world"])
@@ -630,34 +633,57 @@ try:
             if not transferred_from.is_file():
                 raise FileNotFoundError(transferred_from)
             source_model = PPO.load(str(transferred_from), device=args.device)
-            if (
-                tuple(source_model.observation_space.shape)
-                != tuple(model.observation_space.shape)
-                or tuple(source_model.action_space.shape)
-                != tuple(model.action_space.shape)
+            source_observation_size = int(source_model.observation_space.shape[0])
+            target_observation_size = int(model.observation_space.shape[0])
+            if tuple(source_model.action_space.shape) != tuple(
+                model.action_space.shape
             ):
-                raise RuntimeError(
-                    "Stair source and target observation/action shapes differ"
-                )
+                raise RuntimeError("Stair source and target action shapes differ")
             source_state = source_model.policy.state_dict()
             target_state = model.policy.state_dict()
-            mismatched = [
-                name
-                for name, tensor in target_state.items()
-                if name not in source_state
-                or tuple(source_state[name].shape) != tuple(tensor.shape)
-            ]
-            if set(source_state) != set(target_state) or mismatched:
-                raise RuntimeError(
-                    "Stair policy parameter contracts differ: "
-                    f"mismatched={mismatched}"
+            if source_observation_size == target_observation_size:
+                mismatched = [
+                    name
+                    for name, tensor in target_state.items()
+                    if name not in source_state
+                    or tuple(source_state[name].shape) != tuple(tensor.shape)
+                ]
+                if set(source_state) != set(target_state) or mismatched:
+                    raise RuntimeError(
+                        "Stair policy parameter contracts differ: "
+                        f"mismatched={mismatched}"
+                    )
+                transferred_state = source_state
+                stair_transfer_report = {
+                    "mode": "exact_same_shape",
+                    "expanded_inputs": [],
+                }
+            elif source_observation_size < target_observation_size:
+                transferred_state, stair_transfer_report = transfer_policy_state(
+                    source_state,
+                    target_state,
+                    source_observation_size=source_observation_size,
                 )
-            model.policy.load_state_dict(source_state, strict=True)
+                stair_transfer_report["mode"] = "expanded_observation"
+                if stair_transfer_report["skipped"]:
+                    raise RuntimeError(
+                        "Expanded stair policy transfer skipped parameters: "
+                        f"{stair_transfer_report['skipped']}"
+                    )
+            else:
+                raise RuntimeError(
+                    "Stair source observation is larger than the target: "
+                    f"{source_observation_size}>{target_observation_size}"
+                )
+            model.policy.load_state_dict(transferred_state, strict=True)
             report["stair_policy_transfer"] = {
                 "source_model": str(transferred_from),
                 "source_model_sha256": sha256_file(transferred_from),
                 "parameter_count": len(source_state),
                 "optimizer_transferred": False,
+                "source_observation_size": source_observation_size,
+                "target_observation_size": target_observation_size,
+                **stair_transfer_report,
             }
             del source_model
         if args.initialize_from_flat:
