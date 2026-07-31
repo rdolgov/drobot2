@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 
 import numpy as np
 from _rl_contract import (
@@ -11,6 +12,37 @@ from _rl_contract import (
     POLICY_OBSERVATION_FIELDS,
     POLICY_OBSERVATION_SIZE,
 )
+
+
+def config_for_height_stage(
+    config: Mapping[str, object],
+    stage_id: str | None,
+) -> dict[str, object]:
+    """Return a config copy with one declared stair-height stage applied."""
+
+    resolved = deepcopy(dict(config))
+    if stage_id is None:
+        return resolved
+    stages = list(resolved.get("stair_height_stages", ()))
+    matches = [stage for stage in stages if str(stage["id"]) == stage_id]
+    if len(matches) != 1:
+        available = [str(stage["id"]) for stage in stages]
+        raise ValueError(
+            f"Unknown stair height stage {stage_id!r}; available={available}"
+        )
+    stage = dict(matches[0])
+    task = dict(resolved["task"])
+    staircase = dict(task["staircase"])
+    rise_m = float(stage["rise_m"])
+    if rise_m <= 0.0:
+        raise ValueError("Stair height stage rise_m must be positive")
+    task["id"] = str(stage["task_id"])
+    task["world"] = str(stage["world"])
+    staircase["rise_m"] = rise_m
+    task["staircase"] = staircase
+    resolved["task"] = task
+    resolved["selected_stair_height_stage"] = stage
+    return resolved
 
 
 def _finite_vector(value, length: int, label: str) -> np.ndarray:
@@ -274,6 +306,8 @@ def stair_reward_terms(
     failed: bool,
     succeeded: bool,
     reward_config: Mapping[str, float],
+    foot_lift_progress_m: float = 0.0,
+    foot_step_placement_progress: int = 0,
 ) -> dict[str, float]:
     """Return individually reviewable stair-climbing reward terms."""
 
@@ -306,6 +340,8 @@ def stair_reward_terms(
 
     velocity_error = float(linear[0] - command[0])
     velocity_tracking = float(np.exp(-((velocity_error / sigma) ** 2)))
+    if bool(reward_config.get("subtract_zero_velocity_tracking", False)):
+        velocity_tracking -= float(np.exp(-((command[0] / sigma) ** 2)))
     upright_cosine = float(np.clip(-gravity[2], 0.0, 1.0))
     clearance_error = (
         float(base_clearance_m)
@@ -364,6 +400,14 @@ def stair_reward_terms(
         "joint_velocity": (
             float(reward_config["joint_velocity"])
             * float(np.mean(np.square(joint_velocity)))
+        ),
+        "foot_lift_progress": (
+            float(reward_config.get("foot_lift_progress", 0.0))
+            * max(0.0, float(foot_lift_progress_m))
+        ),
+        "foot_step_placement": (
+            float(reward_config.get("foot_step_placement", 0.0))
+            * max(0, int(foot_step_placement_progress))
         ),
         "failure": float(reward_config["failure"]) if failed else 0.0,
         "success": float(reward_config["success"]) if succeeded else 0.0,

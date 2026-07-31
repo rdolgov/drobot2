@@ -21,7 +21,10 @@ for module_dir in (str(ISAAC_DIR), str(RL_DIR), str(SCRIPT_DIR)):
         sys.path.insert(0, module_dir)
 
 from _stair_geometry import stair_layer_boxes  # noqa: E402
-from _stair_rl_contract import validate_staircase_config  # noqa: E402
+from _stair_rl_contract import (  # noqa: E402
+    config_for_height_stage,
+    validate_staircase_config,
+)
 
 parser = argparse.ArgumentParser(
     description="Create the Drobot fixed stair-climbing Isaac world."
@@ -33,6 +36,11 @@ parser.add_argument(
 parser.add_argument(
     "--base-world",
     default="exports/isaac/quadruped_robot_manual_world.usda",
+)
+parser.add_argument(
+    "--height-stage",
+    default=None,
+    help="Apply one stair_height_stages entry declared by the config.",
 )
 parser.add_argument(
     "--output",
@@ -64,6 +72,10 @@ with config_path.open("r", encoding="utf-8") as stream:
     config = yaml.safe_load(stream)
 if int(config.get("schema_version", 0)) != 1:
     parser.error(f"Unsupported stairs config schema: {config.get('schema_version')}")
+try:
+    config = config_for_height_stage(config, args.height_stage)
+except ValueError as exc:
+    parser.error(str(exc))
 task_config = dict(config["task"])
 staircase = dict(task_config["staircase"])
 validate_staircase_config(staircase)
@@ -120,6 +132,7 @@ report: dict[str, object] = {
     "isaac_sim_version": "6.0.1",
     "config": str(config_path),
     "config_sha256": _sha256(config_path),
+    "height_stage": args.height_stage,
     "base_world": str(base_world_path),
     "base_world_sha256": (
         _sha256(base_world_path) if base_world_path.is_file() else None

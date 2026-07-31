@@ -17,7 +17,10 @@ for module_dir in (str(ISAAC_DIR), str(RL_DIR), str(STAIRS_DIR)):
     if module_dir not in sys.path:
         sys.path.insert(0, module_dir)
 
-from _policy_transfer import transfer_policy_state  # noqa: E402
+from _policy_transfer import (  # noqa: E402
+    physical_action_output_ratios,
+    transfer_policy_state,
+)
 from _run_support import (  # noqa: E402
     build_model_manifest,
     expected_ppo_algorithm_contract,
@@ -27,6 +30,7 @@ from _run_support import (  # noqa: E402
 )
 from _stair_geometry import stair_layer_boxes  # noqa: E402
 from _stair_rl_contract import (  # noqa: E402
+    config_for_height_stage,
     curriculum_active_steps,
     goal_x_for_active_steps,
     pack_stair_policy_observation,
@@ -59,6 +63,24 @@ def v2_config() -> dict:
 @pytest.fixture
 def v3_config() -> dict:
     with (STAIRS_DIR / "quadruped_stairs_v3.yaml").open(
+        "r",
+        encoding="utf-8",
+    ) as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v4_config() -> dict:
+    with (STAIRS_DIR / "quadruped_stairs_v4.yaml").open(
+        "r",
+        encoding="utf-8",
+    ) as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v5_config() -> dict:
+    with (STAIRS_DIR / "quadruped_stairs_v5.yaml").open(
         "r",
         encoding="utf-8",
     ) as stream:
@@ -240,6 +262,58 @@ def test_flat_policy_transfer_expands_only_the_two_input_layers() -> None:
     assert torch.all(transferred["action_net.bias"] == 4.0)
 
 
+def test_flat_policy_transfer_can_preserve_physical_action_mean() -> None:
+    torch = pytest.importorskip("torch")
+    dof_names = (
+        "front_left_hip_abduction",
+        "front_left_hip_flexion",
+        "front_left_knee",
+    )
+    ratios = physical_action_output_ratios(
+        dof_names,
+        {
+            "hip_abduction": 0.12,
+            "hip_flexion": 0.30,
+            "knee": 0.40,
+        },
+        {
+            "hip_abduction": 0.30,
+            "hip_flexion": 0.75,
+            "knee": 1.00,
+        },
+    )
+    source = {
+        "action_net.weight": torch.ones((3, 2)),
+        "action_net.bias": torch.tensor([1.0, 2.0, 3.0]),
+    }
+    target = {
+        "action_net.weight": torch.zeros((3, 2)),
+        "action_net.bias": torch.zeros(3),
+    }
+
+    transferred, report = transfer_policy_state(
+        source,
+        target,
+        source_observation_size=48,
+        action_output_ratios=ratios,
+    )
+
+    assert ratios == pytest.approx((0.4, 0.4, 0.4))
+    assert torch.allclose(
+        transferred["action_net.weight"],
+        torch.full((3, 2), 0.4),
+    )
+    assert torch.allclose(
+        transferred["action_net.bias"],
+        torch.tensor([0.4, 0.8, 1.2]),
+    )
+    assert report["physical_action_mean_preserved"] is True
+    assert report["rescaled_action_outputs"] == [
+        "action_net.weight",
+        "action_net.bias",
+    ]
+
+
 def test_stairs_config_is_separate_and_consistent(config: dict) -> None:
     task = config["task"]
     ppo = config["ppo"]
@@ -419,6 +493,113 @@ def test_v3_applies_the_physically_exercised_one_leg_profile(
     )
 
 
+def test_v4_transfer_preserves_flat_joint_target_amplitudes(
+    v4_config: dict,
+) -> None:
+    task = v4_config["task"]
+    transfer = task["flat_policy_transfer"]
+    ratios = physical_action_output_ratios(
+        (
+            "front_left_hip_abduction",
+            "front_left_hip_flexion",
+            "front_left_knee",
+        ),
+        transfer["source_action_scale_rad"],
+        task["action_scale_rad"],
+    )
+
+    assert task["id"] == "Drobot-Quadruped-Stairs-v4"
+    assert transfer["preserve_physical_action_mean"] is True
+    assert task["control_hz"] == task["physics_hz"] == 120
+    assert task["target_velocity_body_m_s"] == (
+        transfer["source_target_velocity_body_m_s"]
+    )
+    assert ratios == pytest.approx((1.0, 1.0, 1.0))
+    assert v4_config["ppo"]["initial_log_std"] < -2.0
+    assert task["success_minimum_base_elevation_fraction"] > 0.5
+    assert task["reward"]["foot_lift_progress"] > 0.0
+    assert task["reward"]["foot_step_placement"] > 0.0
+
+
+def test_v4_foot_progress_shaping_is_bounded_to_new_progress(
+    v4_config: dict,
+) -> None:
+    reward = v4_config["task"]["reward"]
+    terms = stair_reward_terms(
+        command_velocity_xyz=(0.15, 0.0, 0.0),
+        body_linear_velocity_xyz=(0.15, 0.0, 0.0),
+        body_angular_velocity_xyz=(0.0, 0.0, 0.0),
+        projected_gravity_xyz=(0.0, 0.0, -1.0),
+        base_clearance_m=0.373,
+        lateral_position_m=0.0,
+        forward_progress_m=0.0,
+        base_height_gain_m=0.0,
+        terrain_height_gain_m=0.0,
+        heading_error_rad=0.0,
+        joint_velocities_normalized=np.zeros(12),
+        action=np.zeros(12),
+        previous_action=np.zeros(12),
+        failed=False,
+        succeeded=False,
+        reward_config=reward,
+        foot_lift_progress_m=0.01,
+        foot_step_placement_progress=1,
+    )
+
+    assert terms["foot_lift_progress"] == pytest.approx(3.0)
+    assert terms["foot_step_placement"] == pytest.approx(100.0)
+    standing = stair_reward_terms(
+        command_velocity_xyz=(0.15, 0.0, 0.0),
+        body_linear_velocity_xyz=(0.0, 0.0, 0.0),
+        body_angular_velocity_xyz=(0.0, 0.0, 0.0),
+        projected_gravity_xyz=(0.0, 0.0, -1.0),
+        base_clearance_m=0.373,
+        lateral_position_m=0.0,
+        forward_progress_m=0.0,
+        base_height_gain_m=0.0,
+        terrain_height_gain_m=0.0,
+        heading_error_rad=0.0,
+        joint_velocities_normalized=np.zeros(12),
+        action=np.zeros(12),
+        previous_action=np.zeros(12),
+        failed=False,
+        succeeded=False,
+        reward_config=reward,
+    )
+
+    assert standing["forward_velocity_tracking"] == pytest.approx(
+        0.0,
+        abs=1e-7,
+    )
+    assert standing["total"] < 0.10
+    assert v4_config["task"]["stall_termination"]["after_seconds"] <= 5.0
+
+
+def test_v5_learns_residuals_around_the_flat_gait(v5_config: dict) -> None:
+    task = v5_config["task"]
+    residual = task["residual_policy"]
+
+    assert task["id"] == "Drobot-Quadruped-Stairs-v5"
+    assert residual["enabled"] is True
+    assert residual["base_task_id"] == "Drobot-Quadruped-Walk-v1"
+    assert residual["base_model"].endswith("drobot_walk_ppo_final.zip")
+    assert residual["base_action_scale_rad"] == {
+        "hip_abduction": 0.12,
+        "hip_flexion": 0.30,
+        "knee": 0.40,
+    }
+    assert task["action_scale_rad"]["hip_flexion"] > 0.30
+    assert task["action_scale_rad"]["knee"] > 0.40
+    assert v5_config["ppo"]["zero_action_mean_init"] is True
+
+    stage_10 = config_for_height_stage(v5_config, "10mm")
+    stage_40 = config_for_height_stage(v5_config, "40mm")
+    assert stage_10["task"]["staircase"]["rise_m"] == pytest.approx(0.01)
+    assert stage_10["task"]["world"].endswith("v5_10mm_world.usda")
+    assert stage_40["task"]["staircase"]["rise_m"] == pytest.approx(0.04)
+    assert stage_40["task"]["world"].endswith("stairs_v2_world.usda")
+
+
 def test_manifest_binds_all_composed_world_dependencies(
     config: dict,
     tmp_path: Path,
@@ -499,6 +680,17 @@ def test_manifest_binds_all_composed_world_dependencies(
         )
 
     robot_path.write_bytes(b"changed robot")
+    override = validate_model_manifest(
+        model_path=model_path,
+        config_path=config_path,
+        world_path=world_path,
+        world_dependencies=dependencies,
+        environment_contract=environment_contract,
+        allow_unverified=True,
+        expected_algorithm_contract=algorithm_contract,
+    )
+    assert override["status"] == "SKIPPED"
+    assert override["reason"] == "manifest_mismatch_and_override_enabled"
     with pytest.raises(RuntimeError, match="Model contract mismatch"):
         validate_model_manifest(
             model_path=model_path,

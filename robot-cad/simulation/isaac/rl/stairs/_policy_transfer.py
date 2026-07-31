@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import math
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 EXPANDABLE_INPUT_WEIGHTS = (
@@ -11,11 +12,54 @@ EXPANDABLE_INPUT_WEIGHTS = (
 )
 
 
+def physical_action_output_ratios(
+    dof_names: Sequence[str],
+    source_action_scale_by_kind: Mapping[str, object],
+    target_action_scale_by_kind: Mapping[str, object],
+) -> tuple[float, ...]:
+    """Return normalized-action ratios that preserve physical joint targets."""
+
+    if not dof_names:
+        raise ValueError("dof_names cannot be empty")
+    if set(source_action_scale_by_kind) != set(target_action_scale_by_kind):
+        raise ValueError(
+            "Source and target action-scale joint kinds must match exactly"
+        )
+
+    ratios: list[float] = []
+    for name in dof_names:
+        matches = [
+            kind
+            for kind in source_action_scale_by_kind
+            if name.endswith(kind)
+        ]
+        if len(matches) != 1:
+            raise ValueError(
+                f"Could not resolve one action-scale joint kind for {name!r}: "
+                f"{matches}"
+            )
+        kind = matches[0]
+        source_scale = float(source_action_scale_by_kind[kind])
+        target_scale = float(target_action_scale_by_kind[kind])
+        if (
+            not math.isfinite(source_scale)
+            or not math.isfinite(target_scale)
+            or source_scale <= 0.0
+            or target_scale <= 0.0
+        ):
+            raise ValueError(
+                f"Action scales for {kind} must be finite and positive"
+            )
+        ratios.append(source_scale / target_scale)
+    return tuple(ratios)
+
+
 def transfer_policy_state(
     source_state: Mapping[str, Any],
     target_state: Mapping[str, Any],
     *,
     source_observation_size: int,
+    action_output_ratios: Sequence[float] | None = None,
 ) -> tuple[dict[str, Any], dict[str, object]]:
     """Copy compatible parameters and zero new terrain-input columns.
 
@@ -68,6 +112,41 @@ def transfer_policy_state(
                 "target_shape": list(target_tensor.shape),
             }
         )
+    rescaled_outputs: list[str] = []
+    serialized_ratios: list[float] | None = None
+    if action_output_ratios is not None:
+        serialized_ratios = [float(value) for value in action_output_ratios]
+        if (
+            not serialized_ratios
+            or any(
+                not math.isfinite(value) or value <= 0.0
+                for value in serialized_ratios
+            )
+        ):
+            raise ValueError(
+                "action_output_ratios must contain finite positive values"
+            )
+        for name in ("action_net.weight", "action_net.bias"):
+            tensor = transferred.get(name)
+            if tensor is None:
+                raise ValueError(
+                    f"Target policy is missing required output tensor {name}"
+                )
+            if tensor.shape[0] != len(serialized_ratios):
+                raise ValueError(
+                    f"Action-output ratio count does not match {name}: "
+                    f"{len(serialized_ratios)} != {tensor.shape[0]}"
+                )
+            ratios = tensor.new_tensor(serialized_ratios)
+            if tensor.ndim == 2:
+                ratios = ratios.reshape(-1, 1)
+            elif tensor.ndim != 1:
+                raise ValueError(
+                    f"Unexpected output tensor rank for {name}: {tensor.ndim}"
+                )
+            transferred[name] = tensor * ratios
+            rescaled_outputs.append(name)
+
     report = {
         "copied_exact_count": len(copied_exact),
         "copied_exact": copied_exact,
@@ -76,5 +155,8 @@ def transfer_policy_state(
         "skipped": skipped,
         "optimizer_transferred": False,
         "new_input_columns_initialized_to_zero": True,
+        "physical_action_mean_preserved": action_output_ratios is not None,
+        "action_output_ratios": serialized_ratios,
+        "rescaled_action_outputs": rescaled_outputs,
     }
     return transferred, report

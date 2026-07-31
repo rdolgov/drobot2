@@ -28,6 +28,7 @@ from _run_support import (  # noqa: E402
     validate_model_manifest,
     validate_ppo_algorithm_contract,
 )
+from _stair_rl_contract import config_for_height_stage  # noqa: E402
 
 parser = argparse.ArgumentParser(
     description="Evaluate a trained Drobot stairs PPO policy."
@@ -37,6 +38,11 @@ parser.add_argument(
     default=str(SCRIPT_DIR / "quadruped_stairs_v1.yaml"),
 )
 parser.add_argument("--world", default=None)
+parser.add_argument(
+    "--height-stage",
+    default=None,
+    help="Apply one stair_height_stages entry declared by the config.",
+)
 parser.add_argument(
     "--model",
     default=(
@@ -72,6 +78,10 @@ with config_path.open("r", encoding="utf-8") as stream:
     config = yaml.safe_load(stream)
 if int(config.get("schema_version", 0)) != 1:
     parser.error(f"Unsupported stairs config schema: {config.get('schema_version')}")
+try:
+    config = config_for_height_stage(config, args.height_stage)
+except ValueError as exc:
+    parser.error(str(exc))
 task_config = dict(config["task"])
 staircase = dict(task_config["staircase"])
 active_steps = (
@@ -176,6 +186,7 @@ report: dict[str, object] = {
     "seed": args.seed,
     "device": args.device,
     "active_steps": active_steps,
+    "height_stage": args.height_stage,
     "camera_view": args.camera_view,
     "screenshot": str(screenshot_path) if screenshot_path else None,
     "isaac_sim_version": "6.0.1",

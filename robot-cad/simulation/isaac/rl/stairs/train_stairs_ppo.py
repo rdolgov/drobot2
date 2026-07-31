@@ -25,6 +25,7 @@ for module_dir in (str(ISAAC_DIR), str(RL_DIR), str(SCRIPT_DIR)):
 
 from _policy_transfer import (  # noqa: E402
     EXPANDABLE_INPUT_WEIGHTS,
+    physical_action_output_ratios,
     transfer_policy_state,
 )
 from _run_support import (  # noqa: E402
@@ -38,6 +39,7 @@ from _run_support import (  # noqa: E402
     write_model_manifest,
 )
 from _stair_rl_contract import (  # noqa: E402
+    config_for_height_stage,
     progress_gate_failures,
     stair_observation_fields,
 )
@@ -50,6 +52,17 @@ parser.add_argument(
     default=str(SCRIPT_DIR / "quadruped_stairs_v1.yaml"),
 )
 parser.add_argument("--world", default=None)
+parser.add_argument(
+    "--height-stage",
+    default=None,
+    help="Apply one stair_height_stages entry declared by the config.",
+)
+parser.add_argument(
+    "--fixed-active-steps",
+    type=int,
+    default=None,
+    help="Pin training to one declared stair count instead of advancing mastery.",
+)
 parser.add_argument(
     "--output-dir",
     default="simulation/isaac/output/rl/ppo-stairs-v1",
@@ -71,6 +84,14 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--initialize-from-stairs",
+    default=None,
+    help=(
+        "Initialize a new same-shape stair policy from another stair model. "
+        "Policy parameters transfer; optimizer state does not."
+    ),
+)
+parser.add_argument(
     "--allow-unverified-resume",
     action="store_true",
     help="Allow a deliberate resume from a stairs model without its manifest.",
@@ -79,6 +100,14 @@ parser.add_argument(
     "--smoke-test",
     action="store_true",
     help="Run a 512-step end-to-end pipeline check; not convergence evidence.",
+)
+parser.add_argument(
+    "--initialize-only",
+    action="store_true",
+    help=(
+        "Save the initialized/transferred policy and a current manifest "
+        "without collecting a PPO rollout."
+    ),
 )
 parser.add_argument("--gui", action="store_true")
 args, _ = parser.parse_known_args()
@@ -89,17 +118,48 @@ def _resolve_project_path(value: str | os.PathLike[str]) -> Path:
     return path.resolve() if path.is_absolute() else (PROJECT_ROOT / path).resolve()
 
 
-if args.resume and args.initialize_from_flat:
-    parser.error("--resume and --initialize-from-flat are mutually exclusive")
+initialization_options = (
+    args.resume,
+    args.initialize_from_flat,
+    args.initialize_from_stairs,
+)
+if sum(value is not None for value in initialization_options) > 1:
+    parser.error(
+        "--resume, --initialize-from-flat, and --initialize-from-stairs "
+        "are mutually exclusive"
+    )
 if args.total_timesteps is not None and args.total_timesteps <= 0:
     parser.error("--total-timesteps must be positive")
+if args.smoke_test and args.initialize_only:
+    parser.error("--smoke-test and --initialize-only are mutually exclusive")
 config_path = _resolve_project_path(args.config)
 with config_path.open("r", encoding="utf-8") as stream:
     config = yaml.safe_load(stream)
 if int(config.get("schema_version", 0)) != 1:
     parser.error(f"Unsupported stairs config schema: {config.get('schema_version')}")
+try:
+    config = config_for_height_stage(config, args.height_stage)
+except ValueError as exc:
+    parser.error(str(exc))
 task_config = dict(config["task"])
+if args.fixed_active_steps is not None:
+    maximum_steps = int(task_config["staircase"]["step_count"])
+    if args.fixed_active_steps < 1 or args.fixed_active_steps > maximum_steps:
+        parser.error(
+            f"--fixed-active-steps must be within 1..{maximum_steps}"
+        )
+    curriculum = dict(task_config["curriculum"])
+    curriculum["levels"] = [
+        {"start_fraction": 0.0, "active_steps": args.fixed_active_steps}
+    ]
+    task_config["curriculum"] = curriculum
 ppo_config = dict(config["ppo"])
+residual_policy_config = dict(task_config.get("residual_policy", {}))
+if bool(residual_policy_config.get("enabled", False)) and args.initialize_from_flat:
+    parser.error(
+        "Residual stair policies use their configured frozen base model and "
+        "cannot also use --initialize-from-flat"
+    )
 policy_observation_size = len(
     stair_observation_fields(
         task_config["staircase"]["terrain_sample_offsets_m"],
@@ -275,8 +335,13 @@ class TrainingControlCallback(BaseCallback):
         succeeded = bool(metrics["stairs_completed"])
         highest_step = int(metrics["highest_step_reached"])
         elevation_gain = float(metrics["maximum_base_elevation_gain_m"])
-        minimum_elevation = float(
-            self.watchdog.get("minimum_base_elevation_gain_m", 0.02)
+        minimum_elevation = min(
+            float(self.watchdog.get("minimum_base_elevation_gain_m", 0.02)),
+            (
+                active_steps
+                * float(self.task_config["staircase"]["rise_m"])
+                * 0.5
+            ),
         )
         physically_reached_first_step = (
             highest_step >= 1 and elevation_gain >= minimum_elevation
@@ -450,10 +515,13 @@ report: dict[str, object] = {
     ],
     "output_dir": str(output_dir),
     "smoke_test": args.smoke_test,
+    "initialize_only": args.initialize_only,
     "training_mode": training_mode,
     "algorithm_contract_requested": algorithm_contract,
     "requested_total_timesteps": total_timesteps,
     "requested_seed": args.seed,
+    "height_stage": args.height_stage,
+    "fixed_active_steps": args.fixed_active_steps,
     "device_request": args.device,
     "isaac_sim_version": "6.0.1",
     "torch_version": torch.__version__,
@@ -547,6 +615,51 @@ try:
             device=args.device,
             verbose=1,
         )
+        if bool(ppo_config.get("zero_action_mean_init", False)):
+            with torch.no_grad():
+                model.policy.action_net.weight.zero_()
+                model.policy.action_net.bias.zero_()
+            report["zero_action_mean_initialization"] = {
+                "weight": "all_zero",
+                "bias": "all_zero",
+            }
+        if args.initialize_from_stairs:
+            transferred_from = _resolve_project_path(
+                args.initialize_from_stairs
+            )
+            if not transferred_from.is_file():
+                raise FileNotFoundError(transferred_from)
+            source_model = PPO.load(str(transferred_from), device=args.device)
+            if (
+                tuple(source_model.observation_space.shape)
+                != tuple(model.observation_space.shape)
+                or tuple(source_model.action_space.shape)
+                != tuple(model.action_space.shape)
+            ):
+                raise RuntimeError(
+                    "Stair source and target observation/action shapes differ"
+                )
+            source_state = source_model.policy.state_dict()
+            target_state = model.policy.state_dict()
+            mismatched = [
+                name
+                for name, tensor in target_state.items()
+                if name not in source_state
+                or tuple(source_state[name].shape) != tuple(tensor.shape)
+            ]
+            if set(source_state) != set(target_state) or mismatched:
+                raise RuntimeError(
+                    "Stair policy parameter contracts differ: "
+                    f"mismatched={mismatched}"
+                )
+            model.policy.load_state_dict(source_state, strict=True)
+            report["stair_policy_transfer"] = {
+                "source_model": str(transferred_from),
+                "source_model_sha256": sha256_file(transferred_from),
+                "parameter_count": len(source_state),
+                "optimizer_transferred": False,
+            }
+            del source_model
         if args.initialize_from_flat:
             transferred_from = _resolve_project_path(args.initialize_from_flat)
             if not transferred_from.is_file():
@@ -568,10 +681,23 @@ try:
                 raise RuntimeError(
                     f"Flat source activation must be ELU, got {source_activation}"
                 )
+            transfer_config = dict(
+                task_config.get("flat_policy_transfer", {})
+            )
+            output_ratios = None
+            if bool(
+                transfer_config.get("preserve_physical_action_mean", False)
+            ):
+                output_ratios = physical_action_output_ratios(
+                    raw_env.dof_names,
+                    dict(transfer_config["source_action_scale_rad"]),
+                    dict(task_config["action_scale_rad"]),
+                )
             transferred_state, transfer_report = transfer_policy_state(
                 source_model.policy.state_dict(),
                 model.policy.state_dict(),
                 source_observation_size=48,
+                action_output_ratios=output_ratios,
             )
             expected_exact_count = len(model.policy.state_dict()) - len(
                 EXPANDABLE_INPUT_WEIGHTS
@@ -613,49 +739,58 @@ try:
     )
     if str(task_config["curriculum"].get("mode", "timesteps")) == "timesteps":
         raw_env.set_training_progress(initial_curriculum_progress)
-    checkpoint_dir = output_dir / "checkpoints"
-    checkpoint_callback = CheckpointCallback(
-        save_freq=checkpoint_frequency,
-        save_path=str(checkpoint_dir),
-        name_prefix="drobot_stairs_ppo",
-        save_replay_buffer=False,
-        save_vecnormalize=False,
+    training_control_callback: TrainingControlCallback | None = None
+    if not args.initialize_only:
+        checkpoint_dir = output_dir / "checkpoints"
+        checkpoint_callback = CheckpointCallback(
+            save_freq=checkpoint_frequency,
+            save_path=str(checkpoint_dir),
+            name_prefix="drobot_stairs_ppo",
+            save_replay_buffer=False,
+            save_vecnormalize=False,
+        )
+        training_control_callback = TrainingControlCallback(
+            task_config=task_config,
+            total_for_curriculum=curriculum_total_timesteps,
+            report_path=output_dir / "progress_watchdog.json",
+        )
+        callbacks = CallbackList(
+            [
+                checkpoint_callback,
+                CheckpointManifestCallback(
+                    save_frequency=checkpoint_frequency,
+                    save_path=checkpoint_dir,
+                    config_path=config_path,
+                    world_path=world_path,
+                    world_dependencies=world_dependency_paths,
+                    raw_env=raw_env,
+                    algorithm_contract=algorithm_contract,
+                    seed=actual_training_seed,
+                    transferred_from=transferred_from,
+                    resumed_from=resume_path,
+                    inherited_transfer=inherited_transfer,
+                ),
+                training_control_callback,
+            ]
+        )
+        model.learn(
+            total_timesteps=total_timesteps,
+            callback=callbacks,
+            reset_num_timesteps=reset_num_timesteps,
+            progress_bar=False,
+        )
+    aborted_no_progress = bool(
+        training_control_callback is not None
+        and training_control_callback.aborted
     )
-    training_control_callback = TrainingControlCallback(
-        task_config=task_config,
-        total_for_curriculum=curriculum_total_timesteps,
-        report_path=output_dir / "progress_watchdog.json",
-    )
-    callbacks = CallbackList(
-        [
-            checkpoint_callback,
-            CheckpointManifestCallback(
-                save_frequency=checkpoint_frequency,
-                save_path=checkpoint_dir,
-                config_path=config_path,
-                world_path=world_path,
-                world_dependencies=world_dependency_paths,
-                raw_env=raw_env,
-                algorithm_contract=algorithm_contract,
-                seed=actual_training_seed,
-                transferred_from=transferred_from,
-                resumed_from=resume_path,
-                inherited_transfer=inherited_transfer,
-            ),
-            training_control_callback,
-        ]
-    )
-    model.learn(
-        total_timesteps=total_timesteps,
-        callback=callbacks,
-        reset_num_timesteps=reset_num_timesteps,
-        progress_bar=False,
-    )
-    aborted_no_progress = training_control_callback.aborted
     final_model_base = output_dir / (
         "drobot_stairs_ppo_aborted"
         if aborted_no_progress
-        else "drobot_stairs_ppo_final"
+        else (
+            "drobot_stairs_ppo_initialized"
+            if args.initialize_only
+            else "drobot_stairs_ppo_final"
+        )
     )
     model.save(str(final_model_base))
     final_model_path = final_model_base.with_suffix(".zip")
@@ -693,15 +828,27 @@ try:
             "initial_curriculum_progress": initial_curriculum_progress,
             "environment_contract": raw_env.contract,
             "curriculum_transitions": raw_env.curriculum_transitions,
-            "progress_watchdog": training_control_callback.snapshot(),
+            "progress_watchdog": (
+                training_control_callback.snapshot()
+                if training_control_callback is not None
+                else {
+                    "status": "NOT_RUN",
+                    "reason": "initialize_only",
+                }
+            ),
             "recent_completed_episodes": raw_env.completed_episode_metrics,
             "elapsed_seconds": time.perf_counter() - start_time,
             "scope": (
-                "Pipeline validation only" if args.smoke_test
+                "Policy initialization without PPO updates"
+                if args.initialize_only
                 else (
-                    "Automatically aborted stair PPO training"
-                    if aborted_no_progress
-                    else "Single-environment stair PPO training"
+                    "Pipeline validation only"
+                    if args.smoke_test
+                    else (
+                        "Automatically aborted stair PPO training"
+                        if aborted_no_progress
+                        else "Single-environment stair PPO training"
+                    )
                 )
             ),
             "terrain_input": (
