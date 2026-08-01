@@ -1,17 +1,19 @@
-# Force-verified single-tread placement PPO v8
+# Force-verified per-leg single-tread placement PPO v8-v10
 
 ## Decision
 
-The simplified fixed-geometry placement gate passes. A `2,048`-step PPO smoke
-policy raises the front-left foot `205.2-207.4 mm`, advances it over the exact
-`180 mm` riser, lowers it onto the known `250 mm` tread, and holds measured
-tread load for `0.75 s`. Deterministic evaluation passed `5/5` episodes.
+The explicit per-leg fixed-geometry curriculum now passes for both front feet.
+The v8 `2,048`-step PPO raises and force-places front-left `5/5`; the mirrored
+v10 `2,048`-step PPO raises front-right `201.9-204.4 mm` and force-places it
+`5/5` on the same exact `180 mm` rise and `250 mm` tread.
 
-This authorizes the next body-transfer and ordered-leg stage. It does not
-authorize vision work, hardware deployment, or a claim that the robot climbs a
-complete stair. The experimental front-left to front-right v9 integration
-placed only the first foot before the body tipped; that result remains a
-failure.
+The v9 integration now also passes a separate all-feet-loaded body-transfer
+gate between those skills. Under the conservative `200 mm` lateral corridor,
+the composed controller raises front-right `162.8 mm` before the corridor
+termination. A `230 mm` diagnostic reaches `180.9 mm`, but front-left slip
+crosses the measurable `25 mm` threshold. This remains a partial front-pair
+result, not a stair-climb claim and not authorization for vision or hardware
+deployment.
 
 ## What changed
 
@@ -29,9 +31,21 @@ failure.
 - Contact logs distinguish support loss from traction. The passing evaluation
   kept all three supports loaded and limited support slip to `3.393 mm`, below
   the `25 mm` measurable-slip threshold.
-- `quadruped_stairs_v9_front_pair_placement.yaml` is an experimental ordered
-  front-pair task. It carries the first placed foot as support while targeting
-  front-right. The latest diagnostic still tipped and is not a release model.
+- `quadruped_stairs_v10_front_right_single_tread_placement.yaml` mirrors the
+  complete force-backed curriculum for front-right without changing geometry,
+  observations, effort cap, or success criteria.
+- `quadruped_stairs_v9_front_pair_placement.yaml` adds an incenter-targeted
+  body transfer. It anchors all loaded feet, gates the handoff on force,
+  support margin, pose error, base speed, body rate, and uprightness, then
+  composes the independently verified left/right policies with zero residual
+  action during transfer.
+- Reach-limited references are clipped explicitly and counted. Support slip is
+  now reported per leg, which identified the already-placed front-left foot as
+  the only support crossing the `25 mm` slip threshold.
+- A rubber-pad sensitivity (`1.20/1.00` static/dynamic friction versus the
+  authored `0.90/0.75`) changed that slip by less than `2%` and reduced
+  front-right lift. The remaining slip is controller-induced dragging, not
+  evidence that higher friction alone solves the sequence.
 - Placement media use a close external review camera. The camera remains
   evaluation-only.
 
@@ -41,13 +55,14 @@ failure.
 | --- | --- |
 | `simulation/isaac/rl/stairs/quadruped_stairs_v8_single_tread_placement.yaml` | Exact geometry, five-phase reference, force/slip thresholds, reward, hardware cap, and PPO settings |
 | `simulation/isaac/rl/stairs/quadruped_stairs_v9_front_pair_placement.yaml` | Experimental front-left then front-right integration |
+| `simulation/isaac/rl/stairs/quadruped_stairs_v10_front_right_single_tread_placement.yaml` | Mirrored force-backed front-right curriculum |
 | `simulation/isaac/rl/stairs/_stair_rl_contract.py` | Pure placement curriculum, phase reference, observation, contact gate, and reward terms |
 | `simulation/isaac/rl/stairs/_quadruped_stairs_env.py` | IK reference, pre-play contact views, force/load/slip metrics, ordered-leg state, and episode gates |
 | `simulation/isaac/rl/_quadruped_rl_env.py` | Pre-physics-play extension hook used to register contact tensors |
 | `simulation/isaac/rl/stairs/train_stairs_ppo.py` | Balance-prefix initialization and placement-aware PPO contract sizing |
-| `simulation/isaac/rl/stairs/evaluate_stairs_ppo.py` | Deterministic contract verification and close placement screenshot view |
+| `simulation/isaac/rl/stairs/evaluate_stairs_ppo.py` | Deterministic contract verification, optional hash-verified per-leg model composition, and close placement screenshot view |
 | `simulation/isaac/rl/stairs/record_stairs_ppo.py` | Exact H.264 placement recording and close review view |
-| `tests/test_quadruped_stairs_rl_contract.py` | Pure geometry, phase, observation, force gate, and v8/v9 configuration checks |
+| `tests/test_quadruped_stairs_rl_contract.py` | Pure geometry, phase, observation, force gate, and v8-v10 configuration checks |
 
 The physical profile remains the one-leg real-test record: `0.8825985 N m`
 per-joint effort cap, the measured joint limits, and no interpretation of the
@@ -94,6 +109,36 @@ From `robot-cad`:
   --thumbnail reviews\ppo-stairs-v8-180mm-25cm-single-foot-placement.png
 ```
 
+Use the same commands with
+`quadruped_stairs_v10_front_right_single_tread_placement.yaml`, seed `192` for
+training, seed `193` for deterministic evaluation/recording, and the release
+model at
+`simulation\isaac\models\ppo-stairs-v10-180mm-25cm-front-right-placement-small\drobot_stairs_ppo_final.zip`.
+
+Compose the verified front policies around the v9 transfer with:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v9_front_pair_placement.yaml `
+  --output-dir simulation\isaac\output\rl\ppo-stairs-v9-front-pair-composed-init `
+  --initialize-from-balance simulation\isaac\models\ppo-foot-lift-v2-balance-190mm-small\drobot_foot_lift_ppo_final.zip `
+  --initialize-only `
+  --seed 194 `
+  --device cpu
+
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\evaluate_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v9_front_pair_placement.yaml `
+  --model simulation\isaac\output\rl\ppo-stairs-v9-front-pair-composed-init\drobot_stairs_ppo_initialized.zip `
+  --leg-model front_left=simulation\isaac\models\ppo-stairs-v8-180mm-25cm-single-foot-placement-small\drobot_stairs_ppo_final.zip `
+  --leg-model front_right=simulation\isaac\models\ppo-stairs-v10-180mm-25cm-front-right-placement-small\drobot_stairs_ppo_final.zip `
+  --episodes 1 `
+  --active-steps 1 `
+  --seed 195 `
+  --device cpu
+```
+
 Run the pure checks:
 
 ```powershell
@@ -125,18 +170,32 @@ The review artifacts are:
 - `reviews/ppo-stairs-v8-180mm-25cm-single-foot-placement-results.json`
 - `simulation/isaac/models/ppo-stairs-v8-180mm-25cm-single-foot-placement-small/`
 
-The v9 diagnostic placed front-left with `9.436 N`, then failed during the
-front-right transfer with `258.3 mm` support slip and `39.88 deg` tilt. Its
-concise evidence is
-`reviews/ppo-stairs-v9-180mm-25cm-front-pair-results.json`.
+The mirrored front-right artifacts are:
+
+- `reviews/ppo-stairs-v10-180mm-25cm-front-right-placement.mp4`
+- `reviews/ppo-stairs-v10-180mm-25cm-front-right-placement.png`
+- `reviews/ppo-stairs-v10-180mm-25cm-front-right-placement-results.json`
+- `simulation/isaac/models/ppo-stairs-v10-180mm-25cm-front-right-placement-small/`
+
+The v10 trained checkpoint passed `5/5` with `201.9-204.4 mm` clearance,
+`8.75-9.95 N` tread load, `3.478 mm` maximum support slip, `100%` support
+contact, and `3.326 deg` maximum tilt.
+
+The v9 transfer itself now passes with `88.6 mm` positive support margin,
+`21.3 N` retained on front-left, all support contacts, `12.1 mm/s` base speed,
+and `4.17 deg` maximum tilt at handoff. The conservative composition then
+reaches `162.8 mm` front-right lift with `24.34 mm` support slip before the
+`200 mm` corridor gate. Comparative transfer, slip, and friction evidence is
+in `reviews/ppo-stairs-v9-180mm-25cm-front-pair-results.json`.
 
 ## Next gate
 
-Add a body-transfer phase after the first landing that keeps the placed foot
-world-anchored while the torso moves inside the new mixed-height support
-polygon. Gate that phase on all support loads, bounded slip, and tilt before
-starting the next leg. Only after an ordered fixed-geometry sequence succeeds
-should the analytic terrain profile be replaced by depth or vision.
+Train the post-transfer controller to unload front-right without dragging the
+already placed front-left foot laterally. Keep the strict `200 mm` corridor and
+`25 mm` slip threshold; require the composed right foot to clear at least
+`190 mm`, force-load the tread, and hold before adding either rear leg. Only
+after the ordered fixed-geometry sequence succeeds should the analytic terrain
+profile be replaced by depth or vision.
 
 ## Limitations
 
@@ -147,5 +206,5 @@ should the analytic terrain profile be replaced by depth or vision.
   printed foot or rubber sole.
 - Contact friction is simulated. Hardware still needs tethered,
   current-limited, thermal, voltage-sag, and emergency-stop validation.
-- V8 places one foot only. V9 proves that simply chaining mirrored references
-  is insufficient for the front pair.
+- V8 and v10 place one front foot each. V9 proves the body-transfer handoff but
+  does not yet force-place both front feet in one episode.

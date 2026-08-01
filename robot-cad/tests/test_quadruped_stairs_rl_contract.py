@@ -35,6 +35,7 @@ from _stair_rl_contract import (  # noqa: E402
     curriculum_active_steps,
     foot_tread_progress,
     goal_x_for_active_steps,
+    inter_leg_transfer_state,
     next_foot_target_index,
     pack_placement_reference_observation,
     pack_stair_policy_observation,
@@ -47,6 +48,7 @@ from _stair_rl_contract import (  # noqa: E402
     stair_height_at_x,
     stair_observation_fields,
     stair_reward_terms,
+    support_triangle_incenter_xy,
 )
 
 
@@ -119,6 +121,15 @@ def v9_config() -> dict:
         "r",
         encoding="utf-8",
     ) as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v10_config() -> dict:
+    with (
+        STAIRS_DIR
+        / "quadruped_stairs_v10_front_right_single_tread_placement.yaml"
+    ).open("r", encoding="utf-8") as stream:
         return yaml.safe_load(stream)
 
 
@@ -934,7 +945,7 @@ def test_placement_observation_and_contact_gate_require_loaded_support(
     )
 
 
-def test_v9_front_pair_reuses_one_stationary_action_contract(
+def test_v9_front_pair_uses_dynamic_swing_support_action_contract(
     v9_config: dict,
 ) -> None:
     task = v9_config["task"]
@@ -947,8 +958,75 @@ def test_v9_front_pair_reuses_one_stationary_action_contract(
     ]
     assert task["staircase"]["tread_depth_m"] == pytest.approx(0.25)
     assert task["episode_seconds"] >= 2.0 * 10.75
-    assert residual["swing"] == residual["support"]
+    assert residual["support"]["hip_flexion"] > residual["swing"][
+        "hip_flexion"
+    ]
     assert task["action_scale_rad"] == residual["swing"]
+    transfer = task["placement_reference"]["inter_leg_transfer"]
+    assert transfer["enabled"] is True
+    assert transfer["duration_seconds"] > 0.0
+    assert transfer["maximum_seconds"] > transfer["duration_seconds"]
+    assert transfer["minimum_support_margin_m"] > 0.0
+    assert transfer["maximum_base_speed_m_s"] > 0.0
+    assert transfer["maximum_body_rate_rad_s"] > 0.0
+    assert 0.0 <= transfer["support_world_anchor_follow_gain"] <= 1.0
+    assert transfer["post_transfer_weight_shift"]["forward_m"] > 0.0
+    assert transfer["post_transfer_weight_shift"]["lateral_m"] >= 0.0
+    assert transfer["residual_action_scale"] == pytest.approx(0.0)
+    traction = task["foot_contact_material"]
+    assert traction["enabled"] is False
+    assert traction["static_friction"] > 0.90
+    assert traction["dynamic_friction"] > 0.75
+    assert traction["dynamic_friction"] <= traction["static_friction"]
+
+
+def test_v10_isolates_the_mirrored_front_right_placement(
+    v8_config: dict,
+    v10_config: dict,
+) -> None:
+    left = v8_config["task"]
+    right = v10_config["task"]
+
+    assert right["id"] == (
+        "Drobot-Quadruped-Stairs-v10-180mm-Front-Right-Placement"
+    )
+    assert right["placement_reference"]["swing_leg"] == "front_right"
+    assert right["foot_placement_sequence"][0] == "front_right"
+    assert right["staircase"] == left["staircase"]
+    assert right["placement_curriculum"] == left["placement_curriculum"]
+    assert right["robot_hardware_profile"] == left["robot_hardware_profile"]
+
+
+def test_inter_leg_transfer_uses_smooth_weight_shift_and_support_incenter() -> None:
+    transfer_options = {
+        "duration_seconds": 4.0,
+        "unload_duration_seconds": 1.5,
+    }
+    start = inter_leg_transfer_state(0.0, **transfer_options)
+    halfway = inter_leg_transfer_state(2.0, **transfer_options)
+    done = inter_leg_transfer_state(4.0, **transfer_options)
+    unloaded = inter_leg_transfer_state(5.5, **transfer_options)
+
+    assert start["phase"] == "weight_shift"
+    assert start["phase_one_hot"] == (1.0, 0.0, 0.0, 0.0, 0.0)
+    assert start["transfer_fraction"] == pytest.approx(0.0)
+    assert halfway["transfer_fraction"] == pytest.approx(0.5)
+    assert done["transfer_fraction"] == pytest.approx(1.0)
+    assert done["unload_fraction"] == pytest.approx(0.0)
+    assert unloaded["unload_fraction"] == pytest.approx(1.0)
+    assert done["desired_lift_m"] == pytest.approx(0.0)
+    assert done["contact_expected"] is False
+
+    incenter = support_triangle_incenter_xy(
+        ((0.0, 0.0), (2.0, 0.0), (0.0, 2.0))
+    )
+    expected = 2.0 - np.sqrt(2.0)
+    np.testing.assert_allclose(incenter, (expected, expected), atol=1e-6)
+
+    with pytest.raises(ValueError, match="nonzero area"):
+        support_triangle_incenter_xy(
+            ((0.0, 0.0), (1.0, 0.0), (2.0, 0.0))
+        )
 
 
 def test_manifest_binds_all_composed_world_dependencies(

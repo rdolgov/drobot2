@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import sys
@@ -63,12 +64,42 @@ parser.add_argument(
 )
 parser.add_argument("--report", default=None)
 parser.add_argument("--allow-unverified-model", action="store_true")
+parser.add_argument(
+    "--leg-model",
+    action="append",
+    default=[],
+    metavar="LEG=MODEL",
+    help=(
+        "Use a force-verified per-leg PPO policy outside inter-leg transfer; "
+        "repeat for each composed skill."
+    ),
+)
 args, _ = parser.parse_known_args()
 
 
 def _resolve_project_path(value: str | os.PathLike[str]) -> Path:
     path = Path(value)
     return path.resolve() if path.is_absolute() else (PROJECT_ROOT / path).resolve()
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _parse_leg_models(values: list[str]) -> dict[str, Path]:
+    result: dict[str, Path] = {}
+    for value in values:
+        leg, separator, model = str(value).partition("=")
+        if not separator or not leg or not model:
+            parser.error("--leg-model must use LEG=MODEL syntax")
+        if leg in result:
+            parser.error(f"duplicate --leg-model for {leg}")
+        result[leg] = _resolve_project_path(model)
+    return result
 
 
 if args.episodes <= 0:
@@ -97,6 +128,7 @@ world_dependency_paths = tuple(
     for value in task_config.get("world_dependencies", ())
 )
 model_path = _resolve_project_path(args.model)
+leg_model_paths = _parse_leg_models(args.leg_model)
 report_path = (
     _resolve_project_path(args.report)
     if args.report
@@ -192,6 +224,9 @@ report: dict[str, object] = {
     "status": "FAIL",
     "task_id": task_config["id"],
     "model": str(model_path),
+    "leg_models": {
+        leg: str(path) for leg, path in leg_model_paths.items()
+    },
     "world": str(world_path),
     "episodes_requested": args.episodes,
     "seed": args.seed,
@@ -238,11 +273,57 @@ try:
             "reason": "model_manifest_verification_was_skipped",
         }
     )
+    known_placement_legs = set(raw_env.placement_sequence_legs)
+    unknown_leg_models = sorted(set(leg_model_paths) - known_placement_legs)
+    if unknown_leg_models:
+        raise ValueError(
+            "Leg-model mapping is outside the placement sequence: "
+            f"{unknown_leg_models}"
+        )
+    leg_models: dict[str, PPO] = {}
+    leg_model_verification: dict[str, dict[str, object]] = {}
+    for leg, path in leg_model_paths.items():
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        manifest_path = Path(str(path) + ".contract.json")
+        if not manifest_path.is_file():
+            raise FileNotFoundError(manifest_path)
+        with manifest_path.open("r", encoding="utf-8") as stream:
+            manifest = json.load(stream)
+        model_sha256 = _sha256_file(path)
+        if str(manifest.get("model_sha256")) != model_sha256:
+            raise RuntimeError(
+                f"Per-leg model hash mismatch for {leg}: {path}"
+            )
+        leg_model = PPO.load(str(path), device=args.device)
+        if (
+            tuple(leg_model.observation_space.shape)
+            != tuple(raw_env.observation_space.shape)
+            or tuple(leg_model.action_space.shape)
+            != tuple(raw_env.action_space.shape)
+        ):
+            raise RuntimeError(
+                f"Per-leg model spaces do not match the sequence for {leg}"
+            )
+        leg_models[leg] = leg_model
+        leg_model_verification[leg] = {
+            "status": "PASS",
+            "model": str(path),
+            "model_sha256": model_sha256,
+            "manifest": str(manifest_path),
+            "source_task_id": manifest.get("task_id"),
+            "observation_shape": list(leg_model.observation_space.shape),
+            "action_shape": list(leg_model.action_space.shape),
+        }
     observation, _ = raw_env.reset(seed=args.seed)
     episode_metrics: list[dict[str, object]] = []
     maximum_steps = args.episodes * raw_env.max_episode_steps * 2
     for _ in range(maximum_steps):
-        action, _ = model.predict(observation, deterministic=True)
+        if raw_env.placement_transfer_active:
+            action = np.zeros(raw_env.action_space.shape, dtype=np.float32)
+        else:
+            active_model = leg_models.get(raw_env.placement_swing_leg, model)
+            action, _ = active_model.predict(observation, deterministic=True)
         observation, _, terminated, truncated, info = raw_env.step(action)
         if terminated or truncated:
             episode_metrics.append(dict(info["episode_metrics"]))
@@ -267,6 +348,12 @@ try:
             "status": "PASS",
             "model_contract_verification": verification,
             "ppo_algorithm_verification": algorithm_verification,
+            "leg_model_verification": leg_model_verification,
+            "policy_composition": (
+                "per_leg_models_with_zero_residual_inter_leg_transfer"
+                if leg_models
+                else "single_model"
+            ),
             "episodes": episode_metrics,
             "success_count": success_count,
             "success_rate": success_count / len(episode_metrics),

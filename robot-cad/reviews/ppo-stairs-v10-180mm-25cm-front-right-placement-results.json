@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "task_id": "Drobot-Quadruped-Stairs-v10-180mm-Front-Right-Placement",
+  "scope": "2,048-step PPO smoke policy initialized from the verified unsupported-balance skill",
+  "stair_geometry": {
+    "rise_m": 0.18,
+    "tread_depth_m": 0.25
+  },
+  "training_seed": 192,
+  "evaluation_seed": 193,
+  "policy_input": "Blind fixed geometry: IMU, joints, task phase, target error, and contact/load state; no RGB or ToF pixels",
+  "episodes": 5,
+  "successes": 5,
+  "front_right_lift_range_m": [
+    0.201901912689209,
+    0.204427286982536
+  ],
+  "front_right_tread_normal_load_range_n": [
+    8.746455192565918,
+    9.954865455627441
+  ],
+  "minimum_support_contact_fraction": 1.0,
+  "maximum_support_slip_m": 0.0034782378934323788,
+  "maximum_body_tilt_deg": 3.32613684326375,
+  "measurable_support_slip_detected": false,
+  "decision": "The mirrored front-right leg can independently clear and force-load the same 180 x 250 mm tread. Continue composing the learned left and right primitives around the force-gated body transfer; do not add vision."
+}

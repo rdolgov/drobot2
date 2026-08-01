@@ -1,6 +1,6 @@
 schema_version: 1
 task:
-  id: Drobot-Quadruped-Stairs-v9-180mm-Front-Pair-Placement
+  id: Drobot-Quadruped-Stairs-v10-180mm-Front-Right-Placement
   world: exports/isaac/quadruped_robot_stairs_v6_180mm_world.usda
   world_dependencies:
     - exports/isaac/quadruped_robot_manual_world.usda
@@ -12,7 +12,7 @@ task:
   target_velocity_body_m_s: [0.0, 0.0, 0.0]
   physics_hz: 120
   control_hz: 60
-  episode_seconds: 36.0
+  episode_seconds: 14.0
   success_hold_seconds: 0.75
   reset_settle_seconds: 0.75
   reset_start_z_m: 0.46
@@ -25,15 +25,14 @@ task:
   include_placement_reference_observation: true
   foot_placement_tolerance_m: 0.018
   foot_tread_approach_distance_m: 0.25
-  foot_placement_sequence: [front_left, front_right, rear_left, rear_right]
+  foot_placement_sequence: [front_right, front_left, rear_right, rear_left]
   success_minimum_base_elevation_fraction: 0.0
   success_required_feet_on_goal_tread: 0
   stall_termination:
     enabled: false
   placement_reference:
     enabled: true
-    sequence_legs: [front_left, front_right]
-    completed_leg_hold_mode: all_feet_anchored_incenter_transfer
+    swing_leg: front_right
     timing:
       shift_start_seconds: 0.25
       shift_duration_seconds: 2.00
@@ -46,27 +45,6 @@ task:
     weight_shift:
       forward_m: 0.045
       lateral_m: 0.045
-      scale_by_leg:
-        front_left: 1.0
-        front_right: 0.35
-    inter_leg_transfer:
-      enabled: true
-      duration_seconds: 4.00
-      maximum_seconds: 7.00
-      gate_hold_seconds: 0.40
-      support_incenter_blend: 0.85
-      minimum_support_margin_m: 0.015
-      base_target_tolerance_m: 0.060
-      maximum_base_speed_m_s: 0.050
-      maximum_body_rate_rad_s: 0.250
-      maximum_forward_shift_m: 0.080
-      maximum_backward_shift_m: 0.050
-      maximum_lateral_shift_m: 0.120
-      support_world_anchor_follow_gain: 0.0
-      post_transfer_weight_shift:
-        forward_m: 0.035
-        lateral_m: 0.000
-      residual_action_scale: 0.0
     target_x_tolerance_m: 0.065
     target_z_tolerance_m: 0.018
     contact_on_threshold_n: 1.0
@@ -103,16 +81,6 @@ task:
         landing_forward_offset_m: 0.190
         target_tread_fraction: 0.24
         contact_hold_seconds: 0.75
-  # Simulation sensitivity after the placed front-left foot exceeded the
-  # 25 mm measurable-slip gate. This is not yet a measured hardware material.
-  foot_contact_material:
-    enabled: false
-    id: rubber-pad-sensitivity-v1
-    static_friction: 1.20
-    dynamic_friction: 1.00
-    restitution: 0.02
-    compliant_contact_stiffness: 12000.0
-    compliant_contact_damping: 45.0
   robot_hardware_profile:
     id: one-leg-real-test-2026-07-28
     evidence:
@@ -140,9 +108,9 @@ task:
     fore_aft_m: 0.025
     abduction_deg: 0.0
   action_scale_rad:
-    hip_abduction: 0.04
-    hip_flexion: 0.08
-    knee: 0.12
+    hip_abduction: 0.10
+    hip_flexion: 0.22
+    knee: 0.30
   placement_residual_action_scale_rad:
     support:
       hip_abduction: 0.10
@@ -211,7 +179,7 @@ task:
     success: 1500.0
     target_body_clearance_m: 0.36
 ppo:
-  total_timesteps: 500000
+  total_timesteps: 300000
   learning_rate: 0.00003
   target_kl: 0.03
   rollout_steps: 1024

@@ -314,6 +314,87 @@ def placement_reference_state(
     }
 
 
+def inter_leg_transfer_state(
+    elapsed_seconds: float,
+    *,
+    duration_seconds: float,
+    unload_duration_seconds: float = 0.0,
+) -> dict[str, object]:
+    """Return a smooth all-feet-loaded transfer encoded as weight shift."""
+
+    duration = float(duration_seconds)
+    if duration <= 0.0:
+        raise ValueError("inter-leg transfer duration must be positive")
+    unload_duration = float(unload_duration_seconds)
+    if unload_duration < 0.0:
+        raise ValueError("inter-leg unload duration cannot be negative")
+    elapsed = max(0.0, float(elapsed_seconds))
+    linear_fraction = float(
+        np.clip(elapsed / duration, 0.0, 1.0)
+    )
+    transfer_fraction = linear_fraction * linear_fraction * (
+        3.0 - 2.0 * linear_fraction
+    )
+    unload_linear_fraction = (
+        float(np.clip((elapsed - duration) / unload_duration, 0.0, 1.0))
+        if unload_duration > 0.0
+        else 1.0
+    )
+    unload_fraction = unload_linear_fraction * unload_linear_fraction * (
+        3.0 - 2.0 * unload_linear_fraction
+    )
+    return {
+        "phase": "weight_shift",
+        "phase_one_hot": tuple(
+            float(name == "weight_shift") for name in PLACEMENT_PHASES
+        ),
+        "shift_fraction": 1.0,
+        "lift_fraction": 0.0,
+        "advance_fraction": 0.0,
+        "forward_fraction": 0.0,
+        "lower_fraction": 0.0,
+        "desired_lift_m": 0.0,
+        "desired_forward_offset_m": 0.0,
+        "contact_expected": False,
+        "transfer_fraction": transfer_fraction,
+        "unload_fraction": unload_fraction,
+    }
+
+
+def support_triangle_incenter_xy(
+    support_points_xy_m: Sequence[Sequence[float]],
+) -> np.ndarray:
+    """Return the point with equal distance to all three support edges."""
+
+    points = np.asarray(support_points_xy_m, dtype=np.float64)
+    if points.shape != (3, 2) or not np.all(np.isfinite(points)):
+        raise ValueError("support_points_xy_m must be a finite 3x2 triangle")
+    first_edge = points[1] - points[0]
+    second_edge = points[2] - points[0]
+    twice_area = abs(
+        float(
+            first_edge[0] * second_edge[1]
+            - first_edge[1] * second_edge[0]
+        )
+    )
+    if twice_area <= 1e-9:
+        raise ValueError("support triangle must have nonzero area")
+    opposite_edge_lengths = np.asarray(
+        [
+            np.linalg.norm(points[1] - points[2]),
+            np.linalg.norm(points[0] - points[2]),
+            np.linalg.norm(points[0] - points[1]),
+        ],
+        dtype=np.float64,
+    )
+    perimeter = float(np.sum(opposite_edge_lengths))
+    if perimeter <= 0.0:
+        raise ValueError("support triangle perimeter must be positive")
+    return (
+        np.sum(points * opposite_edge_lengths[:, None], axis=0) / perimeter
+    ).astype(np.float32)
+
+
 def placement_contact_reached(
     *,
     swing_tip_position_m: Sequence[float],
