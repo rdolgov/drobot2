@@ -273,7 +273,7 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/_vl53l5cx_contract.py` | Defines pure 8 x 8 ray geometry, 15 Hz mode validation, bounded noise/dropout, three-lane compression, and 24 depth observation fields | sensor YAML values and NumPy grids | rays and normalized depth observations |
 | `simulation/isaac/rl/stairs/_vl53l5cx_sensor.py` | Samples 64 PhysX closest-hit rays, rotates the body sensor into world space, and applies update cadence, hold, and latency | live base pose and sensor config | raw/noisy grids, hit paths, and 24-value depth observation |
 | `simulation/isaac/rl/stairs/_stair_rl_contract.py` | Defines selectable analytic or hardware-shaped terrain input, 57/60/68/81/84-value observation contracts, placement phases/contact gates, progress gates, strict stair/foot goals, physical-height reward terms, and failure reasons | walking/terrain/placement observation and stair YAML values | observations and scalar contract results |
-| `simulation/isaac/rl/stairs/_quadruped_stairs_env.py` | Extends walking with exact DOF order, dynamic swing/support residual scales, pre-play force tracking, five-phase placement, incenter body transfer, per-leg slip and reachable-reference metrics, optional foot-friction sensitivity, selectable analytic/VL53L5CX perception, curriculum, and episode gates | stair world and task config | actions, observations, rewards, contact/sensor and episode state |
+| `simulation/isaac/rl/stairs/_quadruped_stairs_env.py` | Extends walking with exact DOF order, dynamic swing/support residual scales, pre-play force tracking, five-phase placement, mass-weighted whole-robot COM regulation, per-leg slip and reachable-reference metrics, optional foot-friction sensitivity, selectable analytic/VL53L5CX perception, curriculum, and episode gates | stair world and task config | actions, observations, rewards, contact/sensor and episode state |
 | `simulation/isaac/rl/stairs/_policy_transfer.py` | Strictly expands the verified 48/12 ELU flat policy and can rescale output means to preserve physical actions across action boxes | source and target policy tensors | transferred policy state and report |
 | `simulation/isaac/rl/stairs/_run_support.py` | Creates/verifies schema-2 model, config, world/dependency, environment, PPO-mode, transfer, and resume contracts | model, YAML, composed world files, runtime/PPO contracts | adjacent `.contract.json` manifests |
 | `simulation/isaac/rl/stairs/create_stairs_world.py` | Sublayers the validated manual world and authors static stair collision layers | base world and stair YAML | stair-world USDA and static validation JSON |
@@ -284,6 +284,7 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/train_stairs_v6_180mm_ppo.py` | Selects the v6 exact-180 mm task and release output defaults | v6 stair YAML/world and optional model | v6 training outputs |
 | `simulation/isaac/rl/stairs/train_stairs_v7_vl53l5cx_ppo.py` | Selects the v7 exact-180 mm task with cheap multi-zone ToF input | v7 stair YAML/world and optional model | v7 sensor-policy training outputs |
 | `simulation/isaac/rl/stairs/train_stairs_v16_front_pair_ppo.py` | Selects the v16 blind front-pair task, verified v10 right-foot precursor, 140 mm left-leg entry stage, and support-only PPO action mask | v16 config, stair world, and v10 model | v16 model ZIPs, manifests, checkpoints, and training report |
+| `simulation/isaac/rl/stairs/train_stairs_v17_single_foot_190mm_ppo.py` | Fine-tunes the verified isolated front-left policy directly at the strict 190 mm lift-and-hold gate using the exact 250 mm tread scene | v15 config and tracked v15 model | v17 model ZIPs, manifests, checkpoints, and training report |
 | `simulation/isaac/rl/stairs/validate_vl53l5cx_stairs.py` | Verifies live 64-ray PhysX hits, 15 Hz cadence, latency, held observations, and writes an 8 x 8 review heatmap | v7 config and stair world | sensor validation JSON and PNG |
 | `simulation/isaac/rl/stairs/distill_successful_stairs.py` | Collects physically successful stochastic rollouts and behavior-clones their residual actions into the actor mean | v5 world, model, manifest | distilled model, rebound manifest, and collection report |
 | `simulation/isaac/rl/stairs/evaluate_stairs_ppo.py` | Runs deterministic stair episodes at a pinned curriculum level, verifies the primary contract, optionally composes hash-verified per-leg PPO models with zero transfer residual, and uses a close placement camera | stair YAML/world, primary/per-leg models, manifests | evaluation JSON and optional PNG |
@@ -297,6 +298,7 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/models/ppo-stairs-v10-180mm-25cm-front-right-placement-small/` | Tracks the mirrored 2,048-step front-right policy, schema-2 manifest, 5/5 force-backed evaluation, recording, and contact/slip evidence | v10 config/world and unsupported-balance initializer | front-right placement evaluation package, not a complete climb |
 | `simulation/isaac/models/ppo-stairs-v13-front-right-190mm-lift-small/` | Tracks the 8,192-step direct front-right lift policy, schema-2 manifest, 3/3 strict evaluation, recording, and 205 mm lift evidence | v13 config/world and direct PPO policy | supported front-right lift package, not a complete climb |
 | `simulation/isaac/models/ppo-stairs-v15-front-left-190mm-lift-small/` | Tracks the mirrored 8,192-step front-left policy, schema-2 manifest, 5/5 strict evaluation, recording, and 205-207 mm lift evidence | v15 config/world and transferred/direct PPO policy | supported front-left lift package, not a complete climb |
+| `simulation/isaac/models/ppo-stairs-v17-single-foot-190mm-small/` | Tracks the 4,096-step strict-stage V15 fine-tune, schema-2 manifest, 5/5 deterministic evaluation, recording, trajectory, and 205-208 mm lift evidence | v15 config/world and tracked v15 initializer | isolated 190 mm balance gate, not a complete climb |
 | `simulation/isaac/models/ppo-foot-lift-v1-190mm-small/` | Tracks the 512-step supported foot-lift smoke model, schema-2 manifest, three-episode evaluation, recording report, and strict 190 mm success | foot-lift config/world and supported policy | supported-skill evaluation package, not unsupported balance proof |
 | `simulation/isaac/models/ppo-foot-lift-v2-balance-190mm-small/` | Tracks the 512-step unsupported foot-lift smoke model, schema-2 manifest, 5/5 evaluation, screenshot report, recording report, and strict 190 mm success | v2 balance config/manual world | unsupported flat-ground clearance evaluation package |
 | `simulation/isaac/experiments/stair_feasibility/__init__.py` | Marks the scripted real-stair feasibility experiment as a separate Python package | no runtime input | no generated data |
@@ -678,16 +680,29 @@ foot in `5/5`. V13 and V15 separately hold the right and left feet above
 strict episodes). All four policies report `analytic_height_profile`,
 `rgb_camera_policy_input: false`, and no custom traction material.
 
-V16 is a deliberately separate front-pair composition experiment. Its
-8,192-step support-only PPO run advanced from the sequential `140 mm` stage to
-the `190 mm` stage. The best 3,584-step checkpoint completed one strict
-sequential `140 mm` episode with `146.45 mm` left-foot lift, `14.02 mm`
-maximum support slip, all three support contacts, `5.55 deg` maximum tilt, and
-a `0.5 s` hold, but scored only `1/3`; it is not a complete climb or a release
-policy. A doubled-friction/max-combine sensitivity did not fix the transition,
-so more traction is not the next default. The next controller change should
-target post-transfer support-margin/center-of-mass regulation; camera input
-remains deferred until the fixed-geometry sequence is reliable.
+V16 is a deliberately separate front-pair composition experiment. Its new
+closed-loop transfer uses the mass-weighted COM of all 13 rigid links and a
+bounded target inside the three-foot support triangle. The right-to-left
+transfer now finishes with `103.99 mm` support margin, `13.48 mm` COM-target
+error, `23.42 N` tread load, and `4.58 deg` tilt. A 4,096-step support-residual
+run then produced three consecutive stable `140 mm` successes with
+`153.44-153.83 mm` lift, `14.6-14.9 mm` slip, and at most `5.0 deg` tilt.
+The sequential `190 mm` stage is still unsolved: a gentle rear-leg thrust is
+stable but reaches about `150 mm`, while a stronger thrust reaches `170 mm`
+and tips. A higher-friction sensitivity reached only `162 mm` and still tipped,
+so more traction is not the default next change. The remaining problem is
+dynamic body elevation and support recovery after the first front foot is on
+the stair, not terrain perception.
+
+V17 isolates the user's prerequisite again and confirms the hardware model can
+raise one front foot high enough while balanced. It fine-tunes the V15 policy
+for 4,096 additional steps directly at the strict `190 mm` stage beside the
+exact `250 mm` tread. All 12 recent training episodes passed, followed by a
+`5/5` deterministic evaluation with `205.55-207.75 mm` lift, `0.5 s` hold,
+`3.27 mm` maximum support slip, `2.33 deg` maximum tilt, and at least
+`43.31 mm` final support margin. The policy is camera-blind; the external
+camera is only for the review video. This proves isolated lift and balance,
+not the second-foot transfer or a complete climb.
 
 The source map, complete commands, reward/termination formulas, manifest
 rules, measured smoke results, evaluation guidance, and sim-to-real limits are

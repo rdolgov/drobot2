@@ -31,6 +31,7 @@ from _run_support import (  # noqa: E402
 from _stair_geometry import stair_layer_boxes  # noqa: E402
 from _stair_rl_contract import (  # noqa: E402
     PLACEMENT_REFERENCE_OBSERVATION_FIELDS,
+    bounded_support_incenter_target_xy,
     compose_bounded_residual_action,
     config_for_height_stage,
     curriculum_active_steps,
@@ -1038,9 +1039,14 @@ def test_v9_front_pair_uses_dynamic_swing_support_action_contract(
     assert transfer["maximum_base_speed_m_s"] > 0.0
     assert transfer["maximum_body_rate_rad_s"] > 0.0
     assert 0.0 <= transfer["support_world_anchor_follow_gain"] <= 1.0
-    assert transfer["post_transfer_weight_shift"]["forward_m"] > 0.0
+    assert transfer["post_transfer_weight_shift"]["forward_m"] == pytest.approx(
+        0.0
+    )
     assert transfer["post_transfer_weight_shift"]["lateral_m"] >= 0.0
     assert transfer["residual_action_scale"] == pytest.approx(0.0)
+    assert transfer["com_regulation"]["enabled"] is True
+    assert transfer["com_regulation"]["balance_point"] == "composite_com"
+    assert transfer["swing_unload_lift_m"] == pytest.approx(0.080)
     traction = task["foot_contact_material"]
     assert traction["enabled"] is False
     assert traction["static_friction"] > 0.90
@@ -1355,6 +1361,53 @@ def test_v16_rejects_post_transfer_base_drift_on_25cm_tread(
         "forward": pytest.approx(0.0),
         "lateral": pytest.approx(0.0),
     }
+    assert transfer["com_regulation"] == {
+        "enabled": True,
+        "balance_point": "composite_com",
+        "target_incenter_blend": pytest.approx(1.0),
+        "target_offset_m": {
+            "forward": pytest.approx(0.0),
+            "lateral": pytest.approx(0.0),
+        },
+        "target_offset_by_swing_leg": {
+            "front_left": {
+                "forward": pytest.approx(0.0),
+                "lateral": pytest.approx(0.0),
+            }
+        },
+        "hold_target_offset_by_swing_leg": {
+            "front_left": {
+                "forward": pytest.approx(0.0),
+                "lateral": pytest.approx(0.0),
+            }
+        },
+        "support_squat_thrust_by_swing_leg": {
+            "front_left": {
+                "legs": ["rear_left", "rear_right"],
+                "crouch_m": pytest.approx(0.035),
+                "release_lift_fraction": pytest.approx(0.25),
+            },
+        },
+        "maximum_correction_m": {
+            "forward": pytest.approx(0.080),
+            "lateral": pytest.approx(0.120),
+        },
+        "maximum_feedback_correction_m": {
+            "forward": pytest.approx(0.025),
+            "lateral": pytest.approx(0.052),
+            "vertical": pytest.approx(0.020),
+        },
+        "transfer_feedback_gain": {
+            "forward": pytest.approx(1.0),
+            "lateral": pytest.approx(1.20),
+            "vertical": pytest.approx(1.0),
+        },
+        "feedback_gain": {
+            "forward": pytest.approx(1.0),
+            "lateral": pytest.approx(1.20),
+            "vertical": pytest.approx(1.0),
+        },
+    }
     residual_scale = stabilized["placement_residual_action_scale_rad"]
     assert residual_scale["support"] == {
         "hip_abduction": pytest.approx(0.25),
@@ -1371,6 +1424,9 @@ def test_v16_rejects_post_transfer_base_drift_on_25cm_tread(
     assert stabilized["termination"][
         "maximum_lateral_deviation_m"
     ] == pytest.approx(0.50)
+    assert stabilized["termination"][
+        "lateral_deviation_tolerance_m"
+    ] == pytest.approx(0.001)
     assert stabilized["termination"]["minimum_base_clearance_m"] == (
         baseline["termination"]["minimum_base_clearance_m"]
     )
@@ -1443,6 +1499,24 @@ def test_inter_leg_transfer_uses_smooth_weight_shift_and_support_incenter() -> N
         )
 
 
+def test_com_target_moves_toward_support_incenter_with_bounded_shift() -> None:
+    target = bounded_support_incenter_target_xy(
+        reference_point_xy_m=(0.90, 0.90),
+        support_points_xy_m=((0.0, 0.0), (2.0, 0.0), (0.0, 2.0)),
+        incenter_blend=1.0,
+        target_offset_xy_m=(0.01, -0.01),
+        maximum_shift_xy_m=(0.20, 0.10),
+    )
+    np.testing.assert_allclose(target, (0.70, 0.80), atol=1e-6)
+
+    with pytest.raises(ValueError, match="incenter_blend"):
+        bounded_support_incenter_target_xy(
+            reference_point_xy_m=(0.0, 0.0),
+            support_points_xy_m=((0.0, 0.0), (2.0, 0.0), (0.0, 2.0)),
+            incenter_blend=0.0,
+        )
+
+
 def test_support_reference_feedback_amplifies_body_drift_rejection() -> None:
     desired = (0.020, 0.000, 0.000)
     actual = (0.050, 0.060, -0.010)
@@ -1509,6 +1583,12 @@ def test_swing_support_abduction_mask_preserves_lift_authority() -> None:
         mode="swing_plus_support_abduction",
     )
     assert np.flatnonzero(mask).tolist() == [0, 1, 2, 3, 4, 8]
+    swing_only = placement_policy_action_mask(
+        dof_names,
+        target_leg="front_left",
+        mode="swing_only",
+    )
+    assert np.flatnonzero(swing_only).tolist() == [0, 4, 8]
     with pytest.raises(ValueError, match="unknown placement target leg"):
         placement_policy_action_mask(
             dof_names,

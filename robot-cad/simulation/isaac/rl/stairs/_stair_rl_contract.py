@@ -429,6 +429,47 @@ def support_triangle_incenter_xy(
     ).astype(np.float32)
 
 
+def bounded_support_incenter_target_xy(
+    *,
+    reference_point_xy_m: Sequence[float],
+    support_points_xy_m: Sequence[Sequence[float]],
+    incenter_blend: float,
+    target_offset_xy_m: Sequence[float] = (0.0, 0.0),
+    maximum_shift_xy_m: Sequence[float] = (0.12, 0.12),
+) -> np.ndarray:
+    """Return a bounded balance target inside a three-foot support polygon."""
+
+    reference = _finite_vector(
+        reference_point_xy_m,
+        2,
+        "reference_point_xy_m",
+    )
+    offset = _finite_vector(
+        target_offset_xy_m,
+        2,
+        "target_offset_xy_m",
+    )
+    maximum_shift = _finite_vector(
+        maximum_shift_xy_m,
+        2,
+        "maximum_shift_xy_m",
+    )
+    blend = float(incenter_blend)
+    if blend <= 0.0 or blend > 1.0:
+        raise ValueError("incenter_blend must be within (0, 1]")
+    if np.any(maximum_shift <= 0.0):
+        raise ValueError("maximum_shift_xy_m values must be positive")
+    incenter = np.asarray(
+        support_triangle_incenter_xy(support_points_xy_m),
+        dtype=np.float64,
+    )
+    desired_delta = blend * (incenter - reference) + offset
+    return (
+        reference
+        + np.clip(desired_delta, -maximum_shift, maximum_shift)
+    ).astype(np.float64)
+
+
 def placement_phase_ready(
     *,
     sequence_legs: Sequence[str],
@@ -495,6 +536,8 @@ def placement_policy_action_mask(
         raise ValueError(f"unknown placement target leg: {target_leg}")
     if mode == "support_only":
         selected = [not name.startswith(target_prefix) for name in names]
+    elif mode == "swing_only":
+        selected = [name.startswith(target_prefix) for name in names]
     elif mode == "support_abduction_only":
         selected = [
             not name.startswith(target_prefix)

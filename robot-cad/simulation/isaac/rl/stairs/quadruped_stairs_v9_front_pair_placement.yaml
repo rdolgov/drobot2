@@ -12,7 +12,7 @@ task:
   target_velocity_body_m_s: [0.0, 0.0, 0.0]
   physics_hz: 120
   control_hz: 60
-  episode_seconds: 36.0
+  episode_seconds: 60.0
   success_hold_seconds: 0.75
   reset_settle_seconds: 0.75
   reset_start_z_m: 0.46
@@ -52,7 +52,8 @@ task:
     inter_leg_transfer:
       enabled: true
       duration_seconds: 4.00
-      maximum_seconds: 7.00
+      unload_duration_seconds: 2.50
+      maximum_seconds: 8.00
       gate_hold_seconds: 0.40
       support_incenter_blend: 0.85
       minimum_support_margin_m: 0.015
@@ -62,11 +63,54 @@ task:
       maximum_forward_shift_m: 0.080
       maximum_backward_shift_m: 0.050
       maximum_lateral_shift_m: 0.120
+      target_offset_m:
+        forward: 0.000
+        lateral: 0.000
+      com_regulation:
+        enabled: true
+        balance_point: composite_com
+        target_incenter_blend: 1.0
+        target_offset_m:
+          forward: 0.000
+          lateral: 0.000
+        maximum_correction_m:
+          forward: 0.080
+          lateral: 0.120
+        maximum_feedback_correction_m:
+          forward: 0.025
+          lateral: 0.052
+          vertical: 0.020
+        support_squat_thrust_by_swing_leg:
+          front_right:
+            legs: [rear_left, rear_right]
+            crouch_m: 0.035
+            release_lift_fraction: 0.25
+        transfer_feedback_gain:
+          forward: 1.00
+          lateral: 1.20
+          vertical: 1.00
+        feedback_gain:
+          forward: 1.00
+          lateral: 1.20
+          vertical: 1.00
       support_world_anchor_follow_gain: 0.0
+      support_world_anchor_follow_gain_xyz:
+        forward: 0.0
+        lateral: 0.0
+        vertical: 0.0
+      post_transfer_swing_reference_mode: blend_to_nominal_stance
+      support_base_error_feedback_gain:
+        forward: 1.0
+        lateral: 0.0
+        vertical: 1.0
+      swing_unload_lift_m: 0.080
+      maximum_swing_unloaded_load_n: 1.0
       post_transfer_weight_shift:
-        forward_m: 0.035
+        forward_m: 0.000
         lateral_m: 0.000
       residual_action_scale: 0.0
+      phase_snapshot_restore_zero_velocities: true
+      phase_snapshot_restore_settle_control_steps: 12
     target_x_tolerance_m: 0.065
     target_z_tolerance_m: 0.018
     contact_on_threshold_n: 1.0
@@ -176,6 +220,7 @@ task:
     minimum_base_clearance_m: 0.22
     minimum_upright_cosine: 0.80
     maximum_lateral_deviation_m: 0.20
+    lateral_deviation_tolerance_m: 0.001
     minimum_world_x_m: 0.05
   reward:
     velocity_tracking_sigma_m_s: 0.10

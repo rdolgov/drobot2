@@ -164,6 +164,11 @@ parser.add_argument(
         "residual instead of replacing its action."
     ),
 )
+parser.add_argument(
+    "--phase-base-swing-only",
+    action="store_true",
+    help="Mask the frozen phase base policy to the target swing leg.",
+)
 parser.add_argument("--phase-residual-scale", type=float, default=0.25)
 parser.add_argument(
     "--phase-residual-support-only",
@@ -238,6 +243,8 @@ phase_base_model_path = (
 )
 if phase_base_model_path is not None and not args.phase_train_leg:
     parser.error("--phase-base-model requires --phase-train-leg")
+if args.phase_base_swing_only and phase_base_model_path is None:
+    parser.error("--phase-base-swing-only requires --phase-base-model")
 if not 0.0 < args.phase_residual_scale <= 1.0:
     parser.error("--phase-residual-scale must be within (0, 1]")
 phase_mask_flags = (
@@ -751,6 +758,7 @@ report: dict[str, object] = {
         if phase_base_model_path is not None
         else None
     ),
+    "phase_base_swing_only": args.phase_base_swing_only,
     "phase_residual_scale": args.phase_residual_scale,
     "phase_residual_support_only": args.phase_residual_support_only,
     "phase_residual_support_abduction_only": (
@@ -854,6 +862,13 @@ try:
                 "source_task_id": base_manifest.get("task_id"),
             }
         target_residual_mask = None
+        target_base_mask = None
+        if args.phase_base_swing_only:
+            target_base_mask = placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=str(args.phase_train_leg),
+                mode="swing_only",
+            )
         if args.phase_residual_swing_support_abduction:
             target_residual_mask = placement_policy_action_mask(
                 raw_env.dof_names,
@@ -877,6 +892,7 @@ try:
             target_leg=str(args.phase_train_leg),
             precursor_policies=precursor_models,
             target_base_policy=target_base_model,
+            target_base_mask=target_base_mask,
             target_residual_scale=args.phase_residual_scale,
             target_residual_mask=target_residual_mask,
             maximum_reset_attempts=args.phase_reset_attempts,

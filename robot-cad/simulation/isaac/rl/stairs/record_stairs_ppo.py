@@ -149,6 +149,13 @@ parser.add_argument(
     help="Frozen base policy for a bounded per-leg residual model.",
 )
 parser.add_argument(
+    "--leg-base-swing-only",
+    action="append",
+    default=[],
+    metavar="LEG",
+    help="Mask a frozen per-leg base model to the swing joints.",
+)
+parser.add_argument(
     "--leg-residual-scale",
     action="append",
     default=[],
@@ -161,6 +168,13 @@ parser.add_argument(
     default=[],
     metavar="LEG",
     help="Mask the mapped policy action off the named swing leg's joints.",
+)
+parser.add_argument(
+    "--leg-residual-swing-only",
+    action="append",
+    default=[],
+    metavar="LEG",
+    help="Apply a mapped policy only to the named swing leg's joints.",
 )
 parser.add_argument(
     "--leg-residual-support-abduction-only",
@@ -284,8 +298,16 @@ leg_base_model_paths = _parse_leg_models(
     args.leg_base_model,
     "--leg-base-model",
 )
+leg_base_swing_only = set(args.leg_base_swing_only)
+if len(leg_base_swing_only) != len(args.leg_base_swing_only):
+    parser.error("duplicate --leg-base-swing-only leg")
 leg_residual_scales = _parse_leg_scales(args.leg_residual_scale)
 leg_residual_support_only = set(args.leg_residual_support_only)
+if len(leg_residual_support_only) != len(args.leg_residual_support_only):
+    parser.error("duplicate --leg-residual-support-only leg")
+leg_residual_swing_only = set(args.leg_residual_swing_only)
+if len(leg_residual_swing_only) != len(args.leg_residual_swing_only):
+    parser.error("duplicate --leg-residual-swing-only leg")
 leg_residual_support_abduction_only = set(
     args.leg_residual_support_abduction_only
 )
@@ -299,16 +321,21 @@ if set(leg_base_model_paths) != set(leg_residual_scales):
     parser.error(
         "--leg-base-model and --leg-residual-scale must select the same legs"
     )
+if not leg_base_swing_only.issubset(leg_base_model_paths):
+    parser.error("swing-only base masks require --leg-base-model")
 if not set(leg_base_model_paths).issubset(leg_model_paths):
     parser.error("each leg base model requires a residual --leg-model")
 if not leg_residual_support_only.issubset(leg_model_paths):
     parser.error("support-only action masks require --leg-model")
+if not leg_residual_swing_only.issubset(leg_model_paths):
+    parser.error("swing-only action masks require --leg-model")
 if not leg_residual_support_abduction_only.issubset(leg_model_paths):
     parser.error("support-abduction action masks require --leg-model")
 if not leg_residual_swing_support_abduction.issubset(leg_model_paths):
     parser.error("swing/support-abduction action masks require --leg-model")
 mask_sets = (
     leg_residual_support_only,
+    leg_residual_swing_only,
     leg_residual_support_abduction_only,
     leg_residual_swing_support_abduction,
 )
@@ -354,8 +381,10 @@ report: dict[str, object] = {
     "leg_base_models": {
         leg: str(path) for leg, path in leg_base_model_paths.items()
     },
+    "leg_base_swing_only": sorted(leg_base_swing_only),
     "leg_residual_scales": leg_residual_scales,
     "leg_residual_support_only": sorted(leg_residual_support_only),
+    "leg_residual_swing_only": sorted(leg_residual_swing_only),
     "leg_residual_support_abduction_only": sorted(
         leg_residual_support_abduction_only
     ),
@@ -521,6 +550,12 @@ try:
                 target_leg=active_leg,
                 mode="swing_plus_support_abduction",
             )
+        elif active_leg in leg_residual_swing_only:
+            residual_mask = placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=active_leg,
+                mode="swing_only",
+            )
         elif active_leg in leg_residual_support_abduction_only:
             residual_mask = placement_policy_action_mask(
                 raw_env.dof_names,
@@ -543,6 +578,15 @@ try:
                 )
             return direct_action
         base_action, _ = base_model.predict(observation, deterministic=True)
+        if active_leg in leg_base_swing_only:
+            base_action = np.asarray(
+                base_action,
+                dtype=np.float32,
+            ) * placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=active_leg,
+                mode="swing_only",
+            )
         return compose_bounded_residual_action(
             base_action,
             action,

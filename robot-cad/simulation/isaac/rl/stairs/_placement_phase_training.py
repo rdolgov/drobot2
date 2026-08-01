@@ -40,6 +40,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         target_leg: str,
         precursor_policies: Mapping[str, DeterministicPolicy],
         target_base_policy: DeterministicPolicy | None = None,
+        target_base_mask: np.ndarray | None = None,
         target_residual_scale: float = 0.25,
         target_residual_mask: np.ndarray | None = None,
         maximum_reset_attempts: int = 8,
@@ -68,6 +69,21 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         if missing:
             raise ValueError(f"Missing precursor policies for: {missing}")
         self.target_base_policy = target_base_policy
+        self.target_base_mask = (
+            None
+            if target_base_mask is None
+            else np.asarray(target_base_mask, dtype=np.float32).copy()
+        )
+        if self.target_base_mask is not None and (
+            self.target_base_policy is None
+            or self.target_base_mask.shape != self.action_space.shape
+            or np.any(self.target_base_mask < 0.0)
+            or np.any(self.target_base_mask > 1.0)
+        ):
+            raise ValueError(
+                "target_base_mask requires a base policy and must match the "
+                "action space"
+            )
         self.target_residual_scale = float(target_residual_scale)
         if self.target_base_policy is not None and not (
             0.0 < self.target_residual_scale <= 1.0
@@ -305,6 +321,8 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 deterministic=True,
             )
             base_action = np.asarray(predicted, dtype=np.float32)
+            if self.target_base_mask is not None:
+                base_action = base_action * self.target_base_mask
             applied_action = compose_bounded_residual_action(
                 base_action,
                 residual_action,

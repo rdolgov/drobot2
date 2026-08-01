@@ -90,8 +90,8 @@ task:
     inter_leg_transfer:
       enabled: true
       duration_seconds: 4.00
-      unload_duration_seconds: 1.50
-      maximum_seconds: 7.00
+      unload_duration_seconds: 2.50
+      maximum_seconds: 8.00
       gate_hold_seconds: 0.40
       support_incenter_blend: 0.85
       minimum_support_margin_m: 0.015
@@ -104,6 +104,45 @@ task:
       target_offset_m:
         forward: 0.000
         lateral: 0.000
+      # Close the loop on the mass-weighted whole-robot COM, not merely the
+      # base-link origin. The target is recomputed from the three stance feet
+      # and remains blind/proprioceptive: link poses come from joint state and
+      # the mounted IMU, while no camera pixels enter the policy.
+      com_regulation:
+        enabled: true
+        balance_point: composite_com
+        target_incenter_blend: 1.0
+        target_offset_m:
+          forward: 0.000
+          lateral: 0.000
+        target_offset_by_swing_leg:
+          front_left:
+            forward: 0.000
+            lateral: 0.000
+        hold_target_offset_by_swing_leg:
+          front_left:
+            forward: 0.000
+            lateral: 0.000
+        support_squat_thrust_by_swing_leg:
+          front_left:
+            legs: [rear_left, rear_right]
+            crouch_m: 0.035
+            release_lift_fraction: 0.25
+        maximum_correction_m:
+          forward: 0.080
+          lateral: 0.120
+        maximum_feedback_correction_m:
+          forward: 0.025
+          lateral: 0.052
+          vertical: 0.020
+        transfer_feedback_gain:
+          forward: 1.00
+          lateral: 1.20
+          vertical: 1.00
+        feedback_gain:
+          forward: 1.00
+          lateral: 1.20
+          vertical: 1.00
       support_world_anchor_follow_gain: 0.0
       support_world_anchor_follow_gain_xyz:
         forward: 0.0
@@ -114,7 +153,7 @@ task:
         forward: 1.0
         lateral: 0.0
         vertical: 1.0
-      swing_unload_lift_m: 0.030
+      swing_unload_lift_m: 0.080
       maximum_swing_unloaded_load_n: 1.0
       post_transfer_weight_shift:
         forward_m: 0.000
@@ -206,6 +245,9 @@ task:
         minimum_support_margin_m: 0.015
         apex_lift_m: 0.205
         landing_lift_m: 0.145
+        # At the verified 120-degree knee limit, this forward rotation is
+        # needed to reduce vertical leg extension enough for a 190 mm world
+        # lift. Pre-unload and COM feedback now isolate it from support drift.
         lift_forward_offset_m: 0.120
         swing_forward_offset_m: 0.120
         landing_forward_offset_m: 0.120
@@ -330,6 +372,7 @@ task:
     # signal after the inherited controller begins drifting; evaluation and
     # recording must override this to the strict 0.20 m acceptance corridor.
     maximum_lateral_deviation_m: 0.50
+    lateral_deviation_tolerance_m: 0.001
     minimum_world_x_m: 0.05
   reward:
     velocity_tracking_sigma_m_s: 0.10
