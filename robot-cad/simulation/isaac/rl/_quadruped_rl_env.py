@@ -138,6 +138,7 @@ class QuadrupedWalkEnv(gym.Env):
             reset_xform_op_properties=True,
         )
         self.imu_sensor = IMUSensor(imu_prim_path)
+        self._before_physics_play()
         app_utils.play()
         self._update(10)
         self.dof_names = list(self.robot.dof_names)
@@ -258,6 +259,9 @@ class QuadrupedWalkEnv(gym.Env):
         self.maximum_tilt_deg = 0.0
         self.completed_episode_metrics: list[dict[str, object]] = []
         self._closed = False
+
+    def _before_physics_play(self) -> None:
+        """Allow specialized tasks to register physics tensor views."""
 
     def _update(self, count: int = 1) -> None:
         for _ in range(count):

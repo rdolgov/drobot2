@@ -19,6 +19,24 @@ STAIR_FOOT_NAMES = (
     "rear_left",
     "rear_right",
 )
+PLACEMENT_PHASES = (
+    "weight_shift",
+    "lift",
+    "advance",
+    "lower",
+    "hold",
+)
+PLACEMENT_REFERENCE_OBSERVATION_FIELDS = (
+    *(f"placement_phase_{phase}" for phase in PLACEMENT_PHASES),
+    "placement_desired_swing_height_normalized",
+    "placement_measured_swing_height_normalized",
+    "placement_swing_x_error_normalized",
+    "placement_swing_z_error_normalized",
+    "placement_tread_normal_load_normalized",
+    "placement_support_contact_fraction",
+    "placement_support_margin_normalized",
+    "placement_maximum_support_slip_normalized",
+)
 
 
 def config_for_height_stage(
@@ -163,6 +181,227 @@ def curriculum_active_steps(
     if active is None:
         raise ValueError("the first curriculum level must start at fraction 0")
     return active
+
+
+def placement_curriculum_level(
+    progress_fraction: float,
+    levels: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    """Select one ordered single-tread placement stage."""
+
+    progress = float(np.clip(progress_fraction, 0.0, 1.0))
+    if not levels:
+        raise ValueError("placement curriculum levels cannot be empty")
+    selected: dict[str, object] | None = None
+    previous_start = -1.0
+    for raw_level in levels:
+        level = dict(raw_level)
+        start = float(level["start_fraction"])
+        if start < 0.0 or start > 1.0 or start <= previous_start:
+            raise ValueError(
+                "placement curriculum start fractions must increase within [0, 1]"
+            )
+        apex = float(level["apex_lift_m"])
+        landing = float(level["landing_lift_m"])
+        forward = float(level["swing_forward_offset_m"])
+        lift_forward = float(level.get("lift_forward_offset_m", min(forward, 0.11)))
+        landing_forward = float(level.get("landing_forward_offset_m", forward))
+        tread_fraction = float(level["target_tread_fraction"])
+        if apex <= 0.0 or landing <= 0.0 or landing > apex:
+            raise ValueError("placement lift heights must satisfy 0 < landing <= apex")
+        if forward <= 0.0:
+            raise ValueError("placement swing_forward_offset_m must be positive")
+        if lift_forward <= 0.0 or lift_forward > forward:
+            raise ValueError(
+                "placement lift_forward_offset_m must be within (0, swing forward]"
+            )
+        if landing_forward <= 0.0 or landing_forward > forward:
+            raise ValueError(
+                "placement landing_forward_offset_m must be within (0, swing forward]"
+            )
+        if tread_fraction <= 0.0 or tread_fraction >= 1.0:
+            raise ValueError("placement target_tread_fraction must be within (0, 1)")
+        if progress >= start:
+            selected = level
+        previous_start = start
+    if selected is None:
+        raise ValueError("the first placement curriculum level must start at zero")
+    return selected
+
+
+def placement_reference_state(
+    elapsed_seconds: float,
+    *,
+    timing: Mapping[str, float],
+    level: Mapping[str, object],
+) -> dict[str, object]:
+    """Return the explicit shift, lift/advance, lower, and hold reference."""
+
+    elapsed = max(0.0, float(elapsed_seconds))
+    shift_start = float(timing["shift_start_seconds"])
+    shift_duration = float(timing["shift_duration_seconds"])
+    lift_start = float(timing["lift_start_seconds"])
+    lift_duration = float(timing["lift_duration_seconds"])
+    advance_start = float(timing["advance_start_seconds"])
+    advance_duration = float(timing["advance_duration_seconds"])
+    lower_start = float(timing["lower_start_seconds"])
+    lower_duration = float(timing["lower_duration_seconds"])
+    if min(shift_start, lift_start, advance_start, lower_start) < 0.0:
+        raise ValueError("placement phase start times cannot be negative")
+    if min(shift_duration, lift_duration, advance_duration, lower_duration) <= 0.0:
+        raise ValueError("placement phase durations must be positive")
+    if lift_start < shift_start + shift_duration - 1e-9:
+        raise ValueError("placement lift must start after the weight shift")
+    if advance_start < lift_start + lift_duration - 1e-9:
+        raise ValueError("placement advance must start after lift")
+    if lower_start < advance_start + advance_duration - 1e-9:
+        raise ValueError("placement lower must start after advance")
+
+    def smoothstep(value: float) -> float:
+        clipped = float(np.clip(value, 0.0, 1.0))
+        return clipped * clipped * (3.0 - 2.0 * clipped)
+
+    shift_fraction = smoothstep((elapsed - shift_start) / shift_duration)
+    lift_fraction = smoothstep((elapsed - lift_start) / lift_duration)
+    advance_fraction = smoothstep(
+        (elapsed - advance_start) / advance_duration
+    )
+    lower_fraction = smoothstep((elapsed - lower_start) / lower_duration)
+    apex_lift = float(level["apex_lift_m"])
+    landing_lift = float(level["landing_lift_m"])
+    desired_lift = apex_lift * lift_fraction
+    if elapsed >= lower_start:
+        desired_lift = apex_lift + lower_fraction * (landing_lift - apex_lift)
+    final_forward = float(level["swing_forward_offset_m"])
+    lift_forward = min(
+        final_forward,
+        float(level.get("lift_forward_offset_m", 0.11)),
+    )
+    desired_forward = lift_forward * lift_fraction
+    if elapsed >= advance_start:
+        desired_forward = lift_forward + advance_fraction * (
+            final_forward - lift_forward
+        )
+    if elapsed >= lower_start:
+        landing_forward = float(
+            level.get("landing_forward_offset_m", final_forward)
+        )
+        desired_forward = final_forward + lower_fraction * (
+            landing_forward - final_forward
+        )
+    forward_fraction = desired_forward / final_forward
+    if elapsed < lift_start:
+        phase = "weight_shift"
+    elif elapsed < advance_start:
+        phase = "lift"
+    elif elapsed < lower_start:
+        phase = "advance"
+    elif elapsed < lower_start + lower_duration:
+        phase = "lower"
+    else:
+        phase = "hold"
+    return {
+        "phase": phase,
+        "phase_one_hot": tuple(float(phase == name) for name in PLACEMENT_PHASES),
+        "shift_fraction": shift_fraction,
+        "lift_fraction": lift_fraction,
+        "advance_fraction": advance_fraction,
+        "forward_fraction": forward_fraction,
+        "lower_fraction": lower_fraction,
+        "desired_lift_m": desired_lift,
+        "desired_forward_offset_m": desired_forward,
+        "contact_expected": phase in {"lower", "hold"},
+    }
+
+
+def placement_contact_reached(
+    *,
+    swing_tip_position_m: Sequence[float],
+    swing_tread_normal_load_n: float,
+    support_ground_normal_loads_n: Sequence[float],
+    projected_gravity_xyz: Sequence[float],
+    staircase: Mapping[str, object],
+    target_tread_fraction: float,
+    target_x_tolerance_m: float,
+    target_z_tolerance_m: float,
+    contact_on_threshold_n: float,
+    minimum_upright_cosine: float,
+) -> bool:
+    """Require force-backed top contact inside the reviewed tread window."""
+
+    validate_staircase_config(staircase)
+    tip = _finite_vector(swing_tip_position_m, 3, "swing_tip_position_m")
+    support_loads = _finite_vector(
+        support_ground_normal_loads_n,
+        len(STAIR_FOOT_NAMES) - 1,
+        "support_ground_normal_loads_n",
+    )
+    gravity = _finite_vector(projected_gravity_xyz, 3, "projected_gravity_xyz")
+    threshold = float(contact_on_threshold_n)
+    if threshold <= 0.0:
+        raise ValueError("contact_on_threshold_n must be positive")
+    target_x = float(staircase["start_x_m"]) + float(
+        target_tread_fraction
+    ) * float(staircase["tread_depth_m"])
+    target_z = float(staircase["rise_m"])
+    return bool(
+        float(swing_tread_normal_load_n) >= threshold
+        and np.all(support_loads >= threshold)
+        and abs(float(tip[0]) - target_x) <= float(target_x_tolerance_m)
+        and abs(float(tip[2]) - target_z) <= float(target_z_tolerance_m)
+        and float(-gravity[2]) >= float(minimum_upright_cosine)
+    )
+
+
+def pack_placement_reference_observation(
+    *,
+    stair_observation: Sequence[float],
+    phase_one_hot: Sequence[float],
+    desired_swing_height_m: float,
+    measured_swing_height_m: float,
+    swing_x_error_m: float,
+    swing_z_error_m: float,
+    tread_normal_load_n: float,
+    support_contact_fraction: float,
+    support_margin_m: float,
+    maximum_support_slip_m: float,
+    staircase: Mapping[str, object],
+    contact_load_normalization_n: float,
+) -> np.ndarray:
+    """Append phase, target error, force, support, and slip state."""
+
+    base = np.asarray(stair_observation, dtype=np.float32).reshape(-1)
+    if base.size == 0 or not np.all(np.isfinite(base)):
+        raise ValueError("stair_observation must contain finite values")
+    phases = _finite_vector(phase_one_hot, len(PLACEMENT_PHASES), "phase_one_hot")
+    if not np.isclose(float(np.sum(phases)), 1.0, atol=1e-6):
+        raise ValueError("phase_one_hot must select exactly one phase")
+    rise = float(staircase["rise_m"])
+    tread = float(staircase["tread_depth_m"])
+    load_scale = float(contact_load_normalization_n)
+    if load_scale <= 0.0:
+        raise ValueError("contact_load_normalization_n must be positive")
+    extras = np.asarray(
+        [
+            *phases,
+            float(desired_swing_height_m) / rise,
+            float(measured_swing_height_m) / rise,
+            float(swing_x_error_m) / tread,
+            float(swing_z_error_m) / rise,
+            float(tread_normal_load_n) / load_scale,
+            float(support_contact_fraction),
+            float(support_margin_m) / 0.10,
+            float(maximum_support_slip_m) / 0.05,
+        ],
+        dtype=np.float32,
+    )
+    if not np.all(np.isfinite(extras)):
+        raise ValueError("placement observation inputs must be finite")
+    return np.clip(
+        np.concatenate((base, extras)),
+        -POLICY_OBSERVATION_CLIP,
+        POLICY_OBSERVATION_CLIP,
+    ).astype(np.float32)
 
 
 def progress_gate_failures(
@@ -335,6 +574,7 @@ def stair_observation_fields(
     *,
     include_navigation_observation: bool = False,
     include_foot_progress_observation: bool = False,
+    include_placement_reference_observation: bool = False,
     terrain_observation_fields: Sequence[str] | None = None,
 ) -> tuple[str, ...]:
     if terrain_observation_fields is None:
@@ -364,6 +604,8 @@ def stair_observation_fields(
         fields += tuple(
             f"next_foot_target_{name}" for name in STAIR_FOOT_NAMES
         )
+    if include_placement_reference_observation:
+        fields += PLACEMENT_REFERENCE_OBSERVATION_FIELDS
     return fields
 
 
@@ -480,6 +722,11 @@ def stair_reward_terms(
     foot_step_placement_progress: int = 0,
     foot_tread_progress: float = 0.0,
     foot_tread_support_count: int = 0,
+    swing_target_distance_m: float = 0.0,
+    tread_contact_reached: bool = False,
+    support_contact_fraction: float = 0.0,
+    support_slip_m: float = 0.0,
+    support_margin_m: float = 0.0,
 ) -> dict[str, float]:
     """Return individually reviewable stair-climbing reward terms."""
 
@@ -509,6 +756,11 @@ def stair_reward_terms(
     sigma = float(reward_config["velocity_tracking_sigma_m_s"])
     if sigma <= 0.0:
         raise ValueError("velocity_tracking_sigma_m_s must be positive")
+    placement_sigma = float(
+        reward_config.get("swing_target_tracking_sigma_m", 0.05)
+    )
+    if placement_sigma <= 0.0:
+        raise ValueError("swing_target_tracking_sigma_m must be positive")
 
     velocity_error = float(linear[0] - command[0])
     velocity_tracking = float(np.exp(-((velocity_error / sigma) ** 2)))
@@ -592,6 +844,32 @@ def stair_reward_terms(
         "foot_tread_support": (
             float(reward_config.get("foot_tread_support", 0.0))
             * max(0, int(foot_tread_support_count))
+        ),
+        "swing_target_tracking": (
+            float(reward_config.get("swing_target_tracking", 0.0))
+            * float(
+                np.exp(
+                    -0.5
+                    * (float(swing_target_distance_m) / placement_sigma) ** 2
+                )
+            )
+        ),
+        "tread_contact": (
+            float(reward_config.get("tread_contact", 0.0))
+            if tread_contact_reached
+            else 0.0
+        ),
+        "support_contact": (
+            float(reward_config.get("support_contact", 0.0))
+            * float(np.clip(support_contact_fraction, 0.0, 1.0))
+        ),
+        "support_slip": (
+            float(reward_config.get("support_slip", 0.0))
+            * max(0.0, float(support_slip_m))
+        ),
+        "support_margin": (
+            float(reward_config.get("support_margin", 0.0))
+            * float(np.clip(support_margin_m, -0.10, 0.10))
         ),
         "failure": float(reward_config["failure"]) if failed else 0.0,
         "success": float(reward_config["success"]) if succeeded else 0.0,

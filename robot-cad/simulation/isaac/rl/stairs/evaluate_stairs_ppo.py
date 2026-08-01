@@ -129,6 +129,17 @@ def _set_external_camera() -> None:
     approach_start_x = min(
         float(value) for value in task_config["reset_start_x_range_m"]
     )
+    if bool(task_config.get("placement_reference", {}).get("enabled", False)):
+        target_x = float(staircase["start_x_m"]) + 0.35 * float(
+            staircase["tread_depth_m"]
+        )
+        camera_center_x = (approach_start_x + target_x) / 2.0
+        set_camera_view(
+            eye=[camera_center_x, -1.45, 0.72],
+            target=[camera_center_x, 0.0, 0.18],
+            camera_prim_path="/OmniverseKit_Persp",
+        )
+        return
     landing_center_x = (
         float(staircase["start_x_m"])
         + int(staircase["step_count"]) * float(staircase["tread_depth_m"])

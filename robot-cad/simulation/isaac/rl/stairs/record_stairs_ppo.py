@@ -266,20 +266,34 @@ try:
         approach_start_x = min(
             float(value) for value in task_config["reset_start_x_range_m"]
         )
-        landing_center_x = (
-            float(staircase["start_x_m"])
-            + int(staircase["step_count"])
-            * float(staircase["tread_depth_m"])
-            + float(staircase["top_platform_depth_m"]) / 2.0
+        placement_view = bool(
+            task_config.get("placement_reference", {}).get("enabled", False)
         )
-        camera_center_x = (approach_start_x + landing_center_x) / 2.0
-        top_height = (
-            int(staircase["step_count"]) * float(staircase["rise_m"])
-        )
+        if placement_view:
+            target_x = float(staircase["start_x_m"]) + 0.35 * float(
+                staircase["tread_depth_m"]
+            )
+            camera_center_x = (approach_start_x + target_x) / 2.0
+            camera_eye = [camera_center_x, -1.45, 0.72]
+            camera_target = [camera_center_x, 0.0, 0.18]
+        else:
+            landing_center_x = (
+                float(staircase["start_x_m"])
+                + int(staircase["step_count"])
+                * float(staircase["tread_depth_m"])
+                + float(staircase["top_platform_depth_m"]) / 2.0
+            )
+            camera_center_x = (approach_start_x + landing_center_x) / 2.0
+            top_height = (
+                int(staircase["step_count"])
+                * float(staircase["rise_m"])
+            )
+            camera_eye = [camera_center_x, -2.65, top_height + 0.82]
+            camera_target = [camera_center_x, 0.0, top_height + 0.10]
         camera_path = "/OmniverseKit_Persp"
         set_camera_view(
-            eye=[camera_center_x, -2.65, top_height + 0.82],
-            target=[camera_center_x, 0.0, top_height + 0.10],
+            eye=camera_eye,
+            target=camera_target,
             camera_prim_path=camera_path,
         )
         viewport.camera_path = camera_path

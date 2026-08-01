@@ -30,12 +30,17 @@ from _run_support import (  # noqa: E402
 )
 from _stair_geometry import stair_layer_boxes  # noqa: E402
 from _stair_rl_contract import (  # noqa: E402
+    PLACEMENT_REFERENCE_OBSERVATION_FIELDS,
     config_for_height_stage,
     curriculum_active_steps,
     foot_tread_progress,
     goal_x_for_active_steps,
     next_foot_target_index,
+    pack_placement_reference_observation,
     pack_stair_policy_observation,
+    placement_contact_reached,
+    placement_curriculum_level,
+    placement_reference_state,
     progress_gate_failures,
     stair_failure_reasons,
     stair_goal_reached,
@@ -93,6 +98,24 @@ def v5_config() -> dict:
 @pytest.fixture
 def v6_config() -> dict:
     with (STAIRS_DIR / "quadruped_stairs_v6_180mm.yaml").open(
+        "r",
+        encoding="utf-8",
+    ) as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v8_config() -> dict:
+    with (STAIRS_DIR / "quadruped_stairs_v8_single_tread_placement.yaml").open(
+        "r",
+        encoding="utf-8",
+    ) as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v9_config() -> dict:
+    with (STAIRS_DIR / "quadruped_stairs_v9_front_pair_placement.yaml").open(
         "r",
         encoding="utf-8",
     ) as stream:
@@ -801,6 +824,131 @@ def test_v6_uses_exact_180mm_geometry_and_strict_success(
     assert task["stall_termination"][
         "minimum_any_foot_tread_progress"
     ] > 0.0
+
+
+def test_v8_placement_curriculum_uses_blind_force_verified_250mm_tread(
+    v8_config: dict,
+) -> None:
+    task = v8_config["task"]
+    levels = task["placement_curriculum"]["levels"]
+
+    assert task["id"] == (
+        "Drobot-Quadruped-Stairs-v8-180mm-Single-Tread-Placement"
+    )
+    assert task["staircase"]["tread_depth_m"] == pytest.approx(0.25)
+    assert task["staircase"]["rise_m"] == pytest.approx(0.18)
+    assert task["placement_reference"]["enabled"] is True
+    assert task["placement_reference"]["swing_leg"] == "front_left"
+    assert task["residual_policy"]["enabled"] is False
+    assert task["target_velocity_body_m_s"] == [0.0, 0.0, 0.0]
+    assert task["robot_hardware_profile"]["effort_cap_nm"] == pytest.approx(
+        0.8825985
+    )
+    assert placement_curriculum_level(0.0, levels)["id"] == "near-edge-touch"
+    assert placement_curriculum_level(0.5, levels)["id"] == "quarter-tread-load"
+    assert placement_curriculum_level(1.0, levels)["id"] == "center-tread-load"
+    assert levels[-1]["apex_lift_m"] >= 0.19
+    assert task["placement_reference"]["contact_on_threshold_n"] > 0.0
+    assert task["placement_reference"]["measurable_slip_threshold_m"] == pytest.approx(
+        0.025
+    )
+
+
+def test_placement_reference_has_explicit_shift_lift_lower_and_hold_phases(
+    v8_config: dict,
+) -> None:
+    task = v8_config["task"]
+    timing = task["placement_reference"]["timing"]
+    level = task["placement_curriculum"]["levels"][-1]
+
+    shifted = placement_reference_state(2.25, timing=timing, level=level)
+    lifted = placement_reference_state(5.5, timing=timing, level=level)
+    advanced = placement_reference_state(9.5, timing=timing, level=level)
+    lowering = placement_reference_state(10.25, timing=timing, level=level)
+    held = placement_reference_state(12.0, timing=timing, level=level)
+
+    assert shifted["phase"] == "weight_shift"
+    assert shifted["shift_fraction"] == pytest.approx(1.0)
+    assert lifted["phase"] == "advance"
+    assert lifted["desired_lift_m"] == pytest.approx(level["apex_lift_m"])
+    assert advanced["phase"] == "lower"
+    assert advanced["desired_forward_offset_m"] == pytest.approx(
+        level["swing_forward_offset_m"]
+    )
+    assert 0.0 < lowering["lower_fraction"] < 1.0
+    assert held["phase"] == "hold"
+    assert held["desired_lift_m"] == pytest.approx(level["landing_lift_m"])
+    assert held["desired_forward_offset_m"] == pytest.approx(
+        level["landing_forward_offset_m"]
+    )
+    assert held["contact_expected"] is True
+
+
+def test_placement_observation_and_contact_gate_require_loaded_support(
+    v8_config: dict,
+) -> None:
+    task = v8_config["task"]
+    staircase = task["staircase"]
+    base_fields = stair_observation_fields(
+        staircase["terrain_sample_offsets_m"],
+        include_navigation_observation=True,
+        include_foot_progress_observation=True,
+    )
+    base_observation = np.zeros(len(base_fields), dtype=np.float32)
+    observation = pack_placement_reference_observation(
+        stair_observation=base_observation,
+        phase_one_hot=(0.0, 0.0, 0.0, 0.0, 1.0),
+        desired_swing_height_m=0.18,
+        measured_swing_height_m=0.18,
+        swing_x_error_m=0.0,
+        swing_z_error_m=0.0,
+        tread_normal_load_n=12.0,
+        support_contact_fraction=1.0,
+        support_margin_m=0.01,
+        maximum_support_slip_m=0.004,
+        staircase=staircase,
+        contact_load_normalization_n=50.0,
+    )
+    assert observation.shape == (
+        len(base_fields) + len(PLACEMENT_REFERENCE_OBSERVATION_FIELDS),
+    )
+    target_x = staircase["start_x_m"] + 0.24 * staircase["tread_depth_m"]
+    common = {
+        "swing_tip_position_m": (target_x, 0.18, 0.18),
+        "swing_tread_normal_load_n": 12.0,
+        "projected_gravity_xyz": (0.0, 0.0, -1.0),
+        "staircase": staircase,
+        "target_tread_fraction": 0.24,
+        "target_x_tolerance_m": 0.065,
+        "target_z_tolerance_m": 0.018,
+        "contact_on_threshold_n": 1.0,
+        "minimum_upright_cosine": 0.97,
+    }
+    assert placement_contact_reached(
+        **common,
+        support_ground_normal_loads_n=(10.0, 11.0, 12.0),
+    )
+    assert not placement_contact_reached(
+        **common,
+        support_ground_normal_loads_n=(10.0, 0.0, 12.0),
+    )
+
+
+def test_v9_front_pair_reuses_one_stationary_action_contract(
+    v9_config: dict,
+) -> None:
+    task = v9_config["task"]
+    residual = task["placement_residual_action_scale_rad"]
+
+    assert task["id"] == "Drobot-Quadruped-Stairs-v9-180mm-Front-Pair-Placement"
+    assert task["placement_reference"]["sequence_legs"] == [
+        "front_left",
+        "front_right",
+    ]
+    assert task["staircase"]["tread_depth_m"] == pytest.approx(0.25)
+    assert task["episode_seconds"] >= 2.0 * 10.75
+    assert residual["swing"] == residual["support"]
+    assert task["action_scale_rad"] == residual["swing"]
 
 
 def test_manifest_binds_all_composed_world_dependencies(

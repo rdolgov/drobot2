@@ -12,14 +12,24 @@ from pathlib import Path
 
 import numpy as np
 from _quadruped_rl_env import QuadrupedWalkEnv
-from _quadruped_runtime import LEGS, LINK_LENGTH_M
+from _quadruped_runtime import (
+    LEGS,
+    LINK_LENGTH_M,
+    pose_by_name,
+    targets_for_order,
+)
 from _rl_contract import POLICY_OBSERVATION_CLIP
 from _stair_rl_contract import (
+    PLACEMENT_REFERENCE_OBSERVATION_FIELDS,
     curriculum_active_steps,
     foot_tread_progress,
     goal_x_for_active_steps,
     next_foot_target_index,
+    pack_placement_reference_observation,
     pack_stair_policy_observation,
+    placement_contact_reached,
+    placement_curriculum_level,
+    placement_reference_state,
     stair_failure_reasons,
     stair_goal_reached,
     stair_height_at_x,
@@ -91,8 +101,56 @@ def _rotate_wxyz(quaternion: np.ndarray, vector: np.ndarray) -> np.ndarray:
     )
 
 
+def _support_triangle_signed_margin_m(
+    point_xy_m: np.ndarray,
+    support_points_xy_m: np.ndarray,
+) -> float:
+    """Return positive edge clearance inside the three stance feet."""
+
+    point = np.asarray(point_xy_m, dtype=np.float64).reshape(2)
+    vertices = np.asarray(support_points_xy_m, dtype=np.float64).reshape(3, 2)
+    center = np.mean(vertices, axis=0)
+    angles = np.arctan2(vertices[:, 1] - center[1], vertices[:, 0] - center[0])
+    ordered = vertices[np.argsort(angles)]
+    margins: list[float] = []
+    for index in range(3):
+        start = ordered[index]
+        edge = ordered[(index + 1) % 3] - start
+        edge_length = float(np.linalg.norm(edge))
+        if edge_length <= 1e-9:
+            raise RuntimeError("Support-foot contact points are not distinct")
+        relative = point - start
+        margins.append(
+            float((edge[0] * relative[1] - edge[1] * relative[0]) / edge_length)
+        )
+    return min(margins)
+
+
 class QuadrupedStairsEnv(QuadrupedWalkEnv):
     """One floating quadruped learning a curriculum over a fixed staircase."""
+
+    def _before_physics_play(self) -> None:
+        if not self.placement_reference_enabled:
+            return
+        link_path_by_name = dict(
+            zip(self.robot.link_names, self.robot.link_paths[0], strict=True)
+        )
+        foot_paths = [
+            link_path_by_name[f"{leg}_distal_link"] for leg in LEGS
+        ]
+        self.contact_filter_paths = (
+            "/World/Ground",
+            *(
+                f"/World/Stairs/StepLayer_{index + 1:02d}"
+                for index in range(int(self.staircase_config["step_count"]))
+            ),
+        )
+        self.foot_prim = RigidPrim(
+            foot_paths,
+            contact_filter_paths=list(self.contact_filter_paths),
+            max_contact_count=128,
+        )
+        self.foot_prim.set_enabled_contact_tracking([True], threshold=0.0)
 
     def __init__(
         self,
@@ -118,6 +176,33 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         )
         self.curriculum_progress = 0.0
         self.curriculum_transitions: list[dict[str, object]] = []
+        self.placement_reference_config = dict(
+            task_config.get("placement_reference", {})
+        )
+        self.placement_reference_enabled = bool(
+            self.placement_reference_config.get("enabled", False)
+        )
+        self.placement_curriculum_config = dict(
+            task_config.get("placement_curriculum", {})
+        )
+        self.placement_curriculum_levels = tuple(
+            dict(level)
+            for level in self.placement_curriculum_config.get("levels", ())
+        )
+        self.current_placement_level: dict[str, object] | None = None
+        self.current_placement_level_id: str | None = None
+        self.pending_placement_level: dict[str, object] | None = None
+        self.pending_placement_level_id: str | None = None
+        if self.placement_reference_enabled:
+            self.current_placement_level = placement_curriculum_level(
+                0.0,
+                self.placement_curriculum_levels,
+            )
+            self.current_placement_level_id = str(
+                self.current_placement_level["id"]
+            )
+            self.pending_placement_level = dict(self.current_placement_level)
+            self.pending_placement_level_id = self.current_placement_level_id
         super().__init__(
             simulation_app,
             world_path=world_path,
@@ -139,6 +224,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.residual_policy_enabled = bool(
             self.residual_policy_config.get("enabled", False)
         )
+        if self.placement_reference_enabled and self.residual_policy_enabled:
+            raise ValueError(
+                "placement_reference and residual flat-walking policy cannot both be enabled"
+            )
         self.base_policy = None
         self.base_policy_path: Path | None = None
         self.base_policy_sha256: str | None = None
@@ -187,12 +276,18 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 ],
                 dtype=np.float32,
             )
-        link_path_by_name = dict(
-            zip(self.robot.link_names, self.robot.link_paths[0], strict=True)
-        )
-        self.foot_prim = RigidPrim(
-            [link_path_by_name[f"{leg}_distal_link"] for leg in LEGS]
-        )
+        if self.placement_reference_enabled:
+            if not self.foot_prim.is_physics_tensor_entity_valid():
+                raise RuntimeError("Placement foot-contact tensor view is invalid")
+        else:
+            link_path_by_name = dict(
+                zip(self.robot.link_names, self.robot.link_paths[0], strict=True)
+            )
+            foot_paths = [
+                link_path_by_name[f"{leg}_distal_link"] for leg in LEGS
+            ]
+            self.contact_filter_paths = ()
+            self.foot_prim = RigidPrim(foot_paths)
         configured_sequence = tuple(
             str(value)
             for value in self.config.get("foot_placement_sequence", LEGS)
@@ -246,11 +341,18 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.include_foot_progress_observation = bool(
             self.config.get("include_foot_progress_observation", False)
         )
+        self.include_placement_reference_observation = bool(
+            self.placement_reference_enabled
+            and self.config.get("include_placement_reference_observation", True)
+        )
         self.observation_fields = stair_observation_fields(
             offsets,
             include_navigation_observation=self.include_navigation_observation,
             include_foot_progress_observation=(
                 self.include_foot_progress_observation
+            ),
+            include_placement_reference_observation=(
+                self.include_placement_reference_observation
             ),
             terrain_observation_fields=terrain_field_override,
         )
@@ -282,6 +384,93 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             dtype=np.float32,
         )
         self.next_foot_target_index: int | None = 0
+        configured_placement_sequence = tuple(
+            str(leg)
+            for leg in self.placement_reference_config.get(
+                "sequence_legs",
+                (self.placement_reference_config.get("swing_leg", LEGS[0]),),
+            )
+        )
+        if (
+            not configured_placement_sequence
+            or len(set(configured_placement_sequence))
+            != len(configured_placement_sequence)
+            or any(leg not in LEGS for leg in configured_placement_sequence)
+        ):
+            raise ValueError(
+                "placement_reference.sequence_legs must be unique known legs"
+            )
+        self.placement_sequence_legs = configured_placement_sequence
+        self.placement_sequence_position = 0
+        self.placement_swing_leg = self.placement_sequence_legs[0]
+        self.placement_swing_leg_index = 0
+        self.placement_support_leg_indices: tuple[int, ...] = ()
+        self._set_placement_swing_leg(self.placement_swing_leg)
+        self.placement_phase_start_step = 0
+        self.completed_placement_legs: list[str] = []
+        self.completed_placement_joint_targets_by_leg: dict[str, np.ndarray] = {}
+        self.completed_placement_reference_by_leg: dict[
+            str,
+            dict[str, object],
+        ] = {}
+        self.latest_reference_parameters_by_leg: dict[
+            str,
+            dict[str, float],
+        ] = {}
+        self.latest_placement_base_position_m = np.zeros(3, dtype=np.float64)
+        self.dof_indices_by_leg = {
+            leg: tuple(
+                index
+                for index, name in enumerate(self.dof_names)
+                if name.startswith(f"{leg}_")
+            )
+            for leg in LEGS
+        }
+        if self.placement_reference_enabled:
+            residual_scale = dict(
+                self.config["placement_residual_action_scale_rad"]
+            )
+            for index, name in enumerate(self.dof_names):
+                role = (
+                    "swing"
+                    if name.startswith(f"{self.placement_swing_leg}_")
+                    else "support"
+                )
+                kind = next(
+                    candidate
+                    for candidate in residual_scale[role]
+                    if name.endswith(candidate)
+                )
+                self.action_scale[index] = float(residual_scale[role][kind])
+        self.initial_placement_foot_tips_m = np.zeros((len(LEGS), 3), dtype=np.float32)
+        self.placement_leg_start_foot_tips_m = np.zeros(
+            (len(LEGS), 3),
+            dtype=np.float32,
+        )
+        self.latest_ground_normal_loads_n = np.zeros(len(LEGS), dtype=np.float32)
+        self.latest_step_normal_loads_n = np.zeros(
+            (len(LEGS), int(self.staircase_config["step_count"])),
+            dtype=np.float32,
+        )
+        self.maximum_support_slip_m = 0.0
+        self.minimum_support_contact_fraction = 1.0
+        self.minimum_placement_support_margin_m = float("inf")
+        self.maximum_swing_tread_normal_load_n = 0.0
+        self.maximum_tread_normal_load_n_by_leg = np.zeros(
+            len(LEGS),
+            dtype=np.float32,
+        )
+        self.placement_tread_contact_sample_count = 0
+        self.placement_active_sample_count = 0
+
+    def _set_placement_swing_leg(self, leg: str) -> None:
+        self.placement_swing_leg = str(leg)
+        self.placement_swing_leg_index = LEGS.index(self.placement_swing_leg)
+        self.placement_support_leg_indices = tuple(
+            index
+            for index, name in enumerate(LEGS)
+            if name != self.placement_swing_leg
+        )
 
     def _validate_stair_prims(self) -> None:
         expected = int(self.staircase_config["step_count"])
@@ -320,6 +509,154 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             )
         tip_positions[:, 2] -= FOOT_CONTACT_RADIUS_M
         return tip_positions.astype(np.float32)
+
+    def _sample_foot_contact_loads(self) -> tuple[np.ndarray, np.ndarray]:
+        if not self.placement_reference_enabled:
+            return (
+                np.zeros(len(LEGS), dtype=np.float32),
+                np.zeros(
+                    (len(LEGS), int(self.staircase_config["step_count"])),
+                    dtype=np.float32,
+                ),
+            )
+        raw_forces = self.foot_prim.get_contact_force_matrix(
+            dt=1.0 / float(self.physics_hz)
+        )
+        forces = np.asarray(
+            raw_forces.numpy() if hasattr(raw_forces, "numpy") else raw_forces,
+            dtype=np.float64,
+        ).reshape(len(LEGS), -1, 3)
+        expected_filters = 1 + int(self.staircase_config["step_count"])
+        if forces.shape[1] != expected_filters or not np.all(np.isfinite(forces)):
+            raise RuntimeError(
+                "Unexpected placement contact-force matrix: "
+                f"{forces.shape} != ({len(LEGS)}, {expected_filters}, 3)"
+            )
+        normal_loads = np.maximum(forces[:, :, 2], 0.0).astype(np.float32)
+        return normal_loads[:, 0], normal_loads[:, 1:]
+
+    def _placement_state(self, elapsed_seconds: float) -> dict[str, object]:
+        if self.current_placement_level is None:
+            raise RuntimeError("Placement reference has no active curriculum level")
+        return placement_reference_state(
+            max(
+                0.0,
+                float(elapsed_seconds)
+                - self.placement_phase_start_step * self.control_dt_s,
+            ),
+            timing=dict(self.placement_reference_config["timing"]),
+            level=self.current_placement_level,
+        )
+
+    def _placement_reference_targets(
+        self,
+        placement_state: Mapping[str, object],
+    ) -> np.ndarray:
+        stance = dict(self.config["nominal_stance"])
+        nominal_down = float(stance["down_m"])
+        fore_aft = float(stance["fore_aft_m"])
+        nominal_abduction = np.deg2rad(float(stance["abduction_deg"]))
+        weight_shift = dict(self.placement_reference_config["weight_shift"])
+        shift_scale = float(
+            dict(weight_shift.get("scale_by_leg", {})).get(
+                self.placement_swing_leg,
+                1.0,
+            )
+        )
+        if shift_scale < 0.0 or shift_scale > 1.0:
+            raise ValueError("placement weight-shift scale must be within [0, 1]")
+        shift_fraction = float(placement_state["shift_fraction"])
+        swing_front_sign = (
+            1.0 if self.placement_swing_leg.startswith("front_") else -1.0
+        )
+        swing_side_sign = (
+            1.0 if self.placement_swing_leg.endswith("_left") else -1.0
+        )
+        body_shift_forward_m = (
+            -swing_front_sign
+            * float(weight_shift["forward_m"])
+            * shift_scale
+            * shift_fraction
+        )
+        body_shift_lateral_m = (
+            -swing_side_sign
+            * float(weight_shift["lateral_m"])
+            * shift_scale
+            * shift_fraction
+        )
+        down_by_leg = {leg: nominal_down for leg in LEGS}
+        down_by_leg[self.placement_swing_leg] = nominal_down - float(
+            placement_state["desired_lift_m"]
+        )
+        forward_by_leg = {
+            leg: (
+                fore_aft if leg.startswith("front_") else -fore_aft
+            )
+            - body_shift_forward_m
+            for leg in LEGS
+        }
+        forward_by_leg[self.placement_swing_leg] += float(
+            placement_state["desired_forward_offset_m"]
+        )
+        foot_delta_lateral_m = body_shift_lateral_m
+        abduction_by_leg_deg: dict[str, float] = {}
+        for leg in LEGS:
+            side_sign = 1.0 if leg.endswith("_left") else -1.0
+            vertical = down_by_leg[leg] * np.cos(nominal_abduction)
+            outward = down_by_leg[leg] * np.sin(nominal_abduction)
+            shifted_outward = outward - side_sign * foot_delta_lateral_m
+            down_by_leg[leg] = float(np.hypot(vertical, shifted_outward))
+            abduction_by_leg_deg[leg] = float(
+                np.degrees(np.arctan2(shifted_outward, vertical))
+            )
+        for leg, stored in self.completed_placement_reference_by_leg.items():
+            stored_base = np.asarray(
+                stored["base_position_m"],
+                dtype=np.float64,
+            ).reshape(3)
+            base_delta = self.latest_placement_base_position_m - stored_base
+            side_sign = 1.0 if leg.endswith("_left") else -1.0
+            vertical = float(stored["vertical_m"]) + float(base_delta[2])
+            outward = float(stored["outward_m"]) - side_sign * float(
+                base_delta[1]
+            )
+            forward_by_leg[leg] = float(stored["forward_m"]) - float(
+                base_delta[0]
+            )
+            down_by_leg[leg] = float(np.hypot(vertical, outward))
+            abduction_by_leg_deg[leg] = float(
+                np.degrees(np.arctan2(outward, vertical))
+            )
+        self.latest_reference_parameters_by_leg = {}
+        for leg in LEGS:
+            down = float(down_by_leg[leg])
+            abduction = np.deg2rad(float(abduction_by_leg_deg[leg]))
+            self.latest_reference_parameters_by_leg[leg] = {
+                "forward_m": float(forward_by_leg[leg]),
+                "vertical_m": down * float(np.cos(abduction)),
+                "outward_m": down * float(np.sin(abduction)),
+            }
+        pose = pose_by_name(
+            down_by_leg_m=down_by_leg,
+            forward_by_leg_m=forward_by_leg,
+            abduction_by_leg_deg=abduction_by_leg_deg,
+        )
+        targets = np.asarray(
+            targets_for_order(self.dof_names, pose),
+            dtype=np.float32,
+        )
+        return np.clip(
+            targets,
+            self.lower_limits + 1e-3,
+            self.upper_limits - 1e-3,
+        )
+
+    def _placement_target_world_x_m(self) -> float:
+        if self.current_placement_level is None:
+            raise RuntimeError("Placement reference has no active curriculum level")
+        return float(self.staircase_config["start_x_m"]) + float(
+            self.current_placement_level["target_tread_fraction"]
+        ) * float(self.staircase_config["tread_depth_m"])
 
     def _foot_progress(
         self,
@@ -437,6 +774,30 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             )
         self.curriculum_progress = progress
         self.pending_active_step_count = active
+        if self.placement_reference_enabled:
+            self.set_placement_curriculum_progress(progress)
+
+    def set_placement_curriculum_progress(self, progress_fraction: float) -> None:
+        """Select the explicit single-tread placement stage."""
+
+        if not self.placement_reference_enabled:
+            return
+        selected = placement_curriculum_level(
+            progress_fraction,
+            self.placement_curriculum_levels,
+        )
+        selected_id = str(selected["id"])
+        if selected_id != self.pending_placement_level_id:
+            self.curriculum_transitions.append(
+                {
+                    "progress_fraction": float(
+                        np.clip(progress_fraction, 0.0, 1.0)
+                    ),
+                    "placement_level": selected_id,
+                }
+            )
+        self.pending_placement_level = selected
+        self.pending_placement_level_id = selected_id
 
     def set_evaluation_level(self, active_steps: int) -> None:
         """Pin evaluation to a requested number of stairs."""
@@ -450,6 +811,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             self.staircase_config,
             self.active_step_count,
         )
+        if self.placement_reference_enabled:
+            self.set_placement_curriculum_progress(1.0)
+            self.current_placement_level = dict(self.pending_placement_level)
+            self.current_placement_level_id = self.pending_placement_level_id
 
     def set_training_level(
         self,
@@ -533,6 +898,71 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             next_foot_target_one_hot=next_target_one_hot,
             terrain_observation_values=terrain_observation,
         )
+        if self.include_placement_reference_observation:
+            foot_tips = self._sample_foot_tips()
+            ground_loads, step_loads = self._sample_foot_contact_loads()
+            self.latest_ground_normal_loads_n = ground_loads
+            self.latest_step_normal_loads_n = step_loads
+            placement_state = self._placement_state(
+                self.episode_step * self.control_dt_s
+            )
+            target_world_x = self._placement_target_world_x_m()
+            desired_world_x = float(
+                self.placement_leg_start_foot_tips_m[
+                    self.placement_swing_leg_index,
+                    0,
+                ]
+            ) + float(placement_state["forward_fraction"]) * (
+                target_world_x
+                - float(
+                    self.placement_leg_start_foot_tips_m[
+                        self.placement_swing_leg_index,
+                        0,
+                    ]
+                )
+            )
+            desired_world_z = float(
+                self.placement_leg_start_foot_tips_m[
+                    self.placement_swing_leg_index,
+                    2,
+                ]
+            ) + float(placement_state["desired_lift_m"])
+            swing_tip = foot_tips[self.placement_swing_leg_index]
+            support_indices = list(self.placement_support_leg_indices)
+            support_loads = ground_loads[support_indices] + np.sum(
+                step_loads[support_indices, :],
+                axis=1,
+            )
+            contact_threshold = float(
+                self.placement_reference_config["contact_on_threshold_n"]
+            )
+            support_contact_fraction = float(
+                np.mean(support_loads >= contact_threshold)
+            )
+            support_margin = _support_triangle_signed_margin_m(
+                base_position[:2],
+                foot_tips[list(self.placement_support_leg_indices), :2],
+            )
+            state["observation"] = pack_placement_reference_observation(
+                stair_observation=state["observation"],
+                phase_one_hot=placement_state["phase_one_hot"],
+                desired_swing_height_m=desired_world_z,
+                measured_swing_height_m=float(swing_tip[2]),
+                swing_x_error_m=desired_world_x - float(swing_tip[0]),
+                swing_z_error_m=desired_world_z - float(swing_tip[2]),
+                tread_normal_load_n=float(
+                    step_loads[self.placement_swing_leg_index, 0]
+                ),
+                support_contact_fraction=support_contact_fraction,
+                support_margin_m=support_margin,
+                maximum_support_slip_m=self.maximum_support_slip_m,
+                staircase=self.staircase_config,
+                contact_load_normalization_n=float(
+                    self.placement_reference_config[
+                        "contact_load_normalization_n"
+                    ]
+                ),
+            )
         if np.asarray(state["observation"]).shape != (self.observation_size,):
             raise RuntimeError(
                 "Runtime stair observation does not match its declared contract: "
@@ -596,6 +1026,11 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         options: dict | None = None,
     ) -> tuple[np.ndarray, dict]:
         self.active_step_count = self.pending_active_step_count
+        if self.placement_reference_enabled:
+            if self.pending_placement_level is None:
+                raise RuntimeError("Placement curriculum has no pending level")
+            self.current_placement_level = dict(self.pending_placement_level)
+            self.current_placement_level_id = self.pending_placement_level_id
         self.current_goal_x_m = goal_x_for_active_steps(
             self.staircase_config,
             self.active_step_count,
@@ -604,10 +1039,31 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.highest_foot_step.fill(0)
         self.maximum_foot_tread_progress.fill(0.0)
         self.next_foot_target_index = self.foot_placement_sequence_indices[0]
+        self.placement_sequence_position = 0
+        self._set_placement_swing_leg(self.placement_sequence_legs[0])
+        self.placement_phase_start_step = 0
+        self.completed_placement_legs = []
+        self.completed_placement_joint_targets_by_leg = {}
+        self.completed_placement_reference_by_leg = {}
+        self.latest_reference_parameters_by_leg = {}
+        self.latest_placement_base_position_m.fill(0.0)
+        self.initial_placement_foot_tips_m.fill(0.0)
+        self.placement_leg_start_foot_tips_m.fill(0.0)
+        self.maximum_support_slip_m = 0.0
+        self.minimum_support_contact_fraction = 1.0
+        self.minimum_placement_support_margin_m = float("inf")
+        self.maximum_swing_tread_normal_load_n = 0.0
+        self.maximum_tread_normal_load_n_by_leg.fill(0.0)
+        self.placement_tread_contact_sample_count = 0
+        self.placement_active_sample_count = 0
         if self.vl53l5cx_sensor is not None:
             self.vl53l5cx_sensor.reset()
         observation, info = super().reset(seed=seed, options=options)
         self.previous_base_x_m = float(self.episode_origin[0])
+        self.latest_placement_base_position_m = np.asarray(
+            self.episode_origin,
+            dtype=np.float64,
+        ).copy()
         self.previous_base_z_m = float(self.episode_origin[2])
         self.previous_terrain_height_m = stair_height_at_x(
             self.previous_base_x_m,
@@ -625,6 +1081,8 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         )
         self.goal_hold_step_count = 0
         foot_tips = self._sample_foot_tips()
+        self.initial_placement_foot_tips_m = foot_tips.copy()
+        self.placement_leg_start_foot_tips_m = foot_tips.copy()
         self.initial_foot_bottom_z_m = foot_tips[:, 2].copy()
         self.maximum_foot_lift_m.fill(0.0)
         self.highest_foot_step.fill(0)
@@ -637,6 +1095,11 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 self.config.get("foot_tread_approach_distance_m", 0.20)
             ),
         )
+        if self.placement_reference_enabled:
+            ground_loads, step_loads = self._sample_foot_contact_loads()
+            self.latest_ground_normal_loads_n = ground_loads
+            self.latest_step_normal_loads_n = step_loads
+            observation = np.asarray(self._read_state()["observation"]).copy()
         info.update(
             {
                 "task_id": self.config["id"],
@@ -650,6 +1113,8 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     if self.vl53l5cx_sensor is not None
                     else None
                 ),
+                "placement_reference_enabled": self.placement_reference_enabled,
+                "placement_curriculum_level": self.current_placement_level_id,
             }
         )
         return observation, info
@@ -664,7 +1129,20 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             1.0,
         )
         base_action = np.zeros(12, dtype=np.float32)
-        if self.residual_policy_enabled:
+        placement_state: dict[str, object] | None = None
+        reference_target: np.ndarray | None = None
+        if self.placement_reference_enabled:
+            placement_state = self._placement_state(
+                (self.episode_step + 1) * self.control_dt_s
+            )
+            reference_target = self._placement_reference_targets(placement_state)
+            prior_action = self.previous_action.copy()
+            desired_target = np.clip(
+                reference_target + self.action_scale * clipped_action,
+                self.lower_limits + 1e-3,
+                self.upper_limits - 1e-3,
+            )
+        elif self.residual_policy_enabled:
             if self.base_policy is None:
                 raise RuntimeError("Residual base policy was not loaded")
             predicted, _ = self.base_policy.predict(
@@ -684,11 +1162,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         else:
             prior_action = self.previous_action.copy()
             action_offset = self.action_scale * clipped_action
-        desired_target = np.clip(
-            self.nominal_positions + action_offset,
-            self.lower_limits + 1e-3,
-            self.upper_limits - 1e-3,
-        )
+        if not self.placement_reference_enabled:
+            desired_target = np.clip(
+                self.nominal_positions + action_offset,
+                self.lower_limits + 1e-3,
+                self.upper_limits - 1e-3,
+            )
         maximum_delta = self.max_velocities * self.control_dt_s
         target = np.clip(
             desired_target,
@@ -704,6 +1183,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         )
         state = self._read_state()
         base_position = np.asarray(state["base_position"])
+        self.latest_placement_base_position_m = np.asarray(
+            base_position,
+            dtype=np.float64,
+        ).copy()
         base_x = float(base_position[0])
         base_y = float(base_position[1])
         terrain_height = stair_height_at_x(base_x, self.staircase_config)
@@ -720,6 +1203,112 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         ) = self._foot_progress(foot_tips)
         imu_observation = np.asarray(state["imu_observation"])
         projected_gravity = imu_observation[3:6]
+        placement_contact_now = False
+        placement_support_contact_fraction = 0.0
+        placement_support_margin = 0.0
+        placement_swing_target_distance = 0.0
+        placement_swing_tread_load = 0.0
+        if self.placement_reference_enabled:
+            if placement_state is None or self.current_placement_level is None:
+                raise RuntimeError("Placement state was not initialized")
+            ground_loads = self.latest_ground_normal_loads_n
+            step_loads = self.latest_step_normal_loads_n
+            support_indices = list(self.placement_support_leg_indices)
+            support_loads = ground_loads[support_indices] + np.sum(
+                step_loads[support_indices, :],
+                axis=1,
+            )
+            contact_threshold = float(
+                self.placement_reference_config["contact_on_threshold_n"]
+            )
+            placement_support_contact_fraction = float(
+                np.mean(support_loads >= contact_threshold)
+            )
+            placement_support_margin = _support_triangle_signed_margin_m(
+                base_position[:2],
+                foot_tips[support_indices, :2],
+            )
+            support_slips = np.linalg.norm(
+                foot_tips[support_indices, :2]
+                - self.initial_placement_foot_tips_m[support_indices, :2],
+                axis=1,
+            )
+            current_support_slip = float(np.max(support_slips))
+            self.maximum_support_slip_m = max(
+                self.maximum_support_slip_m,
+                current_support_slip,
+            )
+            self.minimum_support_contact_fraction = min(
+                self.minimum_support_contact_fraction,
+                placement_support_contact_fraction,
+            )
+            self.minimum_placement_support_margin_m = min(
+                self.minimum_placement_support_margin_m,
+                placement_support_margin,
+            )
+            swing_tip = foot_tips[self.placement_swing_leg_index]
+            target_world_x = self._placement_target_world_x_m()
+            target_world_z = float(self.staircase_config["rise_m"])
+            placement_swing_target_distance = float(
+                np.linalg.norm(
+                    np.asarray(
+                        [
+                            float(swing_tip[0]) - target_world_x,
+                            float(swing_tip[2]) - target_world_z,
+                        ],
+                        dtype=np.float64,
+                    )
+                )
+            )
+            placement_swing_tread_load = float(
+                step_loads[self.placement_swing_leg_index, 0]
+            )
+            self.maximum_swing_tread_normal_load_n = max(
+                self.maximum_swing_tread_normal_load_n,
+                placement_swing_tread_load,
+            )
+            self.maximum_tread_normal_load_n_by_leg[
+                self.placement_swing_leg_index
+            ] = max(
+                self.maximum_tread_normal_load_n_by_leg[
+                    self.placement_swing_leg_index
+                ],
+                placement_swing_tread_load,
+            )
+            placement_contact_now = bool(
+                placement_state["contact_expected"]
+                and placement_contact_reached(
+                    swing_tip_position_m=swing_tip,
+                    swing_tread_normal_load_n=placement_swing_tread_load,
+                    support_ground_normal_loads_n=support_loads,
+                    projected_gravity_xyz=projected_gravity,
+                    staircase=self.staircase_config,
+                    target_tread_fraction=float(
+                        self.current_placement_level["target_tread_fraction"]
+                    ),
+                    target_x_tolerance_m=float(
+                        self.placement_reference_config[
+                            "target_x_tolerance_m"
+                        ]
+                    ),
+                    target_z_tolerance_m=float(
+                        self.placement_reference_config[
+                            "target_z_tolerance_m"
+                        ]
+                    ),
+                    contact_on_threshold_n=contact_threshold,
+                    minimum_upright_cosine=float(
+                        self.placement_reference_config[
+                            "minimum_success_upright_cosine"
+                        ]
+                    ),
+                )
+            )
+            if str(placement_state["phase"]) != "weight_shift":
+                self.placement_active_sample_count += 1
+                self.placement_tread_contact_sample_count += int(
+                    placement_contact_now
+                )
         failure_reasons = list(
             stair_failure_reasons(
                 base_clearance_m=base_clearance,
@@ -783,7 +1372,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         required_feet_on_goal_tread = int(
             self.config.get("success_required_feet_on_goal_tread", 0)
         )
-        if not failed and stair_goal_reached(
+        if self.placement_reference_enabled:
+            if not failed and placement_contact_now:
+                self.goal_hold_step_count += 1
+            else:
+                self.goal_hold_step_count = 0
+        elif not failed and stair_goal_reached(
             base_world_x_m=base_x,
             base_elevation_gain_m=current_base_elevation,
             goal_world_x_m=self.current_goal_x_m,
@@ -795,7 +1389,51 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             self.goal_hold_step_count += 1
         else:
             self.goal_hold_step_count = 0
-        succeeded = self.goal_hold_step_count >= self.success_hold_steps
+        placement_hold_steps = self.success_hold_steps
+        if self.current_placement_level is not None:
+            placement_hold_steps = int(
+                round(
+                    float(
+                        self.current_placement_level.get(
+                            "contact_hold_seconds",
+                            self.config["success_hold_seconds"],
+                        )
+                    )
+                    * self.control_hz
+                )
+            )
+        succeeded = self.goal_hold_step_count >= placement_hold_steps
+        placement_leg_completed_event: str | None = None
+        if self.placement_reference_enabled and succeeded:
+            placement_leg_completed_event = self.placement_swing_leg
+            if self.placement_swing_leg not in self.completed_placement_legs:
+                self.completed_placement_legs.append(self.placement_swing_leg)
+            indices = self.dof_indices_by_leg[self.placement_swing_leg]
+            self.completed_placement_joint_targets_by_leg[
+                self.placement_swing_leg
+            ] = target[list(indices)].copy()
+            held_reference = dict(
+                self.latest_reference_parameters_by_leg[
+                    self.placement_swing_leg
+                ]
+            )
+            held_reference["base_position_m"] = base_position.tolist()
+            self.completed_placement_reference_by_leg[
+                self.placement_swing_leg
+            ] = held_reference
+            if self.placement_sequence_position + 1 < len(
+                self.placement_sequence_legs
+            ):
+                self.placement_sequence_position += 1
+                self._set_placement_swing_leg(
+                    self.placement_sequence_legs[
+                        self.placement_sequence_position
+                    ]
+                )
+                self.placement_phase_start_step = self.episode_step + 1
+                self.placement_leg_start_foot_tips_m = foot_tips.copy()
+                self.goal_hold_step_count = 0
+                succeeded = False
         terminated = failed or succeeded
 
         self.episode_step += 1
@@ -834,6 +1472,21 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ),
             foot_tread_support_count=(
                 0 if failed else int(np.count_nonzero(current_foot_steps))
+            ),
+            swing_target_distance_m=(
+                0.0 if failed else placement_swing_target_distance
+            ),
+            tread_contact_reached=(
+                False if failed else placement_contact_now
+            ),
+            support_contact_fraction=(
+                0.0 if failed else placement_support_contact_fraction
+            ),
+            support_slip_m=(
+                0.0 if failed else self.maximum_support_slip_m
+            ),
+            support_margin_m=(
+                0.0 if failed else placement_support_margin
             ),
         )
         reward = float(reward_terms["total"])
@@ -904,6 +1557,30 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 if self.vl53l5cx_sensor is not None
                 else None
             ),
+            "placement_phase": (
+                None if placement_state is None else placement_state["phase"]
+            ),
+            "placement_swing_leg": self.placement_swing_leg,
+            "placement_leg_completed_event": placement_leg_completed_event,
+            "completed_placement_legs": list(self.completed_placement_legs),
+            "placement_curriculum_level": self.current_placement_level_id,
+            "placement_contact_now": placement_contact_now,
+            "swing_tread_normal_load_n": placement_swing_tread_load,
+            "ground_normal_load_n_by_leg": dict(
+                zip(
+                    LEGS,
+                    self.latest_ground_normal_loads_n.tolist(),
+                    strict=True,
+                )
+            ),
+            "placement_support_contact_fraction": (
+                placement_support_contact_fraction
+            ),
+            "placement_support_margin_m": placement_support_margin,
+            "maximum_support_slip_m": self.maximum_support_slip_m,
+            "reference_joint_positions_rad": (
+                None if reference_target is None else reference_target.copy()
+            ),
         }
         if terminated or truncated:
             episode_metrics = {
@@ -913,6 +1590,23 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "active_step_count": self.active_step_count,
                 "highest_step_reached": self.highest_step_reached,
                 "stairs_completed": succeeded,
+                "placement_completed": (
+                    succeeded if self.placement_reference_enabled else None
+                ),
+                "placement_swing_leg": (
+                    self.placement_sequence_legs[0]
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "placement_sequence_legs": (
+                    list(self.placement_sequence_legs)
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "completed_placement_legs": list(
+                    self.completed_placement_legs
+                ),
+                "placement_curriculum_level": self.current_placement_level_id,
                 "forward_displacement_m": float(displacement[0]),
                 "lateral_displacement_m": float(displacement[1]),
                 "elevation_gain_m": float(displacement[2]),
@@ -941,6 +1635,62 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "maximum_body_tilt_deg": self.maximum_tilt_deg,
                 "goal_hold_duration_s": (
                     self.goal_hold_step_count / self.control_hz
+                ),
+                "maximum_swing_tread_normal_load_n": (
+                    self.maximum_swing_tread_normal_load_n
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "maximum_tread_normal_load_n_by_leg": (
+                    dict(
+                        zip(
+                            LEGS,
+                            self.maximum_tread_normal_load_n_by_leg.tolist(),
+                            strict=True,
+                        )
+                    )
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "tread_contact_sample_fraction": (
+                    self.placement_tread_contact_sample_count
+                    / self.placement_active_sample_count
+                    if self.placement_active_sample_count
+                    else (
+                        0.0 if self.placement_reference_enabled else None
+                    )
+                ),
+                "minimum_support_contact_fraction": (
+                    self.minimum_support_contact_fraction
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "minimum_placement_support_margin_m": (
+                    self.minimum_placement_support_margin_m
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "maximum_support_slip_m": (
+                    self.maximum_support_slip_m
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "measurable_support_slip_detected": (
+                    self.maximum_support_slip_m
+                    > float(
+                        self.placement_reference_config.get(
+                            "measurable_slip_threshold_m",
+                            0.025,
+                        )
+                    )
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "final_foot_tip_positions_m": foot_tips.tolist(),
+                "initial_foot_tip_positions_m": (
+                    self.initial_placement_foot_tips_m.tolist()
+                    if self.placement_reference_enabled
+                    else None
                 ),
                 "terminated": terminated,
                 "truncated": truncated,
@@ -982,6 +1732,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "include_foot_progress_observation": (
                     self.include_foot_progress_observation
                 ),
+                "include_placement_reference_observation": (
+                    self.include_placement_reference_observation
+                ),
                 "foot_placement_sequence": list(self.foot_placement_sequence),
                 "terrain_perception_mode": self.terrain_perception_mode,
                 "terrain_perception": self.terrain_perception_config,
@@ -1021,9 +1774,13 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 ),
                 "physics_steps_per_control": self.physics_steps_per_control,
                 "control_action_mode": (
-                    "residual_over_flat"
-                    if self.residual_policy_enabled
-                    else "direct"
+                    "placement_reference_plus_ppo_residual"
+                    if self.placement_reference_enabled
+                    else (
+                        "residual_over_flat"
+                        if self.residual_policy_enabled
+                        else "direct"
+                    )
                 ),
                 "residual_policy": (
                     {
@@ -1039,6 +1796,23 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 ),
                 "staircase": self.staircase_config,
                 "curriculum_levels": list(self.curriculum_levels),
+                "placement_reference": (
+                    {
+                        **self.placement_reference_config,
+                        "contact_filter_paths": list(self.contact_filter_paths),
+                        "contact_force_verified_success": True,
+                        "observation_fields": list(
+                            PLACEMENT_REFERENCE_OBSERVATION_FIELDS
+                        ),
+                    }
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "placement_curriculum": (
+                    self.placement_curriculum_config
+                    if self.placement_reference_enabled
+                    else None
+                ),
                 "success_requirements": {
                     "minimum_base_elevation_fraction": float(
                         self.config.get(

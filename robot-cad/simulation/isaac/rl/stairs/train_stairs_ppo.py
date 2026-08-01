@@ -209,6 +209,13 @@ policy_observation_size = len(
         include_foot_progress_observation=bool(
             task_config.get("include_foot_progress_observation", False)
         ),
+        include_placement_reference_observation=bool(
+            task_config.get("placement_reference", {}).get("enabled", False)
+            and task_config.get(
+                "include_placement_reference_observation",
+                True,
+            )
+        ),
         terrain_observation_fields=terrain_observation_fields,
     )
 )

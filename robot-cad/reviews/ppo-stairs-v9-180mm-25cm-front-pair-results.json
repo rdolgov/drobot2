@@ -1,0 +1,19 @@
+{
+  "status": "FAIL",
+  "task_id": "Drobot-Quadruped-Stairs-v9-180mm-Front-Pair-Placement",
+  "scope": "Deterministic initialization-only front-pair integration diagnostic; no PPO updates",
+  "stair_geometry": {
+    "rise_m": 0.18,
+    "tread_depth_m": 0.25
+  },
+  "sequence": ["front_left", "front_right"],
+  "episodes": 1,
+  "completed_placement_legs": ["front_left"],
+  "front_left_maximum_tread_normal_load_n": 9.435922622680664,
+  "front_right_maximum_tread_normal_load_n": 0.0,
+  "minimum_support_contact_fraction": 0.3333333333333333,
+  "maximum_support_slip_m": 0.25827255845069885,
+  "maximum_body_tilt_deg": 39.877876009727736,
+  "failure_reasons": ["body_tipped"],
+  "decision": "Keep the proven single-foot primitive. Add an explicit body-transfer phase that preserves the placed foot before attempting the next leg; do not add vision yet, and do not attribute this failure to traction alone."
+}
