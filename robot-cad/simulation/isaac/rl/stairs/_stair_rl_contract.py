@@ -447,6 +447,48 @@ def compose_bounded_residual_action(
     return np.clip(base + scale * mask * residual, -1.0, 1.0).astype(np.float32)
 
 
+def stabilized_support_reference_base_delta(
+    *,
+    desired_base_delta_m: Sequence[float],
+    actual_base_delta_m: Sequence[float],
+    anchor_follow_gain: float,
+    error_feedback_gain_xyz: Sequence[float],
+) -> np.ndarray:
+    """Return a support reference that actively rejects post-transfer drift.
+
+    A zero feedback gain preserves the existing anchor-follow blend. Positive
+    feedback moves the virtual support-foot target beyond the desired body
+    pose, increasing the joint-position error that restores the base. This is
+    deliberately a proprioceptive controller: it uses the simulated base pose,
+    not camera input or privileged stair geometry.
+    """
+
+    desired = _finite_vector(
+        desired_base_delta_m,
+        3,
+        "desired_base_delta_m",
+    )
+    actual = _finite_vector(
+        actual_base_delta_m,
+        3,
+        "actual_base_delta_m",
+    )
+    feedback = _finite_vector(
+        error_feedback_gain_xyz,
+        3,
+        "error_feedback_gain_xyz",
+    )
+    follow = float(anchor_follow_gain)
+    if follow < 0.0 or follow > 1.0:
+        raise ValueError("anchor_follow_gain must be within [0, 1]")
+    if np.any(feedback < 0.0) or np.any(feedback > 2.0):
+        raise ValueError("error feedback gains must be within [0, 2]")
+    tracking_error = actual - desired
+    return (
+        desired + (follow - feedback) * tracking_error
+    ).astype(np.float64)
+
+
 def placement_contact_reached(
     *,
     swing_tip_position_m: Sequence[float],

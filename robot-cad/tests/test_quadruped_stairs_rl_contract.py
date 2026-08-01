@@ -46,6 +46,7 @@ from _stair_rl_contract import (  # noqa: E402
     placement_phase_ready,
     placement_reference_state,
     progress_gate_failures,
+    stabilized_support_reference_base_delta,
     stair_failure_reasons,
     stair_goal_reached,
     stair_height_at_x,
@@ -149,6 +150,14 @@ def v11_config() -> dict:
 def v12_config() -> dict:
     with (
         STAIRS_DIR / "quadruped_stairs_v12_front_right_lift_hold.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v13_config() -> dict:
+    with (
+        STAIRS_DIR / "quadruped_stairs_v13_front_right_stabilized_lift.yaml"
     ).open("r", encoding="utf-8") as stream:
         return yaml.safe_load(stream)
 
@@ -1091,6 +1100,63 @@ def test_v12_is_a_support_only_190mm_lift_hold_on_a_250mm_tread(
     ] == pytest.approx(0.50)
 
 
+def test_v13_isolates_front_right_lift_under_the_strict_gate(
+    v12_config: dict,
+    v13_config: dict,
+) -> None:
+    baseline = v12_config["task"]
+    stabilized = v13_config["task"]
+    transfer = stabilized["placement_reference"]["inter_leg_transfer"]
+    gains = transfer["support_base_error_feedback_gain"]
+
+    assert stabilized["staircase"] == baseline["staircase"]
+    assert stabilized["staircase"]["tread_depth_m"] == pytest.approx(0.25)
+    assert stabilized["placement_reference"]["minimum_lift_m"] == pytest.approx(
+        0.190
+    )
+    lift_levels = stabilized["placement_curriculum"]["levels"]
+    assert stabilized["placement_curriculum"]["mode"] == "mastery"
+    assert stabilized["placement_curriculum"][
+        "mastery_successes_per_level"
+    ] == 2
+    assert [level["minimum_lift_m"] for level in lift_levels] == pytest.approx(
+        [0.015, 0.020, 0.035, 0.060, 0.100, 0.140, 0.190]
+    )
+    assert [level["minimum_support_margin_m"] for level in lift_levels] == (
+        pytest.approx([0.003, 0.005, 0.008, 0.010, 0.012, 0.012, 0.015])
+    )
+    assert lift_levels[-1]["apex_lift_m"] > stabilized[
+        "placement_reference"
+    ]["minimum_lift_m"]
+    assert lift_levels[-1]["start_fraction"] == pytest.approx(0.90)
+    assert stabilized["placement_reference"]["success_mode_by_leg"] == {
+        "front_right": "swing_lift_hold"
+    }
+    assert stabilized["placement_reference"]["sequence_legs"] == [
+        "front_right"
+    ]
+    assert stabilized["foot_placement_sequence"][0] == "front_right"
+    assert stabilized["placement_reference"]["weight_shift"][
+        "scale_by_leg"
+    ]["front_right"] == pytest.approx(1.0)
+    assert stabilized["termination"][
+        "maximum_lateral_deviation_m"
+    ] == pytest.approx(0.20)
+    assert transfer["enabled"] is False
+    assert transfer["support_incenter_blend"] == pytest.approx(
+        baseline["placement_reference"]["inter_leg_transfer"][
+            "support_incenter_blend"
+        ]
+    )
+    assert transfer["target_offset_m"]["lateral"] == pytest.approx(0.0)
+    assert transfer["post_transfer_weight_shift"]["lateral_m"] == pytest.approx(
+        0.0
+    )
+    assert gains["lateral"] >= gains["forward"] >= 0.0
+    assert gains["vertical"] == pytest.approx(0.0)
+    assert stabilized["foot_contact_material"]["enabled"] is False
+
+
 def test_inter_leg_transfer_uses_smooth_weight_shift_and_support_incenter() -> None:
     transfer_options = {
         "duration_seconds": 4.0,
@@ -1120,6 +1186,43 @@ def test_inter_leg_transfer_uses_smooth_weight_shift_and_support_incenter() -> N
     with pytest.raises(ValueError, match="nonzero area"):
         support_triangle_incenter_xy(
             ((0.0, 0.0), (1.0, 0.0), (2.0, 0.0))
+        )
+
+
+def test_support_reference_feedback_amplifies_body_drift_rejection() -> None:
+    desired = (0.020, 0.000, 0.000)
+    actual = (0.050, 0.060, -0.010)
+
+    baseline = stabilized_support_reference_base_delta(
+        desired_base_delta_m=desired,
+        actual_base_delta_m=actual,
+        anchor_follow_gain=0.0,
+        error_feedback_gain_xyz=(0.0, 0.0, 0.0),
+    )
+    np.testing.assert_allclose(baseline, desired)
+
+    stabilized = stabilized_support_reference_base_delta(
+        desired_base_delta_m=desired,
+        actual_base_delta_m=actual,
+        anchor_follow_gain=0.0,
+        error_feedback_gain_xyz=(0.25, 0.75, 0.0),
+    )
+    np.testing.assert_allclose(stabilized, (0.0125, -0.045, 0.0))
+
+    followed = stabilized_support_reference_base_delta(
+        desired_base_delta_m=desired,
+        actual_base_delta_m=actual,
+        anchor_follow_gain=1.0,
+        error_feedback_gain_xyz=(0.0, 0.0, 0.0),
+    )
+    np.testing.assert_allclose(followed, actual)
+
+    with pytest.raises(ValueError, match="feedback gains"):
+        stabilized_support_reference_base_delta(
+            desired_base_delta_m=desired,
+            actual_base_delta_m=actual,
+            anchor_follow_gain=0.0,
+            error_feedback_gain_xyz=(0.0, 2.1, 0.0),
         )
 
 

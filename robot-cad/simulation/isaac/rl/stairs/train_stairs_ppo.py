@@ -74,6 +74,15 @@ parser.add_argument(
     default="simulation/isaac/output/rl/ppo-stairs-v1",
 )
 parser.add_argument("--total-timesteps", type=int, default=None)
+parser.add_argument(
+    "--curriculum-total-timesteps",
+    type=int,
+    default=None,
+    help=(
+        "Optional timestep horizon for curriculum fractions. Use the explicit "
+        "small-run budget to exercise every stage without changing PPO defaults."
+    ),
+)
 parser.add_argument("--seed", type=int, default=142)
 parser.add_argument("--device", default="cpu")
 parser.add_argument(
@@ -314,7 +323,13 @@ else:
     batch_size = int(ppo_config["batch_size"])
     epochs = int(ppo_config["epochs"])
     checkpoint_frequency = int(ppo_config["checkpoint_frequency_steps"])
-    curriculum_total_timesteps = int(ppo_config["total_timesteps"])
+    curriculum_total_timesteps = (
+        int(args.curriculum_total_timesteps)
+        if args.curriculum_total_timesteps is not None
+        else int(ppo_config["total_timesteps"])
+    )
+if curriculum_total_timesteps <= 0:
+    parser.error("--curriculum-total-timesteps must be positive")
 if rollout_steps < 2 or batch_size < 2 or rollout_steps % batch_size:
     parser.error("PPO rollout_steps must be divisible by batch_size and both >= 2")
 training_mode = "smoke" if args.smoke_test else "full"
@@ -380,6 +395,29 @@ class TrainingControlCallback(BaseCallback):
             self.curriculum_config.get("mastery_success_rate", 0.70)
         )
         self.level_outcomes: deque[bool] = deque(maxlen=self.mastery_window)
+        self.placement_curriculum_config = dict(
+            task_config.get("placement_curriculum", {})
+        )
+        self.placement_curriculum_mode = str(
+            self.placement_curriculum_config.get("mode", "timesteps")
+        )
+        if self.placement_curriculum_mode not in {"timesteps", "mastery"}:
+            raise ValueError(
+                "Unsupported placement curriculum mode: "
+                f"{self.placement_curriculum_mode}"
+            )
+        self.placement_mastery_successes_required = int(
+            self.placement_curriculum_config.get(
+                "mastery_successes_per_level",
+                2,
+            )
+        )
+        if self.placement_mastery_successes_required < 1:
+            raise ValueError(
+                "placement mastery_successes_per_level must be positive"
+            )
+        self.placement_mastery_level_id: str | None = None
+        self.placement_mastery_successes = 0
         self.watchdog = dict(task_config.get("progress_watchdog", {}))
         self.watchdog_enabled = bool(self.watchdog.get("enabled", False))
         self.report_path = report_path
@@ -414,6 +452,12 @@ class TrainingControlCallback(BaseCallback):
             "curriculum_mode": self.curriculum_mode,
             "active_step_count": int(raw.active_step_count),
             "pending_active_step_count": int(raw.pending_active_step_count),
+            "placement_curriculum_mode": self.placement_curriculum_mode,
+            "placement_mastery_level_id": self.placement_mastery_level_id,
+            "placement_mastery_successes": self.placement_mastery_successes,
+            "placement_mastery_successes_required": (
+                self.placement_mastery_successes_required
+            ),
             "completed_episodes": self.completed_episodes,
             "successful_episodes": self.successful_episodes,
             "first_step_climb_episodes": self.first_step_climb_episodes,
@@ -484,6 +528,35 @@ class TrainingControlCallback(BaseCallback):
         )
 
         raw = self._raw_env()
+        placement_level_id = metrics.get("placement_curriculum_level")
+        if (
+            self.placement_curriculum_mode == "mastery"
+            and placement_level_id is not None
+        ):
+            placement_level_id = str(placement_level_id)
+            if placement_level_id != self.placement_mastery_level_id:
+                self.placement_mastery_level_id = placement_level_id
+                self.placement_mastery_successes = 0
+            if succeeded:
+                self.placement_mastery_successes += 1
+            if (
+                self.placement_mastery_successes
+                >= self.placement_mastery_successes_required
+            ):
+                levels = list(raw.placement_curriculum_levels)
+                current_index = next(
+                    index
+                    for index, level in enumerate(levels)
+                    if str(level["id"]) == placement_level_id
+                )
+                if current_index + 1 < len(levels):
+                    next_level = levels[current_index + 1]
+                    raw.set_placement_curriculum_progress(
+                        float(next_level["start_fraction"])
+                    )
+                    self.placement_mastery_level_id = str(next_level["id"])
+                    self.placement_mastery_successes = 0
+                    self.last_progress_step = int(self.num_timesteps)
         if active_steps == raw.active_step_count:
             self.level_outcomes.append(succeeded)
         if self.curriculum_mode != "mastery":
@@ -644,6 +717,7 @@ report: dict[str, object] = {
     "training_mode": training_mode,
     "algorithm_contract_requested": algorithm_contract,
     "requested_total_timesteps": total_timesteps,
+    "curriculum_total_timesteps": curriculum_total_timesteps,
     "requested_seed": args.seed,
     "height_stage": args.height_stage,
     "fixed_active_steps": args.fixed_active_steps,

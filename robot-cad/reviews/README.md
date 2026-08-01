@@ -28,3 +28,10 @@ companions show the exact composed `2,048`-step mixed-height experiment on a
 has no measurable slip, but stops at `142.08 mm` lift after exceeding the
 strict `200 mm` lateral corridor by `2.12 mm`. This is an intentional failure
 handoff, not a claimed 190 mm success.
+
+`ppo-stairs-v13-front-right-190mm-lift-success.mp4` and its PNG/JSON
+companions show the simplified direct front-right lift beside the same
+`180 mm` rise / `250 mm` tread staircase. The learned PPO residual passes
+`3/3` deterministic episodes, reaches `204.61-205.05 mm`, holds for `0.50 s`,
+keeps all three support contacts, and records at most `3.42 mm` support slip.
+This proves the isolated lift capability, not tread placement or stair ascent.

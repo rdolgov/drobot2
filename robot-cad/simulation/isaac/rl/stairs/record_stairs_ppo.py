@@ -161,6 +161,13 @@ parser.add_argument(
     default=[],
     metavar="LEG",
 )
+parser.add_argument(
+    "--zero-action-leg",
+    action="append",
+    default=[],
+    metavar="LEG",
+    help="Use the analytic placement reference without a PPO residual for LEG.",
+)
 args, _ = parser.parse_known_args()
 
 
@@ -267,6 +274,9 @@ leg_residual_support_only = set(args.leg_residual_support_only)
 leg_residual_support_abduction_only = set(
     args.leg_residual_support_abduction_only
 )
+zero_action_legs = set(args.zero_action_leg)
+if len(zero_action_legs) != len(args.zero_action_leg):
+    parser.error("duplicate --zero-action-leg leg")
 if set(leg_base_model_paths) != set(leg_residual_scales):
     parser.error(
         "--leg-base-model and --leg-residual-scale must select the same legs"
@@ -316,6 +326,7 @@ report: dict[str, object] = {
         leg: str(path) for leg, path in leg_base_model_paths.items()
     },
     "leg_residual_scales": leg_residual_scales,
+    "zero_action_legs": sorted(zero_action_legs),
     "world": str(world_path),
     "seed": args.seed,
     "deterministic": not args.stochastic,
@@ -377,7 +388,7 @@ try:
     )
     known_placement_legs = set(raw_env.placement_sequence_legs)
     unknown_leg_models = sorted(
-        (set(leg_model_paths) | set(leg_base_model_paths))
+        (set(leg_model_paths) | set(leg_base_model_paths) | zero_action_legs)
         - known_placement_legs
     )
     if unknown_leg_models:
@@ -453,11 +464,14 @@ try:
         if raw_env.placement_transfer_active:
             return np.zeros(raw_env.action_space.shape, dtype=np.float32)
         active_leg = raw_env.placement_swing_leg
-        active_model = leg_models.get(active_leg, model)
-        action, _ = active_model.predict(
-            observation,
-            deterministic=not args.stochastic,
-        )
+        if active_leg in zero_action_legs:
+            action = np.zeros(raw_env.action_space.shape, dtype=np.float32)
+        else:
+            active_model = leg_models.get(active_leg, model)
+            action, _ = active_model.predict(
+                observation,
+                deterministic=not args.stochastic,
+            )
         base_model = leg_base_models.get(active_leg)
         if base_model is None:
             return np.asarray(action, dtype=np.float32)

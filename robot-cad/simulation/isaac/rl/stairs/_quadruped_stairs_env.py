@@ -33,6 +33,7 @@ from _stair_rl_contract import (
     placement_curriculum_level,
     placement_lift_hold_reached,
     placement_reference_state,
+    stabilized_support_reference_base_delta,
     stair_failure_reasons,
     stair_goal_reached,
     stair_height_at_x,
@@ -497,6 +498,19 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "inter_leg_transfer.support_world_anchor_follow_gain must be "
                 "within [0, 1]"
             )
+        support_error_feedback = dict(
+            self.inter_leg_transfer_config.get(
+                "support_base_error_feedback_gain",
+                {},
+            )
+        )
+        for axis in ("forward", "lateral", "vertical"):
+            gain = float(support_error_feedback.get(axis, 0.0))
+            if gain < 0.0 or gain > 2.0:
+                raise ValueError(
+                    "inter_leg_transfer.support_base_error_feedback_gain "
+                    f"{axis} must be within [0, 2]"
+                )
         self.placement_transfer_active = False
         self.placement_transfer_start_step = 0
         self.placement_transfer_gate_step_count = 0
@@ -619,6 +633,16 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             )
         )
 
+    def _active_placement_level(self) -> dict[str, object]:
+        if self.current_placement_level is None:
+            raise RuntimeError("Placement reference has no active curriculum level")
+        level = dict(self.current_placement_level)
+        overrides_by_leg = dict(
+            self.placement_reference_config.get("level_override_by_leg", {})
+        )
+        level.update(dict(overrides_by_leg.get(self.placement_swing_leg, {})))
+        return level
+
     def _validate_stair_prims(self) -> None:
         expected = int(self.staircase_config["step_count"])
         for index in range(expected):
@@ -683,8 +707,6 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         return normal_loads[:, 0], normal_loads[:, 1:]
 
     def _placement_state(self, elapsed_seconds: float) -> dict[str, object]:
-        if self.current_placement_level is None:
-            raise RuntimeError("Placement reference has no active curriculum level")
         return placement_reference_state(
             max(
                 0.0,
@@ -693,7 +715,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             )
             + self.placement_phase_elapsed_offset_s,
             timing=dict(self.placement_reference_config["timing"]),
-            level=self.current_placement_level,
+            level=self._active_placement_level(),
         )
 
     def _reference_parameters_from_joint_positions(
@@ -829,6 +851,21 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         desired_delta_xy = blend * (
             incenter - self.placement_transfer_start_base_position_m[:2]
         )
+        target_offset = dict(
+            self.inter_leg_transfer_config.get("target_offset_m", {})
+        )
+        target_offset_xy = np.asarray(
+            [
+                float(target_offset.get("forward", 0.0)),
+                float(target_offset.get("lateral", 0.0)),
+            ],
+            dtype=np.float64,
+        )
+        if not np.all(np.isfinite(target_offset_xy)):
+            raise ValueError(
+                "inter_leg_transfer.target_offset_m must be finite"
+            )
+        desired_delta_xy += target_offset_xy
         desired_delta_xy[0] = np.clip(
             desired_delta_xy[0],
             -float(
@@ -972,8 +1009,21 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 0.25,
             )
         )
-        base_delta = desired_base_delta + anchor_follow_gain * (
-            actual_base_delta - desired_base_delta
+        feedback_config = dict(
+            self.inter_leg_transfer_config.get(
+                "support_base_error_feedback_gain",
+                {},
+            )
+        )
+        base_delta = stabilized_support_reference_base_delta(
+            desired_base_delta_m=desired_base_delta,
+            actual_base_delta_m=actual_base_delta,
+            anchor_follow_gain=anchor_follow_gain,
+            error_feedback_gain_xyz=(
+                float(feedback_config.get("forward", 0.0)),
+                float(feedback_config.get("lateral", 0.0)),
+                float(feedback_config.get("vertical", 0.0)),
+            ),
         )
         adjusted: dict[str, dict[str, float]] = {}
         for leg, stored in self.placement_leg_baseline_reference_by_leg.items():
@@ -1103,10 +1153,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         )
 
     def _placement_target_world_x_m(self) -> float:
-        if self.current_placement_level is None:
-            raise RuntimeError("Placement reference has no active curriculum level")
+        level = self._active_placement_level()
         return float(self.staircase_config["start_x_m"]) + float(
-            self.current_placement_level["target_tread_fraction"]
+            level["target_tread_fraction"]
         ) * float(self.staircase_config["tread_depth_m"])
 
     def _foot_progress(
@@ -1225,7 +1274,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             )
         self.curriculum_progress = progress
         self.pending_active_step_count = active
-        if self.placement_reference_enabled:
+        if self.placement_reference_enabled and str(
+            self.placement_curriculum_config.get("mode", "timesteps")
+        ) == "timesteps":
             self.set_placement_curriculum_progress(progress)
 
     def set_placement_curriculum_progress(self, progress_fraction: float) -> None:
@@ -2108,6 +2159,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 placement_swing_tread_load,
             )
             placement_success_mode = self._placement_success_mode()
+            active_placement_level = self._active_placement_level()
             if placement_success_mode == "swing_lift_hold":
                 placement_contact_now = placement_lift_hold_reached(
                     swing_tip_height_m=float(swing_tip[2]),
@@ -2120,13 +2172,21 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     support_margin_m=placement_support_margin,
                     projected_gravity_xyz=projected_gravity,
                     minimum_lift_m=float(
-                        self.placement_reference_config["minimum_lift_m"]
+                        active_placement_level.get(
+                            "minimum_lift_m",
+                            self.placement_reference_config[
+                                "minimum_lift_m"
+                            ],
+                        )
                     ),
                     contact_on_threshold_n=contact_threshold,
                     minimum_support_margin_m=float(
-                        self.placement_reference_config[
-                            "minimum_lift_support_margin_m"
-                        ]
+                        active_placement_level.get(
+                            "minimum_support_margin_m",
+                            self.placement_reference_config[
+                                "minimum_lift_support_margin_m"
+                            ],
+                        )
                     ),
                     minimum_upright_cosine=float(
                         self.placement_reference_config[
@@ -2144,7 +2204,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     projected_gravity_xyz=projected_gravity,
                     staircase=self.staircase_config,
                     target_tread_fraction=float(
-                        self.current_placement_level["target_tread_fraction"]
+                        active_placement_level["target_tread_fraction"]
                     ),
                     target_x_tolerance_m=float(
                         self.placement_reference_config[
@@ -2434,6 +2494,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         placement_hold_steps = self.success_hold_steps
         if self.current_placement_level is not None:
             placement_success_mode = self._placement_success_mode()
+            active_placement_level = self._active_placement_level()
             hold_key = (
                 "lift_hold_seconds"
                 if placement_success_mode == "swing_lift_hold"
@@ -2442,7 +2503,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             placement_hold_steps = int(
                 round(
                     float(
-                        self.current_placement_level.get(
+                        active_placement_level.get(
                             hold_key,
                             self.config["success_hold_seconds"],
                         )
@@ -2713,7 +2774,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     succeeded if self.placement_reference_enabled else None
                 ),
                 "placement_swing_leg": (
-                    self.placement_sequence_legs[0]
+                    self.placement_swing_leg
                     if self.placement_reference_enabled
                     else None
                 ),
