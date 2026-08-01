@@ -1,0 +1,233 @@
+schema_version: 1
+task:
+  id: Drobot-Quadruped-Stairs-v12-Front-Right-190mm-Lift-Hold
+  world: exports/isaac/quadruped_robot_stairs_v6_180mm_world.usda
+  world_dependencies:
+    - exports/isaac/quadruped_robot_manual_world.usda
+    - exports/isaac/quadruped_robot_floating.usdc
+  robot_prim: /World/Robot
+  imu_prim: /World/Robot/Geometry/base_link/body_imu
+  camera_prim: /World/Robot/Geometry/base_link/lekiwi_camera
+  # The front-left policy first force-places on the 250 mm tread. After the
+  # verified unloaded transfer, PPO corrects support joints only while the
+  # frozen front-right controller raises that foot by at least 190 mm.
+  target_velocity_body_m_s: [0.0, 0.0, 0.0]
+  physics_hz: 120
+  control_hz: 60
+  episode_seconds: 60.0
+  success_hold_seconds: 0.50
+  reset_settle_seconds: 0.75
+  reset_start_z_m: 0.46
+  reset_start_x_range_m: [0.3391109582, 0.3391109582]
+  reset_start_y_range_m: [0.0008123450, 0.0008123450]
+  reset_start_yaw_range_deg: [0.0868712834, 0.0868712834]
+  reset_joint_noise_rad: 0.0
+  reset_joint_offsets_rad:
+    - -0.0027938977
+    - -0.0024945535
+    - 0.0017021899
+    - -0.0011947560
+    - 0.0006370381
+    - -0.0019738669
+    - -0.0020031606
+    - 0.0008928371
+    - 0.0004912728
+    - 0.0008375710
+    - -0.0007811296
+    - -0.0029836656
+  include_navigation_observation: true
+  include_foot_progress_observation: true
+  include_placement_reference_observation: true
+  foot_placement_tolerance_m: 0.018
+  foot_tread_approach_distance_m: 0.25
+  foot_placement_sequence: [front_left, front_right, rear_left, rear_right]
+  success_minimum_base_elevation_fraction: 0.0
+  success_required_feet_on_goal_tread: 0
+  stall_termination:
+    enabled: false
+  placement_reference:
+    enabled: true
+    sequence_legs: [front_left, front_right]
+    completed_leg_hold_mode: all_feet_anchored_incenter_transfer
+    success_mode: tread_contact
+    success_mode_by_leg:
+      front_right: swing_lift_hold
+    minimum_lift_m: 0.190
+    minimum_lift_support_margin_m: 0.015
+    timing:
+      shift_start_seconds: 0.25
+      shift_duration_seconds: 2.00
+      lift_start_seconds: 2.50
+      lift_duration_seconds: 3.00
+      advance_start_seconds: 5.50
+      advance_duration_seconds: 4.00
+      lower_start_seconds: 9.50
+      lower_duration_seconds: 1.50
+    weight_shift:
+      forward_m: 0.045
+      lateral_m: 0.045
+      scale_by_leg:
+        front_left: 1.0
+        front_right: 0.35
+    inter_leg_transfer:
+      enabled: true
+      duration_seconds: 4.00
+      unload_duration_seconds: 1.50
+      maximum_seconds: 7.00
+      gate_hold_seconds: 0.40
+      support_incenter_blend: 0.85
+      minimum_support_margin_m: 0.015
+      base_target_tolerance_m: 0.060
+      maximum_base_speed_m_s: 0.050
+      maximum_body_rate_rad_s: 0.250
+      maximum_forward_shift_m: 0.080
+      maximum_backward_shift_m: 0.050
+      maximum_lateral_shift_m: 0.120
+      support_world_anchor_follow_gain: 0.0
+      swing_unload_lift_m: 0.030
+      maximum_swing_unloaded_load_n: 1.0
+      post_transfer_weight_shift:
+        forward_m: 0.035
+        lateral_m: 0.000
+      residual_action_scale: 0.0
+    target_x_tolerance_m: 0.065
+    target_z_tolerance_m: 0.018
+    contact_on_threshold_n: 1.0
+    contact_load_normalization_n: 50.0
+    minimum_success_upright_cosine: 0.9781476
+    measurable_slip_threshold_m: 0.025
+  placement_curriculum:
+    mode: timesteps
+    levels:
+      - id: front-right-190mm-lift-hold
+        start_fraction: 0.00
+        apex_lift_m: 0.205
+        landing_lift_m: 0.145
+        lift_forward_offset_m: 0.110
+        swing_forward_offset_m: 0.210
+        landing_forward_offset_m: 0.190
+        target_tread_fraction: 0.24
+        contact_hold_seconds: 0.75
+        lift_hold_seconds: 0.50
+  foot_contact_material:
+    enabled: false
+    id: rubber-pad-sensitivity-v1
+    static_friction: 1.20
+    dynamic_friction: 1.00
+    restitution: 0.02
+    compliant_contact_stiffness: 12000.0
+    compliant_contact_damping: 45.0
+  robot_hardware_profile:
+    id: one-leg-real-test-2026-07-28
+    evidence:
+      - hardware/one-leg-testbed/leg.toml
+      - hardware/one-leg-testbed/calibration.json
+      - conversations/2026-07-28-one-leg-wall-isaac-revisit.md
+    center_tick: 2048
+    encoder_directions:
+      hip_abduction: 1
+      hip_flexion: -1
+      knee: -1
+    joint_limits_deg:
+      hip_abduction: [-45.0, 45.0]
+      hip_flexion: [-90.0, 90.0]
+      knee: [-120.0, 120.0]
+    torque_limit_register: 300
+    torque_limit_register_full_scale: 1000
+    torque_limit_fraction: 0.30
+    stall_torque_nm: 2.941995
+    effort_cap_nm: 0.8825985
+    speed_register: 350
+    speed_register_applied_as_rad_s: false
+  nominal_stance:
+    down_m: 0.300
+    fore_aft_m: 0.025
+    abduction_deg: 0.0
+  action_scale_rad:
+    hip_abduction: 0.04
+    hip_flexion: 0.08
+    knee: 0.12
+  placement_residual_action_scale_rad:
+    support:
+      hip_abduction: 0.10
+      hip_flexion: 0.22
+      knee: 0.30
+    swing:
+      hip_abduction: 0.04
+      hip_flexion: 0.08
+      knee: 0.12
+  residual_policy:
+    enabled: false
+  staircase:
+    start_x_m: 0.55
+    step_count: 4
+    tread_depth_m: 0.25
+    rise_m: 0.18
+    width_m: 1.00
+    top_platform_depth_m: 0.50
+    terrain_sample_offsets_m: [-0.15, 0.0, 0.08, 0.16, 0.25, 0.375, 0.50, 0.75]
+    terrain_height_normalization_m: 0.36
+    goal_distance_normalization_m: 2.00
+    goal_margin_m: 0.10
+  curriculum:
+    mode: timesteps
+    levels:
+      - start_fraction: 0.00
+        active_steps: 1
+  progress_watchdog:
+    enabled: false
+  termination:
+    minimum_base_clearance_m: 0.22
+    minimum_upright_cosine: 0.80
+    maximum_lateral_deviation_m: 0.40
+    minimum_world_x_m: 0.05
+  reward:
+    velocity_tracking_sigma_m_s: 0.10
+    subtract_zero_velocity_tracking: false
+    forward_velocity_tracking: 0.0
+    forward_progress: 0.0
+    base_height_gain: 0.0
+    terrain_height_gain: 0.0
+    upright: 1.0
+    upright_deviation: -40.0
+    alive: 0.05
+    centerline: -700.0
+    lateral_velocity: -2.0
+    heading_error: -0.5
+    vertical_velocity: -0.20
+    roll_pitch_rate: -0.25
+    yaw_rate: -0.08
+    body_clearance: -30.0
+    action_rate: -0.05
+    action_magnitude: -0.02
+    joint_velocity: -0.004
+    foot_lift_progress: 1000.0
+    foot_tread_progress: 0.0
+    foot_step_placement: 0.0
+    foot_tread_support: 0.0
+    swing_target_tracking_sigma_m: 0.035
+    swing_target_tracking: 3.0
+    tread_contact: 25.0
+    support_contact: 8.0
+    support_slip: -700.0
+    support_margin: 250.0
+    failure: -1000.0
+    success: 2000.0
+    target_body_clearance_m: 0.36
+ppo:
+  total_timesteps: 200000
+  learning_rate: 0.00005
+  target_kl: 0.015
+  rollout_steps: 512
+  batch_size: 64
+  epochs: 4
+  gamma: 0.997
+  gae_lambda: 0.95
+  clip_range: 0.15
+  entropy_coefficient: 0.0
+  value_coefficient: 0.50
+  max_gradient_norm: 0.50
+  policy_hidden_layers: [256, 256]
+  initial_log_std: -3.00
+  zero_action_mean_init: true
+  checkpoint_frequency_steps: 512

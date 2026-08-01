@@ -31,6 +31,7 @@ from _run_support import (  # noqa: E402
 from _stair_geometry import stair_layer_boxes  # noqa: E402
 from _stair_rl_contract import (  # noqa: E402
     PLACEMENT_REFERENCE_OBSERVATION_FIELDS,
+    compose_bounded_residual_action,
     config_for_height_stage,
     curriculum_active_steps,
     foot_tread_progress,
@@ -41,6 +42,8 @@ from _stair_rl_contract import (  # noqa: E402
     pack_stair_policy_observation,
     placement_contact_reached,
     placement_curriculum_level,
+    placement_lift_hold_reached,
+    placement_phase_ready,
     placement_reference_state,
     progress_gate_failures,
     stair_failure_reasons,
@@ -129,6 +132,23 @@ def v10_config() -> dict:
     with (
         STAIRS_DIR
         / "quadruped_stairs_v10_front_right_single_tread_placement.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v11_config() -> dict:
+    with (
+        STAIRS_DIR
+        / "quadruped_stairs_v11_front_right_after_left_training.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v12_config() -> dict:
+    with (
+        STAIRS_DIR / "quadruped_stairs_v12_front_right_lift_hold.yaml"
     ).open("r", encoding="utf-8") as stream:
         return yaml.safe_load(stream)
 
@@ -358,6 +378,18 @@ def test_stair_failures_use_local_clearance_and_corridor() -> None:
         "left_stair_corridor",
         "moved_too_far_backward",
     )
+    assert stair_failure_reasons(
+        base_clearance_m=0.373,
+        lateral_position_m=0.0,
+        world_x_m=0.7,
+        projected_gravity_xyz=(0.0, 0.0, -1.0),
+        minimum_base_clearance_m=0.20,
+        minimum_upright_cosine=0.70,
+        maximum_lateral_deviation_m=0.48,
+        minimum_world_x_m=-1.20,
+        support_slip_m=0.0251,
+        maximum_support_slip_m=0.025,
+    ) == ("support_slip_exceeded",)
 
 
 def test_flat_policy_transfer_expands_only_the_two_input_layers() -> None:
@@ -997,6 +1029,68 @@ def test_v10_isolates_the_mirrored_front_right_placement(
     assert right["robot_hardware_profile"] == left["robot_hardware_profile"]
 
 
+def test_v11_trains_only_the_mixed_height_handoff_before_strict_v9_eval(
+    v9_config: dict,
+    v11_config: dict,
+) -> None:
+    strict = v9_config["task"]
+    training = v11_config["task"]
+
+    assert training["placement_reference"]["sequence_legs"] == [
+        "front_left",
+        "front_right",
+    ]
+    assert training["staircase"] == strict["staircase"]
+    assert training["robot_hardware_profile"] == strict["robot_hardware_profile"]
+    assert training["termination"]["maximum_lateral_deviation_m"] > strict[
+        "termination"
+    ]["maximum_lateral_deviation_m"]
+    assert training["placement_reference"][
+        "measurable_slip_threshold_m"
+    ] == pytest.approx(
+        strict["placement_reference"]["measurable_slip_threshold_m"]
+    )
+    transfer = training["placement_reference"]["inter_leg_transfer"]
+    assert transfer["unload_duration_seconds"] > 0.0
+    assert transfer["swing_unload_lift_m"] > 0.0
+    assert transfer["maximum_swing_unloaded_load_n"] == pytest.approx(1.0)
+    assert len(training["reset_joint_offsets_rad"]) == 12
+    assert training["reset_start_x_range_m"][0] == pytest.approx(
+        training["reset_start_x_range_m"][1]
+    )
+    assert training["reward"]["centerline"] < strict["reward"]["centerline"]
+    assert training["reward"]["support_slip"] < strict["reward"][
+        "support_slip"
+    ]
+    assert v11_config["ppo"]["learning_rate"] > 0.0
+    assert v11_config["ppo"]["target_kl"] < v9_config["ppo"]["target_kl"]
+    assert v11_config["ppo"]["initial_log_std"] < v9_config["ppo"][
+        "initial_log_std"
+    ]
+
+
+def test_v12_is_a_support_only_190mm_lift_hold_on_a_250mm_tread(
+    v11_config: dict,
+    v12_config: dict,
+) -> None:
+    baseline = v11_config["task"]
+    lift = v12_config["task"]
+    placement = lift["placement_reference"]
+
+    assert lift["staircase"] == baseline["staircase"]
+    assert lift["staircase"]["tread_depth_m"] == pytest.approx(0.25)
+    assert placement["sequence_legs"] == ["front_left", "front_right"]
+    assert placement["success_mode"] == "tread_contact"
+    assert placement["success_mode_by_leg"] == {
+        "front_right": "swing_lift_hold"
+    }
+    assert placement["minimum_lift_m"] == pytest.approx(0.190)
+    assert placement["minimum_lift_support_margin_m"] > 0.0
+    assert lift["placement_curriculum"]["levels"][0][
+        "lift_hold_seconds"
+    ] == pytest.approx(0.50)
+
+
 def test_inter_leg_transfer_uses_smooth_weight_shift_and_support_incenter() -> None:
     transfer_options = {
         "duration_seconds": 4.0,
@@ -1026,6 +1120,191 @@ def test_inter_leg_transfer_uses_smooth_weight_shift_and_support_incenter() -> N
     with pytest.raises(ValueError, match="nonzero area"):
         support_triangle_incenter_xy(
             ((0.0, 0.0), (1.0, 0.0), (2.0, 0.0))
+        )
+
+
+def test_lift_hold_requires_height_support_margin_and_upright_body() -> None:
+    options = {
+        "swing_tip_height_m": 0.201,
+        "initial_swing_tip_height_m": 0.010,
+        "support_normal_loads_n": (12.0, 10.0, 11.0),
+        "support_margin_m": 0.020,
+        "projected_gravity_xyz": (0.0, 0.0, -0.999),
+        "minimum_lift_m": 0.190,
+        "contact_on_threshold_n": 1.0,
+        "minimum_support_margin_m": 0.015,
+        "minimum_upright_cosine": 0.978,
+    }
+    assert placement_lift_hold_reached(**options) is True
+    assert placement_lift_hold_reached(
+        **{**options, "swing_tip_height_m": 0.199}
+    ) is False
+    assert placement_lift_hold_reached(
+        **{**options, "support_normal_loads_n": (12.0, 0.5, 11.0)}
+    ) is False
+    assert placement_lift_hold_reached(
+        **{**options, "support_margin_m": 0.014}
+    ) is False
+
+
+def test_phase_training_replays_verified_prefix_before_exposing_target() -> None:
+    gym = pytest.importorskip("gymnasium")
+    from _placement_phase_training import PlacementPhaseTrainingEnv
+
+    class FakePlacementEnv(gym.Env):
+        def __init__(self) -> None:
+            self.observation_space = gym.spaces.Box(
+                -1.0,
+                1.0,
+                shape=(3,),
+                dtype=np.float32,
+            )
+            self.action_space = gym.spaces.Box(
+                -1.0,
+                1.0,
+                shape=(2,),
+                dtype=np.float32,
+            )
+            self.placement_sequence_legs = ("front_left", "front_right")
+            self.actions: list[np.ndarray] = []
+            self.snapshot_restores = 0
+
+        def reset(self, *, seed=None, options=None):
+            super().reset(seed=seed)
+            self.completed_placement_legs: list[str] = []
+            self.placement_swing_leg = "front_left"
+            self.placement_transfer_active = False
+            self.actions.clear()
+            return np.zeros(3, dtype=np.float32), {}
+
+        def capture_placement_phase_snapshot(self):
+            return {"ready": True}
+
+        def restore_placement_phase_snapshot(self, snapshot, *, seed=None, options=None):
+            assert snapshot == {"ready": True}
+            self.completed_placement_legs = ["front_left"]
+            self.placement_swing_leg = "front_right"
+            self.placement_transfer_active = False
+            self.snapshot_restores += 1
+            return np.full(3, 9.0, dtype=np.float32), {}
+
+        def step(self, action):
+            self.actions.append(np.asarray(action, dtype=np.float32).copy())
+            if len(self.actions) == 1:
+                self.completed_placement_legs.append("front_left")
+                self.placement_transfer_active = True
+            elif len(self.actions) == 2:
+                self.placement_transfer_active = False
+                self.placement_swing_leg = "front_right"
+            terminated = len(self.actions) >= 3
+            return (
+                np.full(3, len(self.actions), dtype=np.float32),
+                float(len(self.actions)),
+                terminated,
+                False,
+                {},
+            )
+
+    class FixedPolicy:
+        def predict(self, observation, *, deterministic):
+            assert deterministic is True
+            return np.full(2, 0.25, dtype=np.float32), None
+
+    raw = FakePlacementEnv()
+    wrapped = PlacementPhaseTrainingEnv(
+        raw,
+        target_leg="front_right",
+        precursor_policies={"front_left": FixedPolicy()},
+    )
+    observation, info = wrapped.reset(seed=7)
+
+    assert placement_phase_ready(
+        sequence_legs=raw.placement_sequence_legs,
+        completed_legs=raw.completed_placement_legs,
+        active_leg=raw.placement_swing_leg,
+        transfer_active=raw.placement_transfer_active,
+        target_leg="front_right",
+    ) is True
+    np.testing.assert_allclose(observation, (2.0, 2.0, 2.0))
+    np.testing.assert_allclose(raw.actions[0], (0.25, 0.25))
+    np.testing.assert_allclose(raw.actions[1], (0.0, 0.0))
+    assert info["phase_training_precursor_steps"] == 2
+    assert wrapped.training_stats()["successful_precursor_attempts"] == 1
+
+    _, reward, terminated, truncated, _ = wrapped.step(
+        np.full(2, -0.5, dtype=np.float32)
+    )
+    assert reward == pytest.approx(3.0)
+    assert terminated is True
+    assert truncated is False
+    np.testing.assert_allclose(raw.actions[2], (-0.5, -0.5))
+
+    observation, info = wrapped.reset(seed=8)
+    np.testing.assert_allclose(observation, (9.0, 9.0, 9.0))
+    assert info["phase_training_snapshot_restored"] is True
+    assert raw.snapshot_restores == 1
+    assert wrapped.training_stats()["cached_phase_restores"] == 1
+
+
+def test_phase_training_ready_requires_every_earlier_leg() -> None:
+    class RawState:
+        placement_sequence_legs = ("front_left", "front_right")
+        completed_placement_legs = ()
+        placement_swing_leg = "front_right"
+        placement_transfer_active = False
+
+    state = RawState()
+    assert placement_phase_ready(
+        sequence_legs=state.placement_sequence_legs,
+        completed_legs=state.completed_placement_legs,
+        active_leg=state.placement_swing_leg,
+        transfer_active=state.placement_transfer_active,
+        target_leg="front_right",
+    ) is False
+    RawState.completed_placement_legs = ("front_left",)
+    state = RawState()
+    assert placement_phase_ready(
+        sequence_legs=state.placement_sequence_legs,
+        completed_legs=state.completed_placement_legs,
+        active_leg=state.placement_swing_leg,
+        transfer_active=state.placement_transfer_active,
+        target_leg="front_right",
+    ) is True
+    with pytest.raises(ValueError, match="Unknown placement phase target"):
+        placement_phase_ready(
+            sequence_legs=state.placement_sequence_legs,
+            completed_legs=state.completed_placement_legs,
+            active_leg=state.placement_swing_leg,
+            transfer_active=state.placement_transfer_active,
+            target_leg="rear_left",
+        )
+
+
+def test_bounded_residual_action_preserves_base_and_clips_correction() -> None:
+    action = compose_bounded_residual_action(
+        (0.90, -0.80, 0.10),
+        (1.00, -1.00, 0.40),
+        residual_scale=0.25,
+    )
+    np.testing.assert_allclose(action, (1.0, -1.0, 0.20))
+    masked = compose_bounded_residual_action(
+        (0.90, -0.80, 0.10),
+        (1.00, -1.00, 0.40),
+        residual_scale=0.25,
+        residual_mask=(1.0, 0.0, 1.0),
+    )
+    np.testing.assert_allclose(masked, (1.0, -0.80, 0.20))
+
+    with pytest.raises(ValueError, match="matching vectors"):
+        compose_bounded_residual_action((0.0,), (0.0, 1.0), residual_scale=0.25)
+    with pytest.raises(ValueError, match="within"):
+        compose_bounded_residual_action((0.0,), (0.0,), residual_scale=0.0)
+    with pytest.raises(ValueError, match="residual_mask"):
+        compose_bounded_residual_action(
+            (0.0,),
+            (0.0,),
+            residual_scale=0.25,
+            residual_mask=(1.0, 0.0),
         )
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -26,7 +27,10 @@ from _run_support import (  # noqa: E402
     validate_model_manifest,
     validate_ppo_algorithm_contract,
 )
-from _stair_rl_contract import config_for_height_stage  # noqa: E402
+from _stair_rl_contract import (  # noqa: E402
+    compose_bounded_residual_action,
+    config_for_height_stage,
+)
 
 parser = argparse.ArgumentParser(
     description="Record one deterministic Drobot stair-climbing episode."
@@ -90,6 +94,12 @@ parser.add_argument(
 )
 parser.add_argument("--active-steps", type=int, default=None)
 parser.add_argument(
+    "--maximum-lateral-deviation-m",
+    type=float,
+    default=None,
+    help="Override only the recording corridor without changing training config.",
+)
+parser.add_argument(
     "--camera-view",
     choices=("external", "onboard"),
     default="external",
@@ -118,6 +128,39 @@ parser.add_argument(
     help="Optional compressed NumPy observation/action trajectory output.",
 )
 parser.add_argument("--allow-unverified-model", action="store_true")
+parser.add_argument(
+    "--leg-model",
+    action="append",
+    default=[],
+    metavar="LEG=MODEL",
+    help="Use a verified per-leg PPO outside inter-leg transfer.",
+)
+parser.add_argument(
+    "--leg-base-model",
+    action="append",
+    default=[],
+    metavar="LEG=MODEL",
+    help="Frozen base policy for a bounded per-leg residual model.",
+)
+parser.add_argument(
+    "--leg-residual-scale",
+    action="append",
+    default=[],
+    metavar="LEG=SCALE",
+    help="Residual action scale for a leg that also has --leg-base-model.",
+)
+parser.add_argument(
+    "--leg-residual-support-only",
+    action="append",
+    default=[],
+    metavar="LEG",
+)
+parser.add_argument(
+    "--leg-residual-support-abduction-only",
+    action="append",
+    default=[],
+    metavar="LEG",
+)
 args, _ = parser.parse_known_args()
 
 
@@ -130,6 +173,44 @@ def _numpy(value) -> np.ndarray:
     if hasattr(value, "numpy"):
         value = value.numpy()
     return np.asarray(value)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _parse_leg_models(values: list[str], option_name: str) -> dict[str, Path]:
+    result: dict[str, Path] = {}
+    for value in values:
+        leg, separator, model = str(value).partition("=")
+        if not separator or not leg or not model:
+            parser.error(f"{option_name} must use LEG=MODEL syntax")
+        if leg in result:
+            parser.error(f"duplicate {option_name} for {leg}")
+        result[leg] = _resolve_project_path(model)
+    return result
+
+
+def _parse_leg_scales(values: list[str]) -> dict[str, float]:
+    result: dict[str, float] = {}
+    for value in values:
+        leg, separator, scale_text = str(value).partition("=")
+        if not separator or not leg or not scale_text:
+            parser.error("--leg-residual-scale must use LEG=SCALE syntax")
+        if leg in result:
+            parser.error(f"duplicate --leg-residual-scale for {leg}")
+        try:
+            scale = float(scale_text)
+        except ValueError:
+            parser.error(f"invalid residual scale for {leg}: {scale_text}")
+        if scale <= 0.0 or scale > 1.0:
+            parser.error("leg residual scales must be within (0, 1]")
+        result[leg] = scale
+    return result
 
 
 if args.fps <= 0 or args.width <= 0 or args.height <= 0:
@@ -150,6 +231,14 @@ try:
 except ValueError as exc:
     parser.error(str(exc))
 task_config = dict(config["task"])
+if args.maximum_lateral_deviation_m is not None:
+    if args.maximum_lateral_deviation_m <= 0.0:
+        parser.error("--maximum-lateral-deviation-m must be positive")
+    termination = dict(task_config["termination"])
+    termination["maximum_lateral_deviation_m"] = float(
+        args.maximum_lateral_deviation_m
+    )
+    task_config["termination"] = termination
 staircase = dict(task_config["staircase"])
 active_steps = (
     int(staircase["step_count"])
@@ -168,6 +257,28 @@ world_dependency_paths = tuple(
     for value in task_config.get("world_dependencies", ())
 )
 model_path = _resolve_project_path(args.model)
+leg_model_paths = _parse_leg_models(args.leg_model, "--leg-model")
+leg_base_model_paths = _parse_leg_models(
+    args.leg_base_model,
+    "--leg-base-model",
+)
+leg_residual_scales = _parse_leg_scales(args.leg_residual_scale)
+leg_residual_support_only = set(args.leg_residual_support_only)
+leg_residual_support_abduction_only = set(
+    args.leg_residual_support_abduction_only
+)
+if set(leg_base_model_paths) != set(leg_residual_scales):
+    parser.error(
+        "--leg-base-model and --leg-residual-scale must select the same legs"
+    )
+if not set(leg_base_model_paths).issubset(leg_model_paths):
+    parser.error("each leg base model requires a residual --leg-model")
+if not leg_residual_support_only.issubset(leg_base_model_paths):
+    parser.error("support-only residual legs require --leg-base-model")
+if not leg_residual_support_abduction_only.issubset(leg_base_model_paths):
+    parser.error("support-abduction residual legs require --leg-base-model")
+if leg_residual_support_only & leg_residual_support_abduction_only:
+    parser.error("leg residual joint masks are mutually exclusive")
 video_path = _resolve_project_path(args.video)
 thumbnail_path = _resolve_project_path(args.thumbnail)
 report_path = _resolve_project_path(args.report)
@@ -200,6 +311,11 @@ report: dict[str, object] = {
     "status": "FAIL",
     "task_id": task_config["id"],
     "model": str(model_path),
+    "leg_models": {leg: str(path) for leg, path in leg_model_paths.items()},
+    "leg_base_models": {
+        leg: str(path) for leg, path in leg_base_model_paths.items()
+    },
+    "leg_residual_scales": leg_residual_scales,
     "world": str(world_path),
     "seed": args.seed,
     "deterministic": not args.stochastic,
@@ -209,6 +325,9 @@ report: dict[str, object] = {
     "search_success_episodes": args.search_success_episodes,
     "device": args.device,
     "active_steps": active_steps,
+    "maximum_lateral_deviation_override_m": (
+        args.maximum_lateral_deviation_m
+    ),
     "height_stage": args.height_stage,
     "camera_view": args.camera_view,
     "video": str(video_path),
@@ -256,6 +375,115 @@ try:
             "reason": "model_manifest_verification_was_skipped",
         }
     )
+    known_placement_legs = set(raw_env.placement_sequence_legs)
+    unknown_leg_models = sorted(
+        (set(leg_model_paths) | set(leg_base_model_paths))
+        - known_placement_legs
+    )
+    if unknown_leg_models:
+        raise ValueError(
+            "Leg-model mapping is outside the placement sequence: "
+            f"{unknown_leg_models}"
+        )
+    leg_models: dict[str, PPO] = {}
+    leg_model_verification: dict[str, dict[str, object]] = {}
+    for leg, path in leg_model_paths.items():
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        manifest_path = Path(str(path) + ".contract.json")
+        if not manifest_path.is_file():
+            raise FileNotFoundError(manifest_path)
+        with manifest_path.open("r", encoding="utf-8") as stream:
+            manifest = json.load(stream)
+        model_sha256 = _sha256_file(path)
+        if str(manifest.get("model_sha256")) != model_sha256:
+            raise RuntimeError(f"Per-leg model hash mismatch for {leg}: {path}")
+        leg_model = PPO.load(str(path), device=args.device)
+        if (
+            tuple(leg_model.observation_space.shape)
+            != tuple(raw_env.observation_space.shape)
+            or tuple(leg_model.action_space.shape)
+            != tuple(raw_env.action_space.shape)
+        ):
+            raise RuntimeError(
+                f"Per-leg model spaces do not match the sequence for {leg}"
+            )
+        leg_models[leg] = leg_model
+        leg_model_verification[leg] = {
+            "status": "PASS",
+            "model": str(path),
+            "model_sha256": model_sha256,
+            "manifest": str(manifest_path),
+            "source_task_id": manifest.get("task_id"),
+        }
+    leg_base_models: dict[str, PPO] = {}
+    leg_base_model_verification: dict[str, dict[str, object]] = {}
+    for leg, path in leg_base_model_paths.items():
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        manifest_path = Path(str(path) + ".contract.json")
+        if not manifest_path.is_file():
+            raise FileNotFoundError(manifest_path)
+        with manifest_path.open("r", encoding="utf-8") as stream:
+            manifest = json.load(stream)
+        model_sha256 = _sha256_file(path)
+        if str(manifest.get("model_sha256")) != model_sha256:
+            raise RuntimeError(
+                f"Per-leg base model hash mismatch for {leg}: {path}"
+            )
+        base_model = PPO.load(str(path), device=args.device)
+        if (
+            tuple(base_model.observation_space.shape)
+            != tuple(raw_env.observation_space.shape)
+            or tuple(base_model.action_space.shape)
+            != tuple(raw_env.action_space.shape)
+        ):
+            raise RuntimeError(f"Per-leg base model spaces do not match for {leg}")
+        leg_base_models[leg] = base_model
+        leg_base_model_verification[leg] = {
+            "status": "PASS",
+            "model": str(path),
+            "model_sha256": model_sha256,
+            "manifest": str(manifest_path),
+            "source_task_id": manifest.get("task_id"),
+            "residual_scale": leg_residual_scales[leg],
+        }
+
+    def policy_action(observation: np.ndarray) -> np.ndarray:
+        if raw_env.placement_transfer_active:
+            return np.zeros(raw_env.action_space.shape, dtype=np.float32)
+        active_leg = raw_env.placement_swing_leg
+        active_model = leg_models.get(active_leg, model)
+        action, _ = active_model.predict(
+            observation,
+            deterministic=not args.stochastic,
+        )
+        base_model = leg_base_models.get(active_leg)
+        if base_model is None:
+            return np.asarray(action, dtype=np.float32)
+        base_action, _ = base_model.predict(observation, deterministic=True)
+        residual_mask = None
+        if active_leg in leg_residual_support_abduction_only:
+            residual_mask = [
+                1.0
+                if (
+                    not name.startswith(f"{active_leg}_")
+                    and name.endswith("_hip_abduction")
+                )
+                else 0.0
+                for name in raw_env.dof_names
+            ]
+        elif active_leg in leg_residual_support_only:
+            residual_mask = [
+                0.0 if name.startswith(f"{active_leg}_") else 1.0
+                for name in raw_env.dof_names
+            ]
+        return compose_bounded_residual_action(
+            base_action,
+            action,
+            residual_scale=leg_residual_scales[active_leg],
+            residual_mask=residual_mask,
+        )
     viewport = get_active_viewport()
     if viewport is None:
         raise RuntimeError("Isaac Sim has no active viewport")
@@ -327,10 +555,7 @@ try:
         observation, _ = raw_env.reset(seed=skipped_seed)
         skipped_metrics: dict[str, object] | None = None
         for _ in range(raw_env.max_episode_steps):
-            action, _ = model.predict(
-                observation,
-                deterministic=not args.stochastic,
-            )
+            action = policy_action(observation)
             observation, _, terminated, truncated, info = raw_env.step(action)
             if terminated or truncated:
                 skipped_metrics = dict(info["episode_metrics"])
@@ -371,10 +596,7 @@ try:
         candidate_actions: list[np.ndarray] = []
         candidate_metrics: dict[str, object] | None = None
         for control_step in range(raw_env.max_episode_steps):
-            action, _ = model.predict(
-                observation,
-                deterministic=not args.stochastic,
-            )
+            action = policy_action(observation)
             candidate_observations.append(observation.copy())
             candidate_actions.append(
                 np.asarray(action, dtype=np.float32).reshape(12).copy()
@@ -491,6 +713,17 @@ try:
             "status": "PASS",
             "model_contract_verification": verification,
             "ppo_algorithm_verification": algorithm_verification,
+            "leg_model_verification": leg_model_verification,
+            "leg_base_model_verification": leg_base_model_verification,
+            "policy_composition": (
+                "per_leg_models_with_bounded_residuals"
+                if leg_base_models
+                else (
+                    "per_leg_models_with_zero_inter_leg_transfer"
+                    if leg_models
+                    else "single_model"
+                )
+            ),
             "recorded_frames": recorded_frames,
             "episode": episode_metrics,
             "selected_episode_index": selected_episode_index,

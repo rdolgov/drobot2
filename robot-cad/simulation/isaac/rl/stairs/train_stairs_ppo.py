@@ -11,6 +11,7 @@ import traceback
 from collections import deque
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch._dynamo  # noqa: F401
 import yaml
@@ -123,6 +124,45 @@ parser.add_argument(
         "without collecting a PPO rollout."
     ),
 )
+parser.add_argument(
+    "--phase-train-leg",
+    default=None,
+    help=(
+        "Train only this placement leg after replaying every earlier leg and "
+        "inter-leg transfer with deterministic verified policies."
+    ),
+)
+parser.add_argument(
+    "--precursor-leg-model",
+    action="append",
+    default=[],
+    metavar="LEG=MODEL",
+    help=(
+        "Deterministic policy used to replay an earlier placement leg; repeat "
+        "for every leg before --phase-train-leg."
+    ),
+)
+parser.add_argument(
+    "--phase-base-model",
+    default=None,
+    help=(
+        "Frozen target-leg base policy; PPO learns a bounded corrective "
+        "residual instead of replacing its action."
+    ),
+)
+parser.add_argument("--phase-residual-scale", type=float, default=0.25)
+parser.add_argument(
+    "--phase-residual-support-only",
+    action="store_true",
+    help="Mask PPO corrections off the target swing leg's three joints.",
+)
+parser.add_argument(
+    "--phase-residual-support-abduction-only",
+    action="store_true",
+    help="Apply PPO corrections only to support-leg hip-abduction joints.",
+)
+parser.add_argument("--phase-reset-attempts", type=int, default=8)
+parser.add_argument("--phase-precursor-max-steps", type=int, default=1800)
 parser.add_argument("--gui", action="store_true")
 args, _ = parser.parse_known_args()
 
@@ -130,6 +170,18 @@ args, _ = parser.parse_known_args()
 def _resolve_project_path(value: str | os.PathLike[str]) -> Path:
     path = Path(value)
     return path.resolve() if path.is_absolute() else (PROJECT_ROOT / path).resolve()
+
+
+def _parse_leg_model_paths(values: list[str]) -> dict[str, Path]:
+    result: dict[str, Path] = {}
+    for value in values:
+        leg, separator, model = str(value).partition("=")
+        if not separator or not leg or not model:
+            parser.error("--precursor-leg-model must use LEG=MODEL syntax")
+        if leg in result:
+            parser.error(f"duplicate precursor model for {leg}")
+        result[leg] = _resolve_project_path(model)
+    return result
 
 
 initialization_options = (
@@ -147,6 +199,27 @@ if args.total_timesteps is not None and args.total_timesteps <= 0:
     parser.error("--total-timesteps must be positive")
 if args.smoke_test and args.initialize_only:
     parser.error("--smoke-test and --initialize-only are mutually exclusive")
+if args.phase_reset_attempts < 1:
+    parser.error("--phase-reset-attempts must be positive")
+if args.phase_precursor_max_steps < 1:
+    parser.error("--phase-precursor-max-steps must be positive")
+precursor_leg_model_paths = _parse_leg_model_paths(args.precursor_leg_model)
+if precursor_leg_model_paths and not args.phase_train_leg:
+    parser.error("--precursor-leg-model requires --phase-train-leg")
+phase_base_model_path = (
+    _resolve_project_path(args.phase_base_model)
+    if args.phase_base_model
+    else None
+)
+if phase_base_model_path is not None and not args.phase_train_leg:
+    parser.error("--phase-base-model requires --phase-train-leg")
+if not 0.0 < args.phase_residual_scale <= 1.0:
+    parser.error("--phase-residual-scale must be within (0, 1]")
+if (
+    args.phase_residual_support_only
+    and args.phase_residual_support_abduction_only
+):
+    parser.error("phase residual joint masks are mutually exclusive")
 config_path = _resolve_project_path(args.config)
 with config_path.open("r", encoding="utf-8") as stream:
     config = yaml.safe_load(stream)
@@ -266,6 +339,7 @@ simulation_app = SimulationApp(
 )
 
 import stable_baselines3  # noqa: E402
+from _placement_phase_training import PlacementPhaseTrainingEnv  # noqa: E402
 from _quadruped_stairs_env import QuadrupedStairsEnv  # noqa: E402
 from _run_support import validate_model_manifest  # noqa: E402
 from stable_baselines3 import PPO  # noqa: E402
@@ -573,6 +647,20 @@ report: dict[str, object] = {
     "requested_seed": args.seed,
     "height_stage": args.height_stage,
     "fixed_active_steps": args.fixed_active_steps,
+    "phase_train_leg": args.phase_train_leg,
+    "precursor_leg_models": {
+        leg: str(path) for leg, path in precursor_leg_model_paths.items()
+    },
+    "phase_base_model": (
+        str(phase_base_model_path)
+        if phase_base_model_path is not None
+        else None
+    ),
+    "phase_residual_scale": args.phase_residual_scale,
+    "phase_residual_support_only": args.phase_residual_support_only,
+    "phase_residual_support_abduction_only": (
+        args.phase_residual_support_abduction_only
+    ),
     "terrain_perception_mode": terrain_perception_mode,
     "terrain_perception": terrain_perception_config,
     "device_request": args.device,
@@ -586,6 +674,7 @@ report: dict[str, object] = {
 }
 exit_code = 1
 raw_env: QuadrupedStairsEnv | None = None
+phase_training_env: PlacementPhaseTrainingEnv | None = None
 monitored_env = None
 start_time = time.perf_counter()
 
@@ -601,7 +690,106 @@ try:
         task_config=task_config,
         render_mode="human" if args.gui else None,
     )
-    monitored_env = Monitor(raw_env, filename=str(output_dir / "monitor.csv"))
+    training_env = raw_env
+    precursor_model_verification: dict[str, dict[str, object]] = {}
+    if args.phase_train_leg:
+        precursor_models: dict[str, PPO] = {}
+        for leg, precursor_path in precursor_leg_model_paths.items():
+            if not precursor_path.is_file():
+                raise FileNotFoundError(precursor_path)
+            precursor_manifest_path = model_manifest_path(precursor_path)
+            if not precursor_manifest_path.is_file():
+                raise FileNotFoundError(precursor_manifest_path)
+            precursor_manifest = read_model_manifest(precursor_path)
+            precursor_hash = sha256_file(precursor_path)
+            if precursor_manifest.get("model_sha256") != precursor_hash:
+                raise RuntimeError(
+                    f"Precursor model hash mismatch for {leg}: {precursor_path}"
+                )
+            precursor_model = PPO.load(str(precursor_path), device=args.device)
+            if tuple(precursor_model.observation_space.shape) != tuple(
+                raw_env.observation_space.shape
+            ) or tuple(precursor_model.action_space.shape) != tuple(
+                raw_env.action_space.shape
+            ):
+                raise RuntimeError(
+                    f"Precursor model spaces do not match the target for {leg}"
+                )
+            precursor_models[leg] = precursor_model
+            precursor_model_verification[leg] = {
+                "status": "PASS",
+                "model": str(precursor_path),
+                "model_sha256": precursor_hash,
+                "manifest": str(precursor_manifest_path),
+                "source_task_id": precursor_manifest.get("task_id"),
+            }
+        target_base_model: PPO | None = None
+        if phase_base_model_path is not None:
+            if not phase_base_model_path.is_file():
+                raise FileNotFoundError(phase_base_model_path)
+            base_manifest_path = model_manifest_path(phase_base_model_path)
+            if not base_manifest_path.is_file():
+                raise FileNotFoundError(base_manifest_path)
+            base_manifest = read_model_manifest(phase_base_model_path)
+            base_hash = sha256_file(phase_base_model_path)
+            if base_manifest.get("model_sha256") != base_hash:
+                raise RuntimeError(
+                    f"Phase base model hash mismatch: {phase_base_model_path}"
+                )
+            target_base_model = PPO.load(
+                str(phase_base_model_path),
+                device=args.device,
+            )
+            if tuple(target_base_model.observation_space.shape) != tuple(
+                raw_env.observation_space.shape
+            ) or tuple(target_base_model.action_space.shape) != tuple(
+                raw_env.action_space.shape
+            ):
+                raise RuntimeError("Phase base model spaces do not match target")
+            report["phase_base_model_verification"] = {
+                "status": "PASS",
+                "model": str(phase_base_model_path),
+                "model_sha256": base_hash,
+                "manifest": str(base_manifest_path),
+                "source_task_id": base_manifest.get("task_id"),
+            }
+        target_residual_mask = None
+        if args.phase_residual_support_abduction_only:
+            target_prefix = f"{args.phase_train_leg}_"
+            target_residual_mask = np.asarray(
+                [
+                    1.0
+                    if (
+                        not name.startswith(target_prefix)
+                        and name.endswith("_hip_abduction")
+                    )
+                    else 0.0
+                    for name in raw_env.dof_names
+                ],
+                dtype=np.float32,
+            )
+        elif args.phase_residual_support_only:
+            target_prefix = f"{args.phase_train_leg}_"
+            target_residual_mask = np.asarray(
+                [
+                    0.0 if name.startswith(target_prefix) else 1.0
+                    for name in raw_env.dof_names
+                ],
+                dtype=np.float32,
+            )
+        phase_training_env = PlacementPhaseTrainingEnv(
+            raw_env,
+            target_leg=str(args.phase_train_leg),
+            precursor_policies=precursor_models,
+            target_base_policy=target_base_model,
+            target_residual_scale=args.phase_residual_scale,
+            target_residual_mask=target_residual_mask,
+            maximum_reset_attempts=args.phase_reset_attempts,
+            maximum_precursor_steps=args.phase_precursor_max_steps,
+        )
+        training_env = phase_training_env
+        report["precursor_model_verification"] = precursor_model_verification
+    monitored_env = Monitor(training_env, filename=str(output_dir / "monitor.csv"))
     policy_kwargs = {
         "activation_fn": torch.nn.ELU,
         "net_arch": list(ppo_config["policy_hidden_layers"]),
@@ -812,6 +1000,13 @@ try:
                     f"{source_observation_size}>{target_observation_size}"
                 )
             model.policy.load_state_dict(transferred_state, strict=True)
+            if "initial_log_std" in ppo_config:
+                model.policy.log_std.data.fill_(
+                    float(ppo_config["initial_log_std"])
+                )
+                stair_transfer_report["log_std_overridden_after_transfer"] = (
+                    float(ppo_config["initial_log_std"])
+                )
             report["stair_policy_transfer"] = {
                 "source_model": str(transferred_from),
                 "source_model_sha256": sha256_file(transferred_from),
@@ -999,17 +1194,26 @@ try:
                 }
             ),
             "recent_completed_episodes": raw_env.completed_episode_metrics,
+            "phase_training": (
+                phase_training_env.training_stats()
+                if phase_training_env is not None
+                else None
+            ),
             "elapsed_seconds": time.perf_counter() - start_time,
             "scope": (
                 "Policy initialization without PPO updates"
                 if args.initialize_only
                 else (
-                    "Pipeline validation only"
-                    if args.smoke_test
+                    "Target-leg PPO after deterministic placement-prefix replay"
+                    if phase_training_env is not None
                     else (
-                        "Automatically aborted stair PPO training"
-                        if aborted_no_progress
-                        else "Single-environment stair PPO training"
+                        "Pipeline validation only"
+                        if args.smoke_test
+                        else (
+                            "Automatically aborted stair PPO training"
+                            if aborted_no_progress
+                            else "Single-environment stair PPO training"
+                        )
                     )
                 )
             ),
@@ -1030,6 +1234,8 @@ except Exception as exc:
     report["traceback"] = traceback.format_exc()
     report["elapsed_seconds"] = time.perf_counter() - start_time
 finally:
+    if phase_training_env is not None:
+        report["phase_training"] = phase_training_env.training_stats()
     if monitored_env is not None:
         monitored_env.close()
     elif raw_env is not None:

@@ -395,6 +395,58 @@ def support_triangle_incenter_xy(
     ).astype(np.float32)
 
 
+def placement_phase_ready(
+    *,
+    sequence_legs: Sequence[str],
+    completed_legs: Sequence[str],
+    active_leg: str,
+    transfer_active: bool,
+    target_leg: str,
+) -> bool:
+    """Return whether a post-transfer target-leg phase is ready for PPO."""
+
+    sequence = tuple(str(leg) for leg in sequence_legs)
+    if target_leg not in sequence:
+        raise ValueError(f"Unknown placement phase target: {target_leg}")
+    target_position = sequence.index(target_leg)
+    completed = set(str(leg) for leg in completed_legs)
+    return bool(
+        not transfer_active
+        and active_leg == target_leg
+        and all(leg in completed for leg in sequence[:target_position])
+    )
+
+
+def compose_bounded_residual_action(
+    base_action: Sequence[float],
+    residual_action: Sequence[float],
+    *,
+    residual_scale: float,
+    residual_mask: Sequence[float] | None = None,
+) -> np.ndarray:
+    """Add a bounded corrective action to a frozen base-policy action."""
+
+    base = np.asarray(base_action, dtype=np.float32)
+    residual = np.asarray(residual_action, dtype=np.float32)
+    if base.shape != residual.shape or base.ndim != 1:
+        raise ValueError("base and residual actions must be matching vectors")
+    if not np.all(np.isfinite(base)) or not np.all(np.isfinite(residual)):
+        raise ValueError("base and residual actions must be finite")
+    mask = (
+        np.ones_like(base)
+        if residual_mask is None
+        else np.asarray(residual_mask, dtype=np.float32)
+    )
+    if mask.shape != base.shape or not np.all(np.isfinite(mask)):
+        raise ValueError("residual_mask must match the finite action vector")
+    if np.any(mask < 0.0) or np.any(mask > 1.0):
+        raise ValueError("residual_mask values must be within [0, 1]")
+    scale = float(residual_scale)
+    if scale <= 0.0 or scale > 1.0:
+        raise ValueError("residual_scale must be within (0, 1]")
+    return np.clip(base + scale * mask * residual, -1.0, 1.0).astype(np.float32)
+
+
 def placement_contact_reached(
     *,
     swing_tip_position_m: Sequence[float],
@@ -430,6 +482,41 @@ def placement_contact_reached(
         and np.all(support_loads >= threshold)
         and abs(float(tip[0]) - target_x) <= float(target_x_tolerance_m)
         and abs(float(tip[2]) - target_z) <= float(target_z_tolerance_m)
+        and float(-gravity[2]) >= float(minimum_upright_cosine)
+    )
+
+
+def placement_lift_hold_reached(
+    *,
+    swing_tip_height_m: float,
+    initial_swing_tip_height_m: float,
+    support_normal_loads_n: Sequence[float],
+    support_margin_m: float,
+    projected_gravity_xyz: Sequence[float],
+    minimum_lift_m: float,
+    contact_on_threshold_n: float,
+    minimum_support_margin_m: float,
+    minimum_upright_cosine: float,
+) -> bool:
+    """Require a force-supported upright hold above the requested foot lift."""
+
+    support_loads = _finite_vector(
+        support_normal_loads_n,
+        len(STAIR_FOOT_NAMES) - 1,
+        "support_normal_loads_n",
+    )
+    gravity = _finite_vector(projected_gravity_xyz, 3, "projected_gravity_xyz")
+    lift = float(swing_tip_height_m) - float(initial_swing_tip_height_m)
+    threshold = float(contact_on_threshold_n)
+    minimum_lift = float(minimum_lift_m)
+    if threshold <= 0.0:
+        raise ValueError("contact_on_threshold_n must be positive")
+    if minimum_lift <= 0.0:
+        raise ValueError("minimum_lift_m must be positive")
+    return bool(
+        lift >= minimum_lift
+        and np.all(support_loads >= threshold)
+        and float(support_margin_m) >= float(minimum_support_margin_m)
         and float(-gravity[2]) >= float(minimum_upright_cosine)
     )
 
@@ -969,6 +1056,8 @@ def stair_failure_reasons(
     minimum_upright_cosine: float,
     maximum_lateral_deviation_m: float,
     minimum_world_x_m: float,
+    support_slip_m: float = 0.0,
+    maximum_support_slip_m: float | None = None,
     finite_state: bool = True,
 ) -> tuple[str, ...]:
     """Return deterministic fall, corridor, and non-finite failure reasons."""
@@ -987,6 +1076,11 @@ def stair_failure_reasons(
         reasons.append("body_tipped")
     if abs(float(lateral_position_m)) > float(maximum_lateral_deviation_m):
         reasons.append("left_stair_corridor")
+    if (
+        maximum_support_slip_m is not None
+        and float(support_slip_m) > float(maximum_support_slip_m)
+    ):
+        reasons.append("support_slip_exceeded")
     if float(world_x_m) < float(minimum_world_x_m):
         reasons.append("moved_too_far_backward")
     return tuple(reasons)

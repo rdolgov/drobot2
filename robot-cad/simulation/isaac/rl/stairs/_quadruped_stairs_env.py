@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import math
 from collections.abc import Mapping
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -30,6 +31,7 @@ from _stair_rl_contract import (
     pack_stair_policy_observation,
     placement_contact_reached,
     placement_curriculum_level,
+    placement_lift_hold_reached,
     placement_reference_state,
     stair_failure_reasons,
     stair_goal_reached,
@@ -602,6 +604,20 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 self.action_scale[index] = float(
                     residual_scale[role][kind]
                 )
+
+    def _placement_success_mode(self) -> str:
+        mode_by_leg = dict(
+            self.placement_reference_config.get("success_mode_by_leg", {})
+        )
+        return str(
+            mode_by_leg.get(
+                self.placement_swing_leg,
+                self.placement_reference_config.get(
+                    "success_mode",
+                    "tread_contact",
+                ),
+            )
+        )
 
     def _validate_stair_prims(self) -> None:
         expected = int(self.staircase_config["step_count"])
@@ -1409,11 +1425,22 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
 
     def _reset_robot(self) -> None:
         reset_noise = float(self.config["reset_joint_noise_rad"])
-        joint_noise = self.np_random.uniform(
-            -reset_noise,
-            reset_noise,
-            size=12,
-        ).astype(np.float32)
+        configured_offsets = self.config.get("reset_joint_offsets_rad")
+        if configured_offsets is None:
+            joint_noise = self.np_random.uniform(
+                -reset_noise,
+                reset_noise,
+                size=12,
+            ).astype(np.float32)
+        else:
+            joint_noise = np.asarray(
+                configured_offsets,
+                dtype=np.float32,
+            )
+            if joint_noise.shape != (12,) or not np.all(np.isfinite(joint_noise)):
+                raise ValueError(
+                    "reset_joint_offsets_rad must contain 12 finite values"
+                )
         initial_positions = np.clip(
             self.nominal_positions + joint_noise,
             self.lower_limits + 1e-3,
@@ -1569,6 +1596,303 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         )
         return observation, info
 
+    def capture_placement_phase_snapshot(self) -> dict[str, object]:
+        """Capture one verified post-transfer state for phase-only training."""
+
+        if not self.placement_reference_enabled:
+            raise RuntimeError("Placement snapshot requires placement reference mode")
+        if self.placement_transfer_active:
+            raise RuntimeError("Cannot snapshot an active inter-leg transfer")
+        if not self.completed_placement_legs:
+            raise RuntimeError("Placement snapshot has no completed precursor leg")
+
+        base_positions, base_orientations = self.robot.get_world_poses()
+        linear_velocities, angular_velocities = self.robot.get_velocities()
+
+        def finite_copy(value, shape: tuple[int, ...], label: str) -> np.ndarray:
+            if hasattr(value, "numpy"):
+                value = value.numpy()
+            result = np.asarray(value, dtype=np.float32).reshape(shape).copy()
+            if not np.all(np.isfinite(result)):
+                raise RuntimeError(f"Cannot snapshot non-finite {label}")
+            return result
+
+        return {
+            "schema_version": 1,
+            "placement_sequence_legs": tuple(self.placement_sequence_legs),
+            "placement_sequence_position": self.placement_sequence_position,
+            "placement_swing_leg": self.placement_swing_leg,
+            "active_step_count": self.active_step_count,
+            "placement_curriculum_level": self.current_placement_level_id,
+            "current_placement_level": deepcopy(self.current_placement_level),
+            "base_position_m": finite_copy(
+                base_positions,
+                (-1, 3),
+                "base position",
+            )[0],
+            "base_orientation_wxyz": finite_copy(
+                base_orientations,
+                (-1, 4),
+                "base orientation",
+            )[0],
+            "base_linear_velocity_m_s": finite_copy(
+                linear_velocities,
+                (-1, 3),
+                "base linear velocity",
+            )[0],
+            "base_angular_velocity_rad_s": finite_copy(
+                angular_velocities,
+                (-1, 3),
+                "base angular velocity",
+            )[0],
+            "joint_positions_rad": finite_copy(
+                self.robot.get_dof_positions(),
+                (12,),
+                "joint positions",
+            ),
+            "joint_velocities_rad_s": finite_copy(
+                self.robot.get_dof_velocities(),
+                (12,),
+                "joint velocities",
+            ),
+            "joint_position_targets_rad": self.previous_target.copy(),
+            "previous_action": self.previous_action.copy(),
+            "previous_residual_action": self.previous_residual_action.copy(),
+            "completed_placement_legs": list(self.completed_placement_legs),
+            "completed_placement_joint_targets_by_leg": deepcopy(
+                self.completed_placement_joint_targets_by_leg
+            ),
+            "completed_placement_reference_by_leg": deepcopy(
+                self.completed_placement_reference_by_leg
+            ),
+            "placement_leg_baseline_reference_by_leg": deepcopy(
+                self.placement_leg_baseline_reference_by_leg
+            ),
+            "placement_leg_baseline_base_position_m": (
+                self.placement_leg_baseline_base_position_m.copy()
+            ),
+            "placement_leg_baseline_lift_offset_m": (
+                self.placement_leg_baseline_lift_offset_m
+            ),
+            "completed_inter_leg_transfers": list(
+                self.completed_inter_leg_transfers
+            ),
+            "last_completed_inter_leg_transfer_metrics": deepcopy(
+                self.last_completed_inter_leg_transfer_metrics
+            ),
+            "initial_placement_foot_tips_m": (
+                self.initial_placement_foot_tips_m.copy()
+            ),
+            "initial_foot_bottom_z_m": self.initial_foot_bottom_z_m.copy(),
+            "maximum_foot_lift_m": self.maximum_foot_lift_m.copy(),
+            "highest_foot_step": self.highest_foot_step.copy(),
+            "maximum_foot_tread_progress": (
+                self.maximum_foot_tread_progress.copy()
+            ),
+        }
+
+    def restore_placement_phase_snapshot(
+        self,
+        snapshot: Mapping[str, object],
+        *,
+        seed: int | None = None,
+        options: dict | None = None,
+    ) -> tuple[np.ndarray, dict[str, object]]:
+        """Restore a cached post-transfer state as a fresh training episode."""
+
+        del options
+        super(QuadrupedWalkEnv, self).reset(seed=seed)
+        stored = dict(snapshot)
+        if int(stored.get("schema_version", 0)) != 1:
+            raise ValueError("Unsupported placement phase snapshot schema")
+        if tuple(stored["placement_sequence_legs"]) != tuple(
+            self.placement_sequence_legs
+        ):
+            raise ValueError("Placement phase snapshot sequence does not match")
+        if stored["placement_curriculum_level"] != self.pending_placement_level_id:
+            raise ValueError("Placement curriculum changed; recache the phase state")
+        if int(stored["active_step_count"]) != self.pending_active_step_count:
+            raise ValueError("Stair curriculum changed; recache the phase state")
+
+        base_position = np.asarray(
+            stored["base_position_m"], dtype=np.float32
+        ).reshape(3)
+        base_orientation = np.asarray(
+            stored["base_orientation_wxyz"], dtype=np.float32
+        ).reshape(4)
+        linear_velocity = np.asarray(
+            stored["base_linear_velocity_m_s"], dtype=np.float32
+        ).reshape(3)
+        angular_velocity = np.asarray(
+            stored["base_angular_velocity_rad_s"], dtype=np.float32
+        ).reshape(3)
+        joint_positions = np.asarray(
+            stored["joint_positions_rad"], dtype=np.float32
+        ).reshape(12)
+        joint_velocities = np.asarray(
+            stored["joint_velocities_rad_s"], dtype=np.float32
+        ).reshape(12)
+        joint_targets = np.asarray(
+            stored["joint_position_targets_rad"], dtype=np.float32
+        ).reshape(12)
+        physical_values = (
+            base_position,
+            base_orientation,
+            linear_velocity,
+            angular_velocity,
+            joint_positions,
+            joint_velocities,
+            joint_targets,
+        )
+        if any(not np.all(np.isfinite(value)) for value in physical_values):
+            raise ValueError("Placement phase snapshot contains non-finite state")
+
+        self.active_step_count = int(stored["active_step_count"])
+        self.current_goal_x_m = goal_x_for_active_steps(
+            self.staircase_config,
+            self.active_step_count,
+        )
+        self.current_placement_level_id = str(
+            stored["placement_curriculum_level"]
+        )
+        self.current_placement_level = deepcopy(stored["current_placement_level"])
+        self.placement_sequence_position = int(
+            stored["placement_sequence_position"]
+        )
+        self._set_placement_swing_leg(str(stored["placement_swing_leg"]))
+        self.completed_placement_legs = list(stored["completed_placement_legs"])
+        self.completed_placement_joint_targets_by_leg = deepcopy(
+            stored["completed_placement_joint_targets_by_leg"]
+        )
+        self.completed_placement_reference_by_leg = deepcopy(
+            stored["completed_placement_reference_by_leg"]
+        )
+        self.placement_leg_baseline_reference_by_leg = deepcopy(
+            stored["placement_leg_baseline_reference_by_leg"]
+        )
+        self.placement_leg_baseline_base_position_m = np.asarray(
+            stored["placement_leg_baseline_base_position_m"],
+            dtype=np.float64,
+        ).reshape(3).copy()
+        self.placement_leg_baseline_lift_offset_m = float(
+            stored["placement_leg_baseline_lift_offset_m"]
+        )
+        self.completed_inter_leg_transfers = list(
+            stored["completed_inter_leg_transfers"]
+        )
+        self.last_completed_inter_leg_transfer_metrics = deepcopy(
+            stored["last_completed_inter_leg_transfer_metrics"]
+        )
+        self.placement_transfer_active = False
+        self.placement_transfer_start_step = 0
+        self.placement_transfer_gate_step_count = 0
+        self.placement_transfer_reference_by_leg = {}
+        self.placement_transfer_start_base_position_m.fill(0.0)
+        self.placement_transfer_target_base_position_m.fill(0.0)
+        self.placement_phase_start_step = 0
+        self.placement_phase_elapsed_offset_s = 0.0
+        self.goal_hold_step_count = 0
+
+        self.robot.set_world_poses(
+            positions=[base_position],
+            orientations=[base_orientation],
+        )
+        self.robot.set_velocities(
+            linear_velocities=[linear_velocity],
+            angular_velocities=[angular_velocity],
+        )
+        self.robot.set_dof_positions(joint_positions)
+        self.robot.set_dof_velocities(joint_velocities)
+        self.robot.set_dof_position_targets(joint_targets)
+        self.previous_target = joint_targets.copy()
+        self.previous_action = np.asarray(
+            stored["previous_action"], dtype=np.float32
+        ).reshape(12).copy()
+        self.previous_residual_action = np.asarray(
+            stored["previous_residual_action"], dtype=np.float32
+        ).reshape(12).copy()
+        self._update(self.physics_steps_per_control)
+
+        base_state = super()._read_state()
+        restored_base = np.asarray(base_state["base_position"], dtype=np.float32)
+        foot_tips = self._sample_foot_tips()
+        self.episode_step = 0
+        self.episode_return = 0.0
+        self.episode_origin = restored_base.copy()
+        self.minimum_height_m = float("inf")
+        self.maximum_tilt_deg = 0.0
+        self.previous_base_x_m = float(restored_base[0])
+        self.previous_base_z_m = float(restored_base[2])
+        self.previous_terrain_height_m = stair_height_at_x(
+            self.previous_base_x_m,
+            self.staircase_config,
+        )
+        self.maximum_base_elevation_gain_m = 0.0
+        self.maximum_terrain_height_m = self.previous_terrain_height_m
+        self.minimum_base_clearance_m = float(
+            restored_base[2] - self.previous_terrain_height_m
+        )
+        self.highest_step_reached = stair_index_at_x(
+            self.previous_base_x_m,
+            self.staircase_config,
+        )
+        self.initial_placement_foot_tips_m = np.asarray(
+            stored["initial_placement_foot_tips_m"],
+            dtype=np.float32,
+        ).reshape(len(LEGS), 3).copy()
+        self.placement_leg_start_foot_tips_m = foot_tips.copy()
+        self.initial_foot_bottom_z_m = np.asarray(
+            stored["initial_foot_bottom_z_m"],
+            dtype=np.float32,
+        ).reshape(len(LEGS)).copy()
+        self.maximum_foot_lift_m = np.asarray(
+            stored["maximum_foot_lift_m"],
+            dtype=np.float32,
+        ).reshape(len(LEGS)).copy()
+        self.highest_foot_step = np.asarray(
+            stored["highest_foot_step"],
+            dtype=np.int32,
+        ).reshape(len(LEGS)).copy()
+        self.maximum_foot_tread_progress = np.asarray(
+            stored["maximum_foot_tread_progress"],
+            dtype=np.float32,
+        ).reshape(len(LEGS)).copy()
+        self.next_foot_target_index = next_foot_target_index(
+            self.highest_foot_step,
+            active_steps=self.active_step_count,
+            sequence_indices=self.foot_placement_sequence_indices,
+        )
+        self.latest_placement_base_position_m = restored_base.astype(
+            np.float64
+        ).copy()
+        self.maximum_support_slip_m = 0.0
+        self.maximum_support_slip_m_by_leg.fill(0.0)
+        self.minimum_support_contact_fraction = 1.0
+        self.minimum_placement_support_margin_m = float("inf")
+        self.maximum_swing_tread_normal_load_n = 0.0
+        self.maximum_tread_normal_load_n_by_leg.fill(0.0)
+        self.placement_tread_contact_sample_count = 0
+        self.placement_active_sample_count = 0
+        self.placement_reference_reach_clip_count = 0
+        self.maximum_placement_reference_reach_excess_m = 0.0
+        ground_loads, step_loads = self._sample_foot_contact_loads()
+        self.latest_ground_normal_loads_n = ground_loads
+        self.latest_step_normal_loads_n = step_loads
+        observation = np.asarray(self._read_state()["observation"]).copy()
+        return observation, {
+            "dof_names": tuple(self.dof_names),
+            "task_id": self.config["id"],
+            "active_step_count": self.active_step_count,
+            "goal_world_x_m": self.current_goal_x_m,
+            "observation_fields": self.observation_fields,
+            "physics_steps_per_control": self.physics_steps_per_control,
+            "terrain_perception_mode": self.terrain_perception_mode,
+            "placement_reference_enabled": True,
+            "placement_curriculum_level": self.current_placement_level_id,
+            "reset_base_position_m": self.episode_origin.copy(),
+            "placement_phase_snapshot_restored": True,
+        }
+
     def step(
         self,
         action,
@@ -1693,6 +2017,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         placement_contact_now = False
         placement_support_contact_fraction = 0.0
         placement_support_margin = 0.0
+        placement_current_support_slip_m = 0.0
         placement_swing_target_distance = 0.0
         placement_swing_tread_load = 0.0
         placement_transfer_gate_now = False
@@ -1731,6 +2056,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 axis=1,
             )
             current_support_slip = float(np.max(support_slips))
+            placement_current_support_slip_m = current_support_slip
             for support_index, slip_m in zip(
                 support_indices,
                 support_slips,
@@ -1781,9 +2107,37 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 ],
                 placement_swing_tread_load,
             )
-            placement_contact_now = bool(
-                placement_state["contact_expected"]
-                and placement_contact_reached(
+            placement_success_mode = self._placement_success_mode()
+            if placement_success_mode == "swing_lift_hold":
+                placement_contact_now = placement_lift_hold_reached(
+                    swing_tip_height_m=float(swing_tip[2]),
+                    initial_swing_tip_height_m=float(
+                        self.initial_foot_bottom_z_m[
+                            self.placement_swing_leg_index
+                        ]
+                    ),
+                    support_normal_loads_n=support_loads,
+                    support_margin_m=placement_support_margin,
+                    projected_gravity_xyz=projected_gravity,
+                    minimum_lift_m=float(
+                        self.placement_reference_config["minimum_lift_m"]
+                    ),
+                    contact_on_threshold_n=contact_threshold,
+                    minimum_support_margin_m=float(
+                        self.placement_reference_config[
+                            "minimum_lift_support_margin_m"
+                        ]
+                    ),
+                    minimum_upright_cosine=float(
+                        self.placement_reference_config[
+                            "minimum_success_upright_cosine"
+                        ]
+                    ),
+                )
+            elif placement_success_mode == "tread_contact":
+                placement_contact_now = bool(
+                    placement_state["contact_expected"]
+                    and placement_contact_reached(
                     swing_tip_position_m=swing_tip,
                     swing_tread_normal_load_n=placement_swing_tread_load,
                     support_ground_normal_loads_n=support_loads,
@@ -1808,8 +2162,13 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                             "minimum_success_upright_cosine"
                         ]
                     ),
+                    )
                 )
-            )
+            else:
+                raise ValueError(
+                    "placement_reference.success_mode must be tread_contact "
+                    "or swing_lift_hold"
+                )
             if self.placement_transfer_active:
                 placement_transfer_base_target_error_m = float(
                     np.linalg.norm(
@@ -1943,6 +2302,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 minimum_world_x_m=float(
                     self.termination_config["minimum_world_x_m"]
                 ),
+                support_slip_m=self.maximum_support_slip_m,
+                maximum_support_slip_m=(
+                    float(self.termination_config["maximum_support_slip_m"])
+                    if "maximum_support_slip_m" in self.termination_config
+                    else None
+                ),
             )
         )
         stall_config = dict(self.config.get("stall_termination", {}))
@@ -2068,11 +2433,17 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             self.goal_hold_step_count = 0
         placement_hold_steps = self.success_hold_steps
         if self.current_placement_level is not None:
+            placement_success_mode = self._placement_success_mode()
+            hold_key = (
+                "lift_hold_seconds"
+                if placement_success_mode == "swing_lift_hold"
+                else "contact_hold_seconds"
+            )
             placement_hold_steps = int(
                 round(
                     float(
                         self.current_placement_level.get(
-                            "contact_hold_seconds",
+                            hold_key,
                             self.config["success_hold_seconds"],
                         )
                     )
@@ -2174,7 +2545,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 0.0 if failed else placement_support_contact_fraction
             ),
             support_slip_m=(
-                0.0 if failed else self.maximum_support_slip_m
+                0.0 if failed else placement_current_support_slip_m
             ),
             support_margin_m=(
                 0.0 if failed else placement_support_margin
@@ -2265,6 +2636,11 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ),
             "placement_curriculum_level": self.current_placement_level_id,
             "placement_contact_now": placement_contact_now,
+            "placement_success_mode": (
+                self._placement_success_mode()
+                if self.placement_reference_enabled
+                else None
+            ),
             "swing_tread_normal_load_n": placement_swing_tread_load,
             "ground_normal_load_n_by_leg": dict(
                 zip(

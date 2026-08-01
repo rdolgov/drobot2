@@ -21,3 +21,10 @@ treads, and `0/10` deterministic successes. The recording reached only the
 first stair and is intentionally presented as an objective failure. The
 private Sites URL above now serves this v6 review and retains downloadable
 machine-readable results.
+
+`ppo-stairs-v12-front-right-190mm-lift-evaluation.mp4` and its PNG/JSON
+companions show the exact composed `2,048`-step mixed-height experiment on a
+`250 mm` tread. The selected checkpoint retains all three support contacts and
+has no measurable slip, but stops at `142.08 mm` lift after exceeding the
+strict `200 mm` lateral corridor by `2.12 mm`. This is an intentional failure
+handoff, not a claimed 190 mm success.
