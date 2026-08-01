@@ -43,6 +43,11 @@ from _stair_rl_contract import (  # noqa: E402
     progress_gate_failures,
     stair_observation_fields,
 )
+from _vl53l5cx_contract import (  # noqa: E402
+    VL53L5CX_MODE,
+    validate_vl53l5cx_config,
+    vl53l5cx_observation_fields,
+)
 
 parser = argparse.ArgumentParser(
     description="Train the separate Drobot stair-climbing PPO policy."
@@ -160,6 +165,31 @@ if bool(residual_policy_config.get("enabled", False)) and args.initialize_from_f
         "Residual stair policies use their configured frozen base model and "
         "cannot also use --initialize-from-flat"
     )
+terrain_perception_config = dict(
+    task_config.get(
+        "terrain_perception",
+        {"mode": "analytic_height_profile"},
+    )
+)
+terrain_perception_mode = str(
+    terrain_perception_config.get("mode", "analytic_height_profile")
+)
+terrain_observation_fields = None
+if terrain_perception_mode == VL53L5CX_MODE:
+    try:
+        validate_vl53l5cx_config(
+            terrain_perception_config,
+            control_hz=int(task_config["control_hz"]),
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+    terrain_observation_fields = vl53l5cx_observation_fields(
+        terrain_perception_config
+    )
+elif terrain_perception_mode != "analytic_height_profile":
+    parser.error(
+        f"Unsupported terrain perception mode: {terrain_perception_mode}"
+    )
 policy_observation_size = len(
     stair_observation_fields(
         task_config["staircase"]["terrain_sample_offsets_m"],
@@ -169,6 +199,7 @@ policy_observation_size = len(
         include_foot_progress_observation=bool(
             task_config.get("include_foot_progress_observation", False)
         ),
+        terrain_observation_fields=terrain_observation_fields,
     )
 )
 world_path = _resolve_project_path(args.world or task_config["world"])
@@ -525,6 +556,8 @@ report: dict[str, object] = {
     "requested_seed": args.seed,
     "height_stage": args.height_stage,
     "fixed_active_steps": args.fixed_active_steps,
+    "terrain_perception_mode": terrain_perception_mode,
+    "terrain_perception": terrain_perception_config,
     "device_request": args.device,
     "isaac_sim_version": "6.0.1",
     "torch_version": torch.__version__,
@@ -878,8 +911,13 @@ try:
                 )
             ),
             "terrain_input": (
-                "Analytic height profile used for simulation learning; not "
-                "yet a hardware sensor pipeline."
+                "VL53L5CX-style 8 x 8 noisy raycast depth at 15 Hz; RGB "
+                "camera pixels are not policy inputs."
+                if terrain_perception_mode == VL53L5CX_MODE
+                else (
+                    "Analytic height profile used for simulation learning; "
+                    "not a hardware sensor pipeline."
+                )
             ),
         }
     )

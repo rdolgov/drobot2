@@ -28,6 +28,12 @@ from _stair_rl_contract import (
     stair_reward_terms,
     validate_staircase_config,
 )
+from _vl53l5cx_contract import (
+    VL53L5CX_MODE,
+    validate_vl53l5cx_config,
+    vl53l5cx_observation_fields,
+)
+from _vl53l5cx_sensor import VL53L5CXRaycastSensor
 from gymnasium import spaces
 from isaacsim.core.experimental.prims import RigidPrim
 from pxr import UsdPhysics
@@ -83,6 +89,8 @@ def _rotate_wxyz(quaternion: np.ndarray, vector: np.ndarray) -> np.ndarray:
             np.cross(quaternion_vector, vector),
         )
     )
+
+
 class QuadrupedStairsEnv(QuadrupedWalkEnv):
     """One floating quadruped learning a curriculum over a fixed staircase."""
 
@@ -196,6 +204,38 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             LEGS.index(name) for name in configured_sequence
         )
 
+        self.terrain_perception_config = dict(
+            self.config.get(
+                "terrain_perception",
+                {"mode": "analytic_height_profile"},
+            )
+        )
+        self.terrain_perception_mode = str(
+            self.terrain_perception_config.get(
+                "mode",
+                "analytic_height_profile",
+            )
+        )
+        self.vl53l5cx_sensor: VL53L5CXRaycastSensor | None = None
+        terrain_field_override = None
+        if self.terrain_perception_mode == VL53L5CX_MODE:
+            validate_vl53l5cx_config(
+                self.terrain_perception_config,
+                control_hz=self.control_hz,
+            )
+            self.vl53l5cx_sensor = VL53L5CXRaycastSensor(
+                self.terrain_perception_config,
+                control_hz=self.control_hz,
+            )
+            terrain_field_override = vl53l5cx_observation_fields(
+                self.terrain_perception_config
+            )
+        elif self.terrain_perception_mode != "analytic_height_profile":
+            raise ValueError(
+                "Unsupported terrain perception mode: "
+                f"{self.terrain_perception_mode}"
+            )
+
         offsets = tuple(
             float(value)
             for value in self.staircase_config["terrain_sample_offsets_m"]
@@ -212,6 +252,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             include_foot_progress_observation=(
                 self.include_foot_progress_observation
             ),
+            terrain_observation_fields=terrain_field_override,
         )
         self.observation_size = len(self.observation_fields)
         self.observation_space = spaces.Box(
@@ -441,6 +482,13 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         ).copy()
         base_position = np.asarray(state["base_position"])
         heading_error = _yaw_from_wxyz(state["base_orientation"])
+        terrain_observation = None
+        if self.vl53l5cx_sensor is not None:
+            terrain_observation = self.vl53l5cx_sensor.observe(
+                base_position_world_m=base_position,
+                base_orientation_wxyz=state["base_orientation"],
+                rng=self.np_random,
+            )
         foot_progress_normalized = None
         next_target_one_hot = None
         if self.include_foot_progress_observation:
@@ -483,7 +531,14 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ),
             foot_progress_normalized=foot_progress_normalized,
             next_foot_target_one_hot=next_target_one_hot,
+            terrain_observation_values=terrain_observation,
         )
+        if np.asarray(state["observation"]).shape != (self.observation_size,):
+            raise RuntimeError(
+                "Runtime stair observation does not match its declared contract: "
+                f"{np.asarray(state['observation']).shape} != "
+                f"({self.observation_size},)"
+            )
         state["heading_error_rad"] = heading_error
         return state
 
@@ -549,6 +604,8 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.highest_foot_step.fill(0)
         self.maximum_foot_tread_progress.fill(0.0)
         self.next_foot_target_index = self.foot_placement_sequence_indices[0]
+        if self.vl53l5cx_sensor is not None:
+            self.vl53l5cx_sensor.reset()
         observation, info = super().reset(seed=seed, options=options)
         self.previous_base_x_m = float(self.episode_origin[0])
         self.previous_base_z_m = float(self.episode_origin[2])
@@ -587,6 +644,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "goal_world_x_m": self.current_goal_x_m,
                 "observation_fields": self.observation_fields,
                 "physics_steps_per_control": self.physics_steps_per_control,
+                "terrain_perception_mode": self.terrain_perception_mode,
+                "terrain_sensor_metrics": (
+                    self.vl53l5cx_sensor.metrics
+                    if self.vl53l5cx_sensor is not None
+                    else None
+                ),
             }
         )
         return observation, info
@@ -835,6 +898,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             "target_joint_positions_rad": target.copy(),
             "base_policy_action": base_action.copy(),
             "residual_policy_action": clipped_action.copy(),
+            "terrain_perception_mode": self.terrain_perception_mode,
+            "terrain_sensor_metrics": (
+                self.vl53l5cx_sensor.metrics
+                if self.vl53l5cx_sensor is not None
+                else None
+            ),
         }
         if terminated or truncated:
             episode_metrics = {
@@ -914,9 +983,41 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     self.include_foot_progress_observation
                 ),
                 "foot_placement_sequence": list(self.foot_placement_sequence),
+                "terrain_perception_mode": self.terrain_perception_mode,
+                "terrain_perception": self.terrain_perception_config,
                 "terrain_input_note": (
-                    "Analytic forward terrain profile; replace with a "
-                    "camera/depth estimator before hardware deployment."
+                    "Noisy, held, latency-delayed 8 x 8 VL53L5CX PhysX "
+                    "raycasts compressed to 24 lane/row depth values; RGB "
+                    "camera pixels are not policy inputs."
+                    if self.vl53l5cx_sensor is not None
+                    else (
+                        "Analytic forward terrain profile; replace with a "
+                        "hardware-reproducible estimator before deployment."
+                    )
+                ),
+                "rgb_camera_policy_input": False,
+                "terrain_sensor_runtime": (
+                    {
+                        "ray_count": int(
+                            np.prod(
+                                self.vl53l5cx_sensor.ray_directions_from_base.shape[
+                                    :2
+                                ]
+                            )
+                        ),
+                        "control_frames_per_measurement": (
+                            self.vl53l5cx_sensor.control_frames_per_measurement
+                        ),
+                        "latency_frames": (
+                            self.vl53l5cx_sensor.latency_frames
+                        ),
+                        "latency_seconds": (
+                            self.vl53l5cx_sensor.latency_frames
+                            / self.vl53l5cx_sensor.update_rate_hz
+                        ),
+                    }
+                    if self.vl53l5cx_sensor is not None
+                    else None
                 ),
                 "physics_steps_per_control": self.physics_steps_per_control,
                 "control_action_mode": (

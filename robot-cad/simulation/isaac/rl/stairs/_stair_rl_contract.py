@@ -335,11 +335,19 @@ def stair_observation_fields(
     *,
     include_navigation_observation: bool = False,
     include_foot_progress_observation: bool = False,
+    terrain_observation_fields: Sequence[str] | None = None,
 ) -> tuple[str, ...]:
-    terrain_fields = tuple(
-        f"terrain_height_delta_at_{float(offset):+.3f}_m"
-        for offset in terrain_sample_offsets_m
-    )
+    if terrain_observation_fields is None:
+        terrain_fields = tuple(
+            f"terrain_height_delta_at_{float(offset):+.3f}_m"
+            for offset in terrain_sample_offsets_m
+        )
+    else:
+        terrain_fields = tuple(str(field) for field in terrain_observation_fields)
+        if not terrain_fields or any(not field for field in terrain_fields):
+            raise ValueError("terrain_observation_fields cannot be empty")
+        if len(set(terrain_fields)) != len(terrain_fields):
+            raise ValueError("terrain_observation_fields must be unique")
     fields = POLICY_OBSERVATION_FIELDS + terrain_fields + (
         "goal_distance_normalized",
     )
@@ -371,8 +379,9 @@ def pack_stair_policy_observation(
     include_foot_progress_observation: bool = False,
     foot_progress_normalized=None,
     next_foot_target_one_hot=None,
+    terrain_observation_values=None,
 ) -> np.ndarray:
-    """Append a compact forward terrain scan and curriculum goal distance."""
+    """Append a terrain observation and curriculum goal distance."""
 
     validate_staircase_config(staircase)
     base = _finite_vector(
@@ -380,20 +389,34 @@ def pack_stair_policy_observation(
         POLICY_OBSERVATION_SIZE,
         "walking_observation",
     )
-    offsets = np.asarray(
-        staircase["terrain_sample_offsets_m"],
-        dtype=np.float32,
-    ).reshape(-1)
-    local_height = stair_height_at_x(base_world_x_m, staircase)
-    heights = np.asarray(
-        [
-            stair_height_at_x(base_world_x_m + float(offset), staircase)
-            for offset in offsets
-        ],
-        dtype=np.float32,
-    )
-    height_scale = float(staircase["terrain_height_normalization_m"])
-    terrain_profile = np.clip((heights - local_height) / height_scale, -2.0, 2.0)
+    if terrain_observation_values is None:
+        offsets = np.asarray(
+            staircase["terrain_sample_offsets_m"],
+            dtype=np.float32,
+        ).reshape(-1)
+        local_height = stair_height_at_x(base_world_x_m, staircase)
+        heights = np.asarray(
+            [
+                stair_height_at_x(base_world_x_m + float(offset), staircase)
+                for offset in offsets
+            ],
+            dtype=np.float32,
+        )
+        height_scale = float(staircase["terrain_height_normalization_m"])
+        terrain_profile = np.clip(
+            (heights - local_height) / height_scale,
+            -2.0,
+            2.0,
+        )
+    else:
+        terrain_profile = np.asarray(
+            terrain_observation_values,
+            dtype=np.float32,
+        ).reshape(-1)
+        if terrain_profile.size == 0 or not np.all(np.isfinite(terrain_profile)):
+            raise ValueError(
+                "terrain_observation_values must contain finite values"
+            )
     goal_distance = np.clip(
         (float(goal_world_x_m) - float(base_world_x_m))
         / float(staircase["goal_distance_normalization_m"]),

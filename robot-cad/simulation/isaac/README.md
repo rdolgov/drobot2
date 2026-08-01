@@ -253,9 +253,12 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/quadruped_stairs_v4.yaml` | Corrects flat-policy action scaling and matches its effective 120 Hz action cadence | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/quadruped_stairs_v5.yaml` | Defines the frozen-flat residual controller, staged 10-40 mm worlds, physical fork-tip shaping, strict elevation/hold success, and measured hardware limits | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/quadruped_stairs_v6_180mm.yaml` | Defines the fixed-250 mm-depth height curriculum through the exact 180 mm stage, 68-value foot-sequence input, strict four-foot landing gate, and measured hardware limits | edited by stair runners | no generated data |
+| `simulation/isaac/rl/stairs/quadruped_stairs_v7_vl53l5cx.yaml` | Reuses the exact 180 x 250 mm world and measured hardware limits while replacing analytic terrain input with a 15 Hz noisy/latent 8 x 8 VL53L5CX raycast contract | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/_stair_geometry.py` | Defines the crack-free stacked collision layers for the four-step staircase | stair YAML values | pure Python geometry facts |
-| `simulation/isaac/rl/stairs/_stair_rl_contract.py` | Defines analytic terrain sampling, 57/60/68-value observation contracts, progress gates, strict stair/foot goals, foot-sequence progress, physical-height reward terms, and failure reasons | walking observation and stair YAML values | observations and scalar contract results |
-| `simulation/isaac/rl/stairs/_quadruped_stairs_env.py` | Extends the walking environment with exact DOF order, configured control cadence, optional frozen-base residual actions, physical fork-tip progress, stair-relative state, curriculum, and episode metrics | stair world and task config | actions, observations, rewards, episode state |
+| `simulation/isaac/rl/stairs/_vl53l5cx_contract.py` | Defines pure 8 x 8 ray geometry, 15 Hz mode validation, bounded noise/dropout, three-lane compression, and 24 depth observation fields | sensor YAML values and NumPy grids | rays and normalized depth observations |
+| `simulation/isaac/rl/stairs/_vl53l5cx_sensor.py` | Samples 64 PhysX closest-hit rays, rotates the body sensor into world space, and applies update cadence, hold, and latency | live base pose and sensor config | raw/noisy grids, hit paths, and 24-value depth observation |
+| `simulation/isaac/rl/stairs/_stair_rl_contract.py` | Defines selectable analytic or hardware-shaped terrain input, 57/60/68/84-value observation contracts, progress gates, strict stair/foot goals, foot-sequence progress, physical-height reward terms, and failure reasons | walking/terrain observation and stair YAML values | observations and scalar contract results |
+| `simulation/isaac/rl/stairs/_quadruped_stairs_env.py` | Extends walking with exact DOF order, optional frozen-base residual actions, selectable analytic/VL53L5CX perception, physical fork-tip progress, curriculum, and episode metrics | stair world and task config | actions, observations, rewards, sensor and episode state |
 | `simulation/isaac/rl/stairs/_policy_transfer.py` | Strictly expands the verified 48/12 ELU flat policy and can rescale output means to preserve physical actions across action boxes | source and target policy tensors | transferred policy state and report |
 | `simulation/isaac/rl/stairs/_run_support.py` | Creates/verifies schema-2 model, config, world/dependency, environment, PPO-mode, transfer, and resume contracts | model, YAML, composed world files, runtime/PPO contracts | adjacent `.contract.json` manifests |
 | `simulation/isaac/rl/stairs/create_stairs_world.py` | Sublayers the validated manual world and authors static stair collision layers | base world and stair YAML | stair-world USDA and static validation JSON |
@@ -264,12 +267,15 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/train_stairs_v4_ppo.py` | Selects the transfer-safe v4 stair defaults | v4 stair YAML/world and optional model | v4 training outputs |
 | `simulation/isaac/rl/stairs/train_stairs_v5_ppo.py` | Selects the residual-policy v5 defaults and staged-height configuration | v5 stair YAML/world and optional model | v5 training outputs |
 | `simulation/isaac/rl/stairs/train_stairs_v6_180mm_ppo.py` | Selects the v6 exact-180 mm task and release output defaults | v6 stair YAML/world and optional model | v6 training outputs |
+| `simulation/isaac/rl/stairs/train_stairs_v7_vl53l5cx_ppo.py` | Selects the v7 exact-180 mm task with cheap multi-zone ToF input | v7 stair YAML/world and optional model | v7 sensor-policy training outputs |
+| `simulation/isaac/rl/stairs/validate_vl53l5cx_stairs.py` | Verifies live 64-ray PhysX hits, 15 Hz cadence, latency, held observations, and writes an 8 x 8 review heatmap | v7 config and stair world | sensor validation JSON and PNG |
 | `simulation/isaac/rl/stairs/distill_successful_stairs.py` | Collects physically successful stochastic rollouts and behavior-clones their residual actions into the actor mean | v5 world, model, manifest | distilled model, rebound manifest, and collection report |
 | `simulation/isaac/rl/stairs/evaluate_stairs_ppo.py` | Runs deterministic stair episodes at a pinned curriculum level and verifies the model contract | stair YAML/world, model, manifest | evaluation JSON and optional PNG |
 | `simulation/isaac/rl/stairs/record_stairs_ppo.py` | Records deterministic or stochastic stair episodes, optionally replaying seeded precursor episodes so policy RNG and PhysX reset history remain exact | stair YAML/world, model, manifest | H.264 MP4, thumbnail PNG, optional trajectory, recording JSON |
 | `simulation/isaac/models/ppo-walk-v1-2m/` | Tracks the frozen flat-walking dependency used by v5 residual control | validated flat PPO ZIP | release dependency |
 | `simulation/isaac/models/ppo-stairs-v5-10mm-four-step/` | Tracks the source-equivalent shallow-stair policy, schema-2 manifest, and deterministic evaluation | v5 config/world and source policy | evaluable release package |
 | `simulation/isaac/models/ppo-stairs-v6-180mm-25cm-small/` | Tracks the bounded 180 mm x 250 mm evaluation policy, schema-2 manifest, training/evaluation/recording reports, and explicit failure result | v6 config/world and bounded policy | non-deployable evaluation package |
+| `simulation/isaac/models/ppo-stairs-v7-vl53l5cx-180mm-small/` | Tracks the 512-step VL53L5CX sensor-policy smoke model, schema-2 manifest, training/evaluation/recording reports, and explicit failure result | v7 config/world and transferred v6 policy | non-deployable sensor pipeline package |
 | `simulation/isaac/experiments/stair_feasibility/__init__.py` | Marks the scripted real-stair feasibility experiment as a separate Python package | no runtime input | no generated data |
 | `simulation/isaac/experiments/stair_feasibility/real_stair_feasibility.yaml` | Versions the isolated block geometry, scripted motion, contact model, rated torque cap, and pass/fail thresholds | edited feasibility configuration | no generated data |
 | `simulation/isaac/experiments/stair_feasibility/_contract.py` | Defines pure IK targets, support-triangle margin, configuration validation, and trial gates | feasibility YAML and measured metrics | analytic targets and gate failures |
@@ -624,6 +630,23 @@ never passed stair one. This validates the exact-world/training/recording
 pipeline while reinforcing, not overturning, the existing rated-torque
 feasibility failure.
 
+V7 keeps the same exact `180 mm` rise, `250 mm` tread, and measured
+`0.8825985 N m` hardware cap, but removes the policy's perfect analytic
+terrain-height samples. It casts an `8 x 8` VL53L5CX-style grid from a
+`40 deg` downward mount at the real full-grid limit of `15 Hz`, adds bounded
+range noise, `5%` modeled zone dropout, and one-frame latency, then median
+compresses it to 24 left/center/right row depths. The policy grows from 68 to
+84 values. IMU and joint feedback remain inputs; RGB camera pixels are only
+used for the review recording.
+
+The 512-step transfer smoke and live sensor validator passed. The validator
+delivered new samples only at control frames `8`, `16`, and `24`; all rays hit
+the first two authored stair layers. The deterministic four-step evaluation
+still scored `0/1`, and the recording stopped at the seven-second progress
+gate without reaching stair one. Review the honest run and depth grid at
+https://drobot-stair-sensor-eval.romka.chatgpt.site. This validates the cheap
+sensor/training/recording path, not locomotion or hardware readiness.
+
 The source map, complete commands, reward/termination formulas, manifest
 rules, measured smoke results, evaluation guidance, and sim-to-real limits are
 owned by [`docs/rl-stairs/README.md`](../../docs/rl-stairs/README.md), with
@@ -632,7 +655,9 @@ the corrected experiment recorded separately in
 hardware-informed residual result in
 [`docs/rl-stairs-v5/README.md`](../../docs/rl-stairs-v5/README.md), with the
 full-size bounded result in
-[`docs/rl-stairs-v6-180mm/README.md`](../../docs/rl-stairs-v6-180mm/README.md).
+[`docs/rl-stairs-v6-180mm/README.md`](../../docs/rl-stairs-v6-180mm/README.md),
+and the multi-zone ToF experiment in
+[`docs/rl-stairs-v7-vl53l5cx/README.md`](../../docs/rl-stairs-v7-vl53l5cx/README.md).
 
 ## Real-stair feasibility gate
 
