@@ -45,6 +45,7 @@ from _stair_rl_contract import (  # noqa: E402
     placement_lift_hold_reached,
     placement_phase_ready,
     placement_reference_state,
+    placement_success_mode,
     progress_gate_failures,
     stabilized_support_reference_base_delta,
     stair_failure_reasons,
@@ -158,6 +159,22 @@ def v12_config() -> dict:
 def v13_config() -> dict:
     with (
         STAIRS_DIR / "quadruped_stairs_v13_front_right_stabilized_lift.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v14_config() -> dict:
+    with (
+        STAIRS_DIR / "quadruped_stairs_v14_front_pair_right_then_left.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v15_config() -> dict:
+    with (
+        STAIRS_DIR / "quadruped_stairs_v15_front_left_stabilized_lift.yaml"
     ).open("r", encoding="utf-8") as stream:
         return yaml.safe_load(stream)
 
@@ -1155,6 +1172,128 @@ def test_v13_isolates_front_right_lift_under_the_strict_gate(
     assert gains["lateral"] >= gains["forward"] >= 0.0
     assert gains["vertical"] == pytest.approx(0.0)
     assert stabilized["foot_contact_material"]["enabled"] is False
+
+
+def test_v14_reverses_the_front_pair_and_mastery_gates_left_placement(
+    v10_config: dict,
+    v14_config: dict,
+) -> None:
+    single_right = v10_config["task"]
+    front_pair = v14_config["task"]
+    placement = front_pair["placement_reference"]
+    levels = front_pair["placement_curriculum"]["levels"]
+
+    assert front_pair["staircase"] == single_right["staircase"]
+    assert front_pair["staircase"]["tread_depth_m"] == pytest.approx(0.25)
+    assert placement["sequence_legs"] == ["front_right", "front_left"]
+    assert placement["success_mode"] == "tread_contact"
+    assert placement["inter_leg_transfer"]["enabled"] is True
+    assert placement["inter_leg_transfer"][
+        "base_target_tolerance_m"
+    ] == pytest.approx(0.065)
+    assert placement["inter_leg_transfer"][
+        "phase_snapshot_restore_zero_velocities"
+    ] is True
+    assert placement["inter_leg_transfer"][
+        "phase_snapshot_restore_settle_control_steps"
+    ] == 12
+    left_timing = placement["timing_override_by_leg"]["front_left"]
+    assert left_timing["lift_start_seconds"] == pytest.approx(0.50)
+    assert left_timing["lower_start_seconds"] == pytest.approx(5.50)
+    assert placement["level_override_by_leg"]["front_right"][
+        "target_tread_fraction"
+    ] == pytest.approx(0.24)
+    assert front_pair["placement_curriculum"]["mode"] == "mastery"
+    assert front_pair["placement_curriculum"][
+        "mastery_successes_per_level"
+    ] == 2
+    assert [level["id"] for level in levels] == [
+        "left-supported-015mm-lift",
+        "left-supported-035mm-lift",
+        "left-supported-060mm-lift",
+        "left-supported-100mm-lift",
+        "left-supported-140mm-lift",
+        "left-supported-190mm-lift",
+        "left-near-edge-force-touch",
+        "left-quarter-tread-load",
+        "left-center-tread-load",
+    ]
+    assert [level["minimum_lift_m"] for level in levels[:6]] == (
+        pytest.approx([0.015, 0.035, 0.060, 0.100, 0.140, 0.190])
+    )
+    assert [level["success_mode"] for level in levels] == [
+        "swing_lift_hold",
+        "swing_lift_hold",
+        "swing_lift_hold",
+        "swing_lift_hold",
+        "swing_lift_hold",
+        "swing_lift_hold",
+        "tread_contact",
+        "tread_contact",
+        "tread_contact",
+    ]
+    assert [level["contact_hold_seconds"] for level in levels[-3:]] == (
+        pytest.approx([0.25, 0.50, 0.75])
+    )
+    assert levels[-1]["apex_lift_m"] == pytest.approx(0.205)
+    assert front_pair["termination"][
+        "maximum_lateral_deviation_m"
+    ] == pytest.approx(0.30)
+    assert front_pair["foot_contact_material"]["enabled"] is False
+
+
+def test_v15_mirrors_the_proven_direct_lift_for_front_left(
+    v13_config: dict,
+    v15_config: dict,
+) -> None:
+    right = v13_config["task"]
+    left = v15_config["task"]
+
+    assert left["staircase"] == right["staircase"]
+    assert left["staircase"]["tread_depth_m"] == pytest.approx(0.25)
+    assert left["placement_reference"]["sequence_legs"] == ["front_left"]
+    assert left["placement_reference"]["success_mode_by_leg"] == {
+        "front_left": "swing_lift_hold"
+    }
+    assert left["placement_reference"]["minimum_lift_m"] == pytest.approx(
+        0.190
+    )
+    assert left["placement_reference"][
+        "minimum_lift_support_margin_m"
+    ] == pytest.approx(0.015)
+    levels = left["placement_curriculum"]["levels"]
+    assert [level["minimum_lift_m"] for level in levels] == pytest.approx(
+        [0.015, 0.020, 0.035, 0.060, 0.100, 0.140, 0.190]
+    )
+    assert all(level["id"].startswith("front-left-") for level in levels)
+    assert levels[-1]["lift_hold_seconds"] == pytest.approx(0.50)
+    assert left["termination"] == right["termination"]
+    assert left["foot_contact_material"]["enabled"] is False
+
+
+def test_placement_success_mode_prefers_level_then_leg_then_default() -> None:
+    assert (
+        placement_success_mode(
+            swing_leg="front_left",
+            default_mode="tread_contact",
+            mode_by_leg={"front_left": "swing_lift_hold"},
+            active_level={"success_mode": "tread_contact"},
+        )
+        == "tread_contact"
+    )
+    assert (
+        placement_success_mode(
+            swing_leg="front_left",
+            mode_by_leg={"front_left": "swing_lift_hold"},
+        )
+        == "swing_lift_hold"
+    )
+    assert placement_success_mode(swing_leg="front_right") == "tread_contact"
+    with pytest.raises(ValueError, match="success mode"):
+        placement_success_mode(
+            swing_leg="front_right",
+            active_level={"success_mode": "unsupported"},
+        )
 
 
 def test_inter_leg_transfer_uses_smooth_weight_shift_and_support_incenter() -> None:

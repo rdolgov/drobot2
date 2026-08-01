@@ -229,6 +229,30 @@ def placement_curriculum_level(
     return selected
 
 
+def placement_success_mode(
+    *,
+    swing_leg: str,
+    default_mode: str = "tread_contact",
+    mode_by_leg: Mapping[str, object] | None = None,
+    active_level: Mapping[str, object] | None = None,
+) -> str:
+    """Resolve level, leg, then task success mode for a placement stage."""
+
+    leg_modes = dict(mode_by_leg or {})
+    level = dict(active_level or {})
+    mode = str(
+        level.get(
+            "success_mode",
+            leg_modes.get(str(swing_leg), default_mode),
+        )
+    )
+    if mode not in {"tread_contact", "swing_lift_hold"}:
+        raise ValueError(
+            "placement success mode must be tread_contact or swing_lift_hold"
+        )
+    return mode
+
+
 def placement_reference_state(
     elapsed_seconds: float,
     *,

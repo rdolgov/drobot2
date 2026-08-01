@@ -33,6 +33,7 @@ from _stair_rl_contract import (
     placement_curriculum_level,
     placement_lift_hold_reached,
     placement_reference_state,
+    placement_success_mode,
     stabilized_support_reference_base_delta,
     stair_failure_reasons,
     stair_goal_reached,
@@ -487,6 +488,23 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             self.inter_leg_transfer_config.get("enabled", False)
             and len(self.placement_sequence_legs) > 1
         )
+        self.phase_snapshot_restore_settle_control_steps = int(
+            self.inter_leg_transfer_config.get(
+                "phase_snapshot_restore_settle_control_steps",
+                0,
+            )
+        )
+        if not 0 <= self.phase_snapshot_restore_settle_control_steps <= 120:
+            raise ValueError(
+                "inter_leg_transfer.phase_snapshot_restore_settle_control_steps "
+                "must be within [0, 120]"
+            )
+        self.phase_snapshot_restore_zero_velocities = bool(
+            self.inter_leg_transfer_config.get(
+                "phase_snapshot_restore_zero_velocities",
+                False,
+            )
+        )
         support_anchor_follow_gain = float(
             self.inter_leg_transfer_config.get(
                 "support_world_anchor_follow_gain",
@@ -620,17 +638,21 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 )
 
     def _placement_success_mode(self) -> str:
-        mode_by_leg = dict(
-            self.placement_reference_config.get("success_mode_by_leg", {})
-        )
-        return str(
-            mode_by_leg.get(
-                self.placement_swing_leg,
+        return placement_success_mode(
+            swing_leg=self.placement_swing_leg,
+            default_mode=str(
                 self.placement_reference_config.get(
                     "success_mode",
                     "tread_contact",
-                ),
-            )
+                )
+            ),
+            mode_by_leg=dict(
+                self.placement_reference_config.get(
+                    "success_mode_by_leg",
+                    {},
+                )
+            ),
+            active_level=self._active_placement_level(),
         )
 
     def _active_placement_level(self) -> dict[str, object]:
@@ -707,6 +729,17 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         return normal_loads[:, 0], normal_loads[:, 1:]
 
     def _placement_state(self, elapsed_seconds: float) -> dict[str, object]:
+        timing = dict(self.placement_reference_config["timing"])
+        timing.update(
+            dict(
+                dict(
+                    self.placement_reference_config.get(
+                        "timing_override_by_leg",
+                        {},
+                    )
+                ).get(self.placement_swing_leg, {})
+            )
+        )
         return placement_reference_state(
             max(
                 0.0,
@@ -714,7 +747,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 - self.placement_phase_start_step * self.control_dt_s,
             )
             + self.placement_phase_elapsed_offset_s,
-            timing=dict(self.placement_reference_config["timing"]),
+            timing=timing,
             level=self._active_placement_level(),
         )
 
@@ -1848,12 +1881,22 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             positions=[base_position],
             orientations=[base_orientation],
         )
-        self.robot.set_velocities(
-            linear_velocities=[linear_velocity],
-            angular_velocities=[angular_velocity],
-        )
+        if self.phase_snapshot_restore_zero_velocities:
+            self.robot.set_velocities(
+                linear_velocities=[np.zeros(3, dtype=np.float32)],
+                angular_velocities=[np.zeros(3, dtype=np.float32)],
+            )
+        else:
+            self.robot.set_velocities(
+                linear_velocities=[linear_velocity],
+                angular_velocities=[angular_velocity],
+            )
         self.robot.set_dof_positions(joint_positions)
-        self.robot.set_dof_velocities(joint_velocities)
+        self.robot.set_dof_velocities(
+            np.zeros(12, dtype=np.float32)
+            if self.phase_snapshot_restore_zero_velocities
+            else joint_velocities
+        )
         self.robot.set_dof_position_targets(joint_targets)
         self.previous_target = joint_targets.copy()
         self.previous_action = np.asarray(
@@ -1862,11 +1905,26 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.previous_residual_action = np.asarray(
             stored["previous_residual_action"], dtype=np.float32
         ).reshape(12).copy()
-        self._update(self.physics_steps_per_control)
+        settle_steps = max(1, self.phase_snapshot_restore_settle_control_steps)
+        for _ in range(settle_steps):
+            self.robot.set_dof_position_targets(joint_targets)
+            self._update(self.physics_steps_per_control)
 
         base_state = super()._read_state()
         restored_base = np.asarray(base_state["base_position"], dtype=np.float32)
         foot_tips = self._sample_foot_tips()
+        if self.phase_snapshot_restore_settle_control_steps:
+            self.placement_leg_baseline_reference_by_leg = (
+                self._reference_parameters_from_joint_positions(
+                    np.asarray(
+                        base_state["joint_positions"],
+                        dtype=np.float32,
+                    )
+                )
+            )
+            self.placement_leg_baseline_base_position_m = restored_base.astype(
+                np.float64
+            ).copy()
         self.episode_step = 0
         self.episode_return = 0.0
         self.episode_origin = restored_base.copy()
@@ -1929,6 +1987,28 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         ground_loads, step_loads = self._sample_foot_contact_loads()
         self.latest_ground_normal_loads_n = ground_loads
         self.latest_step_normal_loads_n = step_loads
+        contact_threshold = float(
+            self.placement_reference_config["contact_on_threshold_n"]
+        )
+        completed_indices = [
+            LEGS.index(leg) for leg in self.completed_placement_legs
+        ]
+        completed_tread_loads = (
+            np.sum(step_loads[completed_indices], axis=1)
+            if completed_indices
+            else np.zeros(0, dtype=np.float32)
+        )
+        support_loads = ground_loads + np.sum(step_loads, axis=1)
+        restored_support_loads = support_loads[
+            list(self.placement_support_leg_indices)
+        ]
+        if (
+            completed_indices
+            and np.any(completed_tread_loads < contact_threshold)
+        ) or np.any(restored_support_loads < contact_threshold):
+            raise RuntimeError(
+                "Placement phase snapshot did not restore force-backed support"
+            )
         observation = np.asarray(self._read_state()["observation"]).copy()
         return observation, {
             "dof_names": tuple(self.dof_names),
@@ -1942,6 +2022,17 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             "placement_curriculum_level": self.current_placement_level_id,
             "reset_base_position_m": self.episode_origin.copy(),
             "placement_phase_snapshot_restored": True,
+            "placement_phase_snapshot_settle_control_steps": (
+                self.phase_snapshot_restore_settle_control_steps
+            ),
+            "placement_phase_snapshot_completed_tread_min_load_n": (
+                float(np.min(completed_tread_loads))
+                if completed_tread_loads.size
+                else 0.0
+            ),
+            "placement_phase_snapshot_support_min_load_n": float(
+                np.min(restored_support_loads)
+            ),
         }
 
     def step(
