@@ -470,6 +470,26 @@ def bounded_support_incenter_target_xy(
     ).astype(np.float64)
 
 
+def balance_target_error_xy(
+    *,
+    balance_position_xy_m: Sequence[float],
+    target_position_xy_m: Sequence[float],
+) -> np.ndarray:
+    """Return the signed whole-robot balance error in the target frame."""
+
+    balance = _finite_vector(
+        balance_position_xy_m,
+        2,
+        "balance_position_xy_m",
+    )
+    target = _finite_vector(
+        target_position_xy_m,
+        2,
+        "target_position_xy_m",
+    )
+    return balance.astype(np.float64) - target.astype(np.float64)
+
+
 def placement_phase_ready(
     *,
     sequence_legs: Sequence[str],

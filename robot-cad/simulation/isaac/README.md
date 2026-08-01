@@ -715,6 +715,9 @@ full-size bounded result in
 [`docs/rl-stairs-v6-180mm/README.md`](../../docs/rl-stairs-v6-180mm/README.md),
 and the multi-zone ToF experiment in
 [`docs/rl-stairs-v7-vl53l5cx/README.md`](../../docs/rl-stairs-v7-vl53l5cx/README.md).
+The corrected composite-COM training contract, V19-V21 transfer sensitivities,
+and the traction-versus-vision recommendation are recorded in
+[`docs/rl-stairs-v19-v21-transfer-audit/README.md`](../../docs/rl-stairs-v19-v21-transfer-audit/README.md).
 
 ## Real-stair feasibility gate
 

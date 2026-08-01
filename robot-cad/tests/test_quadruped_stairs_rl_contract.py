@@ -31,6 +31,7 @@ from _run_support import (  # noqa: E402
 from _stair_geometry import stair_layer_boxes  # noqa: E402
 from _stair_rl_contract import (  # noqa: E402
     PLACEMENT_REFERENCE_OBSERVATION_FIELDS,
+    balance_target_error_xy,
     bounded_support_incenter_target_xy,
     compose_bounded_residual_action,
     config_for_height_stage,
@@ -1514,6 +1515,20 @@ def test_com_target_moves_toward_support_incenter_with_bounded_shift() -> None:
             reference_point_xy_m=(0.0, 0.0),
             support_points_xy_m=((0.0, 0.0), (2.0, 0.0), (0.0, 2.0)),
             incenter_blend=0.0,
+        )
+
+
+def test_balance_target_error_uses_the_com_target_frame() -> None:
+    error = balance_target_error_xy(
+        balance_position_xy_m=(0.42, -0.03),
+        target_position_xy_m=(0.36, -0.09),
+    )
+
+    np.testing.assert_allclose(error, (0.06, 0.06), atol=1e-7)
+    with pytest.raises(ValueError, match="balance_position_xy_m"):
+        balance_target_error_xy(
+            balance_position_xy_m=(np.nan, 0.0),
+            target_position_xy_m=(0.0, 0.0),
         )
 
 

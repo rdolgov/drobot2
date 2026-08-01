@@ -22,6 +22,7 @@ from _quadruped_runtime import (
 from _rl_contract import POLICY_OBSERVATION_CLIP
 from _stair_rl_contract import (
     PLACEMENT_REFERENCE_OBSERVATION_FIELDS,
+    balance_target_error_xy,
     bounded_support_incenter_target_xy,
     curriculum_active_steps,
     foot_tread_progress,
@@ -856,6 +857,43 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             / total_mass
         ).astype(np.float64)
 
+    def _placement_balance_target_xy_m(self) -> np.ndarray:
+        """Return the retained whole-robot balance target for this phase."""
+
+        target = self.placement_transfer_target_balance_position_m[:2].copy()
+        if not np.any(np.abs(target) > 1e-9):
+            target = self.placement_leg_baseline_balance_position_m[:2].copy()
+        if not self.placement_transfer_active:
+            hold_target_offset = dict(
+                self.com_regulation_config.get("hold_target_offset_m", {})
+            )
+            hold_target_offset.update(
+                dict(
+                    dict(
+                        self.com_regulation_config.get(
+                            "hold_target_offset_by_swing_leg",
+                            {},
+                        )
+                    ).get(self.placement_swing_leg, {})
+                )
+            )
+            target += np.asarray(
+                [
+                    float(hold_target_offset.get("forward", 0.0)),
+                    float(hold_target_offset.get("lateral", 0.0)),
+                ],
+                dtype=np.float64,
+            )
+        return target
+
+    def _placement_balance_target_error_xy_m(self) -> np.ndarray:
+        """Return composite-COM error relative to the retained support target."""
+
+        return balance_target_error_xy(
+            balance_position_xy_m=self.latest_placement_com_position_m[:2],
+            target_position_xy_m=self._placement_balance_target_xy_m(),
+        )
+
     def _sample_foot_contact_loads(self) -> tuple[np.ndarray, np.ndarray]:
         if not self.placement_reference_enabled:
             return (
@@ -1279,33 +1317,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             dtype=np.float64,
         )
         if self.com_regulation_enabled:
-            target_balance_xy = (
-                self.placement_transfer_target_balance_position_m[:2]
-            ).copy()
-            if not np.any(np.abs(target_balance_xy) > 1e-9):
-                target_balance_xy = (
-                    self.placement_leg_baseline_balance_position_m[:2]
-                ).copy()
-            hold_target_offset = dict(
-                self.com_regulation_config.get("hold_target_offset_m", {})
-            )
-            hold_target_offset.update(
-                dict(
-                    dict(
-                        self.com_regulation_config.get(
-                            "hold_target_offset_by_swing_leg",
-                            {},
-                        )
-                    ).get(self.placement_swing_leg, {})
-                )
-            )
-            target_balance_xy += np.asarray(
-                [
-                    float(hold_target_offset.get("forward", 0.0)),
-                    float(hold_target_offset.get("lateral", 0.0)),
-                ],
-                dtype=np.float64,
-            )
+            target_balance_xy = self._placement_balance_target_xy_m()
             desired_base_delta[:2] = shift_fraction * (
                 target_balance_xy
                 - self.placement_leg_baseline_balance_position_m[:2]
@@ -1909,7 +1921,16 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         state["observation"] = pack_stair_policy_observation(
             walking_observation=state["observation"],
             base_world_x_m=float(base_position[0]),
-            base_world_y_m=float(base_position[1]),
+            # In COM-regulated placement, expose error in the same retained
+            # balance-target frame used by control and reward. This preserves
+            # the observation shape while removing a torso/whole-body mismatch.
+            base_world_y_m=(
+                float(self._placement_balance_target_error_xy_m()[1])
+                if self.placement_reference_enabled
+                and self.com_regulation_enabled
+                and self.com_regulation_balance_point == "composite_com"
+                else float(base_position[1])
+            ),
             heading_error_rad=heading_error,
             goal_world_x_m=self.current_goal_x_m,
             staircase=self.staircase_config,
@@ -2261,6 +2282,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             "placement_leg_baseline_balance_position_m": (
                 self.placement_leg_baseline_balance_position_m.copy()
             ),
+            "placement_transfer_target_base_position_m": (
+                self.placement_transfer_target_base_position_m.copy()
+            ),
+            "placement_transfer_target_balance_position_m": (
+                self.placement_transfer_target_balance_position_m.copy()
+            ),
             "placement_leg_baseline_lift_offset_m": (
                 self.placement_leg_baseline_lift_offset_m
             ),
@@ -2385,9 +2412,21 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.placement_transfer_gate_step_count = 0
         self.placement_transfer_reference_by_leg = {}
         self.placement_transfer_start_base_position_m.fill(0.0)
-        self.placement_transfer_target_base_position_m.fill(0.0)
+        self.placement_transfer_target_base_position_m = np.asarray(
+            stored.get(
+                "placement_transfer_target_base_position_m",
+                self.placement_leg_baseline_base_position_m,
+            ),
+            dtype=np.float64,
+        ).reshape(3).copy()
         self.placement_transfer_start_balance_position_m.fill(0.0)
-        self.placement_transfer_target_balance_position_m.fill(0.0)
+        self.placement_transfer_target_balance_position_m = np.asarray(
+            stored.get(
+                "placement_transfer_target_balance_position_m",
+                self.placement_leg_baseline_balance_position_m,
+            ),
+            dtype=np.float64,
+        ).reshape(3).copy()
         self.placement_phase_start_step = 0
         self.placement_phase_elapsed_offset_s = 0.0
         self.goal_hold_step_count = 0
@@ -2698,6 +2737,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             base_position,
             dtype=np.float64,
         )
+        placement_balance_target_error_xy_m = np.asarray(
+            [0.0, base_y],
+            dtype=np.float64,
+        )
         if self.placement_reference_enabled:
             if placement_state is None or self.current_placement_level is None:
                 raise RuntimeError("Placement state was not initialized")
@@ -2742,6 +2785,13 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 balance_position,
                 dtype=np.float64,
             )
+            if (
+                self.com_regulation_enabled
+                and self.com_regulation_balance_point == "composite_com"
+            ):
+                placement_balance_target_error_xy_m = (
+                    self._placement_balance_target_error_xy_m()
+                )
             self.maximum_balance_lateral_deviation_m = max(
                 self.maximum_balance_lateral_deviation_m,
                 abs(float(placement_balance_position[1])),
@@ -3248,7 +3298,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             body_angular_velocity_xyz=imu_observation[:3],
             projected_gravity_xyz=projected_gravity,
             base_clearance_m=base_clearance,
-            lateral_position_m=base_y,
+            lateral_position_m=float(placement_balance_target_error_xy_m[1]),
             forward_progress_m=forward_progress,
             base_height_gain_m=base_height_gain,
             terrain_height_gain_m=terrain_height_gain,
@@ -3447,6 +3497,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ),
             "placement_balance_position_m": (
                 placement_balance_position.copy()
+            ),
+            "placement_balance_target_error_xy_m": (
+                placement_balance_target_error_xy_m.copy()
             ),
             "placement_com_position_m": (
                 self.latest_placement_com_position_m.copy()
