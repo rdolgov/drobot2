@@ -268,6 +268,7 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/quadruped_stairs_v13_front_right_stabilized_lift.yaml` | Isolates a strict supported front-right 190 mm lift beside the exact 180 x 250 mm tread, with no custom friction | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/quadruped_stairs_v14_front_pair_right_then_left.yaml` | Composes verified right-foot placement with a snapshot-stabilized left-foot lift/placement mastery curriculum; current bounded run reaches the 100 mm gate and isolates post-transfer body-clearance loss | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/quadruped_stairs_v15_front_left_stabilized_lift.yaml` | Mirrors the strict supported-lift curriculum for the front-left leg and gates 190 mm clearance, three-foot support, slip, and upright hold beside the exact 250 mm tread | edited by stair runners | no generated data |
+| `simulation/isaac/rl/stairs/quadruped_stairs_v16_front_pair_proprioceptive_support.yaml` | Replays the verified right-foot placement, performs a force/margin-gated body transfer, then trains a support-only PPO residual through progressive left-foot lift and contact stages; RGB remains disabled | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/_stair_geometry.py` | Defines the crack-free stacked collision layers for the four-step staircase | stair YAML values | pure Python geometry facts |
 | `simulation/isaac/rl/stairs/_vl53l5cx_contract.py` | Defines pure 8 x 8 ray geometry, 15 Hz mode validation, bounded noise/dropout, three-lane compression, and 24 depth observation fields | sensor YAML values and NumPy grids | rays and normalized depth observations |
 | `simulation/isaac/rl/stairs/_vl53l5cx_sensor.py` | Samples 64 PhysX closest-hit rays, rotates the body sensor into world space, and applies update cadence, hold, and latency | live base pose and sensor config | raw/noisy grids, hit paths, and 24-value depth observation |
@@ -282,6 +283,7 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/train_stairs_v5_ppo.py` | Selects the residual-policy v5 defaults and staged-height configuration | v5 stair YAML/world and optional model | v5 training outputs |
 | `simulation/isaac/rl/stairs/train_stairs_v6_180mm_ppo.py` | Selects the v6 exact-180 mm task and release output defaults | v6 stair YAML/world and optional model | v6 training outputs |
 | `simulation/isaac/rl/stairs/train_stairs_v7_vl53l5cx_ppo.py` | Selects the v7 exact-180 mm task with cheap multi-zone ToF input | v7 stair YAML/world and optional model | v7 sensor-policy training outputs |
+| `simulation/isaac/rl/stairs/train_stairs_v16_front_pair_ppo.py` | Selects the v16 blind front-pair task, verified v10 right-foot precursor, 140 mm left-leg entry stage, and support-only PPO action mask | v16 config, stair world, and v10 model | v16 model ZIPs, manifests, checkpoints, and training report |
 | `simulation/isaac/rl/stairs/validate_vl53l5cx_stairs.py` | Verifies live 64-ray PhysX hits, 15 Hz cadence, latency, held observations, and writes an 8 x 8 review heatmap | v7 config and stair world | sensor validation JSON and PNG |
 | `simulation/isaac/rl/stairs/distill_successful_stairs.py` | Collects physically successful stochastic rollouts and behavior-clones their residual actions into the actor mean | v5 world, model, manifest | distilled model, rebound manifest, and collection report |
 | `simulation/isaac/rl/stairs/evaluate_stairs_ppo.py` | Runs deterministic stair episodes at a pinned curriculum level, verifies the primary contract, optionally composes hash-verified per-leg PPO models with zero transfer residual, and uses a close placement camera | stair YAML/world, primary/per-leg models, manifests | evaluation JSON and optional PNG |
@@ -667,6 +669,25 @@ still scored `0/1`, and the recording stopped at the seven-second progress
 gate without reaching stair one. Review the honest run and depth grid at
 https://drobot-stair-sensor-eval.romka.chatgpt.site. This validates the cheap
 sensor/training/recording path, not locomotion or hardware readiness.
+
+The fixed-geometry per-leg prerequisite is now independently verified before
+adding vision. V8 places the front-left foot on the first `180 x 250 mm` tread
+in `5/5` force-backed episodes, and V10 mirrors that result for the front-right
+foot in `5/5`. V13 and V15 separately hold the right and left feet above
+`190 mm` under the measured `0.8825985 N m` effort cap (`3/3` and `5/5`
+strict episodes). All four policies report `analytic_height_profile`,
+`rgb_camera_policy_input: false`, and no custom traction material.
+
+V16 is a deliberately separate front-pair composition experiment. Its
+8,192-step support-only PPO run advanced from the sequential `140 mm` stage to
+the `190 mm` stage. The best 3,584-step checkpoint completed one strict
+sequential `140 mm` episode with `146.45 mm` left-foot lift, `14.02 mm`
+maximum support slip, all three support contacts, `5.55 deg` maximum tilt, and
+a `0.5 s` hold, but scored only `1/3`; it is not a complete climb or a release
+policy. A doubled-friction/max-combine sensitivity did not fix the transition,
+so more traction is not the next default. The next controller change should
+target post-transfer support-margin/center-of-mass regulation; camera input
+remains deferred until the fixed-geometry sequence is reliable.
 
 The source map, complete commands, reward/termination formulas, manifest
 rules, measured smoke results, evaluation guidance, and sim-to-real limits are

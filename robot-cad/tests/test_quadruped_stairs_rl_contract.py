@@ -44,6 +44,7 @@ from _stair_rl_contract import (  # noqa: E402
     placement_curriculum_level,
     placement_lift_hold_reached,
     placement_phase_ready,
+    placement_policy_action_mask,
     placement_reference_state,
     placement_success_mode,
     progress_gate_failures,
@@ -175,6 +176,15 @@ def v14_config() -> dict:
 def v15_config() -> dict:
     with (
         STAIRS_DIR / "quadruped_stairs_v15_front_left_stabilized_lift.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v16_config() -> dict:
+    with (
+        STAIRS_DIR
+        / "quadruped_stairs_v16_front_pair_proprioceptive_support.yaml"
     ).open("r", encoding="utf-8") as stream:
         return yaml.safe_load(stream)
 
@@ -1271,6 +1281,111 @@ def test_v15_mirrors_the_proven_direct_lift_for_front_left(
     assert left["foot_contact_material"]["enabled"] is False
 
 
+def test_v16_rejects_post_transfer_base_drift_on_25cm_tread(
+    v14_config: dict,
+    v16_config: dict,
+) -> None:
+    baseline = v14_config["task"]
+    stabilized = v16_config["task"]
+    transfer = stabilized["placement_reference"]["inter_leg_transfer"]
+
+    assert stabilized["staircase"] == baseline["staircase"]
+    assert stabilized["staircase"]["tread_depth_m"] == pytest.approx(0.25)
+    first_level = stabilized["placement_curriculum"]["levels"][0]
+    assert first_level["minimum_lift_m"] == pytest.approx(0.015)
+    assert first_level["apex_lift_m"] == pytest.approx(0.065)
+    assert first_level["landing_lift_m"] == pytest.approx(0.040)
+    lift_levels = stabilized["placement_curriculum"]["levels"][:6]
+    assert [level["minimum_lift_m"] for level in lift_levels] == pytest.approx(
+        [0.015, 0.035, 0.060, 0.100, 0.140, 0.190]
+    )
+    expected_lift_reach = pytest.approx(
+        [0.020, 0.035, 0.050, 0.065, 0.080, 0.120]
+    )
+    assert [
+        level["lift_forward_offset_m"] for level in lift_levels
+    ] == expected_lift_reach
+    assert [
+        level["swing_forward_offset_m"] for level in lift_levels
+    ] == expected_lift_reach
+    assert [
+        level["landing_forward_offset_m"] for level in lift_levels
+    ] == expected_lift_reach
+    assert placement_curriculum_level(0.0, lift_levels)["id"] == (
+        "left-supported-015mm-lift"
+    )
+    assert transfer["post_transfer_swing_reference_mode"] == (
+        "blend_to_nominal_stance"
+    )
+    left_timing = stabilized["placement_reference"][
+        "timing_override_by_leg"
+    ]["front_left"]
+    assert left_timing["lift_duration_seconds"] == pytest.approx(2.0)
+    assert left_timing["advance_start_seconds"] == pytest.approx(2.5)
+    assert lift_levels[-1]["apex_lift_m"] == pytest.approx(0.205)
+    invalid_contact = {
+        **lift_levels[0],
+        "success_mode": "tread_contact",
+        "lift_forward_offset_m": 0.0,
+        "swing_forward_offset_m": 0.0,
+        "landing_forward_offset_m": 0.0,
+    }
+    with pytest.raises(ValueError, match="pure swing lift hold"):
+        placement_curriculum_level(0.0, [invalid_contact])
+    assert stabilized["placement_reference"]["sequence_legs"] == [
+        "front_right",
+        "front_left",
+    ]
+    assert transfer["post_transfer_weight_shift"] == {
+        "forward_m": pytest.approx(0.0),
+        "lateral_m": pytest.approx(0.0),
+    }
+    assert transfer["support_base_error_feedback_gain"] == {
+        "forward": pytest.approx(1.0),
+        "lateral": pytest.approx(0.0),
+        "vertical": pytest.approx(1.0),
+    }
+    assert transfer["support_world_anchor_follow_gain"] == pytest.approx(0.0)
+    assert transfer["support_world_anchor_follow_gain_xyz"] == {
+        "forward": pytest.approx(0.0),
+        "lateral": pytest.approx(0.0),
+        "vertical": pytest.approx(0.0),
+    }
+    assert transfer["target_offset_m"] == {
+        "forward": pytest.approx(0.0),
+        "lateral": pytest.approx(0.0),
+    }
+    residual_scale = stabilized["placement_residual_action_scale_rad"]
+    assert residual_scale["support"] == {
+        "hip_abduction": pytest.approx(0.25),
+        "hip_flexion": pytest.approx(0.22),
+        "knee": pytest.approx(0.30),
+    }
+    assert residual_scale["override_by_swing_leg"]["front_left"][
+        "support"
+    ] == {
+        "hip_abduction": pytest.approx(0.10),
+        "hip_flexion": pytest.approx(0.22),
+        "knee": pytest.approx(0.30),
+    }
+    assert stabilized["termination"][
+        "maximum_lateral_deviation_m"
+    ] == pytest.approx(0.50)
+    assert stabilized["termination"]["minimum_base_clearance_m"] == (
+        baseline["termination"]["minimum_base_clearance_m"]
+    )
+    assert stabilized["foot_contact_material"]["enabled"] is True
+    assert stabilized["foot_contact_material"]["static_friction"] == (
+        pytest.approx(1.20)
+    )
+    assert stabilized["foot_contact_material"]["dynamic_friction"] == (
+        pytest.approx(1.00)
+    )
+    assert stabilized["foot_contact_material"][
+        "friction_combine_mode"
+    ] == "average"
+
+
 def test_placement_success_mode_prefers_level_then_leg_then_default() -> None:
     assert (
         placement_success_mode(
@@ -1356,12 +1471,49 @@ def test_support_reference_feedback_amplifies_body_drift_rejection() -> None:
     )
     np.testing.assert_allclose(followed, actual)
 
+    lateral_anchor = stabilized_support_reference_base_delta(
+        desired_base_delta_m=desired,
+        actual_base_delta_m=actual,
+        anchor_follow_gain=(0.0, 1.0, 0.0),
+        error_feedback_gain_xyz=(0.0, 0.0, 0.0),
+    )
+    np.testing.assert_allclose(lateral_anchor, (0.020, 0.060, 0.000))
+
     with pytest.raises(ValueError, match="feedback gains"):
         stabilized_support_reference_base_delta(
             desired_base_delta_m=desired,
             actual_base_delta_m=actual,
             anchor_follow_gain=0.0,
             error_feedback_gain_xyz=(0.0, 2.1, 0.0),
+        )
+
+
+def test_swing_support_abduction_mask_preserves_lift_authority() -> None:
+    dof_names = (
+        "front_left_hip_abduction",
+        "rear_left_hip_abduction",
+        "front_right_hip_abduction",
+        "rear_right_hip_abduction",
+        "front_left_hip_flexion",
+        "rear_left_hip_flexion",
+        "front_right_hip_flexion",
+        "rear_right_hip_flexion",
+        "front_left_knee",
+        "rear_left_knee",
+        "front_right_knee",
+        "rear_right_knee",
+    )
+    mask = placement_policy_action_mask(
+        dof_names,
+        target_leg="front_left",
+        mode="swing_plus_support_abduction",
+    )
+    assert np.flatnonzero(mask).tolist() == [0, 1, 2, 3, 4, 8]
+    with pytest.raises(ValueError, match="unknown placement target leg"):
+        placement_policy_action_mask(
+            dof_names,
+            target_leg="middle_left",
+            mode="swing_plus_support_abduction",
         )
 
 
@@ -1444,7 +1596,25 @@ def test_phase_training_replays_verified_prefix_before_exposing_target() -> None
                 float(len(self.actions)),
                 terminated,
                 False,
-                {},
+                {
+                    "maximum_foot_lift_m_by_leg": {"front_right": 0.020},
+                    "base_clearance_m": 0.300,
+                    "placement_support_margin_m": 0.010,
+                    "placement_support_contact_fraction": 2.0 / 3.0,
+                    "maximum_support_slip_m": 0.005,
+                    "placement_swing_lift_m": 0.025,
+                    "placement_upright_cosine": 0.990,
+                    "placement_goal_hold_step_count": 4,
+                    "placement_desired_lift_m": 0.030,
+                    "placement_swing_reference_joint_positions_rad": (
+                        np.asarray((0.1, 0.2, 0.3), dtype=np.float32)
+                        * len(self.actions)
+                    ),
+                    "placement_swing_actual_joint_positions_rad": (
+                        np.asarray((0.01, 0.02, 0.03), dtype=np.float32)
+                        * len(self.actions)
+                    ),
+                },
             )
 
     class FixedPolicy:
@@ -1480,12 +1650,55 @@ def test_phase_training_replays_verified_prefix_before_exposing_target() -> None
     assert terminated is True
     assert truncated is False
     np.testing.assert_allclose(raw.actions[2], (-0.5, -0.5))
+    stats = wrapped.training_stats()
+    assert stats["target_steps"] == 1
+    assert stats["maximum_target_swing_lift_m"] == pytest.approx(0.025)
+    assert stats["minimum_target_base_clearance_m"] == pytest.approx(0.300)
+    assert stats["minimum_target_support_margin_m"] == pytest.approx(0.010)
+    assert stats["minimum_target_support_contact_fraction"] == pytest.approx(
+        2.0 / 3.0
+    )
+    assert stats["maximum_target_support_slip_m"] == pytest.approx(0.005)
+    assert stats["minimum_target_upright_cosine"] == pytest.approx(0.990)
+    assert stats["maximum_target_goal_hold_steps"] == 4
+    assert stats["maximum_target_desired_lift_m"] == pytest.approx(0.030)
+    assert stats["maximum_target_swing_reference_change_rad"] == (
+        pytest.approx(0.0)
+    )
+    assert stats["maximum_target_swing_actual_change_rad"] == pytest.approx(0.0)
+    assert stats["maximum_target_residual_action_abs"] == pytest.approx(0.5)
+    assert stats["maximum_target_applied_action_abs"] == pytest.approx(0.5)
 
     observation, info = wrapped.reset(seed=8)
     np.testing.assert_allclose(observation, (9.0, 9.0, 9.0))
     assert info["phase_training_snapshot_restored"] is True
     assert raw.snapshot_restores == 1
     assert wrapped.training_stats()["cached_phase_restores"] == 1
+
+    masked_raw = FakePlacementEnv()
+    masked = PlacementPhaseTrainingEnv(
+        masked_raw,
+        target_leg="front_right",
+        precursor_policies={"front_left": FixedPolicy()},
+        target_residual_mask=np.asarray((1.0, 0.0), dtype=np.float32),
+    )
+    masked.reset(seed=9)
+    _, _, _, _, masked_info = masked.step(
+        np.full(2, -0.5, dtype=np.float32)
+    )
+    np.testing.assert_allclose(masked_raw.actions[2], (-0.5, 0.0))
+    assert masked_info["phase_training_residual_action_max_abs"] == (
+        pytest.approx(0.5)
+    )
+    assert masked_info["phase_training_applied_action_max_abs"] == (
+        pytest.approx(0.5)
+    )
+    assert masked.training_stats()["target_action_mode"] == (
+        "masked_direct_ppo_action"
+    )
+    assert masked.training_stats()[
+        "target_residual_active_action_indices"
+    ] == [0]
 
 
 def test_phase_training_ready_requires_every_earlier_leg() -> None:

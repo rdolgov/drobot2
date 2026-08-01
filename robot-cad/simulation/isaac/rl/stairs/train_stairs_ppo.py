@@ -11,7 +11,6 @@ import traceback
 from collections import deque
 from pathlib import Path
 
-import numpy as np
 import torch
 import torch._dynamo  # noqa: F401
 import yaml
@@ -41,6 +40,7 @@ from _run_support import (  # noqa: E402
 )
 from _stair_rl_contract import (  # noqa: E402
     config_for_height_stage,
+    placement_policy_action_mask,
     progress_gate_failures,
     stair_observation_fields,
 )
@@ -68,6 +68,11 @@ parser.add_argument(
     type=int,
     default=None,
     help="Pin training to one declared stair count instead of advancing mastery.",
+)
+parser.add_argument(
+    "--placement-start-level",
+    default=None,
+    help="Start a mastery run at one named placement curriculum level.",
 )
 parser.add_argument(
     "--output-dir",
@@ -163,12 +168,23 @@ parser.add_argument("--phase-residual-scale", type=float, default=0.25)
 parser.add_argument(
     "--phase-residual-support-only",
     action="store_true",
-    help="Mask PPO corrections off the target swing leg's three joints.",
+    help=(
+        "Mask PPO action off the target swing leg's three joints, with or "
+        "without a frozen base policy."
+    ),
 )
 parser.add_argument(
     "--phase-residual-support-abduction-only",
     action="store_true",
     help="Apply PPO corrections only to support-leg hip-abduction joints.",
+)
+parser.add_argument(
+    "--phase-residual-swing-support-abduction",
+    action="store_true",
+    help=(
+        "Apply PPO to all three swing-leg joints and only hip abduction on "
+        "the support legs."
+    ),
 )
 parser.add_argument("--phase-reset-attempts", type=int, default=8)
 parser.add_argument("--phase-precursor-max-steps", type=int, default=1800)
@@ -224,11 +240,15 @@ if phase_base_model_path is not None and not args.phase_train_leg:
     parser.error("--phase-base-model requires --phase-train-leg")
 if not 0.0 < args.phase_residual_scale <= 1.0:
     parser.error("--phase-residual-scale must be within (0, 1]")
-if (
-    args.phase_residual_support_only
-    and args.phase_residual_support_abduction_only
-):
+phase_mask_flags = (
+    args.phase_residual_support_only,
+    args.phase_residual_support_abduction_only,
+    args.phase_residual_swing_support_abduction,
+)
+if sum(phase_mask_flags) > 1:
     parser.error("phase residual joint masks are mutually exclusive")
+if any(phase_mask_flags) and not args.phase_train_leg:
+    parser.error("phase residual joint masks require --phase-train-leg")
 config_path = _resolve_project_path(args.config)
 with config_path.open("r", encoding="utf-8") as stream:
     config = yaml.safe_load(stream)
@@ -721,6 +741,7 @@ report: dict[str, object] = {
     "requested_seed": args.seed,
     "height_stage": args.height_stage,
     "fixed_active_steps": args.fixed_active_steps,
+    "placement_start_level": args.placement_start_level,
     "phase_train_leg": args.phase_train_leg,
     "precursor_leg_models": {
         leg: str(path) for leg, path in precursor_leg_model_paths.items()
@@ -734,6 +755,9 @@ report: dict[str, object] = {
     "phase_residual_support_only": args.phase_residual_support_only,
     "phase_residual_support_abduction_only": (
         args.phase_residual_support_abduction_only
+    ),
+    "phase_residual_swing_support_abduction": (
+        args.phase_residual_swing_support_abduction
     ),
     "terrain_perception_mode": terrain_perception_mode,
     "terrain_perception": terrain_perception_config,
@@ -764,6 +788,8 @@ try:
         task_config=task_config,
         render_mode="human" if args.gui else None,
     )
+    if args.placement_start_level is not None:
+        raw_env.set_placement_level(args.placement_start_level)
     training_env = raw_env
     precursor_model_verification: dict[str, dict[str, object]] = {}
     if args.phase_train_leg:
@@ -828,28 +854,23 @@ try:
                 "source_task_id": base_manifest.get("task_id"),
             }
         target_residual_mask = None
-        if args.phase_residual_support_abduction_only:
-            target_prefix = f"{args.phase_train_leg}_"
-            target_residual_mask = np.asarray(
-                [
-                    1.0
-                    if (
-                        not name.startswith(target_prefix)
-                        and name.endswith("_hip_abduction")
-                    )
-                    else 0.0
-                    for name in raw_env.dof_names
-                ],
-                dtype=np.float32,
+        if args.phase_residual_swing_support_abduction:
+            target_residual_mask = placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=str(args.phase_train_leg),
+                mode="swing_plus_support_abduction",
+            )
+        elif args.phase_residual_support_abduction_only:
+            target_residual_mask = placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=str(args.phase_train_leg),
+                mode="support_abduction_only",
             )
         elif args.phase_residual_support_only:
-            target_prefix = f"{args.phase_train_leg}_"
-            target_residual_mask = np.asarray(
-                [
-                    0.0 if name.startswith(target_prefix) else 1.0
-                    for name in raw_env.dof_names
-                ],
-                dtype=np.float32,
+            target_residual_mask = placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=str(args.phase_train_leg),
+                mode="support_only",
             )
         phase_training_env = PlacementPhaseTrainingEnv(
             raw_env,

@@ -206,18 +206,26 @@ def placement_curriculum_level(
         forward = float(level["swing_forward_offset_m"])
         lift_forward = float(level.get("lift_forward_offset_m", min(forward, 0.11)))
         landing_forward = float(level.get("landing_forward_offset_m", forward))
+        success_mode = str(level.get("success_mode", "tread_contact"))
         tread_fraction = float(level["target_tread_fraction"])
         if apex <= 0.0 or landing <= 0.0 or landing > apex:
             raise ValueError("placement lift heights must satisfy 0 < landing <= apex")
-        if forward <= 0.0:
-            raise ValueError("placement swing_forward_offset_m must be positive")
-        if lift_forward <= 0.0 or lift_forward > forward:
+        if forward < 0.0 or (
+            forward == 0.0 and success_mode != "swing_lift_hold"
+        ):
             raise ValueError(
-                "placement lift_forward_offset_m must be within (0, swing forward]"
+                "placement swing_forward_offset_m must be positive unless "
+                "the stage is a pure swing lift hold"
             )
-        if landing_forward <= 0.0 or landing_forward > forward:
+        if lift_forward < 0.0 or lift_forward > forward:
             raise ValueError(
-                "placement landing_forward_offset_m must be within (0, swing forward]"
+                "placement lift_forward_offset_m must be within "
+                "[0, swing forward]"
+            )
+        if landing_forward < 0.0 or landing_forward > forward:
+            raise ValueError(
+                "placement landing_forward_offset_m must be within "
+                "[0, swing forward]"
             )
         if tread_fraction <= 0.0 or tread_fraction >= 1.0:
             raise ValueError("placement target_tread_fraction must be within (0, 1)")
@@ -313,7 +321,9 @@ def placement_reference_state(
         desired_forward = final_forward + lower_fraction * (
             landing_forward - final_forward
         )
-    forward_fraction = desired_forward / final_forward
+    forward_fraction = (
+        0.0 if final_forward == 0.0 else desired_forward / final_forward
+    )
     if elapsed < lift_start:
         phase = "weight_shift"
     elif elapsed < advance_start:
@@ -471,11 +481,42 @@ def compose_bounded_residual_action(
     return np.clip(base + scale * mask * residual, -1.0, 1.0).astype(np.float32)
 
 
+def placement_policy_action_mask(
+    dof_names: Sequence[str],
+    *,
+    target_leg: str,
+    mode: str,
+) -> np.ndarray:
+    """Select the joints a phase-specific placement policy may command."""
+
+    names = tuple(str(name) for name in dof_names)
+    target_prefix = f"{target_leg}_"
+    if not any(name.startswith(target_prefix) for name in names):
+        raise ValueError(f"unknown placement target leg: {target_leg}")
+    if mode == "support_only":
+        selected = [not name.startswith(target_prefix) for name in names]
+    elif mode == "support_abduction_only":
+        selected = [
+            not name.startswith(target_prefix)
+            and name.endswith("_hip_abduction")
+            for name in names
+        ]
+    elif mode == "swing_plus_support_abduction":
+        selected = [
+            name.startswith(target_prefix)
+            or name.endswith("_hip_abduction")
+            for name in names
+        ]
+    else:
+        raise ValueError(f"unknown placement action mask mode: {mode}")
+    return np.asarray(selected, dtype=np.float32)
+
+
 def stabilized_support_reference_base_delta(
     *,
     desired_base_delta_m: Sequence[float],
     actual_base_delta_m: Sequence[float],
-    anchor_follow_gain: float,
+    anchor_follow_gain: float | Sequence[float],
     error_feedback_gain_xyz: Sequence[float],
 ) -> np.ndarray:
     """Return a support reference that actively rejects post-transfer drift.
@@ -502,9 +543,17 @@ def stabilized_support_reference_base_delta(
         3,
         "error_feedback_gain_xyz",
     )
-    follow = float(anchor_follow_gain)
-    if follow < 0.0 or follow > 1.0:
-        raise ValueError("anchor_follow_gain must be within [0, 1]")
+    follow = (
+        np.full(3, float(anchor_follow_gain), dtype=np.float64)
+        if np.isscalar(anchor_follow_gain)
+        else _finite_vector(
+            anchor_follow_gain,
+            3,
+            "anchor_follow_gain",
+        )
+    )
+    if np.any(follow < 0.0) or np.any(follow > 1.0):
+        raise ValueError("anchor_follow_gain values must be within [0, 1]")
     if np.any(feedback < 0.0) or np.any(feedback > 2.0):
         raise ValueError("error feedback gains must be within [0, 2]")
     tracking_error = actual - desired

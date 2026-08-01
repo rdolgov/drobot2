@@ -99,6 +99,25 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         self.last_precursor_steps = 0
         self.last_precursor_failure_reasons: list[str] = []
         self.latest_observation: np.ndarray | None = None
+        self.target_steps = 0
+        self.maximum_target_swing_lift_m = 0.0
+        self.minimum_target_base_clearance_m = float("inf")
+        self.minimum_target_support_margin_m = float("inf")
+        self.minimum_target_support_contact_fraction = 1.0
+        self.maximum_target_support_slip_m = 0.0
+        self.minimum_target_upright_cosine = 1.0
+        self.maximum_target_goal_hold_steps = 0
+        self.maximum_target_desired_lift_m = 0.0
+        self.initial_target_swing_reference: np.ndarray | None = None
+        self.maximum_target_swing_reference_change_rad = 0.0
+        self.minimum_target_swing_reference_delta_rad: np.ndarray | None = None
+        self.maximum_target_swing_reference_delta_rad: np.ndarray | None = None
+        self.initial_target_swing_actual: np.ndarray | None = None
+        self.maximum_target_swing_actual_change_rad = 0.0
+        self.minimum_target_swing_actual_delta_rad: np.ndarray | None = None
+        self.maximum_target_swing_actual_delta_rad: np.ndarray | None = None
+        self.maximum_target_residual_action_abs = 0.0
+        self.maximum_target_applied_action_abs = 0.0
 
     def _capture_phase_snapshot(self) -> None:
         if not self.cache_phase_snapshot:
@@ -292,11 +311,113 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 residual_scale=self.target_residual_scale,
                 residual_mask=self.target_residual_mask,
             )
+        elif self.target_residual_mask is not None:
+            applied_action = np.clip(
+                residual_action * self.target_residual_mask,
+                self.action_space.low,
+                self.action_space.high,
+            ).astype(np.float32)
         observation, reward, terminated, truncated, info = self.env.step(
             applied_action
         )
         self.latest_observation = np.asarray(observation, dtype=np.float32).copy()
         result_info = dict(info)
+        self.target_steps += 1
+        lift_by_leg = dict(result_info.get("maximum_foot_lift_m_by_leg", {}))
+        self.maximum_target_swing_lift_m = max(
+            self.maximum_target_swing_lift_m,
+            float(
+                result_info.get(
+                    "placement_swing_lift_m",
+                    lift_by_leg.get(self.target_leg, 0.0),
+                )
+            ),
+        )
+        self.minimum_target_base_clearance_m = min(
+            self.minimum_target_base_clearance_m,
+            float(result_info.get("base_clearance_m", float("inf"))),
+        )
+        self.minimum_target_support_margin_m = min(
+            self.minimum_target_support_margin_m,
+            float(result_info.get("placement_support_margin_m", float("inf"))),
+        )
+        self.minimum_target_support_contact_fraction = min(
+            self.minimum_target_support_contact_fraction,
+            float(result_info.get("placement_support_contact_fraction", 1.0)),
+        )
+        self.maximum_target_support_slip_m = max(
+            self.maximum_target_support_slip_m,
+            float(result_info.get("maximum_support_slip_m", 0.0)),
+        )
+        self.minimum_target_upright_cosine = min(
+            self.minimum_target_upright_cosine,
+            float(result_info.get("placement_upright_cosine", 1.0)),
+        )
+        self.maximum_target_goal_hold_steps = max(
+            self.maximum_target_goal_hold_steps,
+            int(result_info.get("placement_goal_hold_step_count", 0)),
+        )
+        self.maximum_target_desired_lift_m = max(
+            self.maximum_target_desired_lift_m,
+            float(result_info.get("placement_desired_lift_m", 0.0)),
+        )
+        swing_reference_value = result_info.get(
+            "placement_swing_reference_joint_positions_rad"
+        )
+        if swing_reference_value is not None:
+            swing_reference = np.asarray(
+                swing_reference_value,
+                dtype=np.float32,
+            )
+            if self.initial_target_swing_reference is None:
+                self.initial_target_swing_reference = swing_reference.copy()
+                self.minimum_target_swing_reference_delta_rad = np.zeros_like(
+                    swing_reference
+                )
+                self.maximum_target_swing_reference_delta_rad = np.zeros_like(
+                    swing_reference
+                )
+            reference_delta = (
+                swing_reference - self.initial_target_swing_reference
+            )
+            self.minimum_target_swing_reference_delta_rad = np.minimum(
+                self.minimum_target_swing_reference_delta_rad,
+                reference_delta,
+            )
+            self.maximum_target_swing_reference_delta_rad = np.maximum(
+                self.maximum_target_swing_reference_delta_rad,
+                reference_delta,
+            )
+            self.maximum_target_swing_reference_change_rad = max(
+                self.maximum_target_swing_reference_change_rad,
+                float(np.max(np.abs(reference_delta))),
+            )
+        swing_actual_value = result_info.get(
+            "placement_swing_actual_joint_positions_rad"
+        )
+        if swing_actual_value is not None:
+            swing_actual = np.asarray(swing_actual_value, dtype=np.float32)
+            if self.initial_target_swing_actual is None:
+                self.initial_target_swing_actual = swing_actual.copy()
+                self.minimum_target_swing_actual_delta_rad = np.zeros_like(
+                    swing_actual
+                )
+                self.maximum_target_swing_actual_delta_rad = np.zeros_like(
+                    swing_actual
+                )
+            actual_delta = swing_actual - self.initial_target_swing_actual
+            self.minimum_target_swing_actual_delta_rad = np.minimum(
+                self.minimum_target_swing_actual_delta_rad,
+                actual_delta,
+            )
+            self.maximum_target_swing_actual_delta_rad = np.maximum(
+                self.maximum_target_swing_actual_delta_rad,
+                actual_delta,
+            )
+            self.maximum_target_swing_actual_change_rad = max(
+                self.maximum_target_swing_actual_change_rad,
+                float(np.max(np.abs(actual_delta))),
+            )
         result_info["phase_training_residual_scale"] = (
             self.target_residual_scale
             if self.target_base_policy is not None
@@ -310,6 +431,17 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         result_info["phase_training_residual_action_max_abs"] = float(
             np.max(np.abs(residual_action))
         )
+        result_info["phase_training_applied_action_max_abs"] = float(
+            np.max(np.abs(applied_action))
+        )
+        self.maximum_target_residual_action_abs = max(
+            self.maximum_target_residual_action_abs,
+            result_info["phase_training_residual_action_max_abs"],
+        )
+        self.maximum_target_applied_action_abs = max(
+            self.maximum_target_applied_action_abs,
+            result_info["phase_training_applied_action_max_abs"],
+        )
         return observation, float(reward), terminated, truncated, result_info
 
     def training_stats(self) -> dict[str, object]:
@@ -321,7 +453,11 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             "target_action_mode": (
                 "frozen_base_plus_bounded_ppo_residual"
                 if self.target_base_policy is not None
-                else "direct_ppo_action"
+                else (
+                    "masked_direct_ppo_action"
+                    if self.target_residual_mask is not None
+                    else "direct_ppo_action"
+                )
             ),
             "target_residual_scale": (
                 self.target_residual_scale
@@ -349,5 +485,62 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             "last_precursor_steps": self.last_precursor_steps,
             "last_precursor_failure_reasons": list(
                 self.last_precursor_failure_reasons
+            ),
+            "target_steps": self.target_steps,
+            "maximum_target_swing_lift_m": self.maximum_target_swing_lift_m,
+            "minimum_target_base_clearance_m": (
+                None
+                if not np.isfinite(self.minimum_target_base_clearance_m)
+                else self.minimum_target_base_clearance_m
+            ),
+            "minimum_target_support_margin_m": (
+                None
+                if not np.isfinite(self.minimum_target_support_margin_m)
+                else self.minimum_target_support_margin_m
+            ),
+            "minimum_target_support_contact_fraction": (
+                self.minimum_target_support_contact_fraction
+            ),
+            "maximum_target_support_slip_m": self.maximum_target_support_slip_m,
+            "minimum_target_upright_cosine": (
+                self.minimum_target_upright_cosine
+            ),
+            "maximum_target_goal_hold_steps": (
+                self.maximum_target_goal_hold_steps
+            ),
+            "maximum_target_desired_lift_m": (
+                self.maximum_target_desired_lift_m
+            ),
+            "maximum_target_swing_reference_change_rad": (
+                self.maximum_target_swing_reference_change_rad
+            ),
+            "minimum_target_swing_reference_delta_rad": (
+                None
+                if self.minimum_target_swing_reference_delta_rad is None
+                else self.minimum_target_swing_reference_delta_rad.tolist()
+            ),
+            "maximum_target_swing_reference_delta_rad": (
+                None
+                if self.maximum_target_swing_reference_delta_rad is None
+                else self.maximum_target_swing_reference_delta_rad.tolist()
+            ),
+            "maximum_target_swing_actual_change_rad": (
+                self.maximum_target_swing_actual_change_rad
+            ),
+            "minimum_target_swing_actual_delta_rad": (
+                None
+                if self.minimum_target_swing_actual_delta_rad is None
+                else self.minimum_target_swing_actual_delta_rad.tolist()
+            ),
+            "maximum_target_swing_actual_delta_rad": (
+                None
+                if self.maximum_target_swing_actual_delta_rad is None
+                else self.maximum_target_swing_actual_delta_rad.tolist()
+            ),
+            "maximum_target_residual_action_abs": (
+                self.maximum_target_residual_action_abs
+            ),
+            "maximum_target_applied_action_abs": (
+                self.maximum_target_applied_action_abs
             ),
         }

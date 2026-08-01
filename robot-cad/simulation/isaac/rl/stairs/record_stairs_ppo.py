@@ -30,6 +30,7 @@ from _run_support import (  # noqa: E402
 from _stair_rl_contract import (  # noqa: E402
     compose_bounded_residual_action,
     config_for_height_stage,
+    placement_policy_action_mask,
 )
 
 parser = argparse.ArgumentParser(
@@ -94,6 +95,11 @@ parser.add_argument(
 )
 parser.add_argument("--active-steps", type=int, default=None)
 parser.add_argument(
+    "--placement-level",
+    default=None,
+    help="Record one named placement curriculum level instead of the final level.",
+)
+parser.add_argument(
     "--maximum-lateral-deviation-m",
     type=float,
     default=None,
@@ -154,12 +160,21 @@ parser.add_argument(
     action="append",
     default=[],
     metavar="LEG",
+    help="Mask the mapped policy action off the named swing leg's joints.",
 )
 parser.add_argument(
     "--leg-residual-support-abduction-only",
     action="append",
     default=[],
     metavar="LEG",
+    help="Apply a mapped policy only to support hip-abduction joints.",
+)
+parser.add_argument(
+    "--leg-residual-swing-support-abduction",
+    action="append",
+    default=[],
+    metavar="LEG",
+    help="Apply a mapped policy to the swing leg and support hip abduction.",
 )
 parser.add_argument(
     "--zero-action-leg",
@@ -274,6 +289,9 @@ leg_residual_support_only = set(args.leg_residual_support_only)
 leg_residual_support_abduction_only = set(
     args.leg_residual_support_abduction_only
 )
+leg_residual_swing_support_abduction = set(
+    args.leg_residual_swing_support_abduction
+)
 zero_action_legs = set(args.zero_action_leg)
 if len(zero_action_legs) != len(args.zero_action_leg):
     parser.error("duplicate --zero-action-leg leg")
@@ -283,11 +301,22 @@ if set(leg_base_model_paths) != set(leg_residual_scales):
     )
 if not set(leg_base_model_paths).issubset(leg_model_paths):
     parser.error("each leg base model requires a residual --leg-model")
-if not leg_residual_support_only.issubset(leg_base_model_paths):
-    parser.error("support-only residual legs require --leg-base-model")
-if not leg_residual_support_abduction_only.issubset(leg_base_model_paths):
-    parser.error("support-abduction residual legs require --leg-base-model")
-if leg_residual_support_only & leg_residual_support_abduction_only:
+if not leg_residual_support_only.issubset(leg_model_paths):
+    parser.error("support-only action masks require --leg-model")
+if not leg_residual_support_abduction_only.issubset(leg_model_paths):
+    parser.error("support-abduction action masks require --leg-model")
+if not leg_residual_swing_support_abduction.issubset(leg_model_paths):
+    parser.error("swing/support-abduction action masks require --leg-model")
+mask_sets = (
+    leg_residual_support_only,
+    leg_residual_support_abduction_only,
+    leg_residual_swing_support_abduction,
+)
+if any(
+    left & right
+    for index, left in enumerate(mask_sets)
+    for right in mask_sets[index + 1 :]
+):
     parser.error("leg residual joint masks are mutually exclusive")
 video_path = _resolve_project_path(args.video)
 thumbnail_path = _resolve_project_path(args.thumbnail)
@@ -326,6 +355,13 @@ report: dict[str, object] = {
         leg: str(path) for leg, path in leg_base_model_paths.items()
     },
     "leg_residual_scales": leg_residual_scales,
+    "leg_residual_support_only": sorted(leg_residual_support_only),
+    "leg_residual_support_abduction_only": sorted(
+        leg_residual_support_abduction_only
+    ),
+    "leg_residual_swing_support_abduction": sorted(
+        leg_residual_swing_support_abduction
+    ),
     "zero_action_legs": sorted(zero_action_legs),
     "world": str(world_path),
     "seed": args.seed,
@@ -336,6 +372,7 @@ report: dict[str, object] = {
     "search_success_episodes": args.search_success_episodes,
     "device": args.device,
     "active_steps": active_steps,
+    "placement_level": args.placement_level,
     "maximum_lateral_deviation_override_m": (
         args.maximum_lateral_deviation_m
     ),
@@ -366,6 +403,11 @@ try:
         render_mode="human",
     )
     raw_env.set_evaluation_level(active_steps)
+    if args.placement_level is not None:
+        raw_env.set_placement_level(
+            args.placement_level,
+            activate_immediately=True,
+        )
     verification = validate_model_manifest(
         model_path=model_path,
         config_path=config_path,
@@ -472,26 +514,35 @@ try:
                 observation,
                 deterministic=not args.stochastic,
             )
+        residual_mask = None
+        if active_leg in leg_residual_swing_support_abduction:
+            residual_mask = placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=active_leg,
+                mode="swing_plus_support_abduction",
+            )
+        elif active_leg in leg_residual_support_abduction_only:
+            residual_mask = placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=active_leg,
+                mode="support_abduction_only",
+            )
+        elif active_leg in leg_residual_support_only:
+            residual_mask = placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=active_leg,
+                mode="support_only",
+            )
         base_model = leg_base_models.get(active_leg)
         if base_model is None:
-            return np.asarray(action, dtype=np.float32)
-        base_action, _ = base_model.predict(observation, deterministic=True)
-        residual_mask = None
-        if active_leg in leg_residual_support_abduction_only:
-            residual_mask = [
-                1.0
-                if (
-                    not name.startswith(f"{active_leg}_")
-                    and name.endswith("_hip_abduction")
+            direct_action = np.asarray(action, dtype=np.float32)
+            if residual_mask is not None:
+                direct_action = direct_action * np.asarray(
+                    residual_mask,
+                    dtype=np.float32,
                 )
-                else 0.0
-                for name in raw_env.dof_names
-            ]
-        elif active_leg in leg_residual_support_only:
-            residual_mask = [
-                0.0 if name.startswith(f"{active_leg}_") else 1.0
-                for name in raw_env.dof_names
-            ]
+            return direct_action
+        base_action, _ = base_model.predict(observation, deterministic=True)
         return compose_bounded_residual_action(
             base_action,
             action,
