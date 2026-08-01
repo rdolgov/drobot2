@@ -351,6 +351,9 @@ class QuadrupedWalkEnv(gym.Env):
     ) -> tuple[np.ndarray, dict]:
         del options
         super().reset(seed=seed)
+        # Recreate the C++ sensor so filter/history state cannot leak across
+        # teleported Gym episodes.
+        self.imu_sensor.reset()
         self._reset_robot()
         self.episode_step = 0
         self.episode_return = 0.0

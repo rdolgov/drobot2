@@ -28,6 +28,7 @@ from _stair_rl_contract import (
     foot_tread_progress,
     goal_x_for_active_steps,
     inter_leg_transfer_state,
+    joint_effort_telemetry_sample,
     next_foot_target_index,
     pack_placement_reference_observation,
     pack_stair_policy_observation,
@@ -223,6 +224,32 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             "bound_paths": bound_paths,
         }
 
+    def set_foot_contact_friction(
+        self,
+        *,
+        static_friction: float,
+        dynamic_friction: float,
+    ) -> None:
+        """Update the active simulation-only foot material for sensitivity tests."""
+
+        if self.foot_contact_material_applied is None:
+            raise RuntimeError("Foot contact material is not enabled")
+        static = float(static_friction)
+        dynamic = float(dynamic_friction)
+        if static <= 0.0 or dynamic <= 0.0 or dynamic > static:
+            raise ValueError("Invalid foot contact friction coefficients")
+        material_path = str(self.foot_contact_material_applied["material_path"])
+        material_prim = self.stage.GetPrimAtPath(material_path)
+        if not material_prim.IsValid():
+            raise RuntimeError(f"Foot contact material is missing: {material_path}")
+        material_api = UsdPhysics.MaterialAPI(material_prim)
+        material_api.GetStaticFrictionAttr().Set(static)
+        material_api.GetDynamicFrictionAttr().Set(dynamic)
+        self.foot_contact_material_config["static_friction"] = static
+        self.foot_contact_material_config["dynamic_friction"] = dynamic
+        self.foot_contact_material_applied["static_friction"] = static
+        self.foot_contact_material_applied["dynamic_friction"] = dynamic
+
     def __init__(
         self,
         simulation_app,
@@ -292,6 +319,26 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "Stair policy requires the reviewed DOF order: "
                 f"{self.dof_names} != {list(STAIRS_EXPECTED_DOF_ORDER)}"
             )
+        drive_stiffness, drive_damping = self.robot.get_dof_gains()
+        self.drive_stiffness_nm_rad = np.asarray(
+            drive_stiffness.numpy()
+            if hasattr(drive_stiffness, "numpy")
+            else drive_stiffness,
+            dtype=np.float64,
+        ).reshape(-1)
+        self.drive_damping_nm_s_rad = np.asarray(
+            drive_damping.numpy()
+            if hasattr(drive_damping, "numpy")
+            else drive_damping,
+            dtype=np.float64,
+        ).reshape(-1)
+        if (
+            self.drive_stiffness_nm_rad.shape != (12,)
+            or self.drive_damping_nm_s_rad.shape != (12,)
+            or not np.all(np.isfinite(self.drive_stiffness_nm_rad))
+            or not np.all(np.isfinite(self.drive_damping_nm_s_rad))
+        ):
+            raise RuntimeError("Could not read finite 12-DOF implicit drive gains")
         self._validate_stair_prims()
         self.residual_policy_config = dict(
             self.config.get("residual_policy", {})
@@ -686,6 +733,125 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.maximum_placement_desired_lift_m = 0.0
         self.maximum_swing_reference_tracking_error_rad = 0.0
         self.maximum_balance_lateral_deviation_m = 0.0
+        self._reset_joint_effort_telemetry()
+
+    def _reset_joint_effort_telemetry(self) -> None:
+        self.maximum_abs_joint_tracking_error_rad_by_joint = np.zeros(
+            12,
+            dtype=np.float64,
+        )
+        self.peak_abs_requested_pd_effort_nm_by_joint = np.zeros(
+            12,
+            dtype=np.float64,
+        )
+        self.peak_abs_reported_actuation_effort_nm_by_joint = np.zeros(
+            12,
+            dtype=np.float64,
+        )
+        self.peak_abs_projected_joint_reaction_load_nm_by_joint = np.zeros(
+            12,
+            dtype=np.float64,
+        )
+        self.requested_pd_effort_sample_count = 0
+        self.requested_pd_effort_95pct_cap_count = 0
+        self.reported_actuation_effort_sample_count = 0
+        self.projected_joint_reaction_load_sample_count = 0
+
+    def _sample_joint_efforts_nm(self) -> dict[str, np.ndarray]:
+        sampled: dict[str, np.ndarray] = {}
+        for label, getter in (
+            (
+                "reported_actuation_effort_nm",
+                self.robot.get_dof_efforts,
+            ),
+            (
+                "projected_joint_reaction_load_nm",
+                self.robot.get_dof_projected_joint_forces,
+            ),
+        ):
+            try:
+                raw = getter()
+                vector = np.asarray(
+                    raw.numpy() if hasattr(raw, "numpy") else raw,
+                    dtype=np.float64,
+                ).reshape(-1)
+                if vector.shape == (12,) and np.all(np.isfinite(vector)):
+                    sampled[label] = vector.copy()
+            except Exception:
+                continue
+        return sampled
+
+    def _joint_effort_metrics(self) -> dict[str, object]:
+        metrics: dict[str, object] = {
+            "effort_cap_nm": self.effort_cap_nm,
+            "maximum_abs_joint_tracking_error_rad": float(
+                np.max(self.maximum_abs_joint_tracking_error_rad_by_joint)
+            ),
+            "maximum_abs_joint_tracking_error_rad_by_joint": dict(
+                zip(
+                    self.dof_names,
+                    self.maximum_abs_joint_tracking_error_rad_by_joint.tolist(),
+                    strict=True,
+                )
+            ),
+            "drive_stiffness_nm_rad_by_joint": dict(
+                zip(
+                    self.dof_names,
+                    self.drive_stiffness_nm_rad.tolist(),
+                    strict=True,
+                )
+            ),
+            "drive_damping_nm_s_rad_by_joint": dict(
+                zip(
+                    self.dof_names,
+                    self.drive_damping_nm_s_rad.tolist(),
+                    strict=True,
+                )
+            ),
+        }
+        sample_count = self.requested_pd_effort_sample_count
+        peak_values = self.peak_abs_requested_pd_effort_nm_by_joint
+        metrics["requested_pd_effort_sample_count"] = sample_count
+        metrics["peak_abs_requested_pd_effort_nm"] = (
+            float(np.max(peak_values)) if sample_count else None
+        )
+        metrics["peak_abs_requested_pd_effort_nm_by_joint"] = (
+            dict(zip(self.dof_names, peak_values.tolist(), strict=True))
+            if sample_count
+            else None
+        )
+        metrics["peak_requested_pd_effort_to_cap_ratio"] = (
+            float(np.max(peak_values) / self.effort_cap_nm)
+            if sample_count
+            else None
+        )
+        metrics["requested_pd_effort_95pct_cap_sample_fraction"] = (
+            float(self.requested_pd_effort_95pct_cap_count / (sample_count * 12))
+            if sample_count
+            else None
+        )
+        for prefix, peak_values, sample_count in (
+            (
+                "reported_actuation_effort",
+                self.peak_abs_reported_actuation_effort_nm_by_joint,
+                self.reported_actuation_effort_sample_count,
+            ),
+            (
+                "projected_joint_reaction_load",
+                self.peak_abs_projected_joint_reaction_load_nm_by_joint,
+                self.projected_joint_reaction_load_sample_count,
+            ),
+        ):
+            metrics[f"{prefix}_sample_count"] = sample_count
+            metrics[f"peak_abs_{prefix}_nm"] = (
+                float(np.max(peak_values)) if sample_count else None
+            )
+            metrics[f"peak_abs_{prefix}_nm_by_joint"] = (
+                dict(zip(self.dof_names, peak_values.tolist(), strict=True))
+                if sample_count
+                else None
+            )
+        return metrics
 
     def _set_placement_swing_leg(self, leg: str) -> None:
         self.placement_swing_leg = str(leg)
@@ -2138,6 +2304,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.maximum_placement_desired_lift_m = 0.0
         self.maximum_swing_reference_tracking_error_rad = 0.0
         self.maximum_balance_lateral_deviation_m = 0.0
+        self._reset_joint_effort_telemetry()
         if self.vl53l5cx_sensor is not None:
             self.vl53l5cx_sensor.reset()
         observation, info = super().reset(seed=seed, options=options)
@@ -2546,6 +2713,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.placement_active_sample_count = 0
         self.placement_reference_reach_clip_count = 0
         self.maximum_placement_reference_reach_excess_m = 0.0
+        self._reset_joint_effort_telemetry()
         ground_loads, step_loads = self._sample_foot_contact_loads()
         self.latest_ground_normal_loads_n = ground_loads
         self.latest_step_normal_loads_n = step_loads
@@ -2697,6 +2865,65 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             else clipped_action.copy()
         )
         state = self._read_state()
+        sampled_efforts = self._sample_joint_efforts_nm()
+        effort_telemetry = joint_effort_telemetry_sample(
+            target_joint_positions_rad=target,
+            measured_joint_positions_rad=state["joint_positions"],
+            joint_velocities_rad_s=state["joint_velocities"],
+            drive_stiffness_nm_rad=self.drive_stiffness_nm_rad,
+            drive_damping_nm_s_rad=self.drive_damping_nm_s_rad,
+            effort_cap_nm=self.effort_cap_nm,
+            reported_actuation_effort_nm=sampled_efforts.get(
+                "reported_actuation_effort_nm"
+            ),
+            projected_joint_reaction_load_nm=sampled_efforts.get(
+                "projected_joint_reaction_load_nm"
+            ),
+        )
+        joint_tracking_error_rad = np.asarray(
+            effort_telemetry["joint_tracking_error_rad"],
+            dtype=np.float64,
+        )
+        self.maximum_abs_joint_tracking_error_rad_by_joint = np.maximum(
+            self.maximum_abs_joint_tracking_error_rad_by_joint,
+            np.abs(joint_tracking_error_rad),
+        )
+        requested_pd_effort_nm = np.asarray(
+            effort_telemetry["requested_pd_effort_nm"],
+            dtype=np.float64,
+        )
+        self.peak_abs_requested_pd_effort_nm_by_joint = np.maximum(
+            self.peak_abs_requested_pd_effort_nm_by_joint,
+            np.abs(requested_pd_effort_nm),
+        )
+        self.requested_pd_effort_sample_count += 1
+        self.requested_pd_effort_95pct_cap_count += int(
+            np.count_nonzero(
+                np.abs(requested_pd_effort_nm)
+                >= 0.95 * self.effort_cap_nm - 1e-6
+            )
+        )
+        for label, peak_attribute, sample_count_attribute in (
+            (
+                "reported_actuation_effort_nm",
+                "peak_abs_reported_actuation_effort_nm_by_joint",
+                "reported_actuation_effort_sample_count",
+            ),
+            (
+                "projected_joint_reaction_load_nm",
+                "peak_abs_projected_joint_reaction_load_nm_by_joint",
+                "projected_joint_reaction_load_sample_count",
+            ),
+        ):
+            if label not in effort_telemetry:
+                continue
+            values = np.asarray(effort_telemetry[label], dtype=np.float64)
+            setattr(
+                self,
+                peak_attribute,
+                np.maximum(getattr(self, peak_attribute), np.abs(values)),
+            )
+            setattr(self, sample_count_attribute, getattr(self, sample_count_attribute) + 1)
         base_position = np.asarray(state["base_position"])
         self.latest_placement_base_position_m = np.asarray(
             base_position,
@@ -3396,6 +3623,19 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 )
             ),
             "target_joint_positions_rad": target.copy(),
+            "joint_tracking_error_rad": joint_tracking_error_rad.copy(),
+            "requested_pd_effort_nm": requested_pd_effort_nm.copy(),
+            "capped_pd_effort_nm": np.asarray(
+                effort_telemetry["capped_pd_effort_nm"],
+                dtype=np.float64,
+            ).copy(),
+            "reported_actuation_effort_nm": effort_telemetry.get(
+                "reported_actuation_effort_nm"
+            ),
+            "projected_joint_reaction_load_nm": effort_telemetry.get(
+                "projected_joint_reaction_load_nm"
+            ),
+            "joint_effort_metrics": self._joint_effort_metrics(),
             "base_policy_action": base_action.copy(),
             "residual_policy_action": clipped_action.copy(),
             "terrain_perception_mode": self.terrain_perception_mode,
@@ -3711,6 +3951,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     if self.placement_reference_enabled
                     else None
                 ),
+                "joint_effort_metrics": self._joint_effort_metrics(),
                 "final_swing_reference_joint_positions_rad": (
                     reference_target[
                         list(

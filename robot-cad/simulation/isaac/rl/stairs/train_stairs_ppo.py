@@ -193,6 +193,14 @@ parser.add_argument(
 )
 parser.add_argument("--phase-reset-attempts", type=int, default=8)
 parser.add_argument("--phase-precursor-max-steps", type=int, default=1800)
+parser.add_argument(
+    "--phase-disable-snapshot-cache",
+    action="store_true",
+    help=(
+        "Replay the physical precursor on every phase reset so PPO trains "
+        "across live transfer-state variation."
+    ),
+)
 parser.add_argument("--gui", action="store_true")
 args, _ = parser.parse_known_args()
 
@@ -767,6 +775,7 @@ report: dict[str, object] = {
     "phase_residual_swing_support_abduction": (
         args.phase_residual_swing_support_abduction
     ),
+    "phase_snapshot_cache_enabled": not args.phase_disable_snapshot_cache,
     "terrain_perception_mode": terrain_perception_mode,
     "terrain_perception": terrain_perception_config,
     "device_request": args.device,
@@ -897,6 +906,7 @@ try:
             target_residual_mask=target_residual_mask,
             maximum_reset_attempts=args.phase_reset_attempts,
             maximum_precursor_steps=args.phase_precursor_max_steps,
+            cache_phase_snapshot=not args.phase_disable_snapshot_cache,
         )
         training_env = phase_training_env
         report["precursor_model_verification"] = precursor_model_verification

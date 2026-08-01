@@ -490,6 +490,90 @@ def balance_target_error_xy(
     return balance.astype(np.float64) - target.astype(np.float64)
 
 
+def joint_effort_telemetry_sample(
+    *,
+    target_joint_positions_rad: Sequence[float],
+    measured_joint_positions_rad: Sequence[float],
+    joint_velocities_rad_s: Sequence[float] | None = None,
+    drive_stiffness_nm_rad: Sequence[float] | None = None,
+    drive_damping_nm_s_rad: Sequence[float] | None = None,
+    effort_cap_nm: float,
+    reported_actuation_effort_nm: Sequence[float] | None = None,
+    projected_joint_reaction_load_nm: Sequence[float] | None = None,
+) -> dict[str, np.ndarray | float]:
+    """Return finite tracking, implicit-drive demand, and load telemetry."""
+
+    target = _finite_vector(
+        target_joint_positions_rad,
+        JOINT_COUNT,
+        "target_joint_positions_rad",
+    )
+    measured = _finite_vector(
+        measured_joint_positions_rad,
+        JOINT_COUNT,
+        "measured_joint_positions_rad",
+    )
+    cap = float(effort_cap_nm)
+    if not np.isfinite(cap) or cap <= 0.0:
+        raise ValueError("effort_cap_nm must be finite and positive")
+    result: dict[str, np.ndarray | float] = {
+        "joint_tracking_error_rad": (target - measured).astype(np.float64),
+    }
+    pd_inputs = (
+        joint_velocities_rad_s,
+        drive_stiffness_nm_rad,
+        drive_damping_nm_s_rad,
+    )
+    if any(value is not None for value in pd_inputs):
+        if not all(value is not None for value in pd_inputs):
+            raise ValueError(
+                "joint velocities, drive stiffness, and drive damping must "
+                "be provided together"
+            )
+        velocities = _finite_vector(
+            joint_velocities_rad_s,
+            JOINT_COUNT,
+            "joint_velocities_rad_s",
+        )
+        stiffness = _finite_vector(
+            drive_stiffness_nm_rad,
+            JOINT_COUNT,
+            "drive_stiffness_nm_rad",
+        )
+        damping = _finite_vector(
+            drive_damping_nm_s_rad,
+            JOINT_COUNT,
+            "drive_damping_nm_s_rad",
+        )
+        if np.any(stiffness < 0.0) or np.any(damping < 0.0):
+            raise ValueError("drive gains must be non-negative")
+        requested = stiffness * (target - measured) - damping * velocities
+        result["requested_pd_effort_nm"] = requested.astype(np.float64)
+        result["capped_pd_effort_nm"] = np.clip(
+            requested,
+            -cap,
+            cap,
+        ).astype(np.float64)
+        result["requested_pd_effort_nm_peak_to_cap_ratio"] = float(
+            np.max(np.abs(requested)) / cap
+        )
+        result["requested_pd_effort_nm_95pct_cap_fraction"] = float(
+            np.mean(np.abs(requested) >= 0.95 * cap - 1e-6)
+        )
+    for label, values in (
+        ("reported_actuation_effort_nm", reported_actuation_effort_nm),
+        (
+            "projected_joint_reaction_load_nm",
+            projected_joint_reaction_load_nm,
+        ),
+    ):
+        if values is None:
+            continue
+        vector = _finite_vector(values, JOINT_COUNT, label).astype(np.float64)
+        result[label] = vector
+    return result
+
+
 def placement_phase_ready(
     *,
     sequence_legs: Sequence[str],

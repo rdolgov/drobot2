@@ -39,6 +39,7 @@ from _stair_rl_contract import (  # noqa: E402
     foot_tread_progress,
     goal_x_for_active_steps,
     inter_leg_transfer_state,
+    joint_effort_telemetry_sample,
     next_foot_target_index,
     pack_placement_reference_observation,
     pack_stair_policy_observation,
@@ -1529,6 +1530,56 @@ def test_balance_target_error_uses_the_com_target_frame() -> None:
         balance_target_error_xy(
             balance_position_xy_m=(np.nan, 0.0),
             target_position_xy_m=(0.0, 0.0),
+        )
+
+
+def test_joint_effort_telemetry_reports_tracking_and_cap_utilization() -> None:
+    target = np.linspace(-0.3, 0.3, 12)
+    measured = target.copy()
+    measured[4] -= 0.2
+    velocities = np.zeros(12)
+    velocities[4] = 0.25
+    stiffness = np.full(12, 5.0)
+    damping = np.full(12, 0.2)
+    reported = np.zeros(12)
+    reported[4] = 0.95
+    projected = np.zeros(12)
+    projected[7] = -1.2
+
+    sample = joint_effort_telemetry_sample(
+        target_joint_positions_rad=target,
+        measured_joint_positions_rad=measured,
+        joint_velocities_rad_s=velocities,
+        drive_stiffness_nm_rad=stiffness,
+        drive_damping_nm_s_rad=damping,
+        effort_cap_nm=1.0,
+        reported_actuation_effort_nm=reported,
+        projected_joint_reaction_load_nm=projected,
+    )
+
+    assert sample["joint_tracking_error_rad"][4] == pytest.approx(0.2)
+    assert sample["requested_pd_effort_nm"][4] == pytest.approx(0.95)
+    assert sample["capped_pd_effort_nm"][4] == pytest.approx(0.95)
+    assert sample["requested_pd_effort_nm_peak_to_cap_ratio"] == pytest.approx(
+        0.95,
+    )
+    assert sample["requested_pd_effort_nm_95pct_cap_fraction"] == pytest.approx(
+        1.0 / 12.0
+    )
+    assert sample["reported_actuation_effort_nm"][4] == pytest.approx(0.95)
+    assert sample["projected_joint_reaction_load_nm"][7] == pytest.approx(-1.2)
+    with pytest.raises(ValueError, match="effort_cap_nm"):
+        joint_effort_telemetry_sample(
+            target_joint_positions_rad=target,
+            measured_joint_positions_rad=measured,
+            effort_cap_nm=0.0,
+        )
+    with pytest.raises(ValueError, match="provided together"):
+        joint_effort_telemetry_sample(
+            target_joint_positions_rad=target,
+            measured_joint_positions_rad=measured,
+            joint_velocities_rad_s=velocities,
+            effort_cap_nm=1.0,
         )
 
 
