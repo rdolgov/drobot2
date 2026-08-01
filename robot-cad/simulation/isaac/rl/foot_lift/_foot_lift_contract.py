@@ -60,6 +60,56 @@ def desired_foot_lift_m(
     return float(target_lift_m) * smoothstep(ramp_fraction)
 
 
+def lift_curriculum_level(
+    levels: Sequence[Mapping[str, object]],
+    progress: float,
+) -> dict[str, object]:
+    """Return the latest ordered clearance stage reached by progress."""
+
+    if not levels:
+        raise ValueError("lift curriculum requires at least one level")
+    starts = [float(level["start_fraction"]) for level in levels]
+    if starts[0] != 0.0 or starts != sorted(starts):
+        raise ValueError("lift curriculum must start at zero and be ordered")
+    if starts[-1] > 1.0 or starts[0] < 0.0:
+        raise ValueError("lift curriculum fractions must stay within zero and one")
+    bounded = float(np.clip(progress, 0.0, 1.0))
+    selected = dict(levels[0])
+    for level in levels:
+        if bounded + 1e-12 < float(level["start_fraction"]):
+            break
+        selected = dict(level)
+    return selected
+
+
+def support_triangle_signed_margin_m(
+    point_xy_m: Sequence[float],
+    support_points_xy_m: Sequence[Sequence[float]],
+) -> float:
+    """Return positive edge clearance inside a three-foot support triangle."""
+
+    point = _finite_vector(point_xy_m, 2, "point_xy_m").astype(np.float64)
+    vertices = np.asarray(support_points_xy_m, dtype=np.float64)
+    if vertices.shape != (3, 2) or not np.all(np.isfinite(vertices)):
+        raise ValueError("support_points_xy_m must contain three finite XY points")
+    center = np.mean(vertices, axis=0)
+    angles = np.arctan2(vertices[:, 1] - center[1], vertices[:, 0] - center[0])
+    ordered = vertices[np.argsort(angles)]
+    margins: list[float] = []
+    for index in range(3):
+        start = ordered[index]
+        end = ordered[(index + 1) % 3]
+        edge = end - start
+        edge_length = float(np.linalg.norm(edge))
+        if edge_length <= 1e-9:
+            raise ValueError("support triangle points must be distinct")
+        relative = point - start
+        margins.append(
+            float((edge[0] * relative[1] - edge[1] * relative[0]) / edge_length)
+        )
+    return min(margins)
+
+
 def pack_foot_lift_observation(
     *,
     walking_observation: Sequence[float],
@@ -194,6 +244,7 @@ def foot_lift_reward_terms(
     failed: bool,
     succeeded: bool,
     reward_config: Mapping[str, float],
+    support_triangle_margin_m: float = 0.0,
 ) -> dict[str, float]:
     displacement = _finite_vector(
         base_displacement_xy_m,
@@ -225,6 +276,9 @@ def foot_lift_reward_terms(
     upright_cosine = float(np.clip(-gravity[2], -1.0, 1.0))
     terms = {
         "lift_tracking": float(reward_config["lift_tracking"]) * tracking_score,
+        "lift_height": float(reward_config.get("lift_height", 0.0))
+        * max(0.0, float(measured_lift_m)),
+        "lift_error": float(reward_config.get("lift_error", 0.0)) * abs(tracking_error),
         "lift_progress": float(reward_config["lift_progress"]) * max(0.0, float(lift_progress_m)),
         "target_hold": float(reward_config["target_hold"]) if tracking_target_reached else 0.0,
         "upright_deviation": float(reward_config["upright_deviation"]) * (1.0 - upright_cosine),
@@ -233,6 +287,8 @@ def foot_lift_reward_terms(
         "base_drift": float(reward_config["base_drift"]) * float(np.linalg.norm(displacement)),
         "support_foot_lift": float(reward_config["support_foot_lift"])
         * max(0.0, float(maximum_support_foot_lift_m)),
+        "support_margin": float(reward_config.get("support_margin", 0.0))
+        * float(np.clip(support_triangle_margin_m, -0.10, 0.10)),
         "roll_pitch_rate": float(reward_config["roll_pitch_rate"])
         * float(np.dot(angular_velocity[:2], angular_velocity[:2])),
         "yaw_rate": float(reward_config["yaw_rate"]) * float(angular_velocity[2] ** 2),

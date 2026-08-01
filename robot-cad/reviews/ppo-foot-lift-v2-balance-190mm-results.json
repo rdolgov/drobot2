@@ -1,0 +1,26 @@
+{
+  "task_id": "Drobot-Quadruped-Foot-Lift-v2-190mm-Unsupported-Balance",
+  "training_steps": 512,
+  "training_scope": "pipeline smoke test, not convergence",
+  "base_support_mode": "none",
+  "target_lift_m": 0.19,
+  "evaluation": {
+    "episodes": 5,
+    "successes": 5,
+    "minimum_maximum_lift_m": 0.197064280509949,
+    "maximum_maximum_lift_m": 0.199410647153854,
+    "maximum_body_tilt_deg": 2.53504958547992,
+    "maximum_support_foot_lift_m": 0.00485986657440662,
+    "minimum_support_triangle_margin_m": -0.00237328730244206,
+    "required_hold_s": 0.75
+  },
+  "recording": {
+    "skill_completed": true,
+    "maximum_lift_m": 0.1993691325187683,
+    "maximum_body_tilt_deg": 2.270209835203903,
+    "frames": 178,
+    "video_bytes": 4715729
+  },
+  "policy_inputs": "IMU, joints, previous action, and lift task state; no RGB or ToF",
+  "video": "reviews/ppo-foot-lift-v2-balance-190mm-evaluation.mp4"
+}

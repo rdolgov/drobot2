@@ -59,6 +59,7 @@ def transfer_policy_state(
     target_state: Mapping[str, Any],
     *,
     source_observation_size: int,
+    shared_observation_prefix_size: int | None = None,
     action_output_ratios: Sequence[float] | None = None,
 ) -> tuple[dict[str, Any], dict[str, object]]:
     """Copy compatible parameters and zero new terrain-input columns.
@@ -70,6 +71,15 @@ def transfer_policy_state(
 
     if source_observation_size <= 0:
         raise ValueError("source_observation_size must be positive")
+    shared_prefix = (
+        source_observation_size
+        if shared_observation_prefix_size is None
+        else int(shared_observation_prefix_size)
+    )
+    if shared_prefix <= 0 or shared_prefix > source_observation_size:
+        raise ValueError(
+            "shared_observation_prefix_size must be within the source input"
+        )
     transferred = {
         name: tensor.detach().clone()
         for name, tensor in target_state.items()
@@ -100,7 +110,7 @@ def transfer_policy_state(
                 )
             expanded = target_tensor.detach().clone()
             expanded.zero_()
-            expanded[:, :source_observation_size] = source_tensor
+            expanded[:, :shared_prefix] = source_tensor[:, :shared_prefix]
             transferred[name] = expanded
             expanded_inputs.append(name)
             continue
@@ -155,6 +165,9 @@ def transfer_policy_state(
         "skipped": skipped,
         "optimizer_transferred": False,
         "new_input_columns_initialized_to_zero": True,
+        "source_observation_size": source_observation_size,
+        "shared_observation_prefix_size": shared_prefix,
+        "dropped_source_input_columns": source_observation_size - shared_prefix,
         "physical_action_mean_preserved": action_output_ratios is not None,
         "action_output_ratios": serialized_ratios,
         "rescaled_action_outputs": rescaled_outputs,

@@ -408,6 +408,36 @@ def test_flat_policy_transfer_can_preserve_physical_action_mean() -> None:
     ]
 
 
+def test_balance_transfer_keeps_only_the_shared_48_value_prefix() -> None:
+    torch = pytest.importorskip("torch")
+    source = {
+        "mlp_extractor.policy_net.0.weight": torch.full((3, 56), 2.0),
+        "mlp_extractor.value_net.0.weight": torch.full((3, 56), 3.0),
+        "action_net.bias": torch.ones(2),
+    }
+    target = {
+        "mlp_extractor.policy_net.0.weight": torch.full((3, 68), 9.0),
+        "mlp_extractor.value_net.0.weight": torch.full((3, 68), 9.0),
+        "action_net.bias": torch.zeros(2),
+    }
+
+    transferred, report = transfer_policy_state(
+        source,
+        target,
+        source_observation_size=56,
+        shared_observation_prefix_size=48,
+    )
+
+    assert torch.all(
+        transferred["mlp_extractor.policy_net.0.weight"][:, :48] == 2.0
+    )
+    assert torch.all(
+        transferred["mlp_extractor.policy_net.0.weight"][:, 48:] == 0.0
+    )
+    assert report["shared_observation_prefix_size"] == 48
+    assert report["dropped_source_input_columns"] == 8
+
+
 def test_stairs_config_is_separate_and_consistent(config: dict) -> None:
     task = config["task"]
     ppo = config["ppo"]

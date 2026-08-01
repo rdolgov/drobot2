@@ -1,5 +1,29 @@
 # Hardware-profiled 180 mm stair PPO v6
 
+## Unsupported-balance transfer follow-up
+
+The verified unsupported `190 mm` flat-ground balance policy is now a
+supported stair initializer. `train_stairs_ppo.py --initialize-from-balance`
+copies only the shared `48`-value IMU/joint/prior-action prefix from the
+`56`-value balance policy into the `68`-value v6 stair policy. The eight
+lift-specific source columns are deliberately dropped, all 20 stair-specific
+input columns start at zero, and output weights/biases are rescaled per joint
+to preserve the source policy's physical action mean under the larger stair
+residual scales.
+
+The exact `180 mm` rise and `250 mm` tread smoke integration passed its
+`512`-step pipeline, but locomotion still failed. Deterministic evaluation was
+`0/5`; two episodes reached stair index one, the best base elevation gain was
+`18.003 mm`, and no foot reached the first tread. Failure counts were two base
+clearance, one body tip, and two each for no forward and no foot-tread
+progress. The recorded attempt reached stair index one and failed base
+clearance with `14.911 deg` maximum tilt.
+
+This proves the transfer plumbing, not a stair climb. The next policy needs an
+explicit per-foot lift/placement reference or curriculum that invokes the
+validated clearance primitive in the required foot sequence; weight transfer
+encoded only in a flat single-leg actor is not enough for four-step locomotion.
+
 ## Status
 
 V6 defines and runs the requested four-step Isaac Sim task with exactly
@@ -195,3 +219,43 @@ margin, body/leg geometry, contact and weight transfer, then rerun the scripted
 rated-torque feasibility gate. Only after that passes should training proceed
 through the fixed-depth height curriculum with a hardware-reproducible terrain
 sensor and robust deterministic acceptance rate.
+
+## Balance-transfer reproduction and artifacts
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation/isaac/rl/stairs/train_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v6_180mm.yaml `
+  --height-stage 180mm `
+  --fixed-active-steps 4 `
+  --initialize-from-balance `
+  simulation/isaac/models/ppo-foot-lift-v2-balance-190mm-small/drobot_foot_lift_ppo_final.zip `
+  --smoke-test `
+  --seed 13191 `
+  --output-dir simulation/isaac/output/rl/ppo-stairs-v6-180mm-25cm-balance-small
+
+& C:\isaacsim\python.bat `
+  simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v6_180mm.yaml `
+  --height-stage 180mm `
+  --model simulation/isaac/output/rl/ppo-stairs-v6-180mm-25cm-balance-small/drobot_stairs_ppo_final.zip `
+  --active-steps 4 `
+  --episodes 5 `
+  --seed 13192 `
+  --report simulation/isaac/output/rl/ppo-stairs-v6-180mm-25cm-balance-small/evaluation_report.json
+
+& C:\isaacsim\python.bat `
+  simulation/isaac/rl/stairs/record_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v6_180mm.yaml `
+  --height-stage 180mm `
+  --model simulation/isaac/output/rl/ppo-stairs-v6-180mm-25cm-balance-small/drobot_stairs_ppo_final.zip `
+  --active-steps 4 `
+  --seed 13192 `
+  --video reviews/ppo-stairs-v6-180mm-25cm-balance-transfer.mp4 `
+  --thumbnail reviews/ppo-stairs-v6-180mm-25cm-balance-transfer-recording.png `
+  --report simulation/isaac/output/rl/ppo-stairs-v6-180mm-25cm-balance-small/recording_report.json
+```
+
+The packaged checkpoint, manifest, and reports are under
+`simulation/isaac/models/ppo-stairs-v6-180mm-25cm-balance-small/`. The review
+video and images are `reviews/ppo-stairs-v6-180mm-25cm-balance-transfer.*`.

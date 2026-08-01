@@ -97,6 +97,15 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--initialize-from-balance",
+    default=None,
+    help=(
+        "Initialize from the 56-input unsupported foot-balance policy. Only "
+        "the shared 48-value proprioceptive prefix transfers; skill/terrain "
+        "columns start at zero."
+    ),
+)
+parser.add_argument(
     "--allow-unverified-resume",
     action="store_true",
     help="Allow a deliberate resume from a stairs model without its manifest.",
@@ -127,11 +136,12 @@ initialization_options = (
     args.resume,
     args.initialize_from_flat,
     args.initialize_from_stairs,
+    args.initialize_from_balance,
 )
 if sum(value is not None for value in initialization_options) > 1:
     parser.error(
-        "--resume, --initialize-from-flat, and --initialize-from-stairs "
-        "are mutually exclusive"
+        "--resume, --initialize-from-flat, --initialize-from-stairs, and "
+        "--initialize-from-balance are mutually exclusive"
     )
 if args.total_timesteps is not None and args.total_timesteps <= 0:
     parser.error("--total-timesteps must be positive")
@@ -659,6 +669,92 @@ try:
                 "weight": "all_zero",
                 "bias": "all_zero",
             }
+        if args.initialize_from_balance:
+            transferred_from = _resolve_project_path(
+                args.initialize_from_balance
+            )
+            if not transferred_from.is_file():
+                raise FileNotFoundError(transferred_from)
+            source_model = PPO.load(str(transferred_from), device=args.device)
+            source_observation_size = int(source_model.observation_space.shape[0])
+            target_observation_size = int(model.observation_space.shape[0])
+            if source_observation_size != 56:
+                raise RuntimeError(
+                    "Balance initializer must use the 56-value foot-lift input"
+                )
+            if tuple(source_model.action_space.shape) != tuple(
+                model.action_space.shape
+            ):
+                raise RuntimeError("Balance source and stair action shapes differ")
+            source_manifest = read_model_manifest(transferred_from)
+            if source_manifest.get("model_sha256") != sha256_file(transferred_from):
+                raise RuntimeError("Balance initializer manifest/model hash mismatch")
+            if source_manifest.get("task_id") != (
+                "Drobot-Quadruped-Foot-Lift-v2-190mm-Unsupported-Balance"
+            ):
+                raise RuntimeError("Initializer is not the reviewed unsupported balance task")
+            source_contract = dict(source_manifest["environment_contract"])
+            source_fields = tuple(source_contract["observation_fields"])
+            target_fields = tuple(raw_env.contract["observation_fields"])
+            shared_prefix_size = 48
+            if source_fields[:shared_prefix_size] != target_fields[:shared_prefix_size]:
+                raise RuntimeError(
+                    "Balance/stair proprioceptive observation prefixes differ"
+                )
+            source_action_scale = tuple(
+                float(value) for value in source_contract["action_scale_rad"]
+            )
+            target_action_scale = tuple(
+                float(value) for value in raw_env.contract["action_scale_rad"]
+            )
+            if len(source_action_scale) != 12 or len(target_action_scale) != 12:
+                raise RuntimeError("Balance/stair action scale contracts must have 12 values")
+            action_output_ratios = tuple(
+                source / target
+                for source, target in zip(
+                    source_action_scale,
+                    target_action_scale,
+                    strict=True,
+                )
+            )
+            transferred_state, balance_transfer_report = transfer_policy_state(
+                source_model.policy.state_dict(),
+                model.policy.state_dict(),
+                source_observation_size=source_observation_size,
+                shared_observation_prefix_size=shared_prefix_size,
+                action_output_ratios=action_output_ratios,
+            )
+            expected_exact_count = len(model.policy.state_dict()) - len(
+                EXPANDABLE_INPUT_WEIGHTS
+            )
+            if (
+                balance_transfer_report["expanded_inputs"]
+                != list(EXPANDABLE_INPUT_WEIGHTS)
+                or balance_transfer_report["copied_exact_count"]
+                != expected_exact_count
+                or balance_transfer_report["skipped"]
+            ):
+                raise RuntimeError(
+                    "Balance policy transfer was not exact: "
+                    f"{balance_transfer_report}"
+                )
+            model.policy.load_state_dict(transferred_state, strict=True)
+            if "initial_log_std" in ppo_config:
+                model.policy.log_std.data.fill_(
+                    float(ppo_config["initial_log_std"])
+                )
+                balance_transfer_report["log_std_overridden_after_transfer"] = float(
+                    ppo_config["initial_log_std"]
+                )
+            report["balance_policy_transfer"] = {
+                "source_model": str(transferred_from),
+                "source_model_sha256": sha256_file(transferred_from),
+                "source_task_id": source_manifest["task_id"],
+                "source_observation_size": source_observation_size,
+                "target_observation_size": target_observation_size,
+                **balance_transfer_report,
+            }
+            del source_model
         if args.initialize_from_stairs:
             transferred_from = _resolve_project_path(
                 args.initialize_from_stairs

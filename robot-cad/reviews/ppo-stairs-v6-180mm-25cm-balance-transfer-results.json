@@ -1,0 +1,29 @@
+{
+  "task_id": "Drobot-Quadruped-Stairs-v6-180mm",
+  "stair_rise_m": 0.18,
+  "tread_depth_m": 0.25,
+  "training_steps": 512,
+  "training_scope": "balance-transfer pipeline smoke test, not convergence",
+  "transfer": {
+    "source_observation_size": 56,
+    "target_observation_size": 68,
+    "shared_proprioceptive_prefix_size": 48,
+    "dropped_lift_specific_inputs": 8,
+    "zero_initialized_stair_inputs": 20,
+    "physical_action_mean_preserved": true
+  },
+  "evaluation": {
+    "episodes": 5,
+    "successes": 0,
+    "maximum_stair_index": 1,
+    "maximum_base_elevation_gain_m": 0.0180028080940247,
+    "maximum_body_tilt_deg": 42.69074789523844,
+    "failure_reason_counts": {
+      "base_clearance_too_low": 2,
+      "body_tipped": 1,
+      "no_foot_tread_progress": 2,
+      "no_forward_progress": 2
+    }
+  },
+  "video": "reviews/ppo-stairs-v6-180mm-25cm-balance-transfer.mp4"
+}

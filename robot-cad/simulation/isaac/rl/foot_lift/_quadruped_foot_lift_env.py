@@ -12,8 +12,10 @@ from _foot_lift_contract import (
     foot_lift_failure_reasons,
     foot_lift_reward_terms,
     foot_lift_success_reached,
+    lift_curriculum_level,
     pack_foot_lift_observation,
     smoothstep,
+    support_triangle_signed_margin_m,
 )
 from _quadruped_rl_env import QuadrupedWalkEnv
 from _quadruped_runtime import LEGS, LINK_LENGTH_M, pose_by_name, targets_for_order
@@ -80,6 +82,31 @@ class QuadrupedFootLiftEnv(QuadrupedWalkEnv):
         self.ramp_duration_seconds = float(self.lift_config["ramp_duration_seconds"])
         self.target_forward_offset_m = float(self.lift_config["target_forward_offset_m"])
         self.weight_shift_config = dict(task_config["weight_shift"])
+        self.lift_curriculum_config = dict(task_config.get("lift_curriculum", {}))
+        self.lift_curriculum_levels = tuple(
+            dict(level) for level in self.lift_curriculum_config.get("levels", ())
+        )
+        self.current_target_lift_m = self.target_lift_m
+        self.current_reference_lift_m = self.reference_lift_m
+        self.current_lift_curriculum_level = "final"
+        if self.lift_curriculum_levels:
+            lift_curriculum_level(self.lift_curriculum_levels, 0.0)
+            for level in self.lift_curriculum_levels:
+                target = float(level["target_lift_m"])
+                reference = float(level.get("reference_lift_m", target))
+                if target <= 0.0 or reference < target:
+                    raise ValueError("lift curriculum references must cover positive targets")
+            final_level = self.lift_curriculum_levels[-1]
+            if not np.isclose(float(final_level["target_lift_m"]), self.target_lift_m):
+                raise ValueError("final lift curriculum target must match foot_lift.target_lift_m")
+            if not np.isclose(
+                float(final_level.get("reference_lift_m", final_level["target_lift_m"])),
+                self.reference_lift_m,
+            ):
+                raise ValueError(
+                    "final lift curriculum reference must match foot_lift.reference_lift_m"
+                )
+            self.set_lift_curriculum_progress(0.0)
         super().__init__(
             simulation_app,
             world_path=world_path,
@@ -124,6 +151,19 @@ class QuadrupedFootLiftEnv(QuadrupedWalkEnv):
         self.current_swing_foot_lift_m = 0.0
         self.desired_swing_foot_lift_m = 0.0
         self.goal_hold_step_count = 0
+        self.minimum_support_triangle_margin_m = float("inf")
+
+    def set_lift_curriculum_progress(self, progress: float) -> None:
+        """Select the active clearance stage for the next control step."""
+
+        if not self.lift_curriculum_levels:
+            return
+        selected = lift_curriculum_level(self.lift_curriculum_levels, progress)
+        self.current_target_lift_m = float(selected["target_lift_m"])
+        self.current_reference_lift_m = float(
+            selected.get("reference_lift_m", selected["target_lift_m"])
+        )
+        self.current_lift_curriculum_level = str(selected["id"])
 
     def _sample_foot_tips(self) -> np.ndarray:
         positions_raw, orientations_raw = self.foot_prim.get_world_poses()
@@ -211,7 +251,7 @@ class QuadrupedFootLiftEnv(QuadrupedWalkEnv):
     ) -> np.ndarray:
         return pack_foot_lift_observation(
             walking_observation=state["observation"],
-            target_lift_m=self.target_lift_m,
+            target_lift_m=self.current_target_lift_m,
             desired_lift_m=desired_lift_m,
             measured_lift_m=measured_lift_m,
             maximum_lift_m=maximum_lift_m,
@@ -237,6 +277,10 @@ class QuadrupedFootLiftEnv(QuadrupedWalkEnv):
         self.current_swing_foot_lift_m = 0.0
         self.desired_swing_foot_lift_m = 0.0
         self.goal_hold_step_count = 0
+        self.minimum_support_triangle_margin_m = support_triangle_signed_margin_m(
+            np.asarray(state["base_position"])[:2],
+            foot_tips[list(self.support_leg_indices), :2],
+        )
         observation = self._skill_observation(
             state,
             desired_lift_m=0.0,
@@ -250,7 +294,8 @@ class QuadrupedFootLiftEnv(QuadrupedWalkEnv):
             {
                 "task_id": self.config["id"],
                 "swing_leg": self.swing_leg,
-                "target_lift_m": self.target_lift_m,
+                "target_lift_m": self.current_target_lift_m,
+                "lift_curriculum_level": self.current_lift_curriculum_level,
                 "base_support_mode": self.base_support_mode,
                 "observation_fields": FOOT_LIFT_OBSERVATION_FIELDS,
                 "physics_steps_per_control": self.physics_steps_per_control,
@@ -271,7 +316,7 @@ class QuadrupedFootLiftEnv(QuadrupedWalkEnv):
         elapsed_seconds = (self.episode_step + 1) * self.control_dt_s
         desired_lift = desired_foot_lift_m(
             elapsed_seconds,
-            target_lift_m=self.reference_lift_m,
+            target_lift_m=self.current_reference_lift_m,
             ramp_start_seconds=self.ramp_start_seconds,
             ramp_duration_seconds=self.ramp_duration_seconds,
         )
@@ -321,6 +366,10 @@ class QuadrupedFootLiftEnv(QuadrupedWalkEnv):
         base_displacement = base_position - self.episode_base_origin
         base_height_error = float(base_displacement[2])
         base_displacement_xy = base_displacement[:2]
+        support_triangle_margin = support_triangle_signed_margin_m(
+            base_position[:2],
+            foot_tips[list(self.support_leg_indices), :2],
+        )
         imu_observation = np.asarray(state["imu_observation"])
         projected_gravity = imu_observation[3:6]
         failure_reasons = foot_lift_failure_reasons(
@@ -341,8 +390,11 @@ class QuadrupedFootLiftEnv(QuadrupedWalkEnv):
         success_now = not failed and foot_lift_success_reached(
             desired_lift_m=desired_lift,
             measured_lift_m=measured_lift,
-            target_lift_m=self.target_lift_m,
-            minimum_success_lift_m=float(self.success_config["minimum_lift_m"]),
+            target_lift_m=self.current_target_lift_m,
+            minimum_success_lift_m=min(
+                float(self.success_config["minimum_lift_m"]),
+                self.current_target_lift_m,
+            ),
             projected_gravity_xyz=projected_gravity,
             base_height_error_m=base_height_error,
             base_displacement_xy_m=base_displacement_xy,
@@ -376,6 +428,7 @@ class QuadrupedFootLiftEnv(QuadrupedWalkEnv):
             failed=failed,
             succeeded=succeeded,
             reward_config=self.reward_config,
+            support_triangle_margin_m=support_triangle_margin,
         )
         reward = float(reward_terms["total"])
         self.episode_return += reward
@@ -387,6 +440,10 @@ class QuadrupedFootLiftEnv(QuadrupedWalkEnv):
         self.maximum_support_foot_lift_m = maximum_support_lift
         self.current_swing_foot_lift_m = measured_lift
         self.desired_swing_foot_lift_m = desired_lift
+        self.minimum_support_triangle_margin_m = min(
+            self.minimum_support_triangle_margin_m,
+            support_triangle_margin,
+        )
         observation = self._skill_observation(
             state,
             desired_lift_m=desired_lift,
@@ -402,9 +459,12 @@ class QuadrupedFootLiftEnv(QuadrupedWalkEnv):
             "base_displacement_m": base_displacement.copy(),
             "foot_tip_positions_m": foot_tips.copy(),
             "desired_swing_foot_lift_m": desired_lift,
+            "active_target_lift_m": self.current_target_lift_m,
+            "lift_curriculum_level": self.current_lift_curriculum_level,
             "measured_swing_foot_lift_m": measured_lift,
             "maximum_swing_foot_lift_m": maximum_lift,
             "maximum_support_foot_lift_m": maximum_support_lift,
+            "support_triangle_margin_m": support_triangle_margin,
             "goal_hold_duration_s": self.goal_hold_step_count / self.control_hz,
             "failure_reasons": failure_reasons,
             "succeeded": succeeded,
@@ -418,12 +478,19 @@ class QuadrupedFootLiftEnv(QuadrupedWalkEnv):
                 "duration_s": self.episode_step / self.control_hz,
                 "swing_leg": self.swing_leg,
                 "base_support_mode": self.base_support_mode,
-                "target_lift_m": self.target_lift_m,
-                "reference_lift_m": self.reference_lift_m,
+                "target_lift_m": self.current_target_lift_m,
+                "reference_lift_m": self.current_reference_lift_m,
+                "final_target_lift_m": self.target_lift_m,
+                "lift_curriculum_level": self.current_lift_curriculum_level,
                 "maximum_swing_foot_lift_m": maximum_lift,
                 "final_swing_foot_lift_m": measured_lift,
                 "maximum_support_foot_lift_m": maximum_support_lift,
+                "minimum_support_triangle_margin_m": (
+                    self.minimum_support_triangle_margin_m
+                ),
                 "base_displacement_m": base_displacement.tolist(),
+                "final_base_position_m": base_position.tolist(),
+                "final_foot_tip_positions_m": foot_tips.tolist(),
                 "minimum_base_height_m": self.minimum_height_m,
                 "maximum_body_tilt_deg": self.maximum_tilt_deg,
                 "goal_hold_duration_s": (self.goal_hold_step_count / self.control_hz),
@@ -465,4 +532,6 @@ class QuadrupedFootLiftEnv(QuadrupedWalkEnv):
                 ),
             }
         )
+        if self.lift_curriculum_levels:
+            contract["lift_curriculum"] = self.lift_curriculum_config
         return contract

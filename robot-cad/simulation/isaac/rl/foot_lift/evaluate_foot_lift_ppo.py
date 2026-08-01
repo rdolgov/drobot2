@@ -151,6 +151,7 @@ try:
         task_config=task_config,
         render_mode="human" if args.gui else None,
     )
+    raw_env.set_lift_curriculum_progress(1.0)
     verification = validate_model_manifest(
         model_path=model_path,
         config_path=config_path,

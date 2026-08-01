@@ -51,9 +51,22 @@ parser.add_argument("--total-timesteps", type=int, default=None)
 parser.add_argument("--seed", type=int, default=190)
 parser.add_argument("--device", default="cpu")
 parser.add_argument(
+    "--initialize-from-skill",
+    default=None,
+    help=(
+        "Initialize from a same-shape foot-lift/balance policy. Policy state "
+        "transfers exactly; optimizer state does not."
+    ),
+)
+parser.add_argument(
     "--smoke-test",
     action="store_true",
     help="Run 512 PPO steps to validate the complete training pipeline.",
+)
+parser.add_argument(
+    "--final-stage-only",
+    action="store_true",
+    help="Keep an optional lift curriculum pinned to its final clearance stage.",
 )
 parser.add_argument("--gui", action="store_true")
 args, _ = parser.parse_known_args()
@@ -88,6 +101,7 @@ if args.smoke_test:
     epochs = min(2, int(ppo_config["epochs"]))
     checkpoint_frequency = max(128, rollout_steps)
     training_mode = "smoke"
+    curriculum_total_timesteps = int(ppo_config["total_timesteps"])
 else:
     total_timesteps = args.total_timesteps or int(ppo_config["total_timesteps"])
     rollout_steps = int(ppo_config["rollout_steps"])
@@ -95,6 +109,7 @@ else:
     epochs = int(ppo_config["epochs"])
     checkpoint_frequency = int(ppo_config["checkpoint_frequency_steps"])
     training_mode = "full"
+    curriculum_total_timesteps = total_timesteps
 if rollout_steps < 2 or batch_size < 2 or rollout_steps % batch_size:
     parser.error("rollout_steps must be divisible by batch_size and both >= 2")
 algorithm_contract = expected_ppo_algorithm_contract(
@@ -120,8 +135,42 @@ simulation_app = SimulationApp(
 import stable_baselines3  # noqa: E402
 from _quadruped_foot_lift_env import QuadrupedFootLiftEnv  # noqa: E402
 from stable_baselines3 import PPO  # noqa: E402
-from stable_baselines3.common.callbacks import CheckpointCallback  # noqa: E402
+from stable_baselines3.common.callbacks import (  # noqa: E402
+    BaseCallback,
+    CallbackList,
+    CheckpointCallback,
+)
 from stable_baselines3.common.monitor import Monitor  # noqa: E402
+
+
+class LiftCurriculumCallback(BaseCallback):
+    """Advance optional clearance stages without changing policy shape."""
+
+    def __init__(
+        self,
+        environment: QuadrupedFootLiftEnv,
+        *,
+        total_timesteps: int,
+        final_stage_only: bool,
+    ) -> None:
+        super().__init__(verbose=0)
+        self.environment = environment
+        self.total_timesteps = max(1, int(total_timesteps))
+        self.final_stage_only = bool(final_stage_only)
+
+    def _on_training_start(self) -> None:
+        self.environment.set_lift_curriculum_progress(
+            1.0 if self.final_stage_only else 0.0
+        )
+
+    def _on_step(self) -> bool:
+        progress = (
+            1.0
+            if self.final_stage_only
+            else min(1.0, float(self.num_timesteps) / self.total_timesteps)
+        )
+        self.environment.set_lift_curriculum_progress(progress)
+        return True
 
 report: dict[str, object] = {
     "status": "FAIL",
@@ -135,6 +184,8 @@ report: dict[str, object] = {
     "smoke_test": args.smoke_test,
     "training_mode": training_mode,
     "requested_total_timesteps": total_timesteps,
+    "lift_curriculum_total_timesteps": curriculum_total_timesteps,
+    "final_stage_only": args.final_stage_only,
     "seed": args.seed,
     "device_request": args.device,
     "isaac_sim_version": "6.0.1",
@@ -186,7 +237,35 @@ try:
     transferred_from: Path | None = None
     initialization_config = dict(task_config.get("initialization", {}))
     flat_model_value = initialization_config.get("flat_model")
-    if flat_model_value:
+    skill_model_value = args.initialize_from_skill or initialization_config.get(
+        "skill_model"
+    )
+    if flat_model_value and skill_model_value:
+        raise RuntimeError("Only one foot-lift initializer may be configured")
+    if skill_model_value:
+        transferred_from = _resolve_project_path(str(skill_model_value))
+        if not transferred_from.is_file():
+            raise FileNotFoundError(transferred_from)
+        source_model = PPO.load(str(transferred_from), device=args.device)
+        if tuple(source_model.observation_space.shape) != (FOOT_LIFT_OBSERVATION_SIZE,):
+            raise RuntimeError(
+                "Foot-lift initializer must use the current observation contract"
+            )
+        if tuple(source_model.action_space.shape) != (12,):
+            raise RuntimeError("Foot-lift initializer must use the 12-joint action")
+        model.policy.load_state_dict(source_model.policy.state_dict(), strict=True)
+        model.policy.log_std.data.fill_(float(ppo_config["initial_log_std"]))
+        report["skill_policy_transfer"] = {
+            "source_model": str(transferred_from),
+            "source_model_sha256": sha256_file(transferred_from),
+            "source_observation_size": FOOT_LIFT_OBSERVATION_SIZE,
+            "target_observation_size": FOOT_LIFT_OBSERVATION_SIZE,
+            "mode": "exact_policy_state",
+            "optimizer_transferred": False,
+            "log_std_overridden": float(ppo_config["initial_log_std"]),
+        }
+        del source_model
+    elif flat_model_value:
         transferred_from = _resolve_project_path(str(flat_model_value))
         if not transferred_from.is_file():
             raise FileNotFoundError(transferred_from)
@@ -230,9 +309,19 @@ try:
         save_replay_buffer=False,
         save_vecnormalize=False,
     )
+    training_callbacks = CallbackList(
+        [
+            checkpoint_callback,
+            LiftCurriculumCallback(
+                raw_env,
+                total_timesteps=curriculum_total_timesteps,
+                final_stage_only=args.final_stage_only,
+            ),
+        ]
+    )
     model.learn(
         total_timesteps=total_timesteps,
-        callback=checkpoint_callback,
+        callback=training_callbacks,
         reset_num_timesteps=True,
         progress_bar=False,
     )

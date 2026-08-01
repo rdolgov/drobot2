@@ -25,7 +25,9 @@ from _foot_lift_contract import (  # noqa: E402
     foot_lift_failure_reasons,
     foot_lift_reward_terms,
     foot_lift_success_reached,
+    lift_curriculum_level,
     pack_foot_lift_observation,
+    support_triangle_signed_margin_m,
 )
 from _quadruped_runtime import leg_ik  # noqa: E402
 
@@ -214,3 +216,51 @@ def test_config_keeps_real_torque_limit_and_removes_vision(config: dict) -> None
     assert task["target_velocity_body_m_s"] == [0.0, 0.0, 0.0]
     assert task["base_support"]["mode"] == "pose_hold"
     assert config["ppo"]["zero_action_mean_init"] is True
+
+
+def test_unsupported_balance_curriculum_reaches_190mm_final_stage() -> None:
+    with (FOOT_LIFT_DIR / "quadruped_foot_lift_v2_balance.yaml").open(
+        "r",
+        encoding="utf-8",
+    ) as stream:
+        balance_config = yaml.safe_load(stream)
+
+    task = balance_config["task"]
+    levels = task["lift_curriculum"]["levels"]
+    assert task["base_support"]["mode"] == "none"
+    assert task["foot_lift"]["target_lift_m"] == pytest.approx(0.19)
+    assert task["weight_shift"]["forward_m"] != 0.0
+    assert task["weight_shift"]["lateral_m"] != 0.0
+    assert lift_curriculum_level(levels, 0.0)["id"] == "unload-20mm"
+    assert lift_curriculum_level(levels, 0.51)["id"] == "lift-90mm"
+    assert lift_curriculum_level(levels, 1.0)["target_lift_m"] == pytest.approx(0.19)
+
+    reward = task["reward"]
+    common = {
+        "desired_lift_m": 0.19,
+        "lift_progress_m": 0.0,
+        "tracking_target_reached": False,
+        "base_height_error_m": 0.0,
+        "base_displacement_xy_m": (0.0, 0.0),
+        "maximum_support_foot_lift_m": 0.0,
+        "body_angular_velocity_xyz": (0.0, 0.0, 0.0),
+        "projected_gravity_xyz": (0.0, 0.0, -1.0),
+        "joint_velocities_normalized": np.zeros(12),
+        "action": np.zeros(12),
+        "previous_action": np.zeros(12),
+        "failed": False,
+        "succeeded": False,
+        "reward_config": reward,
+    }
+    low = foot_lift_reward_terms(**common, measured_lift_m=0.0)
+    higher = foot_lift_reward_terms(**common, measured_lift_m=0.05)
+    assert higher["total"] > low["total"]
+    assert higher["lift_height"] > low["lift_height"]
+    assert higher["lift_error"] > low["lift_error"]
+
+
+def test_support_triangle_margin_is_positive_inside_and_negative_outside() -> None:
+    support = ((0.0, 0.0), (1.0, 0.0), (0.0, 1.0))
+
+    assert support_triangle_signed_margin_m((0.2, 0.2), support) == pytest.approx(0.2)
+    assert support_triangle_signed_margin_m((-0.1, 0.2), support) == pytest.approx(-0.1)
