@@ -895,6 +895,88 @@ def joint_effort_telemetry_sample(
     return result
 
 
+def post_landing_reposition_snapshot(
+    snapshot: Mapping[str, object],
+    *,
+    leg: str,
+) -> dict[str, object]:
+    """Rewind one completed leg for a measured post-landing re-placement.
+
+    The physical articulation state is preserved.  Only the placement state
+    machine is rewound so the selected, just-completed foot can be lifted and
+    landed again before the following leg is allowed to unload.
+    """
+
+    stored = deepcopy(dict(snapshot))
+    sequence = tuple(str(item) for item in stored["placement_sequence_legs"])
+    if leg not in sequence:
+        raise ValueError(f"Unknown post-landing reposition leg: {leg}")
+    leg_index = sequence.index(leg)
+    if leg_index >= len(sequence) - 1:
+        raise ValueError("Post-landing reposition leg must have a following leg")
+    expected_next_leg = sequence[leg_index + 1]
+    completed = tuple(str(item) for item in stored["completed_placement_legs"])
+    if completed != sequence[: leg_index + 1]:
+        raise ValueError(
+            "Post-landing reposition snapshot must contain the exact completed "
+            "prefix through the selected leg"
+        )
+    if (
+        int(stored["placement_sequence_position"]) != leg_index + 1
+        or str(stored["placement_swing_leg"]) != expected_next_leg
+        or not bool(stored.get("placement_transfer_active", False))
+    ):
+        raise ValueError(
+            "Post-landing reposition requires the following leg's active "
+            "inter-leg transfer boundary"
+        )
+    transfer_reference = deepcopy(
+        dict(stored.get("placement_transfer_reference_by_leg", {}))
+    )
+    if set(transfer_reference) != set(STAIR_FOOT_NAMES):
+        raise ValueError(
+            "Post-landing reposition requires a four-leg transfer reference"
+        )
+
+    current_base = deepcopy(stored["base_position_m"])
+    current_balance = deepcopy(
+        stored.get("placement_transfer_start_balance_position_m", current_base)
+    )
+    maximum_lifts = list(stored.get("maximum_foot_lift_m", ()))
+    baseline_lift_m = (
+        float(maximum_lifts[STAIR_FOOT_NAMES.index(leg)])
+        if len(maximum_lifts) == len(STAIR_FOOT_NAMES)
+        else 0.0
+    )
+    if not np.isfinite(baseline_lift_m) or baseline_lift_m < 0.0:
+        raise ValueError("Post-landing baseline lift must be finite and nonnegative")
+
+    stored["placement_sequence_position"] = leg_index
+    stored["placement_swing_leg"] = leg
+    stored["completed_placement_legs"] = list(sequence[:leg_index])
+    for key in (
+        "completed_placement_joint_targets_by_leg",
+        "completed_placement_reference_by_leg",
+    ):
+        values = deepcopy(dict(stored.get(key, {})))
+        values.pop(leg, None)
+        stored[key] = values
+    stored["placement_leg_baseline_reference_by_leg"] = transfer_reference
+    stored["placement_leg_baseline_base_position_m"] = current_base
+    stored["placement_leg_baseline_balance_position_m"] = current_balance
+    stored["placement_leg_baseline_lift_offset_m"] = baseline_lift_m
+    stored["placement_transfer_active"] = False
+    stored["placement_transfer_reference_by_leg"] = {}
+    stored["placement_transfer_start_base_position_m"] = current_base
+    stored["placement_transfer_target_base_position_m"] = current_base
+    stored["placement_transfer_start_balance_position_m"] = current_balance
+    stored["placement_transfer_target_balance_position_m"] = current_balance
+    for key in ("previous_action", "previous_residual_action"):
+        values = list(stored.get(key, ()))
+        stored[key] = [0.0] * len(values)
+    return stored
+
+
 def placement_phase_ready(
     *,
     sequence_legs: Sequence[str],

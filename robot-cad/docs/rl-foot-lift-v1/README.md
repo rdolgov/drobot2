@@ -140,6 +140,25 @@ Validated on Isaac Sim `6.0.1` with the real-test `0.8825985 N m` effort cap:
 The result establishes supported single-leg clearance in simulation. It does
 not establish unsupported three-foot balance or a stair climb.
 
+### Fresh rear-right seed-941 validation
+
+The unchanged V3 rear-right task was rerun after the stair-transfer diagnosis
+to answer the simpler capability question independently. The `512`-step
+seed-941 smoke run completed its training episode at `196.700 mm` lift and
+`2.362 deg` maximum tilt. Fresh deterministic seed-942 evaluation passed
+`5/5`, with `201.006-204.345 mm` maximum lift, `2.218 deg` worst tilt, and no
+failure reason. The seed-943 recording reached `202.907 mm`, retained a
+positive `1.271 mm` minimum support-triangle margin, and held the strict gate
+for `0.75 s`.
+
+This run uses the `one-leg-real-test-2026-07-28` joint directions, limits, and
+`0.8825985 N m` effort cap. Policy input is camera-blind: IMU, joint state,
+previous action, lift target/progress, and body state. The external camera only
+records the MP4. The tracked package is
+`simulation/isaac/models/ppo-foot-lift-v3-rear-right-190mm-seed941-small/`.
+The model SHA-256 is
+`7f3ccb0a159140de47eb99d8ad71c0eeabf3692a6dd712e36c44206c4e9d279c`.
+
 ## Generated outputs
 
 | Artifact | Path |
@@ -152,6 +171,9 @@ not establish unsupported three-foot balance or a stair climb.
 | Unsupported PPO checkpoint, manifest, and reports | `simulation/isaac/models/ppo-foot-lift-v2-balance-190mm-small/` |
 | Unsupported review video | `reviews/ppo-foot-lift-v2-balance-190mm-evaluation.mp4` |
 | Unsupported evaluation image | `reviews/ppo-foot-lift-v2-balance-190mm-evaluation.png` |
+| Fresh rear-right seed-941 package | `simulation/isaac/models/ppo-foot-lift-v3-rear-right-190mm-seed941-small/` |
+| Fresh rear-right seed-943 video | `reviews/ppo-foot-lift-v3-rear-right-190mm-fresh-seed943.mp4` |
+| Fresh rear-right seed-943 thumbnail | `reviews/ppo-foot-lift-v3-rear-right-190mm-fresh-seed943.png` |
 
 ## Assumptions and limitations
 

@@ -1,0 +1,198 @@
+{
+  "acceptance": {
+    "maximum_body_tilt_deg": 12.0,
+    "maximum_forward_foot_drift_m": 0.03,
+    "maximum_support_slip_m": 0.022,
+    "minimum_physical_outward_displacement_m": 0.008,
+    "minimum_rear_right_tread_load_n": 2.0,
+    "minimum_replacement_support_margin_m": 0.015
+  },
+  "accepted_candidates": 2,
+  "best": {
+    "absolute_apex_lift_m": 0.2410525506734848,
+    "acceptance_gates": {
+      "body_tilt": true,
+      "completed_second_landing": true,
+      "forward_foot_drift": true,
+      "physical_outward_displacement": true,
+      "rear_right_tread_load": true,
+      "relative_reclearance": true,
+      "replacement_support_margin": true,
+      "support_contact": true,
+      "support_slip": true
+    },
+    "accepted": true,
+    "candidate_index": 0,
+    "completed": true,
+    "failure_reasons": [],
+    "final_com_xyz_m": [
+      0.47689429021702384,
+      0.05756186521460534,
+      0.33147429123638933
+    ],
+    "final_rear_right_tread_load_n": 2.301460027694702,
+    "final_rear_right_xyz_m": [
+      0.5318676233291626,
+      -0.030883613973855972,
+      0.16786156594753265
+    ],
+    "forward_foot_drift_m": 0.004161059856414795,
+    "forward_offset_m": 0.015,
+    "initial_physical_lift_m": 0.17407312896102667,
+    "initial_rear_right_xyz_m": [
+      0.5360286831855774,
+      -0.02166828140616417,
+      0.18183012306690216
+    ],
+    "maximum_body_tilt_deg": 11.461161282613327,
+    "maximum_physical_lift_m": 0.18110576272010803,
+    "maximum_support_slip_m": 0.015999991446733475,
+    "maximum_tread_load_n": 13.71591854095459,
+    "measured_relative_reclearance_m": 0.007032633759081364,
+    "minimum_replacement_support_margin_m": 0.06520117742785765,
+    "minimum_support_contact_fraction": 1.0,
+    "next_support_margin_m": -0.10283918234401765,
+    "outward_offset_m": 0.01,
+    "physical_outward_displacement_m": 0.009215332567691803,
+    "relative_apex_lift_m": 0.06,
+    "required_reclearance_lift_m": 0.17907312896102667,
+    "steps": 438,
+    "terminated": false,
+    "truncated": false
+  },
+  "camera_policy_input": false,
+  "candidate_count": 2,
+  "config": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\stairs\\quadruped_stairs_v46_rear_right_sidestep.yaml",
+  "effort_cap_nm": 0.8825985,
+  "external_camera_used": false,
+  "forward_offsets_m": [
+    0.015
+  ],
+  "outward_offsets_m": [
+    0.01,
+    0.015
+  ],
+  "phase_snapshot": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\models\\ppo-stairs-v45-rear-left-dynamic-transfer-4096\\phase_snapshot_seed870.json",
+  "phase_snapshot_sha256": "587ffc5e447e8f36f877490dae7525848529480304565cc7cc1c04e7a1143f85",
+  "ranked_candidates": [
+    {
+      "absolute_apex_lift_m": 0.2410525506734848,
+      "acceptance_gates": {
+        "body_tilt": true,
+        "completed_second_landing": true,
+        "forward_foot_drift": true,
+        "physical_outward_displacement": true,
+        "rear_right_tread_load": true,
+        "relative_reclearance": true,
+        "replacement_support_margin": true,
+        "support_contact": true,
+        "support_slip": true
+      },
+      "accepted": true,
+      "candidate_index": 0,
+      "completed": true,
+      "failure_reasons": [],
+      "final_com_xyz_m": [
+        0.47689429021702384,
+        0.05756186521460534,
+        0.33147429123638933
+      ],
+      "final_rear_right_tread_load_n": 2.301460027694702,
+      "final_rear_right_xyz_m": [
+        0.5318676233291626,
+        -0.030883613973855972,
+        0.16786156594753265
+      ],
+      "forward_foot_drift_m": 0.004161059856414795,
+      "forward_offset_m": 0.015,
+      "initial_physical_lift_m": 0.17407312896102667,
+      "initial_rear_right_xyz_m": [
+        0.5360286831855774,
+        -0.02166828140616417,
+        0.18183012306690216
+      ],
+      "maximum_body_tilt_deg": 11.461161282613327,
+      "maximum_physical_lift_m": 0.18110576272010803,
+      "maximum_support_slip_m": 0.015999991446733475,
+      "maximum_tread_load_n": 13.71591854095459,
+      "measured_relative_reclearance_m": 0.007032633759081364,
+      "minimum_replacement_support_margin_m": 0.06520117742785765,
+      "minimum_support_contact_fraction": 1.0,
+      "next_support_margin_m": -0.10283918234401765,
+      "outward_offset_m": 0.01,
+      "physical_outward_displacement_m": 0.009215332567691803,
+      "relative_apex_lift_m": 0.06,
+      "required_reclearance_lift_m": 0.17907312896102667,
+      "steps": 438,
+      "terminated": false,
+      "truncated": false
+    },
+    {
+      "absolute_apex_lift_m": 0.2410525506734848,
+      "acceptance_gates": {
+        "body_tilt": true,
+        "completed_second_landing": true,
+        "forward_foot_drift": true,
+        "physical_outward_displacement": true,
+        "rear_right_tread_load": true,
+        "relative_reclearance": true,
+        "replacement_support_margin": true,
+        "support_contact": true,
+        "support_slip": true
+      },
+      "accepted": true,
+      "candidate_index": 1,
+      "completed": true,
+      "failure_reasons": [],
+      "final_com_xyz_m": [
+        0.4752497990026156,
+        0.05445861528286932,
+        0.3303944857170337
+      ],
+      "final_rear_right_tread_load_n": 2.0241973400115967,
+      "final_rear_right_xyz_m": [
+        0.5309383869171143,
+        -0.03733381628990173,
+        0.16357870399951935
+      ],
+      "forward_foot_drift_m": 0.005135834217071533,
+      "forward_offset_m": 0.015,
+      "initial_physical_lift_m": 0.17404322233051062,
+      "initial_rear_right_xyz_m": [
+        0.5360742211341858,
+        -0.021681779995560646,
+        0.1818002164363861
+      ],
+      "maximum_body_tilt_deg": 11.619422939820254,
+      "maximum_physical_lift_m": 0.18093593418598175,
+      "maximum_support_slip_m": 0.020191041752696037,
+      "maximum_tread_load_n": 16.731395721435547,
+      "measured_relative_reclearance_m": 0.006892711855471134,
+      "minimum_replacement_support_margin_m": 0.06474571982221766,
+      "minimum_support_contact_fraction": 1.0,
+      "next_support_margin_m": -0.10537254754198784,
+      "outward_offset_m": 0.015,
+      "physical_outward_displacement_m": 0.015652036294341087,
+      "relative_apex_lift_m": 0.06,
+      "required_reclearance_lift_m": 0.17904322233051062,
+      "steps": 489,
+      "terminated": false,
+      "truncated": false
+    }
+  ],
+  "relative_apex_lifts_m": [
+    0.06
+  ],
+  "saved_transfer_snapshot": {
+    "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\rear-left-transfer-snapshot-v46-seed937.json",
+    "sha256": "7545b2c0370e6c58f753487409b3f9a27c1876dbcf4e114b33872823623d1be7"
+  },
+  "seed": 937,
+  "source_task_id": "Drobot-Quadruped-Stairs-v45-Rear-Left-Transfer",
+  "stair_rise_m": 0.18,
+  "stair_tread_depth_m": 0.25,
+  "status": "PASS",
+  "task_id": "Drobot-Quadruped-Stairs-v46-Rear-Right-Sidestep",
+  "task_success": true,
+  "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_stairs_v6_180mm_world.usda"
+}

@@ -59,6 +59,7 @@ from _stair_rl_contract import (  # noqa: E402
     placement_reference_state,
     placement_success_mode,
     placement_transfer_ready,
+    post_landing_reposition_snapshot,
     progress_gate_failures,
     split_post_clearance_advance_fractions,
     stabilized_support_reference_base_delta,
@@ -2472,6 +2473,82 @@ def test_staged_swing_outward_offset_ramps_during_advance() -> None:
             maximum_offset_m=0.005,
             advance_fraction=-0.1,
         )
+
+
+def test_post_landing_reposition_snapshot_rewinds_only_state_machine() -> None:
+    references = {
+        leg: {
+            "forward_m": float(index),
+            "vertical_m": 0.20 + index * 0.01,
+            "outward_m": 0.02,
+        }
+        for index, leg in enumerate(
+            ("front_left", "front_right", "rear_left", "rear_right")
+        )
+    }
+    snapshot = {
+        "placement_sequence_legs": (
+            "front_right",
+            "front_left",
+            "rear_right",
+            "rear_left",
+        ),
+        "placement_sequence_position": 3,
+        "placement_swing_leg": "rear_left",
+        "placement_transfer_active": True,
+        "completed_placement_legs": [
+            "front_right",
+            "front_left",
+            "rear_right",
+        ],
+        "completed_placement_joint_targets_by_leg": {
+            "front_right": [1.0, 2.0, 3.0],
+            "front_left": [4.0, 5.0, 6.0],
+            "rear_right": [7.0, 8.0, 9.0],
+        },
+        "completed_placement_reference_by_leg": {
+            "front_right": {"forward_m": 1.0},
+            "front_left": {"forward_m": 2.0},
+            "rear_right": {"forward_m": 3.0},
+        },
+        "placement_transfer_reference_by_leg": references,
+        "placement_leg_baseline_reference_by_leg": {"stale": {}},
+        "base_position_m": [0.48, 0.08, 0.36],
+        "placement_transfer_start_balance_position_m": [0.49, 0.07, 0.34],
+        "placement_transfer_start_base_position_m": [0.48, 0.08, 0.36],
+        "placement_transfer_target_base_position_m": [0.56, -0.01, 0.36],
+        "placement_transfer_target_balance_position_m": [0.57, -0.03, 0.34],
+        "maximum_foot_lift_m": [0.24, 0.20, 0.0, 0.181],
+        "previous_action": [0.1] * 12,
+        "previous_residual_action": [-0.1] * 12,
+    }
+
+    rewound = post_landing_reposition_snapshot(snapshot, leg="rear_right")
+
+    assert rewound["placement_sequence_position"] == 2
+    assert rewound["placement_swing_leg"] == "rear_right"
+    assert rewound["completed_placement_legs"] == [
+        "front_right",
+        "front_left",
+    ]
+    assert rewound["placement_transfer_active"] is False
+    assert rewound["placement_transfer_reference_by_leg"] == {}
+    assert rewound["placement_leg_baseline_reference_by_leg"] == references
+    assert rewound["placement_leg_baseline_lift_offset_m"] == pytest.approx(
+        0.181
+    )
+    assert "rear_right" not in rewound[
+        "completed_placement_joint_targets_by_leg"
+    ]
+    assert "rear_right" not in rewound["completed_placement_reference_by_leg"]
+    assert rewound["previous_action"] == [0.0] * 12
+    assert rewound["previous_residual_action"] == [0.0] * 12
+    assert snapshot["placement_transfer_active"] is True
+
+    invalid = dict(snapshot)
+    invalid["placement_transfer_active"] = False
+    with pytest.raises(ValueError, match="active inter-leg transfer"):
+        post_landing_reposition_snapshot(invalid, leg="rear_right")
 
 
 def test_post_clearance_advance_shifts_body_before_swing() -> None:

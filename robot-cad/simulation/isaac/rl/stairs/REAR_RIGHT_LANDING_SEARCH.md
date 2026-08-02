@@ -252,3 +252,40 @@ that creates a physically wider support polygon before asking rear-left to
 unload. Validate positive margin and COM capture first, then train the 190 mm
 rear-left lift. Better traction remains a sim-to-real calibration item; better
 vision is not needed for this known fixed 180 x 250 mm stair failure.
+
+## V46 rear-right sidestep and fresh lift-capability split
+
+V46 rewinds only the placement state machine after the accepted V44/V45
+rear-right landing, preserving the exact physical articulation state. It then
+re-lifts rear-right from the tread and searches a small outward/deeper
+replacement before caching the rear-left transfer boundary. The selected
+seed-937 command was `10 mm` outward, `15 mm` forward, and `60 mm` relative
+apex. It completed in `438` steps with:
+
+- `9.215 mm` physical outward displacement;
+- `7.033 mm` measured re-clearance from the already elevated tread pose;
+- `65.201 mm` minimum replacement support margin;
+- `2.301 N` final force-backed rear-right tread load;
+- `15.999 mm` maximum support slip and `11.461 deg` maximum tilt.
+
+The report SHA-256 is
+`f1d3622add4f020caaec7c26fea75e1eb20cf1c4c67e91aa7c87c1193cb8c67d`.
+The saved rear-left transfer snapshot SHA-256 is
+`7545b2c0370e6c58f753487409b3f9a27c1876dbcf4e114b33872823623d1be7`.
+Its requested COM move remains `80.0 mm` forward and about `98.1 mm` lateral.
+
+The exact 4,096-step phase PPO command is recorded in
+`simulation/isaac/models/ppo-stairs-v46-rear-right-sidestep-transfer-4096/README.md`.
+Seed 939 completed the pipeline in `129.338 s`, but achieved `0` transfers and
+only `13.425 mm` rear-left motion. Deterministic seed 940 tipped after `93`
+steps; COM-target error grew from `126.584` to `133.259 mm`, final support
+margin was `-101.073 mm`, and maximum tilt was `20.144 deg`. The external
+camera recorded 46 frames at 30 FPS; RGB was not a policy input.
+
+To separate raw leg ability from this mixed-height failure, a fresh `512`-step
+flat-ground rear-right policy was trained at seed 941. Independent seed-942
+evaluation passed `5/5` with `201.006-204.345 mm` lift and `2.218 deg` worst
+tilt. Therefore the modeled robot can raise the foot above the 180 mm riser;
+the unresolved stair problem is the loaded mixed-height COM transfer and
+controller sequence. The next stage should add an all-four-feet settle/preload
+phase before rear-left unload. More RGB vision is not the immediate need.
