@@ -69,8 +69,10 @@ from _stair_rl_contract import (  # noqa: E402
     stair_observation_fields,
     stair_reward_terms,
     support_load_share_vertical_corrections,
+    support_margin_constrained_target_xy,
     support_pitch_vertical_corrections,
     support_triangle_incenter_xy,
+    touchdown_load_lift_correction_m,
 )
 
 
@@ -2200,6 +2202,63 @@ def test_balance_target_error_uses_the_com_target_frame() -> None:
         )
 
 
+def test_com_target_is_clipped_to_requested_support_margin() -> None:
+    support_points = ((0.0, 0.0), (1.0, 0.0), (0.0, 1.0))
+    unchanged = support_margin_constrained_target_xy(
+        desired_target_xy_m=(0.20, 0.20),
+        support_points_xy_m=support_points,
+        minimum_margin_m=0.10,
+    )
+    np.testing.assert_allclose(unchanged, (0.20, 0.20), atol=1e-9)
+
+    constrained = support_margin_constrained_target_xy(
+        desired_target_xy_m=(0.90, 0.90),
+        support_points_xy_m=support_points,
+        minimum_margin_m=0.10,
+    )
+    expected_edge_coordinate = (1.0 - np.sqrt(2.0) * 0.10) / 2.0
+    np.testing.assert_allclose(
+        constrained,
+        (expected_edge_coordinate, expected_edge_coordinate),
+        atol=1e-7,
+    )
+
+    with pytest.raises(ValueError, match="inradius"):
+        support_margin_constrained_target_xy(
+            desired_target_xy_m=(0.20, 0.20),
+            support_points_xy_m=support_points,
+            minimum_margin_m=0.30,
+        )
+
+
+def test_touchdown_load_feedback_retracts_only_above_target() -> None:
+    arguments = {
+        "target_tread_load_n": 15.0,
+        "proportional_gain_m_per_n": 0.0005,
+        "maximum_lift_correction_m": 0.035,
+    }
+    assert touchdown_load_lift_correction_m(
+        measured_tread_load_n=10.0,
+        **arguments,
+    ) == pytest.approx(0.0)
+    assert touchdown_load_lift_correction_m(
+        measured_tread_load_n=35.0,
+        **arguments,
+    ) == pytest.approx(0.010)
+    assert touchdown_load_lift_correction_m(
+        measured_tread_load_n=300.0,
+        **arguments,
+    ) == pytest.approx(0.035)
+
+    with pytest.raises(ValueError, match="target_tread_load_n"):
+        touchdown_load_lift_correction_m(
+            measured_tread_load_n=10.0,
+            target_tread_load_n=0.0,
+            proportional_gain_m_per_n=0.0005,
+            maximum_lift_correction_m=0.035,
+        )
+
+
 def test_joint_effort_telemetry_reports_tracking_and_cap_utilization() -> None:
     target = np.linspace(-0.3, 0.3, 12)
     measured = target.copy()
@@ -2384,6 +2443,40 @@ def test_post_clearance_advance_shifts_body_before_swing() -> None:
         split_post_clearance_advance_fractions(
             advance_fraction=0.5,
             body_shift_fraction_of_advance=1.0,
+        )
+
+
+def test_post_clearance_advance_can_shift_body_after_swing() -> None:
+    arguments = {
+        "body_shift_fraction_of_advance": 0.5,
+        "sequence": "swing_then_body",
+    }
+    assert split_post_clearance_advance_fractions(
+        advance_fraction=0.0,
+        **arguments,
+    ) == pytest.approx((0.0, 0.0))
+    assert split_post_clearance_advance_fractions(
+        advance_fraction=0.25,
+        **arguments,
+    ) == pytest.approx((0.0, 0.5))
+    assert split_post_clearance_advance_fractions(
+        advance_fraction=0.5,
+        **arguments,
+    ) == pytest.approx((0.0, 1.0))
+    assert split_post_clearance_advance_fractions(
+        advance_fraction=0.75,
+        **arguments,
+    ) == pytest.approx((0.5, 1.0))
+    assert split_post_clearance_advance_fractions(
+        advance_fraction=1.0,
+        **arguments,
+    ) == pytest.approx((1.0, 1.0))
+
+    with pytest.raises(ValueError, match="sequence"):
+        split_post_clearance_advance_fractions(
+            advance_fraction=0.5,
+            body_shift_fraction_of_advance=0.5,
+            sequence="simultaneous",
         )
 
 

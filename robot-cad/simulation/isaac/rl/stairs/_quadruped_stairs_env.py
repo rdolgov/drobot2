@@ -51,7 +51,9 @@ from _stair_rl_contract import (
     stair_observation_fields,
     stair_reward_terms,
     support_load_share_vertical_corrections,
+    support_margin_constrained_target_xy,
     support_pitch_vertical_corrections,
+    touchdown_load_lift_correction_m,
     validate_staircase_config,
 )
 from _vl53l5cx_contract import (
@@ -593,6 +595,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.placement_clearance_gate_hold_step_count = 0
         self.placement_clearance_gate_released = False
         self.placement_clearance_gate_timeout = False
+        self.placement_early_contact_hold_elapsed_s: float | None = None
         self.maximum_placement_clearance_gate_hold_steps = 0
         self.placement_sequence_position = 0
         self.placement_swing_leg = self.placement_sequence_legs[0]
@@ -625,6 +628,89 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.support_load_sharing_enabled = bool(
             self.support_load_sharing_config.get("enabled", False)
         )
+        self.support_margin_regulation_config = dict(
+            self.com_regulation_config.get(
+                "support_margin_regulation",
+                {},
+            )
+        )
+        self.support_margin_regulation_enabled = bool(
+            self.support_margin_regulation_config.get("enabled", False)
+        )
+        support_margin_phases = tuple(
+            str(value)
+            for value in self.support_margin_regulation_config.get(
+                "phases",
+                ("advance", "lower", "hold"),
+            )
+        )
+        if any(
+            phase not in {"weight_shift", "lift", "advance", "lower", "hold"}
+            for phase in support_margin_phases
+        ):
+            raise ValueError(
+                "com_regulation.support_margin_regulation.phases contains "
+                "an unknown placement phase"
+            )
+        self.support_margin_regulation_phases = support_margin_phases
+        support_target_margin_m = float(
+            self.support_margin_regulation_config.get(
+                "minimum_target_margin_m",
+                0.020,
+            )
+        )
+        if not 0.0 <= support_target_margin_m <= 0.10:
+            raise ValueError(
+                "com_regulation.support_margin_regulation."
+                "minimum_target_margin_m must be within [0, 0.10]"
+            )
+        self.touchdown_load_regulation_config = dict(
+            self.placement_reference_config.get(
+                "touchdown_load_regulation",
+                {},
+            )
+        )
+        self.touchdown_load_regulation_enabled = bool(
+            self.touchdown_load_regulation_config.get("enabled", False)
+        )
+        touchdown_legs = tuple(
+            str(value)
+            for value in self.touchdown_load_regulation_config.get(
+                "legs",
+                (),
+            )
+        )
+        if any(leg not in LEGS for leg in touchdown_legs):
+            raise ValueError(
+                "touchdown_load_regulation.legs contains an unknown leg"
+            )
+        self.touchdown_load_regulation_legs = touchdown_legs
+        touchdown_phases = tuple(
+            str(value)
+            for value in self.touchdown_load_regulation_config.get(
+                "phases",
+                ("advance", "lower", "hold"),
+            )
+        )
+        if any(
+            phase not in {"weight_shift", "lift", "advance", "lower", "hold"}
+            for phase in touchdown_phases
+        ):
+            raise ValueError(
+                "touchdown_load_regulation.phases contains an unknown phase"
+            )
+        self.touchdown_load_regulation_phases = touchdown_phases
+        for name, default in (
+            ("attack_smoothing_factor", 0.50),
+            ("release_smoothing_factor", 0.10),
+        ):
+            factor = float(
+                self.touchdown_load_regulation_config.get(name, default)
+            )
+            if not 0.0 < factor <= 1.0:
+                raise ValueError(
+                    f"touchdown_load_regulation.{name} must be within (0, 1]"
+                )
         self.com_regulation_enabled = bool(
             self.com_regulation_config.get("enabled", False)
         )
@@ -873,6 +959,19 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         )
         self.minimum_support_contact_fraction = 1.0
         self.minimum_placement_support_margin_m = float("inf")
+        self.latest_support_margin_regulation_active = False
+        self.latest_support_margin_requested_target_xy_m = np.zeros(
+            2,
+            dtype=np.float64,
+        )
+        self.latest_support_margin_constrained_target_xy_m = np.zeros(
+            2,
+            dtype=np.float64,
+        )
+        self.latest_support_margin_commanded_target_margin_m = 0.0
+        self.maximum_support_margin_target_clip_m = 0.0
+        self.latest_touchdown_load_lift_correction_m = 0.0
+        self.maximum_touchdown_load_lift_correction_m = 0.0
         self.latest_placement_pitch_rear_correction_scale = 1.0
         self.maximum_swing_tread_normal_load_n = 0.0
         self.maximum_tread_normal_load_n_by_leg = np.zeros(
@@ -1019,6 +1118,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             self.placement_clearance_gate_hold_step_count = 0
             self.placement_clearance_gate_released = False
             self.placement_clearance_gate_timeout = False
+            self.placement_early_contact_hold_elapsed_s = None
         if (
             self.placement_reference_enabled
             and hasattr(self, "action_scale")
@@ -1221,9 +1321,14 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
     def _placement_balance_target_error_xy_m(self) -> np.ndarray:
         """Return composite-COM error relative to the retained support target."""
 
+        target_position_xy_m = (
+            self.latest_support_margin_constrained_target_xy_m
+            if self.latest_support_margin_regulation_active
+            else self._placement_balance_target_xy_m()
+        )
         return balance_target_error_xy(
             balance_position_xy_m=self.latest_placement_com_position_m[:2],
-            target_position_xy_m=self._placement_balance_target_xy_m(),
+            target_position_xy_m=target_position_xy_m,
         )
 
     def _sample_foot_contact_loads(self) -> tuple[np.ndarray, np.ndarray]:
@@ -1263,13 +1368,20 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 ).get(self.placement_swing_leg, {})
             )
         )
-        return placement_reference_state(
+        placement_elapsed_seconds = (
             max(
                 0.0,
                 float(elapsed_seconds)
                 - self.placement_phase_start_step * self.control_dt_s,
             )
-            + self.placement_phase_elapsed_offset_s,
+            + self.placement_phase_elapsed_offset_s
+        )
+        if self.placement_early_contact_hold_elapsed_s is not None:
+            placement_elapsed_seconds = (
+                self.placement_early_contact_hold_elapsed_s
+            )
+        return placement_reference_state(
+            placement_elapsed_seconds,
             timing=timing,
             level=self._active_placement_level(),
         )
@@ -1789,6 +1901,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 split_post_clearance_advance_fractions(
                     advance_fraction=advance_fraction,
                     body_shift_fraction_of_advance=float(split_fraction),
+                    sequence=str(
+                        post_clearance_shift.get(
+                            "sequence",
+                            "body_then_swing",
+                        )
+                    ),
                 )
             )
         desired_base_delta[:2] += body_shift_fraction * np.asarray(
@@ -1798,6 +1916,57 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ],
             dtype=np.float64,
         )
+        self.latest_support_margin_regulation_active = False
+        if (
+            self.support_margin_regulation_enabled
+            and str(placement_state["phase"])
+            in self.support_margin_regulation_phases
+        ):
+            support_indices = list(self.placement_support_leg_indices)
+            support_points = np.asarray(
+                self.latest_foot_tips_m[support_indices, :2],
+                dtype=np.float64,
+            )
+            requested_target_xy = (
+                self.placement_leg_baseline_balance_position_m[:2]
+                + desired_base_delta[:2]
+            )
+            minimum_target_margin_m = float(
+                self.support_margin_regulation_config.get(
+                    "minimum_target_margin_m",
+                    0.020,
+                )
+            )
+            constrained_target_xy = support_margin_constrained_target_xy(
+                desired_target_xy_m=requested_target_xy,
+                support_points_xy_m=support_points,
+                minimum_margin_m=minimum_target_margin_m,
+            )
+            self.latest_support_margin_regulation_active = True
+            self.latest_support_margin_requested_target_xy_m = (
+                requested_target_xy.copy()
+            )
+            self.latest_support_margin_constrained_target_xy_m = (
+                constrained_target_xy.copy()
+            )
+            self.latest_support_margin_commanded_target_margin_m = (
+                _support_triangle_signed_margin_m(
+                    constrained_target_xy,
+                    support_points,
+                )
+            )
+            self.maximum_support_margin_target_clip_m = max(
+                self.maximum_support_margin_target_clip_m,
+                float(
+                    np.linalg.norm(
+                        constrained_target_xy - requested_target_xy
+                    )
+                ),
+            )
+            desired_base_delta[:2] = (
+                constrained_target_xy
+                - self.placement_leg_baseline_balance_position_m[:2]
+            )
         anchor_follow_by_axis = self.inter_leg_transfer_config.get(
             "support_world_anchor_follow_gain_xyz"
         )
@@ -2109,7 +2278,11 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     support_indices,
                     :2,
                 ],
-                target_position_xy_m=self._placement_balance_target_xy_m(),
+                target_position_xy_m=(
+                    self.latest_support_margin_constrained_target_xy_m
+                    if self.latest_support_margin_regulation_active
+                    else self._placement_balance_target_xy_m()
+                ),
                 measured_normal_loads_n=support_loads,
                 proportional_gain_m=float(
                     self.support_load_sharing_config.get(
@@ -2209,9 +2382,70 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 swing_advance_fraction * (final_forward_m - lift_forward_m)
             )
         swing["forward_m"] += desired_forward_offset_m
+        raw_touchdown_correction_m = 0.0
+        if (
+            self.touchdown_load_regulation_enabled
+            and self.placement_swing_leg
+            in self.touchdown_load_regulation_legs
+            and str(placement_state["phase"])
+            in self.touchdown_load_regulation_phases
+        ):
+            measured_tread_load_n = float(
+                np.sum(
+                    self.latest_step_normal_loads_n[
+                        self.placement_swing_leg_index,
+                        :,
+                    ]
+                )
+            )
+            raw_touchdown_correction_m = (
+                touchdown_load_lift_correction_m(
+                    measured_tread_load_n=measured_tread_load_n,
+                    target_tread_load_n=float(
+                        self.touchdown_load_regulation_config.get(
+                            "target_tread_load_n",
+                            15.0,
+                        )
+                    ),
+                    proportional_gain_m_per_n=float(
+                        self.touchdown_load_regulation_config.get(
+                            "proportional_gain_m_per_n",
+                            0.0005,
+                        )
+                    ),
+                    maximum_lift_correction_m=float(
+                        self.touchdown_load_regulation_config.get(
+                            "maximum_lift_correction_m",
+                            0.035,
+                        )
+                    ),
+                )
+            )
+        smoothing_key = (
+            "attack_smoothing_factor"
+            if raw_touchdown_correction_m
+            > self.latest_touchdown_load_lift_correction_m
+            else "release_smoothing_factor"
+        )
+        smoothing_default = 0.50 if smoothing_key.startswith("attack") else 0.10
+        smoothing_factor = float(
+            self.touchdown_load_regulation_config.get(
+                smoothing_key,
+                smoothing_default,
+            )
+        )
+        self.latest_touchdown_load_lift_correction_m += smoothing_factor * (
+            raw_touchdown_correction_m
+            - self.latest_touchdown_load_lift_correction_m
+        )
+        self.maximum_touchdown_load_lift_correction_m = max(
+            self.maximum_touchdown_load_lift_correction_m,
+            self.latest_touchdown_load_lift_correction_m,
+        )
         swing["vertical_m"] -= max(
             0.0,
             float(placement_state["desired_lift_m"])
+            + self.latest_touchdown_load_lift_correction_m
             - swing_lift_offset_m,
         )
         return self._targets_from_reference_parameters(adjusted)
@@ -2830,6 +3064,13 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.maximum_support_slip_m_by_leg.fill(0.0)
         self.minimum_support_contact_fraction = 1.0
         self.minimum_placement_support_margin_m = float("inf")
+        self.latest_support_margin_regulation_active = False
+        self.latest_support_margin_requested_target_xy_m.fill(0.0)
+        self.latest_support_margin_constrained_target_xy_m.fill(0.0)
+        self.latest_support_margin_commanded_target_margin_m = 0.0
+        self.maximum_support_margin_target_clip_m = 0.0
+        self.latest_touchdown_load_lift_correction_m = 0.0
+        self.maximum_touchdown_load_lift_correction_m = 0.0
         self.latest_placement_pitch_rear_correction_scale = 1.0
         self.maximum_swing_tread_normal_load_n = 0.0
         self.maximum_tread_normal_load_n_by_leg.fill(0.0)
@@ -3308,6 +3549,13 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             np.float64
         ).copy()
         self.latest_placement_com_position_m = restored_com.copy()
+        self.latest_support_margin_regulation_active = False
+        self.latest_support_margin_requested_target_xy_m.fill(0.0)
+        self.latest_support_margin_constrained_target_xy_m.fill(0.0)
+        self.latest_support_margin_commanded_target_margin_m = 0.0
+        self.maximum_support_margin_target_clip_m = 0.0
+        self.latest_touchdown_load_lift_correction_m = 0.0
+        self.maximum_touchdown_load_lift_correction_m = 0.0
         self.maximum_support_slip_m = 0.0
         self.maximum_support_slip_m_by_leg.fill(0.0)
         self.minimum_support_contact_fraction = 1.0
@@ -3630,6 +3878,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         projected_gravity = imu_observation[3:6]
         upright_cosine = float(np.clip(-projected_gravity[2], -1.0, 1.0))
         placement_contact_now = False
+        placement_contact_expected = False
         placement_swing_lift_m = 0.0
         placement_swing_height_error_m: float | None = None
         placement_support_contact_fraction = 0.0
@@ -3786,6 +4035,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             placement_success_mode = self._placement_success_mode()
             active_placement_level = self._active_placement_level()
             if placement_success_mode == "swing_lift_hold":
+                placement_contact_expected = True
                 placement_contact_now = placement_lift_hold_reached(
                     swing_tip_height_m=float(swing_tip[2]),
                     initial_swing_tip_height_m=float(
@@ -3820,8 +4070,22 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     ),
                 )
             elif placement_success_mode == "tread_contact":
-                placement_contact_now = bool(
+                early_contact_after_clearance = bool(
+                    active_placement_level.get(
+                        "accept_early_tread_contact_after_clearance",
+                        False,
+                    )
+                )
+                placement_contact_expected = bool(
                     placement_state["contact_expected"]
+                    or (
+                        early_contact_after_clearance
+                        and self.placement_clearance_gate_released
+                        and str(placement_state["phase"]) == "advance"
+                    )
+                )
+                placement_contact_now = bool(
+                    placement_contact_expected
                     and placement_contact_reached(
                     swing_tip_position_m=swing_tip,
                     swing_tread_normal_load_n=placement_swing_tread_load,
@@ -3849,6 +4113,19 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     ),
                     )
                 )
+                if (
+                    placement_contact_now
+                    and early_contact_after_clearance
+                    and str(placement_state["phase"]) == "advance"
+                    and self.placement_early_contact_hold_elapsed_s is None
+                ):
+                    # Stop moving a reference that has already produced a
+                    # valid post-clearance tread landing. Live contact,
+                    # support, and upright predicates must still remain true
+                    # for the full configured success-hold duration.
+                    self.placement_early_contact_hold_elapsed_s = float(
+                        placement_state["elapsed_seconds"]
+                    )
             else:
                 raise ValueError(
                     "placement_reference.success_mode must be tread_contact "
@@ -4513,6 +4790,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ),
             "placement_curriculum_level": self.current_placement_level_id,
             "placement_contact_now": placement_contact_now,
+            "placement_contact_expected": placement_contact_expected,
+            "placement_early_contact_hold_elapsed_s": (
+                self.placement_early_contact_hold_elapsed_s
+            ),
             "placement_swing_lift_m": placement_swing_lift_m,
             "placement_upright_cosine": upright_cosine,
             "placement_goal_hold_step_count": self.goal_hold_step_count,
@@ -4533,6 +4814,27 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 placement_support_contact_fraction
             ),
             "placement_support_margin_m": placement_support_margin,
+            "support_margin_regulation_active": (
+                self.latest_support_margin_regulation_active
+            ),
+            "support_margin_requested_target_xy_m": (
+                self.latest_support_margin_requested_target_xy_m.copy()
+            ),
+            "support_margin_constrained_target_xy_m": (
+                self.latest_support_margin_constrained_target_xy_m.copy()
+            ),
+            "support_margin_commanded_target_margin_m": (
+                self.latest_support_margin_commanded_target_margin_m
+            ),
+            "maximum_support_margin_target_clip_m": (
+                self.maximum_support_margin_target_clip_m
+            ),
+            "touchdown_load_lift_correction_m": (
+                self.latest_touchdown_load_lift_correction_m
+            ),
+            "maximum_touchdown_load_lift_correction_m": (
+                self.maximum_touchdown_load_lift_correction_m
+            ),
             "placement_pitch_rear_correction_scale": (
                 self.latest_placement_pitch_rear_correction_scale
             ),

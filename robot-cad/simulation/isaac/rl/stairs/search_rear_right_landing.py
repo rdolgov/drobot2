@@ -40,6 +40,18 @@ parser.add_argument("--candidate-start", type=int, default=0)
 parser.add_argument("--candidate-limit", type=int, default=16)
 parser.add_argument("--maximum-target-steps", type=int, default=600)
 parser.add_argument(
+    "--record-video",
+    default=None,
+    help=(
+        "Encode the selected candidate's phase-local replay only when it "
+        "physically completes the rear-right landing."
+    ),
+)
+parser.add_argument("--record-thumbnail", default=None)
+parser.add_argument("--record-fps", type=int, default=30)
+parser.add_argument("--record-width", type=int, default=960)
+parser.add_argument("--record-height", type=int, default=540)
+parser.add_argument(
     "--rear-transfer-forward-m",
     type=float,
     default=None,
@@ -95,6 +107,10 @@ if args.candidate_start < 0:
     parser.error("--candidate-start cannot be negative")
 if args.maximum_target_steps < 1:
     parser.error("--maximum-target-steps must be positive")
+if args.record_fps < 1 or args.record_width < 1 or args.record_height < 1:
+    parser.error("recording FPS and dimensions must be positive")
+if args.record_video and args.candidate_limit != 1:
+    parser.error("--record-video requires --candidate-limit 1")
 
 
 def project_path(value: str) -> Path:
@@ -118,8 +134,17 @@ def candidate(
     pitch_gain_m: float | None = None,
     pitch_maximum_m: float | None = None,
     post_clearance_body_shift_forward_m: float = 0.0,
+    post_clearance_body_shift_lateral_m: float = 0.0,
     body_shift_fraction_of_advance: float | None = None,
+    advance_sequence: str = "body_then_swing",
+    front_support_extension_m: float = 0.0,
+    front_right_support_extension_m: float | None = None,
 ) -> dict[str, object]:
+    resolved_front_right_extension_m = (
+        front_support_extension_m
+        if front_right_support_extension_m is None
+        else front_right_support_extension_m
+    )
     return {
         "id": candidate_id,
         "swing_forward_offset_m": swing_forward_m,
@@ -137,7 +162,15 @@ def candidate(
         "post_clearance_body_shift_forward_m": (
             post_clearance_body_shift_forward_m
         ),
+        "post_clearance_body_shift_lateral_m": (
+            post_clearance_body_shift_lateral_m
+        ),
         "body_shift_fraction_of_advance": body_shift_fraction_of_advance,
+        "advance_sequence": advance_sequence,
+        "front_support_extension_m": front_support_extension_m,
+        "front_right_support_extension_m": (
+            resolved_front_right_extension_m
+        ),
     }
 
 
@@ -518,6 +551,203 @@ CANDIDATES = (
         post_clearance_body_shift_forward_m=0.010,
         body_shift_fraction_of_advance=0.50,
     ),
+    *(
+        candidate(
+            f"swing-then-margin-shift-{round(shift_m * 1000):03d}mm",
+            swing_forward_m=0.380,
+            landing_forward_m=0.360,
+            landing_lift_m=0.125,
+            tread_fraction=0.08,
+            lift_forward_m=0.070,
+            lower_seconds=3.0,
+            post_clearance_body_shift_forward_m=shift_m,
+            body_shift_fraction_of_advance=0.50,
+            advance_sequence="swing_then_body",
+        )
+        for shift_m in (0.010, 0.015, 0.020, 0.025, 0.030)
+    ),
+    *(
+        candidate(
+            f"swing-then-shift-front-extension-{round(extension_m * 1000):03d}mm",
+            swing_forward_m=0.380,
+            landing_forward_m=0.360,
+            landing_lift_m=0.125,
+            tread_fraction=0.08,
+            lift_forward_m=0.070,
+            lower_seconds=3.0,
+            post_clearance_body_shift_forward_m=0.020,
+            body_shift_fraction_of_advance=0.50,
+            advance_sequence="swing_then_body",
+            front_support_extension_m=extension_m,
+        )
+        for extension_m in (0.005, 0.010, 0.015, 0.020, 0.030)
+    ),
+    *(
+        candidate(
+            f"swing-then-rightward-shift-{round(abs(lateral_m) * 1000):03d}mm",
+            swing_forward_m=0.380,
+            landing_forward_m=0.360,
+            landing_lift_m=0.125,
+            tread_fraction=0.08,
+            lift_forward_m=0.070,
+            lower_seconds=3.0,
+            post_clearance_body_shift_forward_m=0.020,
+            post_clearance_body_shift_lateral_m=lateral_m,
+            body_shift_fraction_of_advance=0.50,
+            advance_sequence="swing_then_body",
+        )
+        for lateral_m in (-0.010, -0.020, -0.030, -0.040)
+    ),
+    *(
+        candidate(
+            "swing-then-rightward-shift-"
+            f"{round(abs(lateral_m) * 1000):03d}mm-front-extension-030mm",
+            swing_forward_m=0.380,
+            landing_forward_m=0.360,
+            landing_lift_m=0.125,
+            tread_fraction=0.08,
+            lift_forward_m=0.070,
+            lower_seconds=3.0,
+            post_clearance_body_shift_forward_m=0.020,
+            post_clearance_body_shift_lateral_m=lateral_m,
+            body_shift_fraction_of_advance=0.50,
+            advance_sequence="swing_then_body",
+            front_support_extension_m=0.030,
+        )
+        for lateral_m in (-0.020, -0.030)
+    ),
+    *(
+        candidate(
+            "swing-then-asymmetric-front-extension-"
+            f"030-{round(right_extension_m * 1000):03d}mm",
+            swing_forward_m=0.380,
+            landing_forward_m=0.360,
+            landing_lift_m=0.125,
+            tread_fraction=0.08,
+            lift_forward_m=0.070,
+            lower_seconds=3.0,
+            post_clearance_body_shift_forward_m=0.020,
+            body_shift_fraction_of_advance=0.50,
+            advance_sequence="swing_then_body",
+            front_support_extension_m=0.030,
+            front_right_support_extension_m=right_extension_m,
+        )
+        for right_extension_m in (0.040, 0.050, 0.060, 0.070, 0.080)
+    ),
+    *(
+        candidate(
+            "asymmetric-front-extension-030-070mm-pitch-"
+            f"{gain_m:.3f}-{maximum_m:.3f}",
+            swing_forward_m=0.380,
+            landing_forward_m=0.360,
+            landing_lift_m=0.125,
+            tread_fraction=0.08,
+            lift_forward_m=0.070,
+            lower_seconds=3.0,
+            post_clearance_body_shift_forward_m=0.020,
+            body_shift_fraction_of_advance=0.50,
+            advance_sequence="swing_then_body",
+            front_support_extension_m=0.030,
+            front_right_support_extension_m=0.070,
+            pitch_gain_m=gain_m,
+            pitch_maximum_m=maximum_m,
+        )
+        for gain_m, maximum_m in (
+            (0.120, 0.035),
+            (0.160, 0.050),
+            (0.240, 0.075),
+        )
+    ),
+    *(
+        candidate(
+            "pitch-0.240-0.075-front-extension-030-"
+            f"{round(right_extension_m * 1000):03d}mm",
+            swing_forward_m=0.380,
+            landing_forward_m=0.360,
+            landing_lift_m=0.125,
+            tread_fraction=0.08,
+            lift_forward_m=0.070,
+            lower_seconds=3.0,
+            post_clearance_body_shift_forward_m=0.020,
+            body_shift_fraction_of_advance=0.50,
+            advance_sequence="swing_then_body",
+            front_support_extension_m=0.030,
+            front_right_support_extension_m=right_extension_m,
+            pitch_gain_m=0.240,
+            pitch_maximum_m=0.075,
+        )
+        for right_extension_m in (0.080, 0.090, 0.100)
+    ),
+    *(
+        candidate(
+            "front-extension-030-090mm-refined-pitch-"
+            f"{gain_m:.3f}-{maximum_m:.3f}",
+            swing_forward_m=0.380,
+            landing_forward_m=0.360,
+            landing_lift_m=0.125,
+            tread_fraction=0.08,
+            lift_forward_m=0.070,
+            lower_seconds=3.0,
+            post_clearance_body_shift_forward_m=0.020,
+            body_shift_fraction_of_advance=0.50,
+            advance_sequence="swing_then_body",
+            front_support_extension_m=0.030,
+            front_right_support_extension_m=0.090,
+            pitch_gain_m=gain_m,
+            pitch_maximum_m=maximum_m,
+        )
+        for gain_m, maximum_m in (
+            (0.245, 0.075),
+            (0.250, 0.080),
+            (0.275, 0.085),
+            (0.300, 0.100),
+        )
+    ),
+    *(
+        candidate(
+            "front-extension-030-090mm-final-pitch-"
+            f"{gain_m:.3f}-{maximum_m:.3f}",
+            swing_forward_m=0.380,
+            landing_forward_m=0.360,
+            landing_lift_m=0.125,
+            tread_fraction=0.08,
+            lift_forward_m=0.070,
+            lower_seconds=3.0,
+            post_clearance_body_shift_forward_m=0.020,
+            body_shift_fraction_of_advance=0.50,
+            advance_sequence="swing_then_body",
+            front_support_extension_m=0.030,
+            front_right_support_extension_m=0.090,
+            pitch_gain_m=gain_m,
+            pitch_maximum_m=maximum_m,
+        )
+        for gain_m, maximum_m in (
+            (0.255, 0.080),
+            (0.260, 0.082),
+            (0.265, 0.083),
+            (0.290, 0.095),
+        )
+    ),
+    *(
+        candidate(
+            "front-extension-030-090mm-pitch-0.255-cap-"
+            f"{maximum_m:.3f}",
+            swing_forward_m=0.380,
+            landing_forward_m=0.360,
+            landing_lift_m=0.125,
+            tread_fraction=0.08,
+            lift_forward_m=0.070,
+            lower_seconds=3.0,
+            post_clearance_body_shift_forward_m=0.020,
+            body_shift_fraction_of_advance=0.50,
+            advance_sequence="swing_then_body",
+            front_support_extension_m=0.030,
+            front_right_support_extension_m=0.090,
+            pitch_gain_m=0.255,
+            pitch_maximum_m=maximum_m,
+        )
+        for maximum_m in (0.082, 0.085, 0.090, 0.100)
+    ),
 )
 
 SELECTED_CANDIDATES = CANDIDATES[
@@ -537,6 +767,12 @@ if args.rear_transfer_forward_m is not None:
     rear_transfer_target["forward"] = float(args.rear_transfer_forward_m)
 world_path = project_path(task_config["world"])
 report_path = project_path(args.report)
+video_path = project_path(args.record_video) if args.record_video else None
+thumbnail_path = (
+    project_path(args.record_thumbnail)
+    if args.record_thumbnail
+    else (video_path.with_suffix(".png") if video_path else None)
+)
 
 # The search changes only the rear-right terminal behavior.  The independent
 # physical clearance gate and its 190 mm threshold remain in the V38 config.
@@ -557,7 +793,13 @@ task_config["placement_reference"]["level_override_by_leg"]["rear_right"] = (
 
 from isaacsim import SimulationApp  # noqa: E402
 
-simulation_app = SimulationApp({"headless": True})
+simulation_app = SimulationApp(
+    {
+        "headless": True,
+        "width": args.record_width,
+        "height": args.record_height,
+    }
+)
 
 from _placement_phase_training import (  # noqa: E402
     FrozenBaseResidualPolicy,
@@ -565,7 +807,12 @@ from _placement_phase_training import (  # noqa: E402
 )
 from _quadruped_stairs_env import QuadrupedStairsEnv  # noqa: E402
 from _stair_rl_contract import placement_policy_action_mask  # noqa: E402
+from isaacsim.core.utils.viewports import set_camera_view  # noqa: E402
+from isaacsim.sensors.experimental.rtx import CameraSensor, RtxCamera  # noqa: E402
+from omni.kit.viewport.utility import get_active_viewport  # noqa: E402
+from PIL import Image  # noqa: E402
 from stable_baselines3 import PPO  # noqa: E402
+from video_encoding import get_video_encoding_interface  # noqa: E402
 
 model_paths = {
     "front_right": project_path(args.front_right_model),
@@ -583,6 +830,12 @@ report: dict[str, object] = {
     "candidate_start": args.candidate_start,
     "candidate_count": len(SELECTED_CANDIDATES),
     "maximum_target_steps": args.maximum_target_steps,
+    "record_video": str(video_path) if video_path else None,
+    "record_thumbnail": str(thumbnail_path) if thumbnail_path else None,
+    "record_fps": args.record_fps if video_path else None,
+    "record_resolution_wh": (
+        [args.record_width, args.record_height] if video_path else None
+    ),
     "rear_transfer_forward_m": task_config["placement_reference"]
     ["inter_leg_transfer"]["com_regulation"]
     ["target_offset_by_swing_leg"]["rear_right"]["forward"],
@@ -600,6 +853,7 @@ report: dict[str, object] = {
     },
 }
 raw_env: QuadrupedStairsEnv | None = None
+camera_sensor: CameraSensor | None = None
 exit_code = 1
 try:
     raw_env = QuadrupedStairsEnv(
@@ -609,6 +863,38 @@ try:
     )
     raw_env.set_evaluation_level(1)
     raw_env.set_placement_level("left-center-tread-load")
+    if video_path is not None:
+        control_hz = int(task_config["control_hz"])
+        if control_hz % args.record_fps:
+            raise RuntimeError(
+                "--record-fps must divide the configured control rate"
+            )
+        viewport = get_active_viewport()
+        if viewport is None:
+            raise RuntimeError("Isaac Sim has no active viewport")
+        stair = task_config["staircase"]
+        camera_center_x = float(stair["start_x_m"]) + 0.10
+        camera_path = "/OmniverseKit_Persp"
+        set_camera_view(
+            eye=[camera_center_x, -1.25, 0.62],
+            target=[camera_center_x, 0.0, 0.18],
+            camera_prim_path=camera_path,
+        )
+        viewport.camera_path = camera_path
+        camera_prim = raw_env.stage.GetPrimAtPath(camera_path)
+        if not camera_prim.IsValid():
+            raise RuntimeError(f"Recording camera prim is missing: {camera_path}")
+        if "OmniSensorAPI" not in camera_prim.GetAppliedSchemas():
+            camera_prim.ApplyAPI("OmniSensorAPI")
+        camera_sensor = CameraSensor(
+            RtxCamera(
+                camera_path,
+                tick_rate=None,
+                reset_xform_op_properties=False,
+            ),
+            resolution=(args.record_height, args.record_width),
+            annotators=["rgb"],
+        )
     precursor_policies = {
         "front_right": PPO.load(str(model_paths["front_right"]), device="cpu"),
         "front_left": PPO.load(str(model_paths["front_left"]), device="cpu"),
@@ -664,6 +950,7 @@ try:
     print("DROBOT_REAR_LANDING_SEARCH_PHASE=candidate_replay", flush=True)
 
     results: list[dict[str, object]] = []
+    recording_result: dict[str, object] | None = None
     for relative_index, values in enumerate(SELECTED_CANDIDATES):
         index = args.candidate_start + relative_index
         level_overrides = dict(
@@ -722,15 +1009,28 @@ try:
         raw_env.com_regulation_config[
             "hold_target_offset_by_swing_leg"
         ] = hold_offsets
+        support_extensions = dict(
+            raw_env.com_regulation_config.get(
+                "support_extension_m_by_swing_leg", {}
+            )
+        )
+        support_extensions["rear_right"] = {
+            "front_left": values["front_support_extension_m"],
+            "front_right": values["front_right_support_extension_m"],
+        }
+        raw_env.com_regulation_config[
+            "support_extension_m_by_swing_leg"
+        ] = support_extensions
         swing_policy.residual_scale = float(values["swing_residual_scale"])
         post_clearance_shift = {
             "forward_m": values["post_clearance_body_shift_forward_m"],
-            "lateral_m": 0.0,
+            "lateral_m": values["post_clearance_body_shift_lateral_m"],
         }
         if values["body_shift_fraction_of_advance"] is not None:
             post_clearance_shift["body_shift_fraction_of_advance"] = values[
                 "body_shift_fraction_of_advance"
             ]
+            post_clearance_shift["sequence"] = values["advance_sequence"]
         raw_env.inter_leg_transfer_config[
             "post_clearance_body_shift_by_leg"
         ] = {"rear_right": post_clearance_shift}
@@ -771,15 +1071,56 @@ try:
         maximum_base_delta_x_m = -float("inf")
         minimum_com_delta_x_m = float("inf")
         maximum_com_delta_x_m = -float("inf")
+        minimum_commanded_target_margin_m = float("inf")
+        maximum_target_clip_m = 0.0
+        minimum_support_contact_fraction = 1.0
+        maximum_touchdown_correction_m = 0.0
+        maximum_goal_hold_steps = 0
+        previous_goal_hold_steps = 0
+        first_goal_hold_start: dict[str, object] | None = None
+        first_goal_hold_break: dict[str, object] | None = None
+        first_tread_contact: dict[str, object] | None = None
+        first_support_contact_loss: dict[str, object] | None = None
         final_swing_xyz_m: list[float] | None = None
         clearance_released = False
         completed = False
         last_info: dict[str, object] = {}
+        candidate_frames: list[np.ndarray] = []
         for _step in range(1, args.maximum_target_steps + 1):
             _, reward, terminated, truncated, info = wrapped.step(
                 candidate_action
             )
             last_info = dict(info)
+            if (
+                camera_sensor is not None
+                and _step
+                % (int(task_config["control_hz"]) // args.record_fps)
+                == 0
+            ):
+                rgb_data, _ = camera_sensor.get_data("rgb")
+                if rgb_data is None:
+                    raise RuntimeError(
+                        f"Recording camera returned no frame at step {_step}"
+                    )
+                if hasattr(rgb_data, "numpy"):
+                    rgb_data = rgb_data.numpy()
+                rgb = np.asarray(rgb_data)
+                if rgb.shape[:2] != (
+                    args.record_height,
+                    args.record_width,
+                ):
+                    raise RuntimeError(
+                        f"Unexpected recording frame shape: {rgb.shape}"
+                    )
+                if rgb.dtype != np.uint8:
+                    rgb = np.clip(rgb, 0, 255).astype(np.uint8)
+                if rgb.ndim != 3 or rgb.shape[2] not in (3, 4):
+                    raise RuntimeError(
+                        f"Unexpected recording channel layout: {rgb.shape}"
+                    )
+                candidate_frames.append(
+                    np.ascontiguousarray(rgb[..., :3]).copy()
+                )
             reward_sum += float(reward)
             minimum_margin_m = min(
                 minimum_margin_m,
@@ -797,6 +1138,98 @@ try:
                 maximum_tread_load_n,
                 float(info.get("swing_tread_normal_load_n", 0.0)),
             )
+            support_contact_fraction = float(
+                info.get("placement_support_contact_fraction", 1.0)
+            )
+            minimum_support_contact_fraction = min(
+                minimum_support_contact_fraction,
+                support_contact_fraction,
+            )
+            maximum_touchdown_correction_m = max(
+                maximum_touchdown_correction_m,
+                float(
+                    info.get(
+                        "maximum_touchdown_load_lift_correction_m", 0.0
+                    )
+                ),
+            )
+            maximum_goal_hold_steps = max(
+                maximum_goal_hold_steps,
+                int(info.get("placement_goal_hold_step_count", 0)),
+            )
+            support_total_loads_n = (
+                np.asarray(raw_env.latest_ground_normal_loads_n)
+                + np.sum(
+                    np.asarray(raw_env.latest_step_normal_loads_n), axis=1
+                )
+            )
+            diagnostic_state = {
+                "step": _step,
+                "phase": info.get("placement_phase"),
+                "body_tilt_deg": math.degrees(
+                    math.acos(
+                        float(
+                            np.clip(
+                                info.get("placement_upright_cosine", 1.0),
+                                -1.0,
+                                1.0,
+                            )
+                        )
+                    )
+                ),
+                "support_contact_fraction": support_contact_fraction,
+                "support_margin_m": float(
+                    info.get("placement_support_margin_m", float("nan"))
+                ),
+                "support_total_loads_n": dict(
+                    zip(
+                        ("front_left", "front_right", "rear_left", "rear_right"),
+                        support_total_loads_n.tolist(),
+                        strict=True,
+                    )
+                ),
+                "balance_target_error_xy_m": np.asarray(
+                    info.get("placement_balance_target_error_xy_m", (0.0, 0.0))
+                ).tolist(),
+            }
+            current_goal_hold_steps = int(
+                info.get("placement_goal_hold_step_count", 0)
+            )
+            if current_goal_hold_steps > 0 and first_goal_hold_start is None:
+                first_goal_hold_start = {
+                    **diagnostic_state,
+                    "goal_hold_steps": current_goal_hold_steps,
+                    "contact_expected": bool(
+                        info.get("placement_contact_expected", False)
+                    ),
+                    "contact_now": bool(
+                        info.get("placement_contact_now", False)
+                    ),
+                }
+            if (
+                first_goal_hold_break is None
+                and previous_goal_hold_steps > 0
+                and current_goal_hold_steps == 0
+            ):
+                first_goal_hold_break = {
+                    **diagnostic_state,
+                    "previous_goal_hold_steps": previous_goal_hold_steps,
+                    "contact_expected": bool(
+                        info.get("placement_contact_expected", False)
+                    ),
+                    "contact_now": bool(
+                        info.get("placement_contact_now", False)
+                    ),
+                    "swing_tread_load_n": float(
+                        info.get("swing_tread_normal_load_n", 0.0)
+                    ),
+                }
+            previous_goal_hold_steps = current_goal_hold_steps
+            if (
+                first_support_contact_loss is None
+                and support_contact_fraction < 1.0
+            ):
+                first_support_contact_loss = dict(diagnostic_state)
             base_delta_x_m = float(
                 raw_env.latest_placement_base_position_m[0]
                 - raw_env.placement_leg_baseline_base_position_m[0]
@@ -817,6 +1250,20 @@ try:
             maximum_com_delta_x_m = max(
                 maximum_com_delta_x_m, com_delta_x_m
             )
+            if bool(info.get("support_margin_regulation_active", False)):
+                minimum_commanded_target_margin_m = min(
+                    minimum_commanded_target_margin_m,
+                    float(
+                        info.get(
+                            "support_margin_commanded_target_margin_m",
+                            float("inf"),
+                        )
+                    ),
+                )
+            maximum_target_clip_m = max(
+                maximum_target_clip_m,
+                float(info.get("maximum_support_margin_target_clip_m", 0.0)),
+            )
             clearance_released = bool(
                 clearance_released
                 or info.get("placement_clearance_gate_released", False)
@@ -827,6 +1274,16 @@ try:
             swing_xyz = foot_tips[raw_env.placement_swing_leg_index]
             final_swing_xyz_m = swing_xyz.tolist()
             maximum_swing_x_m = max(maximum_swing_x_m, float(swing_xyz[0]))
+            tread_load_n = float(info.get("swing_tread_normal_load_n", 0.0))
+            if first_tread_contact is None and tread_load_n >= 1.0:
+                first_tread_contact = {
+                    **diagnostic_state,
+                    "load_n": tread_load_n,
+                    "swing_xyz_m": swing_xyz.tolist(),
+                    "touchdown_correction_m": float(
+                        info.get("touchdown_load_lift_correction_m", 0.0)
+                    ),
+                }
             completed = bool(
                 completed
                 or info.get("placement_leg_completed_event") == "rear_right"
@@ -850,12 +1307,29 @@ try:
                 math.acos(float(np.clip(minimum_upright, -1.0, 1.0)))
             ),
             "maximum_tread_load_n": maximum_tread_load_n,
+            "first_tread_contact": first_tread_contact,
+            "first_support_contact_loss": first_support_contact_loss,
+            "minimum_support_contact_fraction": (
+                minimum_support_contact_fraction
+            ),
+            "maximum_touchdown_correction_m": (
+                maximum_touchdown_correction_m
+            ),
+            "maximum_goal_hold_steps": maximum_goal_hold_steps,
+            "first_goal_hold_start": first_goal_hold_start,
+            "first_goal_hold_break": first_goal_hold_break,
             "target_x_m": target_x_m,
-                "maximum_swing_x_m": maximum_swing_x_m,
-                "minimum_base_delta_x_m": minimum_base_delta_x_m,
-                "maximum_base_delta_x_m": maximum_base_delta_x_m,
-                "minimum_com_delta_x_m": minimum_com_delta_x_m,
-                "maximum_com_delta_x_m": maximum_com_delta_x_m,
+            "maximum_swing_x_m": maximum_swing_x_m,
+            "minimum_base_delta_x_m": minimum_base_delta_x_m,
+            "maximum_base_delta_x_m": maximum_base_delta_x_m,
+            "minimum_com_delta_x_m": minimum_com_delta_x_m,
+            "maximum_com_delta_x_m": maximum_com_delta_x_m,
+            "minimum_commanded_target_margin_m": (
+                None
+                if not np.isfinite(minimum_commanded_target_margin_m)
+                else minimum_commanded_target_margin_m
+            ),
+            "maximum_target_clip_m": maximum_target_clip_m,
             "closest_x_error_m": abs(maximum_swing_x_m - target_x_m),
             "final_swing_xyz_m": final_swing_xyz_m,
             "failure_reasons": list(last_info.get("failure_reasons", ())),
@@ -868,6 +1342,55 @@ try:
                 "joint_effort_metrics"
             ),
         }
+        if video_path is not None and completed:
+            if not candidate_frames:
+                raise RuntimeError(
+                    "The successful candidate produced no recording frames"
+                )
+            video_path.parent.mkdir(parents=True, exist_ok=True)
+            assert thumbnail_path is not None
+            thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+            encoder = get_video_encoding_interface()
+            if encoder is None:
+                raise RuntimeError(
+                    "Isaac H.264 video encoding interface is unavailable"
+                )
+            if not encoder.start_encoding(
+                str(video_path),
+                float(args.record_fps),
+                0,
+                True,
+            ):
+                raise RuntimeError(
+                    f"Could not initialize video encoder for {video_path}"
+                )
+            for frame_index, rgb in enumerate(candidate_frames):
+                alpha = np.full((*rgb.shape[:2], 1), 255, dtype=np.uint8)
+                rgba = np.ascontiguousarray(np.concatenate((rgb, alpha), axis=2))
+                if not encoder.encode_next_frame_from_buffer(
+                    rgba,
+                    args.record_width,
+                    args.record_height,
+                ):
+                    raise RuntimeError(
+                        f"Video encoder rejected frame {frame_index}"
+                    )
+            encoder.finalize_encoding()
+            Image.fromarray(candidate_frames[-1], mode="RGB").save(
+                thumbnail_path
+            )
+            if not video_path.is_file() or video_path.stat().st_size == 0:
+                raise RuntimeError(f"Video was not written: {video_path}")
+            recording_result = {
+                "status": "PASS",
+                "phase_local_replay": True,
+                "candidate_index": index,
+                "frames": len(candidate_frames),
+                "video": str(video_path),
+                "video_bytes": video_path.stat().st_size,
+                "thumbnail": str(thumbnail_path),
+                "thumbnail_bytes": thumbnail_path.stat().st_size,
+            }
         results.append(result)
         print(
             "DROBOT_REAR_LANDING_CANDIDATE="
@@ -894,10 +1417,13 @@ try:
                 "same_cached_post_transfer_state": True,
                 "policy_composition": (
                     "V17 swing-only + 0.5*V35 compact swing residual + "
-                    "1.0*V38 compact support residual"
+                    "1.0*configured compact support residual"
+                ),
+                "support_residual_model": str(
+                    model_paths["support_residual"]
                 ),
                 "camera_policy_input": False,
-                "external_camera_used": False,
+                "external_camera_used": video_path is not None,
             },
             "successful_candidates": sum(
                 bool(item["completed"]) for item in results
@@ -905,6 +1431,7 @@ try:
             "best": ranked[0],
             "ranked_results": ranked,
             "phase_wrapper_stats": wrapped.training_stats(),
+            "recording": recording_result,
         }
     )
     exit_code = 0

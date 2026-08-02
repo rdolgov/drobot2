@@ -621,6 +621,106 @@ def bounded_support_incenter_target_xy(
     ).astype(np.float64)
 
 
+def support_margin_constrained_target_xy(
+    *,
+    desired_target_xy_m: Sequence[float],
+    support_points_xy_m: Sequence[Sequence[float]],
+    minimum_margin_m: float,
+) -> np.ndarray:
+    """Clip a desired COM target to a safe three-foot support inset.
+
+    The returned point is the farthest point toward ``desired_target_xy_m``
+    on the line from the support triangle's incenter that retains the requested
+    edge clearance. This keeps a forward transfer command useful while making
+    the support-margin contract authoritative instead of relying on an
+    unconstrained open-loop body shift.
+    """
+
+    desired = _finite_vector(
+        desired_target_xy_m,
+        2,
+        "desired_target_xy_m",
+    ).astype(np.float64)
+    points = np.asarray(support_points_xy_m, dtype=np.float64)
+    if points.shape != (3, 2) or not np.all(np.isfinite(points)):
+        raise ValueError("support_points_xy_m must be a finite 3x2 triangle")
+    minimum_margin = float(minimum_margin_m)
+    if not np.isfinite(minimum_margin) or minimum_margin < 0.0:
+        raise ValueError("minimum_margin_m must be finite and nonnegative")
+
+    center = np.mean(points, axis=0)
+    angles = np.arctan2(points[:, 1] - center[1], points[:, 0] - center[0])
+    ordered = points[np.argsort(angles)]
+
+    def signed_margin(point: np.ndarray) -> float:
+        margins: list[float] = []
+        for index in range(3):
+            start = ordered[index]
+            edge = ordered[(index + 1) % 3] - start
+            edge_length = float(np.linalg.norm(edge))
+            if edge_length <= 1e-9:
+                raise ValueError("support triangle points must be distinct")
+            relative = point - start
+            margins.append(
+                float(
+                    (edge[0] * relative[1] - edge[1] * relative[0])
+                    / edge_length
+                )
+            )
+        return min(margins)
+
+    incenter = np.asarray(
+        support_triangle_incenter_xy(points),
+        dtype=np.float64,
+    )
+    incenter_margin = signed_margin(incenter)
+    if minimum_margin > incenter_margin + 1e-9:
+        raise ValueError(
+            "minimum_margin_m exceeds the support triangle inradius"
+        )
+    if signed_margin(desired) >= minimum_margin:
+        return desired
+
+    low = 0.0
+    high = 1.0
+    for _ in range(48):
+        midpoint = 0.5 * (low + high)
+        candidate = incenter + midpoint * (desired - incenter)
+        if signed_margin(candidate) >= minimum_margin:
+            low = midpoint
+        else:
+            high = midpoint
+    return (incenter + low * (desired - incenter)).astype(np.float64)
+
+
+def touchdown_load_lift_correction_m(
+    *,
+    measured_tread_load_n: float,
+    target_tread_load_n: float,
+    proportional_gain_m_per_n: float,
+    maximum_lift_correction_m: float,
+) -> float:
+    """Return an upward swing-foot correction for excess touchdown load."""
+
+    measured = float(measured_tread_load_n)
+    target = float(target_tread_load_n)
+    gain = float(proportional_gain_m_per_n)
+    maximum = float(maximum_lift_correction_m)
+    if not np.isfinite(measured) or measured < 0.0:
+        raise ValueError("measured_tread_load_n must be finite and nonnegative")
+    if not np.isfinite(target) or target <= 0.0:
+        raise ValueError("target_tread_load_n must be finite and positive")
+    if not np.isfinite(gain) or gain <= 0.0:
+        raise ValueError(
+            "proportional_gain_m_per_n must be finite and positive"
+        )
+    if not np.isfinite(maximum) or maximum <= 0.0:
+        raise ValueError(
+            "maximum_lift_correction_m must be finite and positive"
+        )
+    return float(np.clip((measured - target) * gain, 0.0, maximum))
+
+
 def balance_target_error_xy(
     *,
     balance_position_xy_m: Sequence[float],
@@ -1041,8 +1141,9 @@ def split_post_clearance_advance_fractions(
     *,
     advance_fraction: float,
     body_shift_fraction_of_advance: float,
+    sequence: str = "body_then_swing",
 ) -> tuple[float, float]:
-    """Sequence body shift before swing advance inside one clearance gate."""
+    """Sequence body shift and swing advance inside one clearance gate."""
 
     fraction = float(advance_fraction)
     split = float(body_shift_fraction_of_advance)
@@ -1052,13 +1153,26 @@ def split_post_clearance_advance_fractions(
         raise ValueError(
             "body_shift_fraction_of_advance must be finite and within (0, 1)"
         )
+    if sequence not in {"body_then_swing", "swing_then_body"}:
+        raise ValueError(
+            "sequence must be body_then_swing or swing_then_body"
+        )
 
     def smoothstep(value: float) -> float:
         clipped = float(np.clip(value, 0.0, 1.0))
         return clipped * clipped * (3.0 - 2.0 * clipped)
 
-    body_shift_fraction = smoothstep(fraction / split)
-    swing_advance_fraction = smoothstep((fraction - split) / (1.0 - split))
+    if sequence == "body_then_swing":
+        body_shift_fraction = smoothstep(fraction / split)
+        swing_advance_fraction = smoothstep(
+            (fraction - split) / (1.0 - split)
+        )
+    else:
+        swing_fraction = 1.0 - split
+        swing_advance_fraction = smoothstep(fraction / swing_fraction)
+        body_shift_fraction = smoothstep(
+            (fraction - swing_fraction) / split
+        )
     return body_shift_fraction, swing_advance_fraction
 
 

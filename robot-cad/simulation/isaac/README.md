@@ -278,6 +278,10 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/quadruped_stairs_v26_front_pair_smoothed_load_sharing.yaml` | Low-pass filters and bounds the rejected load-sharing ablation for a same-seed causal comparison | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/quadruped_stairs_v36_transfer_support_residual.yaml` | Isolates a two-second post-transfer support catch before the rear-right swing on the exact 180 x 250 mm stair, with a compact nine-action residual and measured hardware effort cap | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/quadruped_stairs_v37_joint_clearance_support.yaml` | Stages the post-transfer rear-pitch correction and joins the frozen V17/V35 rear-right swing with V36 support control on the exact 180 x 250 mm stair | edited by stair runners | no generated data |
+| `simulation/isaac/rl/stairs/quadruped_stairs_v42_com_margin_rear_right_landing.yaml` | Clips the rear-right landing balance target into the live support polygon at a positive margin while preserving the measured effort cap and exact 180 x 250 mm stair | edited by stair runners | no generated data |
+| `simulation/isaac/rl/stairs/quadruped_stairs_v43_compliant_rear_right_touchdown.yaml` | Adds bounded rear-right tread-load feedback for compliant touchdown diagnosis | edited by stair runners | no generated data |
+| `simulation/isaac/rl/stairs/quadruped_stairs_v44_early_contact_rear_right_landing.yaml` | Accepts force-backed post-clearance tread contact, latches the landing reference during the strict hold, and applies searched asymmetric support reach plus pitch regulation | edited by stair runners | no generated data |
+| `simulation/isaac/rl/stairs/quadruped_stairs_v45_rear_left_transfer.yaml` | Extends the accepted three-foot prefix only far enough to expose the rear-right-to-rear-left transfer for the next COM search | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/_stair_geometry.py` | Defines the crack-free stacked collision layers for the four-step staircase | stair YAML values | pure Python geometry facts |
 | `simulation/isaac/rl/stairs/_vl53l5cx_contract.py` | Defines pure 8 x 8 ray geometry, 15 Hz mode validation, bounded noise/dropout, three-lane compression, and 24 depth observation fields | sensor YAML values and NumPy grids | rays and normalized depth observations |
 | `simulation/isaac/rl/stairs/_vl53l5cx_sensor.py` | Samples 64 PhysX closest-hit rays, rotates the body sensor into world space, and applies update cadence, hold, and latency | live base pose and sensor config | raw/noisy grids, hit paths, and 24-value depth observation |
@@ -301,12 +305,15 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/train_stairs_v37_joint_clearance_support_small.ps1` | Defines the corrected bounded V37 joint swing/support training job with full-strength V36 support authority; this corrected wrapper has not yet been run | V37 config and verified V10/V17/V35/V36 policies | prospective V37 model and training reports |
 | `simulation/isaac/rl/stairs/train_stairs_v39_rear_right_landing_small.ps1` | Runs the rejected bounded 512-step rear-right landing support-residual pilot | V39 config and verified V10/V17/V35/V38 policies | local model, contract, and training report |
 | `simulation/isaac/rl/stairs/train_stairs_v40_rear_right_swing_landing_small.ps1` | Runs the rejected bounded 1,024-step compact rear-right swing-residual landing pilot | V40 config and verified V10/V17/V35/V38 policies | local model, contract, and training report |
-| `simulation/isaac/rl/stairs/search_rear_right_landing.py` | Restores one verified V38 handoff snapshot and searches rear-right geometry, swing actions, pitch feedback, touchdown, and staged body-shift variants without relaxing the 190 mm/margin/effort gates | V39-V41 configs and verified composed policies | ranked local JSON reports |
-| `simulation/isaac/rl/stairs/REAR_RIGHT_LANDING_SEARCH.md` | Records V39-V41 inputs, exact small-run commands, measured rejects, output locations, assumptions, and next gate | training/evaluation/search reports | reproducible landing diagnosis |
+| `simulation/isaac/rl/stairs/train_stairs_v42_com_margin_rear_right_landing_small.ps1` | Runs the bounded V42 support-margin residual ablation | V42 config and verified V10/V17/V35/V38 policies | local model, contract, and training report |
+| `simulation/isaac/rl/stairs/train_stairs_v44_early_contact_rear_right_landing_small.ps1` | Runs the accepted bounded 512-step V44 compact support-residual pilot | V44 config and verified V10/V17/V35/V38 policies | model, contract, checkpoints, and training report |
+| `simulation/isaac/rl/stairs/search_rear_right_landing.py` | Restores one verified rear-right handoff snapshot and searches geometry, per-front-foot support reach, swing actions, pitch feedback, touchdown, and staged body-shift variants without relaxing the 190 mm/margin/effort gates | V39-V44 configs and verified composed policies | ranked local JSON reports and optional success-gated phase video/thumbnail |
+| `simulation/isaac/rl/stairs/search_rear_left_transfer_com.py` | Replays the accepted V44 three-foot prefix and searches the next rear-left transfer COM deltas from one cached boundary state | V45 config and verified V10/V17/V35/V44 policies | ranked local JSON report |
+| `simulation/isaac/rl/stairs/REAR_RIGHT_LANDING_SEARCH.md` | Records V39-V45 inputs, exact small-run commands, measured rejects, accepted V44 evidence, V45 boundary failure, assumptions, and next gate | training/evaluation/search reports | reproducible landing and transfer diagnosis |
 | `simulation/isaac/rl/stairs/validate_vl53l5cx_stairs.py` | Verifies live 64-ray PhysX hits, 15 Hz cadence, latency, held observations, and writes an 8 x 8 review heatmap | v7 config and stair world | sensor validation JSON and PNG |
 | `simulation/isaac/rl/stairs/distill_successful_stairs.py` | Collects physically successful stochastic rollouts and behavior-clones their residual actions into the actor mean | v5 world, model, manifest | distilled model, rebound manifest, and collection report |
 | `simulation/isaac/rl/stairs/evaluate_stairs_ppo.py` | Runs deterministic stair episodes at a pinned curriculum level, verifies model hashes, and can compose a full base, compact frozen swing residual, and mapped support residual per leg | stair YAML/world, primary/per-leg models, manifests | evaluation JSON and optional PNG |
-| `simulation/isaac/rl/stairs/record_stairs_ppo.py` | Records deterministic or stochastic stair episodes with the same nested per-leg policy composition and a close external placement view | stair YAML/world, models, manifests | H.264 MP4, thumbnail PNG, optional trajectory, recording JSON |
+| `simulation/isaac/rl/stairs/record_stairs_ppo.py` | Records deterministic or stochastic stair episodes with the same nested per-leg policy composition, strict whole-stair or intermediate placement-success search, and a close external placement view | stair YAML/world, models, manifests | H.264 MP4, thumbnail PNG, optional trajectory, recording JSON |
 | `simulation/isaac/models/ppo-walk-v1-2m/` | Tracks the frozen flat-walking dependency used by v5 residual control | validated flat PPO ZIP | release dependency |
 | `simulation/isaac/models/ppo-stairs-v5-10mm-four-step/` | Tracks the source-equivalent shallow-stair policy, schema-2 manifest, and deterministic evaluation | v5 config/world and source policy | evaluable release package |
 | `simulation/isaac/models/ppo-stairs-v6-180mm-25cm-small/` | Tracks the bounded 180 mm x 250 mm evaluation policy, schema-2 manifest, training/evaluation/recording reports, and explicit failure result | v6 config/world and bounded policy | non-deployable evaluation package |
@@ -319,6 +326,7 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/models/ppo-stairs-v17-single-foot-190mm-small/` | Tracks the 4,096-step strict-stage V15 fine-tune, schema-2 manifest, 5/5 deterministic evaluation, recording, trajectory, and 205-208 mm lift evidence | v15 config/world and tracked v15 initializer | isolated 190 mm balance gate, not a complete climb |
 | `simulation/isaac/models/ppo-stairs-v27-support-abduction-190mm-small/` | Tracks the 1,024-step three-action support-abduction residual, 2/5 fresh evaluation, successful recording, and rejected load-sharing A/B | v24 config, verified front-right prefix, and frozen v17 swing policy | experimental transferred 190 mm lift; not robust or a complete climb |
 | `simulation/isaac/models/ppo-stairs-v36-post-transfer-catch-small/` | Tracks the 4,096-step nine-action support catch, bounded initialization search, fresh 65/80-second evaluations, recording, and explicit precursor/lift limitations | V36 config, verified precursor/swing policies, and dynamic transfer snapshot | stable seed-832 post-transfer catch; not a 190 mm lift, tread landing, or complete climb |
+| `simulation/isaac/models/ppo-stairs-v44-early-contact-rear-right-landing-small/` | Tracks the 512-step compact support policy, schema-2 manifest, deterministic search acceptance, fresh seed-870 force-backed landing evaluation, recording report, and exact limitations | V44 config and verified V10/V17/V35/V38 composition | accepted first-tread rear-right landing package; not rear-left transfer or a complete climb |
 | `simulation/isaac/models/ppo-foot-lift-v1-190mm-small/` | Tracks the 512-step supported foot-lift smoke model, schema-2 manifest, three-episode evaluation, recording report, and strict 190 mm success | foot-lift config/world and supported policy | supported-skill evaluation package, not unsupported balance proof |
 | `simulation/isaac/models/ppo-foot-lift-v2-balance-190mm-small/` | Tracks the 512-step unsupported foot-lift smoke model, schema-2 manifest, 5/5 evaluation, screenshot report, recording report, and strict 190 mm success | v2 balance config/manual world | unsupported flat-ground clearance evaluation package |
 | `simulation/isaac/models/ppo-foot-lift-v3-rear-right-190mm-small/` | Tracks the fresh 512-step rear-right balance policy, schema-2 manifest, 5/5 evaluation, and successful recording | V3 balance config/manual world | rear-right flat-ground 190 mm clearance package; not stair-transfer evidence |
@@ -852,6 +860,36 @@ of only about `0.68 rad` against a `1.83 rad` reference under the measured cap.
 No landing pilot is promoted. Commands, assumptions, local report names, and
 the traction-versus-vision conclusion are recorded in
 [`simulation/isaac/rl/stairs/REAR_RIGHT_LANDING_SEARCH.md`](rl/stairs/REAR_RIGHT_LANDING_SEARCH.md).
+
+V42-V44 then corrected the support geometry before contact instead of asking a
+post-impact residual to recover. V42 clips the analytic balance target to a
+positive support-polygon margin; V43 instruments compliant tread-load
+feedback; and the accepted V44 controller uses asymmetric front support reach,
+bounded IMU pitch regulation, and a post-clearance contact latch. The 512-step
+seed-869 PPO run completed in `77.254 s`. Because that horizon ends before
+touchdown, acceptance comes from a fresh seed-870 evaluation: rear-right held
+force-backed tread contact for `45/45` frames after `217.990 mm` lift, with all
+three support feet loaded, `39.443 mm` minimum support margin, `14.000 mm`
+maximum support slip, and `10.238 N` maximum tread load. The exact stair remains
+`180 mm` rise by `250 mm` tread and the applied effort cap remains
+`0.8825985 N m`.
+
+This advances the first-tread sequence through rear-right but is still not a
+complete stair. V45 adds rear-left only to probe the next transfer; four
+seed-870 prefix attempts terminated with `body_tipped` before the rear-left
+transfer snapshot. The next target is pitch/body-rate and COM regulation across
+that boundary, then rear-left unloading and swing. The policy remains
+camera-blind: the external camera only records review video, while inference
+uses IMU/proprioception, joint, contact/load, COM/support, phase, previous
+action, and known fixed-stair geometry.
+
+The accepted model, exact config, fresh evaluation, search evidence, recording
+report, and limitations are packaged under
+`simulation/isaac/models/ppo-stairs-v44-early-contact-rear-right-landing-small/`.
+The accepted 331-frame video is a phase-local seed-870 replay that completes
+the strict landing hold. A separate four-attempt reset-to-contact recording
+search found no full-prefix success, so the site and package label that
+instability instead of presenting the phase clip as an end-to-end climb.
 
 The source map, complete commands, reward/termination formulas, manifest
 rules, measured smoke results, evaluation guidance, and sim-to-real limits are

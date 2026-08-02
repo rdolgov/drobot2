@@ -109,6 +109,16 @@ parser.add_argument(
         "physical success; zero records the first episode regardless."
     ),
 )
+parser.add_argument(
+    "--search-placement-success-episodes",
+    type=int,
+    default=0,
+    help=(
+        "Search up to this many seeded episodes and encode only the first "
+        "completed physical placement sequence. Use this for intermediate "
+        "first-tread policies that do not yet complete a whole stair."
+    ),
+)
 parser.add_argument("--active-steps", type=int, default=None)
 parser.add_argument(
     "--placement-level",
@@ -334,6 +344,13 @@ if args.skip_episodes < 0:
     parser.error("--skip-episodes cannot be negative")
 if args.search_success_episodes < 0:
     parser.error("--search-success-episodes cannot be negative")
+if args.search_placement_success_episodes < 0:
+    parser.error("--search-placement-success-episodes cannot be negative")
+if args.search_success_episodes and args.search_placement_success_episodes:
+    parser.error(
+        "--search-success-episodes and "
+        "--search-placement-success-episodes are mutually exclusive"
+    )
 config_path = _resolve_project_path(args.config)
 with config_path.open("r", encoding="utf-8") as stream:
     config = yaml.safe_load(stream)
@@ -560,6 +577,9 @@ report: dict[str, object] = {
         else "seed_once_then_continue"
     ),
     "search_success_episodes": args.search_success_episodes,
+    "search_placement_success_episodes": (
+        args.search_placement_success_episodes
+    ),
     "device": args.device,
     "active_steps": active_steps,
     "placement_level": args.placement_level,
@@ -1173,7 +1193,11 @@ try:
                 ),
                 flush=True,
             )
-    attempt_limit = args.search_success_episodes or 1
+    attempt_limit = (
+        args.search_success_episodes
+        or args.search_placement_success_episodes
+        or 1
+    )
     search_episode_metrics: list[dict[str, object]] = []
     selected_episode_index: int | None = None
     selected_reset_index: int | None = None
@@ -1235,6 +1259,9 @@ try:
             "episode": attempt_index + 1,
             "seed": episode_seed,
             "stairs_completed": bool(candidate_metrics["stairs_completed"]),
+            "placement_completed": bool(
+                candidate_metrics["placement_completed"]
+            ),
             "highest_step_reached": int(
                 candidate_metrics["highest_step_reached"]
             ),
@@ -1251,8 +1278,17 @@ try:
             + json.dumps(progress, sort_keys=True),
             flush=True,
         )
-        require_success = args.search_success_episodes > 0
-        if require_success and not bool(candidate_metrics["stairs_completed"]):
+        require_stairs_success = args.search_success_episodes > 0
+        require_placement_success = (
+            args.search_placement_success_episodes > 0
+        )
+        if require_stairs_success and not bool(
+            candidate_metrics["stairs_completed"]
+        ):
+            continue
+        if require_placement_success and not bool(
+            candidate_metrics["placement_completed"]
+        ):
             continue
         selected_episode_index = attempt_index + 1
         selected_reset_index = reset_index + 1
@@ -1264,8 +1300,13 @@ try:
         break
 
     if episode_metrics is None or selected_frames is None:
+        target = (
+            "placement sequence"
+            if args.search_placement_success_episodes
+            else "stair episode"
+        )
         raise RuntimeError(
-            "No physically successful stair episode found within "
+            f"No physically successful {target} found within "
             f"{attempt_limit} attempts"
         )
     if not selected_frames:

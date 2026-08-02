@@ -1,4 +1,4 @@
-# Rear-right first-tread landing search (V39-V41)
+# Rear-right first-tread landing search (V39-V45)
 
 ## Scope and immutable inputs
 
@@ -103,8 +103,102 @@ landing. The dominant first-tread landing limitation is rear-leg motion under
 three-foot support at the measured effort cap, followed by real/sim traction
 calibration. Fixed-stair vision is not the present bottleneck.
 
-Before longer PPO training, reduce rear-hip load (mass distribution), increase
-verified actuator/gear torque without changing the safety contract, or author a
-hardware-backed support posture with more hip authority. Then train a
-phase-local body-shift-plus-swing policy and require force-backed contact on the
-same `250 mm` tread before mirroring rear-left.
+V42-V44 supersede that negative conclusion with a force-backed landing; the
+remaining warning about torque, traction calibration, and full-staircase proof
+still applies.
+
+## V42 support-margin and V43 touchdown ablations
+
+V42 clips the analytic COM target into the current support polygon at the
+configured positive margin and adds separate front-foot reach corrections.
+Its bounded support-residual run is reproducible with:
+
+```powershell
+& simulation\isaac\rl\stairs\train_stairs_v42_com_margin_rear_right_landing_small.ps1 `
+  -OutputDir simulation\isaac\output\rl\ppo-stairs-v42-com-margin-rear-right-landing-1024-seed865 `
+  -Seed 865
+```
+
+That seed did not complete the landing. V43 added a tread-load feedback
+correction targeting `15 N`, with `0.0005 m/N` gain and `40 mm` cap. Same-seed
+replays showed that correction was reactive by one physics frame: at seed 862,
+V42 lost both front contacts at step 556 and hit the tread at step 560 with
+`65.12 N` and `15.657 deg` tilt. V43 applied `25.06 mm` correction only after
+that initial impulse and did not change the failure.
+
+The extended deterministic search therefore varied support reach and pitch
+feedback before contact. Front-left `30 mm` plus front-right `90 mm` support
+reach restored all stance contacts. A `0.255` pitch gain with `0.080 m` maximum
+correction reduced the first seed-862 rear-right contact to `1.496 N` at
+`11.026 deg`. These distances are commanded support references, not CAD or
+link-length edits.
+
+## Accepted V44 landing
+
+V44 allows a physical tread contact after the clearance gate to become the
+placement contact. It latches the reference at first valid contact instead of
+continuing to advance the swing reference while the live environment verifies
+contact, upright, support, slip, and margin gates for the full `0.75 s` hold.
+
+Candidate 91 at seed 862 completed all `45/45` contact-hold frames:
+
+- physical rear-right lift: `218.873 mm`
+- minimum support margin: `39.660 mm`
+- minimum support-contact fraction: `1.0`
+- maximum rear-right tread load: `18.485 N`
+- maximum support slip: `13.809 mm`
+
+The bounded PPO job is:
+
+```powershell
+& simulation\isaac\rl\stairs\train_stairs_v44_early_contact_rear_right_landing_small.ps1 `
+  -OutputDir simulation\isaac\output\rl\ppo-stairs-v44-early-contact-rear-right-landing-512-seed869 `
+  -Seed 869
+```
+
+It completed exactly `512` steps in `77.254 s`. The horizon ends before the
+rear-right contact phase, so its zero completed episodes are not landing
+evidence. A separate fresh evaluation at seed 870 composed the trained V44
+support policy with the verified V10/V17/V35 policies and completed `45/45`
+hold frames with `217.990 mm` lift, `39.443 mm` margin, all three support
+contacts, `14.000 mm` slip, and `10.238 N` maximum tread load. The first
+accepted contact was `6.789 N` at `10.681 deg` body tilt.
+
+The tracked package is
+`simulation/isaac/models/ppo-stairs-v44-early-contact-rear-right-landing-small/`.
+Local raw search/training outputs remain ignored. The external camera is used
+only by the recording paths in `record_stairs_ppo.py` and
+`search_rear_right_landing.py`; RGB remains absent from the 95-value policy
+observation.
+
+The accepted phase-local seed-870 camera replay records candidate 91 for 331
+frames at 30 fps and completes the same `45/45` hold at step 662. The strict
+reset-to-contact recorder separately rejected four prefix attempts
+(`body_tipped`, two `body_transfer_failed`, then `body_tipped`). The published
+video is therefore labeled phase-local and is not evidence that the complete
+three-foot prefix is robust from reset.
+
+## V45 rear-left transfer probe
+
+V45 adds `rear_left` to the placement sequence only to expose and search the
+rear-right-to-rear-left transfer. It does not claim a rear-left lift. The
+bounded probe is:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\search_rear_left_transfer_com.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v45_rear_left_transfer.yaml `
+  --seed 870 --forward-deltas-m 0.000,0.020 `
+  --lateral-deltas-m=-0.020,0.000 `
+  --minimum-support-margin-m 0.015 --maximum-body-tilt-deg 12 `
+  --report simulation\isaac\output\rl\ppo-stairs-v45-rear-left-transfer-grid-retry-seed870.json
+```
+
+All four prefix attempts terminated with `body_tipped` before the rear-left
+inter-leg-transfer snapshot became trainable. This is negative next-stage
+evidence, not a V44 landing failure. The next controller should explicitly
+regulate pitch/body rate and COM during the newly loaded rear-right transition,
+then search rear-left unloading. Longer end-to-end PPO or RGB vision is not yet
+justified; hardware traction/compliance measurements remain useful for
+sim-to-real calibration, but the immediate simulated failure is transfer
+attitude rather than unseen geometry.
