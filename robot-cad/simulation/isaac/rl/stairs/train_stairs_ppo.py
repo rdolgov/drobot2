@@ -185,6 +185,11 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--phase-residual-swing-only",
+    action="store_true",
+    help="Apply PPO corrections only to the target swing leg's three joints.",
+)
+parser.add_argument(
     "--phase-residual-support-abduction-only",
     action="store_true",
     help="Apply PPO corrections only to support-leg hip-abduction joints.",
@@ -267,6 +272,7 @@ if not 0.0 < args.phase_residual_scale <= 1.0:
     parser.error("--phase-residual-scale must be within (0, 1]")
 phase_mask_flags = (
     args.phase_residual_support_only,
+    args.phase_residual_swing_only,
     args.phase_residual_support_abduction_only,
     args.phase_residual_swing_support_abduction,
 )
@@ -803,6 +809,7 @@ report: dict[str, object] = {
     "phase_base_swing_only": args.phase_base_swing_only,
     "phase_residual_scale": args.phase_residual_scale,
     "phase_residual_support_only": args.phase_residual_support_only,
+    "phase_residual_swing_only": args.phase_residual_swing_only,
     "phase_residual_support_abduction_only": (
         args.phase_residual_support_abduction_only
     ),
@@ -929,6 +936,12 @@ try:
                 raw_env.dof_names,
                 target_leg=str(args.phase_train_leg),
                 mode="swing_plus_support_abduction",
+            )
+        elif args.phase_residual_swing_only:
+            target_residual_mask = placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=str(args.phase_train_leg),
+                mode="swing_only",
             )
         elif args.phase_residual_support_abduction_only:
             target_residual_mask = placement_policy_action_mask(

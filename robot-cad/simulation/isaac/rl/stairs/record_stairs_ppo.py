@@ -89,6 +89,15 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--increment-reset-seeds",
+    action="store_true",
+    help=(
+        "Use base_seed + episode_index on every reset. By default only the "
+        "first reset is seeded and later resets continue the same RNG stream, "
+        "matching evaluate_stairs_ppo.py."
+    ),
+)
+parser.add_argument(
     "--search-success-episodes",
     type=int,
     default=0,
@@ -402,6 +411,11 @@ report: dict[str, object] = {
     "policy_seed": policy_seed,
     "skip_policy_samples": args.skip_policy_samples,
     "skip_episodes": args.skip_episodes,
+    "reset_seed_mode": (
+        "increment_each_episode"
+        if args.increment_reset_seeds
+        else "seed_once_then_continue"
+    ),
     "search_success_episodes": args.search_success_episodes,
     "device": args.device,
     "active_steps": active_steps,
@@ -672,9 +686,22 @@ try:
         for _ in range(args.skip_policy_samples):
             model.predict(dummy_observation, deterministic=False)
     skipped_episode_metrics: list[dict[str, object]] = []
+
+    def reset_for_episode(reset_index: int) -> tuple[np.ndarray, dict]:
+        reset_seed = (
+            args.seed + reset_index
+            if args.increment_reset_seeds
+            else (args.seed if reset_index == 0 else None)
+        )
+        return raw_env.reset(seed=reset_seed)
+
     for skipped_index in range(args.skip_episodes):
-        skipped_seed = args.seed + skipped_index
-        observation, _ = raw_env.reset(seed=skipped_seed)
+        skipped_seed = (
+            args.seed + skipped_index
+            if args.increment_reset_seeds
+            else (args.seed if skipped_index == 0 else None)
+        )
+        observation, _ = reset_for_episode(skipped_index)
         skipped_metrics: dict[str, object] | None = None
         for _ in range(raw_env.max_episode_steps):
             action = policy_action(observation)
@@ -705,14 +732,20 @@ try:
     attempt_limit = args.search_success_episodes or 1
     search_episode_metrics: list[dict[str, object]] = []
     selected_episode_index: int | None = None
+    selected_reset_index: int | None = None
     selected_episode_seed: int | None = None
     episode_metrics: dict[str, object] | None = None
     selected_frames: list[np.ndarray] | None = None
     trajectory_observations: list[np.ndarray] = []
     trajectory_actions: list[np.ndarray] = []
     for attempt_index in range(attempt_limit):
-        episode_seed = args.seed + args.skip_episodes + attempt_index
-        observation, _ = raw_env.reset(seed=episode_seed)
+        reset_index = args.skip_episodes + attempt_index
+        episode_seed = (
+            args.seed + reset_index
+            if args.increment_reset_seeds
+            else (args.seed if reset_index == 0 else None)
+        )
+        observation, _ = reset_for_episode(reset_index)
         candidate_frames: list[np.ndarray] = []
         candidate_observations: list[np.ndarray] = []
         candidate_actions: list[np.ndarray] = []
@@ -777,6 +810,7 @@ try:
         if require_success and not bool(candidate_metrics["stairs_completed"]):
             continue
         selected_episode_index = attempt_index + 1
+        selected_reset_index = reset_index + 1
         selected_episode_seed = episode_seed
         episode_metrics = candidate_metrics
         selected_frames = candidate_frames
@@ -849,6 +883,7 @@ try:
             "recorded_frames": recorded_frames,
             "episode": episode_metrics,
             "selected_episode_index": selected_episode_index,
+            "selected_reset_index": selected_reset_index,
             "selected_episode_seed": selected_episode_seed,
             "search_episodes_attempted": len(search_episode_metrics),
             "search_episode_metrics": search_episode_metrics,

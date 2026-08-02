@@ -57,6 +57,8 @@ parser.add_argument(
         "validate",
         "full-sequence",
         "full-feedback",
+        "swing-bias",
+        "swing-clearance",
     ),
     default="timing",
 )
@@ -93,6 +95,7 @@ from isaacsim import SimulationApp  # noqa: E402
 simulation_app = SimulationApp({"headless": True})
 
 from _placement_phase_training import PlacementPhaseTrainingEnv  # noqa: E402
+from _policy_transfer import predict_with_observation_prefix  # noqa: E402
 from _quadruped_stairs_env import QuadrupedStairsEnv  # noqa: E402
 from _stair_rl_contract import placement_policy_action_mask  # noqa: E402
 from stable_baselines3 import PPO  # noqa: E402
@@ -100,6 +103,63 @@ from stable_baselines3 import PPO  # noqa: E402
 
 def candidates() -> list[dict[str, object]]:
     result: list[dict[str, object]] = []
+    if args.search_mode == "swing-clearance":
+        for apex_lift_m, knee in (
+            (0.205, 0.0),
+            (0.225, 0.0),
+            (0.245, 0.0),
+            (0.265, 0.0),
+            (0.225, 0.20),
+            (0.245, 0.20),
+            (0.245, 0.40),
+            (0.265, 0.20),
+            (0.265, 0.40),
+        ):
+            result.append(
+                {
+                    "id": (
+                        f"apex-{int(round(1000 * apex_lift_m)):03d}mm-"
+                        f"lift-knee-plus-{int(round(1000 * knee)):03d}"
+                    ),
+                    "mode": "blend_to_nominal_stance",
+                    "lift_duration_s": 3.0,
+                    "forward_offset_m": 0.120,
+                    "apex_lift_m": apex_lift_m,
+                    "swing_action_bias": {
+                        "hip_abduction": 0.0,
+                        "hip_flexion": 0.0,
+                        "knee": knee,
+                    },
+                    "swing_action_bias_lift_only": True,
+                }
+            )
+        return result
+    if args.search_mode == "swing-bias":
+        for candidate_id, hip_flexion, knee in (
+            ("baseline", 0.0, 0.0),
+            ("knee-plus-100", 0.0, 0.10),
+            ("knee-plus-200", 0.0, 0.20),
+            ("knee-minus-100", 0.0, -0.10),
+            ("knee-minus-200", 0.0, -0.20),
+            ("hip-plus-100", 0.10, 0.0),
+            ("hip-minus-100", -0.10, 0.0),
+            ("hip-plus-100-knee-plus-200", 0.10, 0.20),
+            ("hip-minus-100-knee-plus-200", -0.10, 0.20),
+        ):
+            result.append(
+                {
+                    "id": candidate_id,
+                    "mode": "blend_to_nominal_stance",
+                    "lift_duration_s": 3.0,
+                    "forward_offset_m": 0.120,
+                    "swing_action_bias": {
+                        "hip_abduction": 0.0,
+                        "hip_flexion": hip_flexion,
+                        "knee": knee,
+                    },
+                }
+            )
+        return result
     if args.search_mode == "full-feedback":
 
         def feedback_candidate(
@@ -520,18 +580,46 @@ try:
             if raw_env.placement_transfer_active:
                 applied_action = np.zeros(12, dtype=np.float32)
             elif raw_env.placement_swing_leg == "front_right":
-                applied_action, _ = precursor_model.predict(
+                applied_action, _ = predict_with_observation_prefix(
+                    precursor_model,
                     observation,
                     deterministic=True,
                 )
             else:
-                action, _ = swing_model.predict(observation, deterministic=True)
+                action, _ = predict_with_observation_prefix(
+                    swing_model,
+                    observation,
+                    deterministic=True,
+                )
+                swing_bias_by_kind = dict(
+                    candidate.get("swing_action_bias", {})
+                )
+                swing_action_bias = np.asarray(
+                    [
+                        next(
+                            (
+                                float(value)
+                                for kind, value in swing_bias_by_kind.items()
+                                if name.endswith(kind)
+                            ),
+                            0.0,
+                        )
+                        for name in raw_env.dof_names
+                    ],
+                    dtype=np.float32,
+                )
+                if (
+                    bool(candidate.get("swing_action_bias_lift_only", False))
+                    and float(observation[69]) <= 0.5
+                ):
+                    swing_action_bias.fill(0.0)
                 support_action = np.asarray(
                     candidate.get("support_action", np.zeros(12)),
                     dtype=np.float32,
                 )
                 applied_action = np.clip(
-                    np.asarray(action, dtype=np.float32) * swing_mask
+                    (np.asarray(action, dtype=np.float32) + swing_action_bias)
+                    * swing_mask
                     + support_action * (1.0 - swing_mask),
                     -1.0,
                     1.0,
