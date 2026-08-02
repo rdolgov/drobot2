@@ -1,5 +1,15 @@
 # Rear-right first-tread landing search (V39-V45)
 
+> **Superseded contact interpretation (2026-08-02):** V44-V49 used a
+> `RigidPrim` contact sensor attached to the entire distal leg link. The
+> reported `StepLayer_01` force could therefore come from the shin, distal arm,
+> riser, or tread edge rather than the foot sole on the tread top. V53's
+> geometry-qualified tread-top gate gives every completed foot in the V48
+> snapshot `0 N` qualified load, so all earlier "force-backed tread" claims in
+> this document are historical false positives. The flat-ground 190 mm lift
+> result remains valid. See V53-V54 below for the corrected result and next
+> action.
+
 ## Scope and immutable inputs
 
 This bounded follow-up starts from the accepted V38 mixed-height state: the
@@ -336,3 +346,84 @@ contacts retained, and `65.390 mm` minimum replacement support margin. The
 cached next-transfer margin remains negative at `-94.730 mm`, so rear-left PPO
 is still gated. Exact command, hashes, preload response, and the higher-
 traction V49 sensitivity are recorded in `PROGRESSIVE_PRELOAD_SEARCH.md`.
+
+## V53-V54 true tread-top gate and first-foot reset
+
+V53 keeps the raw per-step-layer contact force for diagnosis but qualifies a
+load as tread support only when the sampled foot bottom is horizontally inside
+the exposed `250 mm` tread top (with a `5 mm` inset) and vertically within
+`15 mm` of its `180 mm` top surface. Snapshot restore, placement completion,
+and transfer gates now consume only this qualified load. This is still a
+camera-blind policy: RGB is used only for external evidence recording.
+
+The V48 snapshot was audited with:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\search_rear_left_progressive_preload.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v46_rear_right_sidestep.yaml `
+  --phase-snapshot simulation\isaac\output\rl\rear-left-transfer-snapshot-v48-force-backed-seed964.json `
+  --seed 994 --candidate-target-deltas-m 0.0025,-0.0025 `
+  --candidate-durations-seconds 1.0 --candidate-pitch-feedback-modes off `
+  --candidate-pitch-feedback-gains-m 0.08 --candidate-roll-feedback-gains-m 0.0 `
+  --candidate-load-sharing-gains-m 0.0001 --maximum-stages 1 `
+  --report simulation\isaac\output\rl\rear-left-tread-top-restore-audit-v53-seed994.json
+```
+
+Restore correctly failed: the three formerly completed feet had qualified
+tread-top loads `[0, 0, 0] N` while the whole-distal-link sensor still reported
+raw step-layer loads `[13.152, 29.781, 35.391] N`. The report SHA-256 is
+`16eea4613acc2d9f3d311b93fa34e58cb0898468f6a21bc6d5d954360c73d05a`.
+A fresh full-prefix seed-995 audit also rejected all four precursor attempts
+before rear-right with `phase_training_precursor_timeout`; report SHA-256 is
+`64d3d5a8b989aa2ad7dc398ab3d5dd36a80f23730681a37f84d129366cd0412a`.
+
+The corrected task was reset to only front-right placement and trained for
+four bounded PPO trials. The fixed-level command for the final trial was:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v10_front_right_single_tread_placement.yaml `
+  --output-dir simulation\isaac\output\rl\ppo-stairs-v54-true-tread-top-quarter-front-right-1024-seed1000 `
+  --total-timesteps 1024 --curriculum-total-timesteps 1024 `
+  --fixed-placement-level quarter-tread-load --seed 1000 --device cpu `
+  --ppo-learning-rate 0.00003 --ppo-initial-log-std -3.5 `
+  --ppo-entropy-coefficient 0.0005
+```
+
+The seed-1000 run completed 1,024 PPO steps in `30.09 s`. It remained upright
+(`2.775 deg` maximum tilt), raised front-right `199.719 mm`, kept support slip
+to `3.450 mm`, and retained all three support contacts. The final foot was at
+`x=0.598395 m`, `z=0.195517 m`, but qualified tread-top load remained `0 N`;
+therefore placement success was `0`. The report SHA-256 is
+`c05f7bf5b66d3b3c2b31f0eb3557c90ced4a01ab24775930df0f341c403bd4b2`.
+
+The bounded placement sweep is consistent:
+
+- seed 996, near edge: `192.165 mm` lift, `3.073 deg` tilt, `4.015 mm`
+  slip, final `x=0.530991 m` (19 mm short of the riser), `0 N` top load;
+- seed 998, center: `200.445 mm` lift, `3.470 deg` tilt, `3.410 mm` slip,
+  final `x=0.616453 m`, `z=0.195723 m`, `0 N` top load;
+- seed 999, center with `120 mm` landing request: `205.254 mm` lift,
+  `3.223 deg` tilt, `3.528 mm` slip, final `x=0.628114 m`,
+  `z=0.197053 m`, `0 N` top load;
+- seed 1000, quarter tread: `199.719 mm` lift, `2.775 deg` tilt,
+  `3.450 mm` slip, final `x=0.598395 m`, `z=0.195517 m`, `0 N` top load.
+
+The archived training-report SHA-256 values for seeds 996, 998, 999, and 1000
+are respectively `07f485f7c2e3043d21778fe8c6941d63aedb461295bba0e18416cb49c9ece73d`,
+`383f0b1cabdd8afc60c494f3ae66048557f200703c9df2ffff0dd56f98378396`,
+`e1ab4907b4ef73959716f8eb1453ba2bb2c613380ba3e5de0a0ace87d8c9d552`,
+and `c05f7bf5b66d3b3c2b31f0eb3557c90ced4a01ab24775930df0f341c403bd4b2`.
+
+This corrected evidence rules out traction and vision as the immediate first-
+plant bottleneck: the support feet barely slip, the body stays upright, stair
+geometry is known, and the swing sole never reaches the tread top. The next
+training stage must first move the torso/support polygon forward to create a
+reachable descend-and-load pose, then train the first-foot plant. Hardware
+should add a dedicated sole load sensor or isolated foot rigid body so shin or
+riser force cannot satisfy a foothold gate. Vision becomes important later for
+unknown stair localization; friction tuning becomes important only after a
+true top contact begins to slip. No V54 success video is published because no
+strict tread-top placement passed; the existing seed-943 external-camera video
+remains evidence only for the independently reproduced 190 mm lift capability.

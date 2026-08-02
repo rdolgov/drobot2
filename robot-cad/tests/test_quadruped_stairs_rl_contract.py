@@ -45,6 +45,7 @@ from _stair_rl_contract import (  # noqa: E402
     inter_leg_pre_unload_gate_failures,
     inter_leg_transfer_state,
     joint_effort_telemetry_sample,
+    minimum_foot_load_vertical_corrections,
     next_foot_target_index,
     overlay_masked_action,
     pack_placement_reference_observation,
@@ -62,6 +63,7 @@ from _stair_rl_contract import (  # noqa: E402
     placement_transfer_ready,
     post_landing_reposition_snapshot,
     progress_gate_failures,
+    qualified_step_top_normal_loads,
     reanchor_inter_leg_transfer_snapshot,
     split_post_clearance_advance_fractions,
     stabilized_support_reference_base_delta,
@@ -79,6 +81,7 @@ from _stair_rl_contract import (  # noqa: E402
     support_roll_vertical_corrections,
     support_triangle_incenter_xy,
     touchdown_load_lift_correction_m,
+    validated_foot_contact_patch_config,
 )
 
 
@@ -89,6 +92,59 @@ def config() -> dict:
         encoding="utf-8",
     ) as stream:
         return yaml.safe_load(stream)
+
+
+def test_foot_contact_patch_contract_preserves_fork_tip_reach() -> None:
+    assert validated_foot_contact_patch_config(None) == {"enabled": False}
+    patch = validated_foot_contact_patch_config(
+        {
+            "enabled": True,
+            "id": "rubber-pad-v50",
+            "shape": "box",
+        }
+    )
+    assert patch == {
+        "enabled": True,
+        "id": "rubber-pad-v50",
+        "shape": "box",
+        "legs": ["front_left", "front_right", "rear_left", "rear_right"],
+        "thickness_m": pytest.approx(0.008),
+        "width_m": pytest.approx(0.040),
+        "length_m": pytest.approx(0.050),
+        "contact_plane_offset_m": pytest.approx(0.0125),
+        "contact_offset_m": pytest.approx(0.002),
+        "rest_offset_m": pytest.approx(0.0),
+    }
+    rounded = validated_foot_contact_patch_config(
+        {
+            "enabled": True,
+            "id": "rounded-boot-v50",
+            "shape": "sphere",
+            "legs": ["rear_right"],
+            "radius_m": 0.025,
+        }
+    )
+    assert rounded["radius_m"] == pytest.approx(0.025)
+    assert rounded["contact_plane_offset_m"] == pytest.approx(0.0125)
+    assert rounded["legs"] == ["rear_right"]
+    assert "width_m" not in rounded
+    with pytest.raises(ValueError, match="width_m"):
+        validated_foot_contact_patch_config(
+            {"enabled": True, "id": "bad", "width_m": 0.10}
+        )
+    with pytest.raises(ValueError, match="must exceed"):
+        validated_foot_contact_patch_config(
+            {
+                "enabled": True,
+                "id": "bad",
+                "contact_offset_m": 0.001,
+                "rest_offset_m": 0.001,
+            }
+        )
+    with pytest.raises(ValueError, match="known robot legs"):
+        validated_foot_contact_patch_config(
+            {"enabled": True, "id": "bad", "legs": ["middle"]}
+        )
 
 
 @pytest.fixture
@@ -1219,6 +1275,80 @@ def test_placement_observation_and_contact_gate_require_loaded_support(
     )
 
 
+def test_step_top_load_gate_rejects_riser_and_accepts_tread_top(
+    v8_config: dict,
+) -> None:
+    staircase = v8_config["task"]["staircase"]
+    start = float(staircase["start_x_m"])
+    rise = float(staircase["rise_m"])
+    tread = float(staircase["tread_depth_m"])
+    tips = np.asarray(
+        [
+            (start - 0.015, 0.0, rise + 0.002),
+            (start + 0.020, 0.0, rise + 0.002),
+            (start + tread + 0.020, 0.0, 2.0 * rise - 0.003),
+            (start + 0.020, 0.0, rise + 0.030),
+        ],
+        dtype=np.float32,
+    )
+    raw_loads = np.zeros(
+        (tips.shape[0], int(staircase["step_count"])),
+        dtype=np.float32,
+    )
+    raw_loads[0, 0] = 34.0
+    raw_loads[1, 0] = 21.0
+    raw_loads[2, 1] = 18.0
+    raw_loads[3, 0] = 12.0
+
+    qualified = qualified_step_top_normal_loads(
+        foot_tip_positions_m=tips,
+        step_normal_loads_n=raw_loads,
+        staircase=staircase,
+    )
+
+    assert not np.any(qualified[0])
+    assert qualified[1, 0] == pytest.approx(21.0)
+    assert qualified[2, 1] == pytest.approx(18.0)
+    assert not np.any(qualified[3])
+
+
+def test_step_top_load_gate_rejects_edge_and_invalid_inputs(v8_config: dict) -> None:
+    staircase = v8_config["task"]["staircase"]
+    start = float(staircase["start_x_m"])
+    rise = float(staircase["rise_m"])
+    width = float(staircase["width_m"])
+    tips = np.asarray(
+        [
+            (start + 0.004, 0.0, rise),
+            (start + 0.020, width / 2.0 - 0.004, rise),
+        ],
+        dtype=np.float32,
+    )
+    raw_loads = np.zeros((2, int(staircase["step_count"])), dtype=np.float32)
+    raw_loads[:, 0] = (10.0, 11.0)
+    qualified = qualified_step_top_normal_loads(
+        foot_tip_positions_m=tips,
+        step_normal_loads_n=raw_loads,
+        staircase=staircase,
+    )
+    assert not np.any(qualified)
+
+    with pytest.raises(ValueError, match="step_normal_loads_n"):
+        qualified_step_top_normal_loads(
+            foot_tip_positions_m=tips,
+            step_normal_loads_n=np.zeros((2, 1), dtype=np.float32),
+            staircase=staircase,
+        )
+    with pytest.raises(ValueError, match="cannot contain negative"):
+        invalid_loads = raw_loads.copy()
+        invalid_loads[0, 0] = -1.0
+        qualified_step_top_normal_loads(
+            foot_tip_positions_m=tips,
+            step_normal_loads_n=invalid_loads,
+            staircase=staircase,
+        )
+
+
 def test_support_regulation_observation_exposes_load_com_and_saturation(
     v8_config: dict,
 ) -> None:
@@ -1377,6 +1507,41 @@ def test_four_foot_preload_extends_the_unloaded_foot() -> None:
         proportional_gain_m=0.030,
         maximum_correction_m=0.012,
     ) == pytest.approx((0.0, 0.0, 0.0, 0.0))
+
+
+def test_minimum_foot_load_retention_only_extends_below_floor() -> None:
+    correction = minimum_foot_load_vertical_corrections(
+        measured_normal_loads_n=(30.0, 25.0, 20.0, 0.0),
+        target_foot_index=3,
+        minimum_target_load_n=15.0,
+        proportional_gain_m_per_n=0.0005,
+        maximum_correction_m=0.012,
+    )
+    assert correction == pytest.approx((-0.0025, -0.0025, -0.0025, 0.0075))
+    assert float(np.sum(correction)) == pytest.approx(0.0)
+    assert minimum_foot_load_vertical_corrections(
+        measured_normal_loads_n=(20.0, 20.0, 20.0, 15.0),
+        target_foot_index=3,
+        minimum_target_load_n=15.0,
+        proportional_gain_m_per_n=0.0005,
+        maximum_correction_m=0.012,
+    ) == pytest.approx((0.0, 0.0, 0.0, 0.0))
+    assert minimum_foot_load_vertical_corrections(
+        measured_normal_loads_n=(30.0, 25.0, 20.0, 0.0),
+        target_foot_index=3,
+        minimum_target_load_n=15.0,
+        proportional_gain_m_per_n=0.0005,
+        maximum_correction_m=0.012,
+        redistribution_fraction=0.0,
+    ) == pytest.approx((0.0, 0.0, 0.0, 0.0075))
+    with pytest.raises(ValueError, match="out of range"):
+        minimum_foot_load_vertical_corrections(
+            measured_normal_loads_n=(20.0, 20.0, 20.0, 0.0),
+            target_foot_index=4,
+            minimum_target_load_n=15.0,
+            proportional_gain_m_per_n=0.0005,
+            maximum_correction_m=0.012,
+        )
 
 
 def test_v24_reward_and_termination_make_drift_worse_than_success(

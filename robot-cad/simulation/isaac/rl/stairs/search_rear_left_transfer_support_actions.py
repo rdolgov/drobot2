@@ -70,6 +70,8 @@ parser.add_argument("--record-thumbnail", default=None)
 parser.add_argument("--record-fps", type=int, default=30)
 parser.add_argument("--record-width", type=int, default=960)
 parser.add_argument("--record-height", type=int, default=540)
+parser.add_argument("--phase-transfer-target-delta-m")
+parser.add_argument("--phase-transfer-residual-action-scale", type=float)
 args, _ = parser.parse_known_args()
 
 
@@ -102,6 +104,28 @@ thumbnail_path = (
     else (video_path.with_suffix(".png") if video_path else None)
 )
 amplitudes = comma_floats(args.amplitudes)
+phase_transfer_target_delta_xy_m: tuple[float, float] | None = None
+if args.phase_transfer_target_delta_m is not None:
+    forward_text, separator, lateral_text = str(
+        args.phase_transfer_target_delta_m
+    ).partition(":")
+    if not separator:
+        parser.error("phase transfer target delta must use FORWARD:LATERAL")
+    try:
+        phase_transfer_target_delta_xy_m = (
+            float(forward_text),
+            float(lateral_text),
+        )
+    except ValueError:
+        parser.error("phase transfer target delta must use FORWARD:LATERAL")
+    if not all(
+        math.isfinite(value) for value in phase_transfer_target_delta_xy_m
+    ) or any(abs(value) > 0.12 for value in phase_transfer_target_delta_xy_m):
+        parser.error("phase transfer target delta components must be <= 0.12 m")
+if args.phase_transfer_residual_action_scale is not None and not (
+    0.0 < args.phase_transfer_residual_action_scale <= 1.0
+):
+    parser.error("phase transfer residual action scale must be within (0, 1]")
 if args.maximum_seconds <= 0.0:
     parser.error("--maximum-seconds must be positive")
 if args.record_fps < 1 or args.record_width < 1 or args.record_height < 1:
@@ -112,6 +136,13 @@ if video_path is not None and policy_model_path is None:
 with config_path.open("r", encoding="utf-8") as stream:
     config = yaml.safe_load(stream)
 task_config = dict(config["task"])
+if args.phase_transfer_residual_action_scale is not None:
+    task_config["placement_reference"]["inter_leg_transfer"].setdefault(
+        "override_by_next_swing_leg",
+        {},
+    ).setdefault("rear_left", {})["residual_action_scale"] = float(
+        args.phase_transfer_residual_action_scale
+    )
 with snapshot_path.open("r", encoding="utf-8") as stream:
     snapshot_payload = json.load(stream)
 
@@ -146,7 +177,10 @@ simulation_app = SimulationApp(
 
 from _placement_phase_training import PlacementPhaseTrainingEnv  # noqa: E402
 from _quadruped_stairs_env import QuadrupedStairsEnv  # noqa: E402
-from _stair_rl_contract import placement_policy_action_mask  # noqa: E402
+from _stair_rl_contract import (  # noqa: E402
+    placement_policy_action_mask,
+    reanchor_inter_leg_transfer_snapshot,
+)
 from isaacsim.core.utils.viewports import set_camera_view  # noqa: E402
 from isaacsim.sensors.experimental.rtx import CameraSensor, RtxCamera  # noqa: E402
 from omni.kit.viewport.utility import get_active_viewport  # noqa: E402
@@ -171,11 +205,30 @@ report: dict[str, object] = {
     "record_video": str(video_path) if video_path else None,
     "record_thumbnail": str(thumbnail_path) if thumbnail_path else None,
     "camera_policy_input": False,
+    "phase_transfer_target_delta_xy_m": (
+        list(phase_transfer_target_delta_xy_m)
+        if phase_transfer_target_delta_xy_m is not None
+        else None
+    ),
+    "phase_transfer_residual_action_scale": (
+        args.phase_transfer_residual_action_scale
+    ),
 }
 raw_env: QuadrupedStairsEnv | None = None
 camera_sensor: CameraSensor | None = None
 exit_code = 1
 try:
+    if phase_transfer_target_delta_xy_m is not None:
+        phase_snapshot = reanchor_inter_leg_transfer_snapshot(
+            phase_snapshot,
+            balance_position_m=phase_snapshot[
+                "placement_transfer_start_balance_position_m"
+            ],
+            target_delta_xy_m=phase_transfer_target_delta_xy_m,
+            reference_by_leg=phase_snapshot[
+                "placement_transfer_reference_by_leg"
+            ],
+        )
     raw_env = QuadrupedStairsEnv(
         simulation_app,
         world_path=str(world_path),

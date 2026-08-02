@@ -110,6 +110,26 @@ parser.add_argument(
     default=None,
 )
 parser.add_argument(
+    "--maximum-forward-foot-drift-m",
+    type=float,
+    default=None,
+    help="Optional acceptance override for an intentional rear-edge step.",
+)
+parser.add_argument("--foot-pad-thickness-m", type=float)
+parser.add_argument("--foot-pad-width-m", type=float)
+parser.add_argument("--foot-pad-length-m", type=float)
+parser.add_argument(
+    "--foot-pad-shape",
+    choices=("box", "sphere"),
+    default="box",
+)
+parser.add_argument("--foot-pad-radius-m", type=float)
+parser.add_argument(
+    "--foot-pad-contact-plane-offset-m",
+    type=float,
+    default=0.0125,
+)
+parser.add_argument(
     "--report",
     default=(
         "simulation/isaac/output/rl/"
@@ -143,6 +163,10 @@ if args.minimum_rear_right_tread_load_n is not None:
     acceptance["minimum_rear_right_tread_load_n"] = (
         args.minimum_rear_right_tread_load_n
     )
+if args.maximum_forward_foot_drift_m is not None:
+    acceptance["maximum_forward_foot_drift_m"] = (
+        args.maximum_forward_foot_drift_m
+    )
 outward_offsets_m = (
     comma_floats(args.outward_offsets_m)
     if args.outward_offsets_m
@@ -158,20 +182,63 @@ forward_offsets_m = (
     if args.forward_offsets_m
     else tuple(float(value) for value in reposition_config["forward_offsets_m"])
 )
-if any(value < 0.0 or value > 0.15 for value in outward_offsets_m):
-    parser.error("outward offsets must be within [0, 0.15] m")
+if any(value < -0.10 or value > 0.15 for value in outward_offsets_m):
+    parser.error("outward offsets must be within [-0.10, 0.15] m")
 if any(value <= 0.0 or value > 0.10 for value in relative_apex_lifts_m):
     parser.error("relative apex lifts must be within (0, 0.10] m")
-if any(value < 0.0 or value > 0.05 for value in forward_offsets_m):
-    parser.error("forward offsets must be within [0, 0.05] m")
-if not -0.05 <= float(
+if any(value < -0.05 or value > 0.05 for value in forward_offsets_m):
+    parser.error("forward offsets must be within [-0.05, 0.05] m")
+if not -0.10 <= float(
     acceptance["minimum_physical_outward_displacement_m"]
 ) <= 0.15:
     parser.error(
-        "minimum physical outward displacement must be within [-0.05, 0.15] m"
+        "minimum physical outward displacement must be within [-0.10, 0.15] m"
     )
 if not 1.0 <= float(acceptance["minimum_rear_right_tread_load_n"]) <= 50.0:
     parser.error("minimum rear-right tread load must be within [1, 50] N")
+if not 0.0 < float(acceptance["maximum_forward_foot_drift_m"]) <= 0.10:
+    parser.error("maximum forward foot drift must be within (0, 0.10] m")
+foot_pad_dimensions = (
+    args.foot_pad_thickness_m,
+    args.foot_pad_width_m,
+    args.foot_pad_length_m,
+)
+foot_pad_requested = any(value is not None for value in foot_pad_dimensions) or (
+    args.foot_pad_radius_m is not None
+)
+if (
+    foot_pad_requested
+    and args.foot_pad_shape == "box"
+    and any(value is None for value in foot_pad_dimensions)
+):
+    parser.error("foot-pad thickness, width, and length must be supplied together")
+if (
+    foot_pad_requested
+    and args.foot_pad_shape == "sphere"
+    and args.foot_pad_radius_m is None
+):
+    parser.error("--foot-pad-radius-m is required for a sphere foot pad")
+if foot_pad_requested:
+    foot_contact_patch: dict[str, object] = {
+        "enabled": True,
+        "id": "simulation-rubber-pad-v50-rear-right-foothold",
+        "shape": args.foot_pad_shape,
+        "legs": ["rear_right"],
+        "contact_plane_offset_m": args.foot_pad_contact_plane_offset_m,
+        "contact_offset_m": 0.002,
+        "rest_offset_m": 0.0,
+    }
+    if args.foot_pad_shape == "box":
+        foot_contact_patch.update(
+            {
+                "thickness_m": args.foot_pad_thickness_m,
+                "width_m": args.foot_pad_width_m,
+                "length_m": args.foot_pad_length_m,
+            }
+        )
+    else:
+        foot_contact_patch["radius_m"] = args.foot_pad_radius_m
+    task_config["foot_contact_patch"] = foot_contact_patch
 
 with phase_snapshot_path.open("r", encoding="utf-8") as stream:
     snapshot_wrapper = json.load(stream)
@@ -191,7 +258,18 @@ force_backed_settle = (
     args.minimum_physical_outward_displacement_m is not None
     or args.minimum_rear_right_tread_load_n is not None
 )
-if force_backed_settle:
+inward_rear_edge_requested = any(
+    value < 0.0 for value in (*outward_offsets_m, *forward_offsets_m)
+)
+if foot_pad_requested:
+    task_config["id"] = (
+        "Drobot-Quadruped-Stairs-v50-Rubber-Pad-Rear-Right-Foothold"
+    )
+elif inward_rear_edge_requested:
+    task_config["id"] = (
+        "Drobot-Quadruped-Stairs-v52-Inward-Rear-Edge-Reposition"
+    )
+elif force_backed_settle:
     task_config["id"] = (
         "Drobot-Quadruped-Stairs-v48-Force-Backed-Rear-Right-Foothold"
     )
@@ -227,9 +305,17 @@ report: dict[str, object] = {
     "task_id": task_config["id"],
     "source_task_id": snapshot_wrapper.get("source_task_id"),
     "scope": (
-        "Exact-snapshot force-backed rear-right foothold settle"
-        if force_backed_settle
-        else "Exact-snapshot rear-right post-landing sidestep"
+        "Exact-snapshot rubber-pad rear-right foothold settle"
+        if foot_pad_requested
+        else (
+            "Exact-snapshot inward rear-edge rear-right reposition"
+            if inward_rear_edge_requested
+            else (
+            "Exact-snapshot force-backed rear-right foothold settle"
+            if force_backed_settle
+            else "Exact-snapshot rear-right post-landing sidestep"
+            )
+        )
     ),
     "config": str(config_path),
     "world": str(world_path),
@@ -248,6 +334,10 @@ report: dict[str, object] = {
     "relative_apex_lifts_m": list(relative_apex_lifts_m),
     "forward_offsets_m": list(forward_offsets_m),
     "acceptance": acceptance,
+    "foot_contact_patch": task_config.get(
+        "foot_contact_patch",
+        {"enabled": False},
+    ),
 }
 raw_env: QuadrupedStairsEnv | None = None
 exit_code = 1
@@ -404,6 +494,13 @@ try:
             final_foot_tips[next_support_indices, :2],
         )
         final_tread_load_n = float(
+            np.sum(
+                np.asarray(raw_env.latest_step_top_normal_loads_n)[
+                    rear_right_index
+                ]
+            )
+        )
+        final_step_layer_load_n = float(
             np.sum(np.asarray(raw_env.latest_step_normal_loads_n)[rear_right_index])
         )
         physical_outward_m = float(initial_rr[1] - final_rr[1])
@@ -456,6 +553,7 @@ try:
             "measured_relative_reclearance_m": measured_relative_reclearance_m,
             "maximum_tread_load_n": maximum_tread_load_n,
             "final_rear_right_tread_load_n": final_tread_load_n,
+            "final_rear_right_step_layer_load_n": final_step_layer_load_n,
             "maximum_support_slip_m": maximum_support_slip_m,
             "failure_reasons": list(last_info.get("failure_reasons", ())),
             "terminated": bool(last_info.get("terminated", False)),

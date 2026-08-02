@@ -31,6 +31,7 @@ from _stair_rl_contract import (
     inter_leg_pre_unload_gate_failures,
     inter_leg_transfer_state,
     joint_effort_telemetry_sample,
+    minimum_foot_load_vertical_corrections,
     next_foot_target_index,
     pack_placement_reference_observation,
     pack_stair_policy_observation,
@@ -42,6 +43,7 @@ from _stair_rl_contract import (
     placement_lift_hold_reached,
     placement_reference_state,
     placement_success_mode,
+    qualified_step_top_normal_loads,
     split_post_clearance_advance_fractions,
     stabilized_support_reference_base_delta,
     staged_support_rear_pitch_scale,
@@ -59,6 +61,7 @@ from _stair_rl_contract import (
     support_roll_vertical_corrections,
     touchdown_load_lift_correction_m,
     validate_staircase_config,
+    validated_foot_contact_patch_config,
 )
 from _vl53l5cx_contract import (
     VL53L5CX_MODE,
@@ -68,7 +71,7 @@ from _vl53l5cx_contract import (
 from _vl53l5cx_sensor import VL53L5CXRaycastSensor
 from gymnasium import spaces
 from isaacsim.core.experimental.prims import RigidPrim
-from pxr import PhysxSchema, UsdPhysics, UsdShade
+from pxr import Gf, PhysxSchema, UsdGeom, UsdPhysics, UsdShade
 from stable_baselines3 import PPO
 
 STAIRS_EXPECTED_DOF_ORDER = (
@@ -86,6 +89,8 @@ STAIRS_EXPECTED_DOF_ORDER = (
     "rear_right_knee",
 )
 FOOT_CONTACT_RADIUS_M = 0.0125
+TREAD_TOP_CONTACT_INSET_M = 0.005
+TREAD_TOP_CONTACT_HEIGHT_TOLERANCE_M = 0.015
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parents[3]
 
@@ -163,6 +168,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         foot_paths = [
             link_path_by_name[f"{leg}_distal_link"] for leg in LEGS
         ]
+        self._create_foot_contact_patches(foot_paths)
         self._apply_foot_contact_material(foot_paths)
         self.contact_filter_paths = (
             "/World/Ground",
@@ -177,6 +183,60 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             max_contact_count=128,
         )
         self.foot_prim.set_enabled_contact_tracking([True], threshold=0.0)
+
+    def _create_foot_contact_patches(self, foot_paths: list[str]) -> None:
+        config = self.foot_contact_patch_config
+        if not bool(config.get("enabled", False)):
+            self.foot_contact_patch_applied = None
+            return
+        shape = str(config["shape"])
+        contact_plane_offset_m = float(config["contact_plane_offset_m"])
+        if shape == "box":
+            thickness_m = float(config["thickness_m"])
+            width_m = float(config["width_m"])
+            length_m = float(config["length_m"])
+            center_x_m = (
+                LINK_LENGTH_M + contact_plane_offset_m - 0.5 * thickness_m
+            )
+            local_size_xyz_m = [thickness_m, width_m, length_m]
+        else:
+            radius_m = float(config["radius_m"])
+            center_x_m = LINK_LENGTH_M + contact_plane_offset_m - radius_m
+            local_size_xyz_m = [2.0 * radius_m] * 3
+        contact_offset_m = float(config["contact_offset_m"])
+        rest_offset_m = float(config["rest_offset_m"])
+        patch_legs = set(str(leg) for leg in config["legs"])
+        patch_paths: list[str] = []
+        for leg, foot_path in zip(LEGS, foot_paths, strict=True):
+            if leg not in patch_legs:
+                continue
+            patch_path = f"{foot_path}/simulation_only_rubber_pad_contact_patch"
+            if shape == "box":
+                geometry = UsdGeom.Cube.Define(self.stage, patch_path)
+                geometry.CreateSizeAttr(1.0)
+                geometry.AddTranslateOp().Set(
+                    Gf.Vec3d(center_x_m, 0.0, 0.0)
+                )
+                geometry.AddScaleOp().Set(Gf.Vec3d(*local_size_xyz_m))
+            else:
+                geometry = UsdGeom.Sphere.Define(self.stage, patch_path)
+                geometry.CreateRadiusAttr(float(config["radius_m"]))
+                geometry.AddTranslateOp().Set(
+                    Gf.Vec3d(center_x_m, 0.0, 0.0)
+                )
+            geometry.CreateDisplayColorAttr([Gf.Vec3f(0.04, 0.06, 0.07)])
+            prim = geometry.GetPrim()
+            UsdPhysics.CollisionAPI.Apply(prim)
+            physx_collision = PhysxSchema.PhysxCollisionAPI.Apply(prim)
+            physx_collision.CreateContactOffsetAttr().Set(contact_offset_m)
+            physx_collision.CreateRestOffsetAttr().Set(rest_offset_m)
+            patch_paths.append(patch_path)
+        self.foot_contact_patch_applied = {
+            **config,
+            "local_center_xyz_m": [center_x_m, 0.0, 0.0],
+            "local_size_xyz_m": local_size_xyz_m,
+            "paths": patch_paths,
+        }
 
     def _apply_foot_contact_material(self, foot_paths: list[str]) -> None:
         config = self.foot_contact_material_config
@@ -215,22 +275,29 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         physx_material.CreateCompliantContactDampingAttr().Set(
             float(config.get("compliant_contact_damping", 45.0))
         )
-        bound_paths: list[str] = []
-        for foot_path in foot_paths:
-            proxy_path = (
-                f"{foot_path}/simulation_only_fork_tip_contact_proxy_1"
+        contact_shape_paths = [
+            f"{foot_path}/simulation_only_fork_tip_contact_proxy_1"
+            for foot_path in foot_paths
+        ]
+        if self.foot_contact_patch_applied is not None:
+            contact_shape_paths.extend(
+                str(path)
+                for path in self.foot_contact_patch_applied["paths"]
             )
-            prim = self.stage.GetPrimAtPath(proxy_path)
+        bound_paths: list[str] = []
+        for contact_shape_path in contact_shape_paths:
+            prim = self.stage.GetPrimAtPath(contact_shape_path)
             if not prim.IsValid():
                 raise RuntimeError(
-                    f"Foot contact proxy is missing for traction test: {proxy_path}"
+                    "Foot contact shape is missing for traction test: "
+                    f"{contact_shape_path}"
                 )
             UsdShade.MaterialBindingAPI.Apply(prim).Bind(
                 material,
                 UsdShade.Tokens.strongerThanDescendants,
                 "physics",
             )
-            bound_paths.append(proxy_path)
+            bound_paths.append(contact_shape_path)
         self.foot_contact_material_applied = {
             **config,
             "friction_combine_mode": friction_combine_mode,
@@ -295,6 +362,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             task_config.get("foot_contact_material", {})
         )
         self.foot_contact_material_applied: dict[str, object] | None = None
+        self.foot_contact_patch_config = validated_foot_contact_patch_config(
+            task_config.get("foot_contact_patch")
+        )
+        self.foot_contact_patch_applied: dict[str, object] | None = None
         self.placement_reference_enabled = bool(
             self.placement_reference_config.get("enabled", False)
         )
@@ -667,6 +738,60 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                         "four_foot_preload_load_sharing."
                         f"{name} must be within (0, {maximum}]"
                     )
+        self.placed_foot_load_retention_config = dict(
+            self.com_regulation_config.get("placed_foot_load_retention", {})
+        )
+        self.placed_foot_load_retention_enabled = bool(
+            self.placed_foot_load_retention_config.get("enabled", False)
+        )
+        if (
+            self.placed_foot_load_retention_enabled
+            and self.four_foot_preload_load_sharing_enabled
+        ):
+            raise ValueError(
+                "placed-foot load retention and equalized four-foot preload "
+                "cannot both be enabled"
+            )
+        if self.placed_foot_load_retention_enabled:
+            target_by_swing_leg = dict(
+                self.placed_foot_load_retention_config.get(
+                    "target_foot_by_next_swing_leg",
+                    {},
+                )
+            )
+            if not target_by_swing_leg or any(
+                swing_leg not in LEGS or str(target_leg) not in LEGS
+                for swing_leg, target_leg in target_by_swing_leg.items()
+            ):
+                raise ValueError(
+                    "placed_foot_load_retention.target_foot_by_next_swing_leg "
+                    "must map known legs"
+                )
+            for name, default, maximum in (
+                ("minimum_target_load_n", 15.0, 100.0),
+                ("proportional_gain_m_per_n", 0.0005, 0.01),
+                ("maximum_correction_m", 0.012, 0.05),
+                ("smoothing_factor", 0.50, 1.0),
+            ):
+                value = float(
+                    self.placed_foot_load_retention_config.get(name, default)
+                )
+                if not 0.0 < value <= maximum:
+                    raise ValueError(
+                        "placed_foot_load_retention."
+                        f"{name} must be within (0, {maximum}]"
+                    )
+            redistribution_fraction = float(
+                self.placed_foot_load_retention_config.get(
+                    "redistribution_fraction",
+                    1.0,
+                )
+            )
+            if not 0.0 <= redistribution_fraction <= 1.0:
+                raise ValueError(
+                    "placed_foot_load_retention.redistribution_fraction "
+                    "must be within [0, 1]"
+                )
         self.support_margin_regulation_config = dict(
             self.com_regulation_config.get(
                 "support_margin_regulation",
@@ -1042,6 +1167,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.latest_step_normal_loads_n = np.zeros(
             (len(LEGS), int(self.staircase_config["step_count"])),
             dtype=np.float32,
+        )
+        self.latest_step_top_normal_loads_n = np.zeros_like(
+            self.latest_step_normal_loads_n
         )
         self.latest_foot_tips_m = np.zeros((len(LEGS), 3), dtype=np.float32)
         self.latest_support_load_sharing_correction_m = np.zeros(
@@ -1458,6 +1586,19 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             )
         normal_loads = np.maximum(forces[:, :, 2], 0.0).astype(np.float32)
         return normal_loads[:, 0], normal_loads[:, 1:]
+
+    def _qualified_step_top_normal_loads(
+        self,
+        foot_tips_m: np.ndarray,
+        step_normal_loads_n: np.ndarray,
+    ) -> np.ndarray:
+        return qualified_step_top_normal_loads(
+            foot_tip_positions_m=foot_tips_m,
+            step_normal_loads_n=step_normal_loads_n,
+            staircase=self.staircase_config,
+            minimum_horizontal_inset_m=TREAD_TOP_CONTACT_INSET_M,
+            maximum_top_height_error_m=TREAD_TOP_CONTACT_HEIGHT_TOLERANCE_M,
+        )
 
     def _placement_state(self, elapsed_seconds: float) -> dict[str, object]:
         timing = dict(self.placement_reference_config["timing"])
@@ -2028,6 +2169,83 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 self.maximum_abs_support_load_sharing_correction_m,
                 float(np.max(np.abs(corrections))),
             )
+        retention_config = self.placed_foot_load_retention_config
+        retention_target_by_swing_leg = dict(
+            retention_config.get("target_foot_by_next_swing_leg", {})
+        )
+        retention_target_leg = retention_target_by_swing_leg.get(
+            self.placement_swing_leg
+        )
+        if (
+            self.placed_foot_load_retention_enabled
+            and retention_target_leg is not None
+            and self.placement_transfer_unload_start_step is None
+            and transfer_fraction > 0.0
+        ):
+            total_foot_loads = self.latest_ground_normal_loads_n + np.sum(
+                self.latest_step_normal_loads_n,
+                axis=1,
+            )
+            raw_corrections = minimum_foot_load_vertical_corrections(
+                measured_normal_loads_n=total_foot_loads,
+                target_foot_index=LEGS.index(str(retention_target_leg)),
+                minimum_target_load_n=float(
+                    retention_config.get("minimum_target_load_n", 15.0)
+                ),
+                proportional_gain_m_per_n=float(
+                    retention_config.get(
+                        "proportional_gain_m_per_n",
+                        0.0005,
+                    )
+                ),
+                maximum_correction_m=float(
+                    retention_config.get("maximum_correction_m", 0.012)
+                ),
+                minimum_total_load_n=float(
+                    retention_config.get("minimum_total_load_n", 1.0)
+                ),
+                redistribution_fraction=float(
+                    retention_config.get("redistribution_fraction", 1.0)
+                ),
+            ) * transfer_fraction
+            smoothing_factor = float(
+                retention_config.get("smoothing_factor", 0.50)
+            )
+            corrections = self.latest_support_load_sharing_correction_m + (
+                smoothing_factor
+                * (
+                    raw_corrections
+                    - self.latest_support_load_sharing_correction_m
+                )
+            )
+            maximum_correction_m = float(
+                retention_config.get("maximum_correction_m", 0.012)
+            )
+            corrections = np.clip(
+                corrections,
+                -maximum_correction_m,
+                maximum_correction_m,
+            )
+            for leg_index, leg in enumerate(LEGS):
+                adjusted[leg]["vertical_m"] += float(corrections[leg_index])
+                self.maximum_abs_support_load_sharing_correction_m_by_leg[
+                    leg_index
+                ] = max(
+                    self.maximum_abs_support_load_sharing_correction_m_by_leg[
+                        leg_index
+                    ],
+                    abs(float(corrections[leg_index])),
+                )
+            self.latest_support_load_sharing_correction_m = corrections.copy()
+            self.maximum_abs_support_load_sharing_correction_m = max(
+                self.maximum_abs_support_load_sharing_correction_m,
+                float(np.max(np.abs(corrections))),
+            )
+            self.support_load_sharing_active_sample_count += 1
+            if np.any(
+                np.abs(corrections) >= 0.99 * maximum_correction_m
+            ):
+                self.support_load_sharing_saturated_sample_count += 1
         adjusted[self.placement_swing_leg]["vertical_m"] -= float(
             self._active_inter_leg_transfer_config().get(
                 "swing_unload_lift_m",
@@ -2937,7 +3155,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             next_maximum_tread_progress,
         )
 
-    def set_training_progress(self, progress_fraction: float) -> None:
+    def set_training_progress(
+        self,
+        progress_fraction: float,
+        *,
+        update_placement_curriculum: bool = True,
+    ) -> None:
         """Schedule a curriculum level; it becomes active at the next reset."""
 
         progress = float(np.clip(progress_fraction, 0.0, 1.0))
@@ -2955,9 +3178,14 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             )
         self.curriculum_progress = progress
         self.pending_active_step_count = active
-        if self.placement_reference_enabled and str(
+        if (
+            update_placement_curriculum
+            and self.placement_reference_enabled
+            and str(
             self.placement_curriculum_config.get("mode", "timesteps")
-        ) == "timesteps":
+            )
+            == "timesteps"
+        ):
             self.set_placement_curriculum_progress(progress)
 
     def set_placement_curriculum_progress(self, progress_fraction: float) -> None:
@@ -3137,6 +3365,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ground_loads, step_loads = self._sample_foot_contact_loads()
             self.latest_ground_normal_loads_n = ground_loads
             self.latest_step_normal_loads_n = step_loads
+            self.latest_step_top_normal_loads_n = (
+                self._qualified_step_top_normal_loads(foot_tips, step_loads)
+            )
             placement_state = self._placement_state(
                 self.episode_step * self.control_dt_s
             )
@@ -3411,6 +3642,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ground_loads, step_loads = self._sample_foot_contact_loads()
             self.latest_ground_normal_loads_n = ground_loads
             self.latest_step_normal_loads_n = step_loads
+            self.latest_step_top_normal_loads_n = (
+                self._qualified_step_top_normal_loads(foot_tips, step_loads)
+            )
             observation = np.asarray(self._read_state()["observation"]).copy()
         info.update(
             {
@@ -3849,6 +4083,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         ground_loads, step_loads = self._sample_foot_contact_loads()
         self.latest_ground_normal_loads_n = ground_loads
         self.latest_step_normal_loads_n = step_loads
+        self.latest_step_top_normal_loads_n = self._qualified_step_top_normal_loads(
+            foot_tips,
+            step_loads,
+        )
         contact_threshold = float(
             self.placement_reference_config["contact_on_threshold_n"]
         )
@@ -3856,7 +4094,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             LEGS.index(leg) for leg in self.completed_placement_legs
         ]
         completed_tread_loads = (
-            np.sum(step_loads[completed_indices], axis=1)
+            np.sum(self.latest_step_top_normal_loads_n[completed_indices], axis=1)
             if completed_indices
             else np.zeros(0, dtype=np.float32)
         )
@@ -3869,7 +4107,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             and np.any(completed_tread_loads < contact_threshold)
         ) or np.any(restored_support_loads < contact_threshold):
             raise RuntimeError(
-                "Placement phase snapshot did not restore force-backed support"
+                "Placement phase snapshot did not restore force-backed support: "
+                f"completed_tread_top_loads_n={completed_tread_loads.tolist()}, "
+                "raw_completed_step_layer_loads_n="
+                f"{np.sum(step_loads[completed_indices], axis=1).tolist()}, "
+                f"support_loads_n={restored_support_loads.tolist()}, "
+                f"threshold_n={contact_threshold}"
             )
         observation = np.asarray(self._read_state()["observation"]).copy()
         return observation, {
@@ -4167,6 +4410,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         placement_current_support_slip_m = 0.0
         placement_swing_target_distance = 0.0
         placement_swing_tread_load = 0.0
+        placement_swing_step_layer_load = 0.0
         placement_transfer_gate_now = False
         placement_transfer_base_target_error_m = 0.0
         placement_transfer_completed_tread_min_load_n = 0.0
@@ -4210,6 +4454,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 )
             ground_loads = self.latest_ground_normal_loads_n
             step_loads = self.latest_step_normal_loads_n
+            step_top_loads = self.latest_step_top_normal_loads_n
             support_indices = list(self.placement_support_leg_indices)
             support_loads = ground_loads[support_indices] + np.sum(
                 step_loads[support_indices, :],
@@ -4299,8 +4544,11 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     )
                 )
             )
-            placement_swing_tread_load = float(
+            placement_swing_step_layer_load = float(
                 step_loads[self.placement_swing_leg_index, 0]
+            )
+            placement_swing_tread_load = float(
+                step_top_loads[self.placement_swing_leg_index, 0]
             )
             self.maximum_swing_tread_normal_load_n = max(
                 self.maximum_swing_tread_normal_load_n,
@@ -4429,12 +4677,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 completed_tread_loaded = bool(
                     completed_indices
                     and np.all(
-                        step_loads[completed_indices, 0]
+                        step_top_loads[completed_indices, 0]
                         >= contact_threshold
                     )
                 )
                 placement_transfer_completed_tread_min_load_n = float(
-                    np.min(step_loads[completed_indices, 0])
+                    np.min(step_top_loads[completed_indices, 0])
                     if completed_indices
                     else 0.0
                 )
@@ -5124,6 +5372,28 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 else None
             ),
             "swing_tread_normal_load_n": placement_swing_tread_load,
+            "swing_step_layer_normal_load_n": placement_swing_step_layer_load,
+            "step_layer_normal_load_n_by_leg": dict(
+                zip(
+                    LEGS,
+                    np.sum(self.latest_step_normal_loads_n, axis=1).tolist(),
+                    strict=True,
+                )
+            ),
+            "tread_top_normal_load_n_by_leg": dict(
+                zip(
+                    LEGS,
+                    np.sum(
+                        self.latest_step_top_normal_loads_n,
+                        axis=1,
+                    ).tolist(),
+                    strict=True,
+                )
+            ),
+            "tread_top_contact_horizontal_inset_m": TREAD_TOP_CONTACT_INSET_M,
+            "tread_top_contact_height_tolerance_m": (
+                TREAD_TOP_CONTACT_HEIGHT_TOLERANCE_M
+            ),
             "ground_normal_load_n_by_leg": dict(
                 zip(
                     LEGS,
@@ -5661,6 +5931,11 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                         "enabled": False,
                         "source": "authored_world_material",
                     }
+                ),
+                "foot_contact_patch": (
+                    self.foot_contact_patch_applied
+                    if self.foot_contact_patch_applied is not None
+                    else {"enabled": False}
                 ),
                 "terrain_sensor_runtime": (
                     {

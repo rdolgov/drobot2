@@ -44,6 +44,7 @@ from _stair_rl_contract import (  # noqa: E402
     config_for_height_stage,
     placement_policy_action_mask,
     progress_gate_failures,
+    reanchor_inter_leg_transfer_snapshot,
     stair_observation_fields,
 )
 from _vl53l5cx_contract import (  # noqa: E402
@@ -80,6 +81,15 @@ parser.add_argument(
     "--fixed-placement-level",
     default=None,
     help="Pin every training episode to one placement curriculum level.",
+)
+parser.add_argument(
+    "--fixed-placement-landing-lift-m",
+    type=float,
+    default=None,
+    help=(
+        "Override landing_lift_m on --fixed-placement-level for a bounded "
+        "tread-top touchdown run."
+    ),
 )
 parser.add_argument(
     "--output-dir",
@@ -302,12 +312,37 @@ parser.add_argument(
         "precursor policies."
     ),
 )
+parser.add_argument(
+    "--phase-transfer-target-delta-m",
+    default=None,
+    help=(
+        "Optional FORWARD:LATERAL composite-COM target delta applied to an "
+        "inter-leg-transfer snapshot in memory."
+    ),
+)
+parser.add_argument(
+    "--phase-transfer-residual-action-scale",
+    type=float,
+    default=None,
+    help="Optional learned-residual multiplier for the trained transfer leg.",
+)
 parser.add_argument("--gui", action="store_true")
 args, _ = parser.parse_known_args()
 if args.placement_start_level and args.fixed_placement_level:
     parser.error(
         "--placement-start-level and --fixed-placement-level are mutually exclusive"
     )
+if (
+    args.fixed_placement_landing_lift_m is not None
+    and args.fixed_placement_level is None
+):
+    parser.error(
+        "--fixed-placement-landing-lift-m requires --fixed-placement-level"
+    )
+if args.fixed_placement_landing_lift_m is not None and not (
+    0.0 < args.fixed_placement_landing_lift_m <= 0.25
+):
+    parser.error("--fixed-placement-landing-lift-m must be within (0, 0.25] m")
 
 
 def _resolve_project_path(value: str | os.PathLike[str]) -> Path:
@@ -353,14 +388,50 @@ if args.phase_reset_attempts < 1:
     parser.error("--phase-reset-attempts must be positive")
 if args.phase_precursor_max_steps < 1:
     parser.error("--phase-precursor-max-steps must be positive")
+if args.phase_transfer_residual_action_scale is not None and not (
+    0.0 < args.phase_transfer_residual_action_scale <= 1.0
+):
+    parser.error("phase transfer residual action scale must be within (0, 1]")
 precursor_leg_model_paths = _parse_leg_model_paths(args.precursor_leg_model)
 phase_snapshot_path = (
     _resolve_project_path(args.phase_snapshot) if args.phase_snapshot else None
 )
+phase_transfer_target_delta_xy_m: tuple[float, float] | None = None
+if args.phase_transfer_target_delta_m is not None:
+    forward_text, separator, lateral_text = str(
+        args.phase_transfer_target_delta_m
+    ).partition(":")
+    try:
+        phase_transfer_target_delta_xy_m = (
+            float(forward_text),
+            float(lateral_text),
+        )
+    except ValueError:
+        parser.error("--phase-transfer-target-delta-m must use FORWARD:LATERAL")
+    if not separator or not all(
+        np.isfinite(value) for value in phase_transfer_target_delta_xy_m
+    ):
+        parser.error("--phase-transfer-target-delta-m must use FORWARD:LATERAL")
+    if not any(abs(value) > 1e-9 for value in phase_transfer_target_delta_xy_m):
+        parser.error("phase transfer target delta cannot be zero")
+    if any(abs(value) > 0.12 for value in phase_transfer_target_delta_xy_m):
+        parser.error("phase transfer target delta components must be <= 0.12 m")
 if phase_snapshot_path is not None and not args.phase_train_leg:
     parser.error("--phase-snapshot requires --phase-train-leg")
 if phase_snapshot_path is not None and args.phase_disable_snapshot_cache:
     parser.error("--phase-snapshot requires phase snapshot caching")
+if phase_transfer_target_delta_xy_m is not None and (
+    phase_snapshot_path is None or not args.phase_train_transfer
+):
+    parser.error(
+        "--phase-transfer-target-delta-m requires a transfer phase snapshot"
+    )
+if args.phase_transfer_residual_action_scale is not None and (
+    not args.phase_train_transfer or not args.phase_train_leg
+):
+    parser.error(
+        "--phase-transfer-residual-action-scale requires transfer phase training"
+    )
 if precursor_leg_model_paths and not args.phase_train_leg:
     parser.error("--precursor-leg-model requires --phase-train-leg")
 phase_base_model_path = (
@@ -450,6 +521,33 @@ try:
 except ValueError as exc:
     parser.error(str(exc))
 task_config = dict(config["task"])
+if args.fixed_placement_landing_lift_m is not None:
+    placement_levels = task_config["placement_curriculum"]["levels"]
+    selected_level = next(
+        (
+            level
+            for level in placement_levels
+            if str(level["id"]) == str(args.fixed_placement_level)
+        ),
+        None,
+    )
+    if selected_level is None:
+        parser.error(
+            "--fixed-placement-level does not name a configured placement level"
+        )
+    selected_level["landing_lift_m"] = float(
+        args.fixed_placement_landing_lift_m
+    )
+if args.phase_transfer_residual_action_scale is not None:
+    transfer_override = task_config["placement_reference"][
+        "inter_leg_transfer"
+    ].setdefault("override_by_next_swing_leg", {}).setdefault(
+        str(args.phase_train_leg),
+        {},
+    )
+    transfer_override["residual_action_scale"] = float(
+        args.phase_transfer_residual_action_scale
+    )
 configured_transfer_post_hold_seconds = float(
     task_config.get("placement_reference", {})
     .get("inter_leg_transfer", {})
@@ -625,6 +723,17 @@ if phase_snapshot_path is not None:
     if not isinstance(stored_snapshot, dict):
         parser.error("phase snapshot payload has no simulator snapshot object")
     initial_phase_snapshot = stored_snapshot
+    if phase_transfer_target_delta_xy_m is not None:
+        initial_phase_snapshot = reanchor_inter_leg_transfer_snapshot(
+            initial_phase_snapshot,
+            balance_position_m=initial_phase_snapshot[
+                "placement_transfer_start_balance_position_m"
+            ],
+            target_delta_xy_m=phase_transfer_target_delta_xy_m,
+            reference_by_leg=initial_phase_snapshot[
+                "placement_transfer_reference_by_leg"
+            ],
+        )
 output_dir = _resolve_project_path(args.output_dir)
 output_dir.mkdir(parents=True, exist_ok=True)
 report_path = output_dir / "training_report.json"
@@ -889,7 +998,10 @@ class TrainingControlCallback(BaseCallback):
                     self.placement_mastery_successes = 0
                     self.last_progress_step = int(self.num_timesteps)
         elif self.fixed_placement_level is not None:
-            raw.set_placement_level(self.fixed_placement_level)
+            raw.set_placement_level(
+                self.fixed_placement_level,
+                activate_immediately=True,
+            )
             self.placement_mastery_level_id = self.fixed_placement_level
         if active_steps == raw.active_step_count:
             self.level_outcomes.append(succeeded)
@@ -959,7 +1071,20 @@ class TrainingControlCallback(BaseCallback):
                 1.0,
                 self.num_timesteps / self.total_for_curriculum,
             )
-            raw.set_training_progress(progress)
+            raw.set_training_progress(
+                progress,
+                update_placement_curriculum=(
+                    self.fixed_placement_level is None
+                ),
+            )
+            if self.fixed_placement_level is not None:
+                # set_training_progress also advances the placement curriculum.
+                # Re-pin both pending and live levels so a targeted run does
+                # not silently train the time-selected level instead.
+                raw.set_placement_level(
+                    self.fixed_placement_level,
+                    activate_immediately=True,
+                )
         for info in self.locals.get("infos", ()):
             metrics = info.get("episode_metrics")
             if isinstance(metrics, dict):
@@ -1062,10 +1187,16 @@ report: dict[str, object] = {
     "fixed_active_steps": args.fixed_active_steps,
     "placement_start_level": args.placement_start_level,
     "fixed_placement_level": args.fixed_placement_level,
+    "fixed_placement_landing_lift_m": (
+        args.fixed_placement_landing_lift_m
+    ),
     "phase_train_leg": args.phase_train_leg,
     "phase_train_transfer": args.phase_train_transfer,
     "phase_transfer_post_hold_seconds": (
         phase_transfer_post_hold_seconds
+    ),
+    "phase_transfer_residual_action_scale": (
+        args.phase_transfer_residual_action_scale
     ),
     "phase_post_transfer_hold_only": args.phase_post_transfer_hold_only,
     "precursor_leg_models": {
@@ -1105,6 +1236,11 @@ report: dict[str, object] = {
             "source_task_id": phase_snapshot_payload.get("source_task_id"),
             "target_leg": phase_snapshot_payload.get("target_leg"),
             "mode": phase_snapshot_payload.get("phase_snapshot_mode"),
+            "transfer_target_delta_xy_m": (
+                list(phase_transfer_target_delta_xy_m)
+                if phase_transfer_target_delta_xy_m is not None
+                else None
+            ),
         }
         if phase_snapshot_path is not None
         and phase_snapshot_payload is not None
@@ -1141,7 +1277,10 @@ try:
         render_mode="human" if args.gui else None,
     )
     if args.fixed_placement_level is not None:
-        raw_env.set_placement_level(args.fixed_placement_level)
+        raw_env.set_placement_level(
+            args.fixed_placement_level,
+            activate_immediately=True,
+        )
     elif args.placement_start_level is not None:
         raw_env.set_placement_level(args.placement_start_level)
     training_env = raw_env
@@ -1670,7 +1809,15 @@ try:
         float(model.num_timesteps) / max(1, curriculum_total_timesteps),
     )
     if str(task_config["curriculum"].get("mode", "timesteps")) == "timesteps":
-        raw_env.set_training_progress(initial_curriculum_progress)
+        raw_env.set_training_progress(
+            initial_curriculum_progress,
+            update_placement_curriculum=(args.fixed_placement_level is None),
+        )
+        if args.fixed_placement_level is not None:
+            raw_env.set_placement_level(
+                args.fixed_placement_level,
+                activate_immediately=True,
+            )
     training_control_callback: TrainingControlCallback | None = None
     if not args.initialize_only:
         checkpoint_dir = output_dir / "checkpoints"

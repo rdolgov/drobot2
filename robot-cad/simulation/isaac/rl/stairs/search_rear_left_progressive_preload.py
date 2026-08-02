@@ -146,6 +146,27 @@ parser.add_argument(
 parser.add_argument("--load-sharing-gains-m", default="0.060")
 parser.add_argument("--load-sharing-maximum-correction-m", type=float, default=0.020)
 parser.add_argument("--load-sharing-smoothing-factor", type=float, default=0.50)
+parser.add_argument("--placed-foot-load-retention-target-n", type=float)
+parser.add_argument(
+    "--placed-foot-load-retention-gain-m-per-n",
+    type=float,
+    default=0.0005,
+)
+parser.add_argument(
+    "--placed-foot-load-retention-maximum-correction-m",
+    type=float,
+    default=0.012,
+)
+parser.add_argument(
+    "--placed-foot-load-retention-smoothing-factor",
+    type=float,
+    default=0.50,
+)
+parser.add_argument(
+    "--placed-foot-load-retention-redistribution-fraction",
+    type=float,
+    default=1.0,
+)
 parser.add_argument("--maximum-stages", type=int, default=6)
 parser.add_argument("--settle-hold-seconds", type=float, default=0.40)
 parser.add_argument("--minimum-stage-margin-progress-m", type=float, default=0.002)
@@ -176,6 +197,34 @@ parser.add_argument("--dynamic-friction", type=float)
 parser.add_argument(
     "--friction-combine-mode",
     choices=("average", "min", "multiply", "max"),
+)
+parser.add_argument("--foot-pad-thickness-m", type=float)
+parser.add_argument("--foot-pad-width-m", type=float)
+parser.add_argument("--foot-pad-length-m", type=float)
+parser.add_argument(
+    "--foot-pad-shape",
+    choices=("box", "sphere"),
+    default="box",
+)
+parser.add_argument("--foot-pad-radius-m", type=float)
+parser.add_argument(
+    "--foot-pad-legs",
+    default="front_left,front_right,rear_left,rear_right",
+)
+parser.add_argument(
+    "--foot-pad-contact-plane-offset-m",
+    type=float,
+    default=0.0125,
+)
+parser.add_argument(
+    "--foot-pad-contact-offset-m",
+    type=float,
+    default=0.002,
+)
+parser.add_argument(
+    "--foot-pad-rest-offset-m",
+    type=float,
+    default=0.0,
 )
 parser.add_argument(
     "--report",
@@ -231,6 +280,19 @@ if not 0.0 < args.load_sharing_maximum_correction_m <= 0.05:
     parser.error("load-sharing maximum correction must be within (0, 0.05]")
 if not 0.0 < args.load_sharing_smoothing_factor <= 1.0:
     parser.error("load-sharing smoothing factor must be within (0, 1]")
+retention_requested = args.placed_foot_load_retention_target_n is not None
+if retention_requested and not (
+    0.0 < args.placed_foot_load_retention_target_n <= 100.0
+):
+    parser.error("placed-foot load target must be within (0, 100]")
+if not 0.0 < args.placed_foot_load_retention_gain_m_per_n <= 0.01:
+    parser.error("placed-foot load gain must be within (0, 0.01]")
+if not 0.0 < args.placed_foot_load_retention_maximum_correction_m <= 0.05:
+    parser.error("placed-foot maximum correction must be within (0, 0.05]")
+if not 0.0 < args.placed_foot_load_retention_smoothing_factor <= 1.0:
+    parser.error("placed-foot smoothing factor must be within (0, 1]")
+if not 0.0 <= args.placed_foot_load_retention_redistribution_fraction <= 1.0:
+    parser.error("placed-foot redistribution fraction must be within [0, 1]")
 if any(value <= 0.0 or value > 10.0 for value in durations):
     parser.error("durations must be within (0, 10] seconds")
 if args.maximum_stages < 1 or args.maximum_stages > 12:
@@ -249,6 +311,29 @@ if args.static_friction is not None and not 0.0 < args.static_friction <= 3.0:
     parser.error("--static-friction must be within (0, 3]")
 if args.dynamic_friction is not None and not 0.0 < args.dynamic_friction <= 3.0:
     parser.error("--dynamic-friction must be within (0, 3]")
+foot_pad_dimensions = (
+    args.foot_pad_thickness_m,
+    args.foot_pad_width_m,
+    args.foot_pad_length_m,
+)
+foot_pad_requested = any(value is not None for value in foot_pad_dimensions) or (
+    args.foot_pad_radius_m is not None
+)
+if (
+    foot_pad_requested
+    and args.foot_pad_shape == "box"
+    and any(value is None for value in foot_pad_dimensions)
+):
+    parser.error("foot-pad thickness, width, and length must be supplied together")
+if (
+    foot_pad_requested
+    and args.foot_pad_shape == "sphere"
+    and args.foot_pad_radius_m is None
+):
+    parser.error("--foot-pad-radius-m is required for a sphere foot pad")
+foot_pad_legs = tuple(
+    leg.strip() for leg in args.foot_pad_legs.split(",") if leg.strip()
+)
 
 config_path = project_path(args.config)
 snapshot_path = project_path(args.phase_snapshot)
@@ -265,6 +350,27 @@ if args.dynamic_friction is not None:
     material_config["dynamic_friction"] = args.dynamic_friction
 if args.friction_combine_mode is not None:
     material_config["friction_combine_mode"] = args.friction_combine_mode
+if foot_pad_requested:
+    foot_contact_patch: dict[str, object] = {
+        "enabled": True,
+        "id": "simulation-rubber-pad-v50-contact-patch",
+        "shape": args.foot_pad_shape,
+        "legs": list(foot_pad_legs),
+        "contact_plane_offset_m": args.foot_pad_contact_plane_offset_m,
+        "contact_offset_m": args.foot_pad_contact_offset_m,
+        "rest_offset_m": args.foot_pad_rest_offset_m,
+    }
+    if args.foot_pad_shape == "box":
+        foot_contact_patch.update(
+            {
+                "thickness_m": args.foot_pad_thickness_m,
+                "width_m": args.foot_pad_width_m,
+                "length_m": args.foot_pad_length_m,
+            }
+        )
+    else:
+        foot_contact_patch["radius_m"] = args.foot_pad_radius_m
+    task_config["foot_contact_patch"] = foot_contact_patch
 roll_feedback_requested = any(value > 0.0 for value in roll_feedback_gains)
 traction_sensitivity_requested = any(
     value is not None
@@ -274,7 +380,15 @@ traction_sensitivity_requested = any(
         args.friction_combine_mode,
     )
 )
-if traction_sensitivity_requested:
+if foot_pad_requested:
+    task_config["id"] = (
+        "Drobot-Quadruped-Stairs-v50-Rubber-Pad-Rear-Left-Preload"
+    )
+elif retention_requested:
+    task_config["id"] = (
+        "Drobot-Quadruped-Stairs-v51-Placed-Foot-Load-Retention"
+    )
+elif traction_sensitivity_requested:
     task_config["id"] = (
         "Drobot-Quadruped-Stairs-v49-Traction-Sensitivity-Rear-Left-Preload"
     )
@@ -287,11 +401,38 @@ preload_load_config = task_config["placement_reference"]["inter_leg_transfer"][
 ].setdefault("four_foot_preload_load_sharing", {})
 preload_load_config.update(
     {
-        "enabled": True,
+        "enabled": not retention_requested,
         "next_swing_legs": ["rear_left"],
         "proportional_gain_m": load_sharing_gains[0],
         "maximum_correction_m": args.load_sharing_maximum_correction_m,
         "smoothing_factor": args.load_sharing_smoothing_factor,
+        "minimum_total_load_n": 1.0,
+    }
+)
+retention_config = task_config["placement_reference"]["inter_leg_transfer"][
+    "com_regulation"
+].setdefault("placed_foot_load_retention", {})
+retention_config.update(
+    {
+        "enabled": retention_requested,
+        "target_foot_by_next_swing_leg": {"rear_left": "rear_right"},
+        "minimum_target_load_n": (
+            args.placed_foot_load_retention_target_n
+            if retention_requested
+            else 15.0
+        ),
+        "proportional_gain_m_per_n": (
+            args.placed_foot_load_retention_gain_m_per_n
+        ),
+        "maximum_correction_m": (
+            args.placed_foot_load_retention_maximum_correction_m
+        ),
+        "smoothing_factor": (
+            args.placed_foot_load_retention_smoothing_factor
+        ),
+        "redistribution_fraction": (
+            args.placed_foot_load_retention_redistribution_fraction
+        ),
         "minimum_total_load_n": 1.0,
     }
 )
@@ -400,12 +541,20 @@ report: dict[str, object] = {
     "task_id": task_config["id"],
     "source_task_id": source_task_id,
     "scope": (
-        "Exact force-backed snapshot higher-traction rear-left COM preload"
-        if traction_sensitivity_requested
+        "Exact force-backed snapshot rubber-pad rear-left COM preload"
+        if foot_pad_requested
         else (
-            "Exact force-backed snapshot roll-held four-foot rear-left COM preload"
-            if roll_feedback_requested
-            else "Exact force-backed snapshot progressive rear-left COM preload"
+            "Exact force-backed snapshot placed-foot load-retention preload"
+            if retention_requested
+            else (
+            "Exact force-backed snapshot higher-traction rear-left COM preload"
+            if traction_sensitivity_requested
+            else (
+                "Exact force-backed snapshot roll-held four-foot rear-left COM preload"
+                if roll_feedback_requested
+                else "Exact force-backed snapshot progressive rear-left COM preload"
+            )
+            )
         )
     ),
     "config": str(config_path),
@@ -439,6 +588,7 @@ report: dict[str, object] = {
         args.load_sharing_maximum_correction_m
     ),
     "load_sharing_smoothing_factor": args.load_sharing_smoothing_factor,
+    "placed_foot_load_retention": retention_config,
     "maximum_stages": args.maximum_stages,
     "minimum_final_rear_right_load_n": (
         args.minimum_final_rear_right_load_n
@@ -453,6 +603,10 @@ report: dict[str, object] = {
             material_config["friction_combine_mode"]
         ),
     },
+    "foot_contact_patch": task_config.get(
+        "foot_contact_patch",
+        {"enabled": False},
+    ),
 }
 raw_env: QuadrupedStairsEnv | None = None
 exit_code = 1
@@ -589,6 +743,13 @@ try:
                 else np.zeros(2, dtype=np.float64)
             )
             initial_foot_tips = raw_env._sample_foot_tips().copy()  # noqa: SLF001
+            initial_unload_margin_by_leg_m = {
+                leg: _support_triangle_signed_margin_m(
+                    initial_balance_m[:2],
+                    np.delete(initial_foot_tips[:, :2], leg_index, axis=0),
+                )
+                for leg_index, leg in enumerate(LEGS)
+            }
             maximum_steps = int(
                 math.ceil(
                     (duration_seconds + args.settle_hold_seconds + 2.0)
@@ -616,7 +777,12 @@ try:
                 initial_total_loads[LEGS.index("rear_right")]
             )
             minimum_completed_tread_load_n = float(
-                np.min(raw_env.latest_step_normal_loads_n[completed_indices, 0])
+                np.min(
+                    raw_env.latest_step_top_normal_loads_n[
+                        completed_indices,
+                        0,
+                    ]
+                )
             )
             final_margin_m = initial_margin_m
             final_target_error_m = math.inf
@@ -720,7 +886,12 @@ try:
                     for leg in raw_env.completed_placement_legs
                 ]
                 completed_tread_load = float(
-                    np.min(raw_env.latest_step_normal_loads_n[completed_indices, 0])
+                    np.min(
+                        raw_env.latest_step_top_normal_loads_n[
+                            completed_indices,
+                            0,
+                        ]
+                    )
                 )
                 minimum_completed_tread_load_n = min(
                     minimum_completed_tread_load_n,
@@ -771,8 +942,12 @@ try:
                 raw_env.latest_ground_normal_loads_n
                 + np.sum(raw_env.latest_step_normal_loads_n, axis=1)
             )
-            final_completed_tread_loads = raw_env.latest_step_normal_loads_n[
-                completed_indices, 0
+            final_completed_tread_loads = (
+                raw_env.latest_step_top_normal_loads_n[completed_indices, 0]
+            )
+            final_completed_step_layer_loads = raw_env.latest_step_normal_loads_n[
+                completed_indices,
+                0,
             ]
             settled = candidate_id in captured_by_id
             acceptance_gate_failures: list[str] = []
@@ -820,6 +995,11 @@ try:
                 "final_support_margin_m": final_margin_m,
                 "support_margin_progress_m": margin_progress_m,
                 "initial_balance_position_m": initial_balance_m.tolist(),
+                "initial_foot_tip_positions_m": initial_foot_tips.tolist(),
+                "initial_all_foot_loads_n": initial_total_loads.tolist(),
+                "initial_unload_margin_by_leg_m": (
+                    initial_unload_margin_by_leg_m
+                ),
                 "final_balance_position_m": final_balance_m.tolist(),
                 "measured_balance_delta_xy_m": (
                     final_balance_m[:2] - initial_balance_m[:2]
@@ -843,6 +1023,9 @@ try:
                 "final_completed_tread_loads_n": (
                     final_completed_tread_loads.tolist()
                 ),
+                "final_completed_step_layer_loads_n": (
+                    final_completed_step_layer_loads.tolist()
+                ),
                 "final_base_speed_m_s": float(
                     last_info.get("placement_transfer_base_speed_m_s", math.inf)
                 ),
@@ -854,6 +1037,24 @@ try:
                 ),
                 "final_pre_unload_gate_failures": list(
                     last_info.get("placement_pre_unload_gate_failures", ())
+                ),
+                "maximum_abs_load_correction_m": float(
+                    last_info.get(
+                        "maximum_abs_support_load_sharing_correction_m",
+                        0.0,
+                    )
+                ),
+                "maximum_abs_load_correction_m_by_leg": dict(
+                    last_info.get(
+                        "maximum_abs_support_load_sharing_correction_m_by_leg",
+                        {},
+                    )
+                ),
+                "load_correction_saturated_sample_fraction": float(
+                    last_info.get(
+                        "support_load_sharing_saturated_sample_fraction",
+                        0.0,
+                    )
                 ),
             }
             stage_candidates.append(result)

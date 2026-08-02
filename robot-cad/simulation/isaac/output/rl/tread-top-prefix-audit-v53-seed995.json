@@ -1,0 +1,32 @@
+{
+  "status": "FAIL",
+  "task_id": "Drobot-Quadruped-Stairs-v44-Early-Contact-Rear-Right-Landing",
+  "config": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\stairs\\quadruped_stairs_v44_early_contact_rear_right_landing.yaml",
+  "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_stairs_v6_180mm_world.usda",
+  "seed": 995,
+  "candidate_start": 91,
+  "candidate_count": 1,
+  "maximum_target_steps": 120,
+  "record_video": null,
+  "record_thumbnail": null,
+  "record_fps": null,
+  "record_resolution_wh": null,
+  "rear_transfer_forward_m": 0.02,
+  "models": {
+    "front_right": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\models\\ppo-stairs-v10-180mm-25cm-front-right-placement-small\\drobot_stairs_ppo_final.zip",
+    "front_left": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\models\\ppo-stairs-v17-single-foot-190mm-small\\drobot_stairs_ppo_final.zip",
+    "swing_base": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\models\\ppo-stairs-v17-single-foot-190mm-small\\drobot_stairs_ppo_final.zip",
+    "swing_residual": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\models\\ppo-stairs-v35-rear-right-190mm-lift-small\\drobot_stairs_ppo_final.zip",
+    "support_residual": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\models\\ppo-stairs-v38-rear-right-190mm-small\\drobot_stairs_ppo_final.zip"
+  },
+  "immutable_acceptance": {
+    "stair_tread_depth_m": 0.25,
+    "stair_rise_m": 0.18,
+    "physical_clearance_gate_m": 0.19,
+    "minimum_support_margin_m": 0.015,
+    "contact_hold_seconds": 0.75,
+    "effort_cap_nm": 0.8825985
+  },
+  "error": "RuntimeError(\"Could not reach placement training phase 'rear_right' after 4 attempts; last failures=['phase_training_precursor_timeout']\")",
+  "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\stairs\\search_rear_right_landing.py\", line 979, in <module>\n    wrapped.reset(seed=args.seed)\n  File \"C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\stairs\\_placement_phase_training.py\", line 653, in reset\n    raise RuntimeError(\nRuntimeError: Could not reach placement training phase 'rear_right' after 4 attempts; last failures=['phase_training_precursor_timeout']\n"
+}

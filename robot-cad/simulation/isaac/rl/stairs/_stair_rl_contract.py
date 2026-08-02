@@ -130,6 +130,93 @@ def validate_staircase_config(staircase: Mapping[str, object]) -> None:
         )
 
 
+def validated_foot_contact_patch_config(
+    config: Mapping[str, object] | None,
+) -> dict[str, object]:
+    """Validate an opt-in simulation foot pad without changing leg reach.
+
+    A box models a flat pad rigidly fixed normal to distal-link +X. A sphere
+    models a rounded boot for this no-ankle leg. Both are recentered so their
+    outermost +X point sits at ``contact_plane_offset_m`` beyond the existing
+    fork-axis contact center; the default 12.5 mm therefore preserves the
+    original proxy's effective leg length.
+    """
+
+    values = dict(config or {})
+    enabled = bool(values.get("enabled", False))
+    if not enabled:
+        return {"enabled": False}
+    patch_id = str(values.get("id", "")).strip()
+    shape = str(values.get("shape", "box")).strip().lower()
+    if not patch_id:
+        raise ValueError("foot_contact_patch.id must be nonempty")
+    if shape not in {"box", "sphere"}:
+        raise ValueError("foot_contact_patch.shape must be box or sphere")
+    common_bounds = {
+        "contact_plane_offset_m": (0.005, 0.030),
+        "contact_offset_m": (0.0005, 0.010),
+        "rest_offset_m": (-0.005, 0.005),
+    }
+    normalized: dict[str, object] = {
+        "enabled": True,
+        "id": patch_id,
+        "shape": shape,
+    }
+    legs = tuple(str(leg) for leg in values.get("legs", STAIR_FOOT_NAMES))
+    if (
+        not legs
+        or len(set(legs)) != len(legs)
+        or any(leg not in STAIR_FOOT_NAMES for leg in legs)
+    ):
+        raise ValueError(
+            "foot_contact_patch.legs must contain unique known robot legs"
+        )
+    normalized["legs"] = list(legs)
+    common_defaults = {
+        "contact_plane_offset_m": 0.0125,
+        "contact_offset_m": 0.002,
+        "rest_offset_m": 0.0,
+    }
+    for field, (minimum, maximum) in common_bounds.items():
+        value = float(values.get(field, common_defaults[field]))
+        if not np.isfinite(value) or value < minimum or value > maximum:
+            raise ValueError(
+                f"foot_contact_patch.{field} must be finite and within "
+                f"[{minimum}, {maximum}]"
+            )
+        normalized[field] = value
+    shape_bounds = (
+        {
+            "thickness_m": (0.002, 0.020),
+            "width_m": (0.015, 0.080),
+            "length_m": (0.015, 0.100),
+        }
+        if shape == "box"
+        else {"radius_m": (0.015, 0.040)}
+    )
+    shape_defaults = {
+        "thickness_m": 0.008,
+        "width_m": 0.040,
+        "length_m": 0.050,
+        "radius_m": 0.020,
+    }
+    for field, (minimum, maximum) in shape_bounds.items():
+        value = float(values.get(field, shape_defaults[field]))
+        if not np.isfinite(value) or value < minimum or value > maximum:
+            raise ValueError(
+                f"foot_contact_patch.{field} must be finite and within "
+                f"[{minimum}, {maximum}]"
+            )
+        normalized[field] = value
+    if float(normalized["contact_offset_m"]) <= float(
+        normalized["rest_offset_m"]
+    ):
+        raise ValueError(
+            "foot_contact_patch.contact_offset_m must exceed rest_offset_m"
+        )
+    return normalized
+
+
 def stair_height_at_x(
     world_x_m: float,
     staircase: Mapping[str, object],
@@ -853,6 +940,62 @@ def equalized_foot_load_vertical_corrections(
     correction = np.clip(correction, -maximum, maximum)
     correction[np.abs(correction) < 1e-9] = 0.0
     return correction.astype(np.float64)
+
+
+def minimum_foot_load_vertical_corrections(
+    *,
+    measured_normal_loads_n: Sequence[float],
+    target_foot_index: int,
+    minimum_target_load_n: float,
+    proportional_gain_m_per_n: float,
+    maximum_correction_m: float,
+    minimum_total_load_n: float = 1.0,
+    redistribution_fraction: float = 1.0,
+) -> np.ndarray:
+    """Extend one underloaded foot with optional redistribution to the others."""
+
+    loads = _finite_vector(
+        measured_normal_loads_n,
+        len(STAIR_FOOT_NAMES),
+        "measured_normal_loads_n",
+    ).astype(np.float64)
+    if np.any(loads < 0.0):
+        raise ValueError("measured_normal_loads_n must be nonnegative")
+    target_index = int(target_foot_index)
+    if target_index < 0 or target_index >= len(STAIR_FOOT_NAMES):
+        raise ValueError("target_foot_index is out of range")
+    target_load = float(minimum_target_load_n)
+    gain = float(proportional_gain_m_per_n)
+    maximum = float(maximum_correction_m)
+    minimum_total = float(minimum_total_load_n)
+    redistribution = float(redistribution_fraction)
+    if target_load <= 0.0 or not np.isfinite(target_load):
+        raise ValueError("minimum_target_load_n must be finite and positive")
+    if gain <= 0.0 or not np.isfinite(gain):
+        raise ValueError(
+            "proportional_gain_m_per_n must be finite and positive"
+        )
+    if maximum <= 0.0 or not np.isfinite(maximum):
+        raise ValueError("maximum_correction_m must be finite and positive")
+    if minimum_total < 0.0 or not np.isfinite(minimum_total):
+        raise ValueError("minimum_total_load_n must be finite and nonnegative")
+    if not 0.0 <= redistribution <= 1.0 or not np.isfinite(redistribution):
+        raise ValueError("redistribution_fraction must be within [0, 1]")
+    if float(np.sum(loads)) < minimum_total:
+        return np.zeros(len(STAIR_FOOT_NAMES), dtype=np.float64)
+
+    load_deficit_n = max(0.0, target_load - float(loads[target_index]))
+    extension_m = min(maximum, gain * load_deficit_n)
+    if extension_m <= 0.0:
+        return np.zeros(len(STAIR_FOOT_NAMES), dtype=np.float64)
+    correction = np.full(
+        len(STAIR_FOOT_NAMES),
+        -redistribution * extension_m / (len(STAIR_FOOT_NAMES) - 1),
+        dtype=np.float64,
+    )
+    correction[target_index] = extension_m
+    correction[np.abs(correction) < 1e-9] = 0.0
+    return correction
 
 
 def joint_effort_telemetry_sample(
@@ -1598,6 +1741,77 @@ def placement_contact_reached(
         and abs(float(tip[2]) - target_z) <= float(target_z_tolerance_m)
         and float(-gravity[2]) >= float(minimum_upright_cosine)
     )
+
+
+def qualified_step_top_normal_loads(
+    *,
+    foot_tip_positions_m,
+    step_normal_loads_n,
+    staircase: Mapping[str, object],
+    minimum_horizontal_inset_m: float = 0.005,
+    maximum_top_height_error_m: float = 0.015,
+) -> np.ndarray:
+    """Mask step-layer loads that are not geometrically on an exposed top.
+
+    Isaac's contact-force filters identify the stair box involved in a
+    contact, but not which face produced the force.  A spherical foot against
+    a riser edge can therefore report a positive vertical StepLayer load.  A
+    load is a tread-top load only when the sampled foot bottom is horizontally
+    inside that step's exposed top and vertically near its top surface.
+    """
+
+    validate_staircase_config(staircase)
+    tips = np.asarray(foot_tip_positions_m, dtype=np.float64)
+    loads = np.asarray(step_normal_loads_n, dtype=np.float64)
+    step_count = int(staircase["step_count"])
+    if tips.ndim != 2 or tips.shape[1] != 3 or not np.all(np.isfinite(tips)):
+        raise ValueError("foot_tip_positions_m must have finite shape (N, 3)")
+    if loads.shape != (tips.shape[0], step_count) or not np.all(
+        np.isfinite(loads)
+    ):
+        raise ValueError(
+            "step_normal_loads_n must have finite shape (N, step_count)"
+        )
+    if np.any(loads < 0.0):
+        raise ValueError("step_normal_loads_n cannot contain negative loads")
+    inset = float(minimum_horizontal_inset_m)
+    height_tolerance = float(maximum_top_height_error_m)
+    tread = float(staircase["tread_depth_m"])
+    width = float(staircase["width_m"])
+    if not np.isfinite(inset) or inset < 0.0:
+        raise ValueError("minimum_horizontal_inset_m must be finite and nonnegative")
+    if 2.0 * inset >= min(tread, width):
+        raise ValueError("minimum_horizontal_inset_m leaves no usable tread top")
+    if not np.isfinite(height_tolerance) or height_tolerance <= 0.0:
+        raise ValueError("maximum_top_height_error_m must be finite and positive")
+
+    start = float(staircase["start_x_m"])
+    rise = float(staircase["rise_m"])
+    end = start + step_count * tread + float(
+        staircase["top_platform_depth_m"]
+    )
+    qualified = np.zeros_like(loads, dtype=np.float32)
+    inside_width = np.abs(tips[:, 1]) <= width / 2.0 - inset
+    for step_index in range(step_count):
+        top_start_x = start + step_index * tread
+        top_end_x = (
+            start + (step_index + 1) * tread
+            if step_index + 1 < step_count
+            else end
+        )
+        top_z = (step_index + 1) * rise
+        on_exposed_top = (
+            (tips[:, 0] >= top_start_x + inset)
+            & (tips[:, 0] <= top_end_x - inset)
+            & inside_width
+            & (np.abs(tips[:, 2] - top_z) <= height_tolerance)
+        )
+        qualified[:, step_index] = np.where(
+            on_exposed_top,
+            loads[:, step_index],
+            0.0,
+        )
+    return qualified
 
 
 def placement_lift_hold_reached(

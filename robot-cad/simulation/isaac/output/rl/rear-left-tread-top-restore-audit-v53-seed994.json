@@ -1,0 +1,70 @@
+{
+  "camera_policy_input": false,
+  "candidate_durations_seconds": [
+    1.0
+  ],
+  "candidate_load_sharing_gains_m": [
+    0.0001
+  ],
+  "candidate_pitch_feedback_gains_m": [
+    0.08
+  ],
+  "candidate_pitch_feedback_modes": [
+    "off"
+  ],
+  "candidate_roll_feedback_gains_m": [
+    0.0
+  ],
+  "candidate_target_deltas_m": [
+    [
+      0.0025,
+      -0.0025
+    ]
+  ],
+  "config": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\stairs\\quadruped_stairs_v46_rear_right_sidestep.yaml",
+  "effort_cap_nm": 0.8825985,
+  "error": "RuntimeError('Placement phase snapshot did not restore force-backed support: completed_tread_top_loads_n=[0.0, 0.0, 0.0], raw_completed_step_layer_loads_n=[13.1519136428833, 29.78091049194336, 35.39051055908203], support_loads_n=[29.78091049194336, 13.1519136428833, 35.39051055908203], threshold_n=1.0')",
+  "foot_contact_material": {
+    "dynamic_friction": 1.0,
+    "friction_combine_mode": "average",
+    "static_friction": 1.2
+  },
+  "foot_contact_patch": {
+    "enabled": false
+  },
+  "learned_action_input": false,
+  "load_sharing_maximum_correction_m": 0.0001,
+  "load_sharing_smoothing_factor": 0.5,
+  "maximum_stages": 1,
+  "minimum_balance_progress_fraction": 0.5,
+  "minimum_final_rear_right_load_n": 5.0,
+  "phase_snapshot": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\rear-left-transfer-snapshot-v48-force-backed-seed964.json",
+  "phase_snapshot_mode": "inter_leg_transfer",
+  "pitch_feedback_maximum_correction_m": 0.025,
+  "pitch_include_next_swing_leg_before_unload": false,
+  "pitch_target_projected_gravity_x": 0.0,
+  "placed_foot_load_retention": {
+    "enabled": false,
+    "maximum_correction_m": 0.012,
+    "minimum_target_load_n": 15.0,
+    "minimum_total_load_n": 1.0,
+    "proportional_gain_m_per_n": 0.0005,
+    "redistribution_fraction": 1.0,
+    "smoothing_factor": 0.5,
+    "target_foot_by_next_swing_leg": {
+      "rear_left": "rear_right"
+    }
+  },
+  "roll_feedback_maximum_correction_m": 0.025,
+  "roll_target_projected_gravity_y": 0.1009,
+  "scope": "Exact force-backed snapshot progressive rear-left COM preload",
+  "seed": 994,
+  "source_task_id": "Drobot-Quadruped-Stairs-v46-Rear-Right-Sidestep",
+  "stair_rise_m": 0.18,
+  "stair_tread_depth_m": 0.25,
+  "status": "ERROR",
+  "strict_pass": false,
+  "target_leg": "rear_left",
+  "task_id": "Drobot-Quadruped-Stairs-v47-Progressive-Rear-Left-Preload",
+  "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\stairs\\search_rear_left_progressive_preload.py\", line 716, in <module>\n    _, reset_info = raw_env.restore_placement_phase_snapshot(\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\stairs\\_quadruped_stairs_env.py\", line 4099, in restore_placement_phase_snapshot\n    raise RuntimeError(\nRuntimeError: Placement phase snapshot did not restore force-backed support: completed_tread_top_loads_n=[0.0, 0.0, 0.0], raw_completed_step_layer_loads_n=[13.1519136428833, 29.78091049194336, 35.39051055908203], support_loads_n=[29.78091049194336, 13.1519136428833, 35.39051055908203], threshold_n=1.0\n"
+}
