@@ -35,7 +35,9 @@ from _run_support import (  # noqa: E402
     validate_ppo_algorithm_contract,
 )
 from _stair_rl_contract import (  # noqa: E402
+    FIRST_TREAD_EXPERIMENT_PROFILES,
     compose_bounded_residual_action,
+    config_for_first_tread_experiment,
     config_for_height_stage,
     expand_compact_masked_action,
     overlay_masked_action,
@@ -54,6 +56,12 @@ parser.add_argument(
     "--height-stage",
     default=None,
     help="Apply one stair_height_stages entry declared by the config.",
+)
+parser.add_argument(
+    "--first-tread-profile",
+    choices=FIRST_TREAD_EXPERIMENT_PROFILES,
+    default="baseline-forward",
+    help="Apply the same reproducible first-tread profile used for training.",
 )
 parser.add_argument(
     "--model",
@@ -274,6 +282,10 @@ if int(config.get("schema_version", 0)) != 1:
     parser.error(f"Unsupported stairs config schema: {config.get('schema_version')}")
 try:
     config = config_for_height_stage(config, args.height_stage)
+    config["task"] = config_for_first_tread_experiment(
+        config["task"],
+        args.first_tread_profile,
+    )
 except ValueError as exc:
     parser.error(str(exc))
 task_config = dict(config["task"])
@@ -561,6 +573,7 @@ report: dict[str, object] = {
     ),
     "episode_seconds_override": args.episode_seconds,
     "height_stage": args.height_stage,
+    "first_tread_profile": args.first_tread_profile,
     "camera_view": args.camera_view,
     "screenshot": str(screenshot_path) if screenshot_path else None,
     "isaac_sim_version": "6.0.1",

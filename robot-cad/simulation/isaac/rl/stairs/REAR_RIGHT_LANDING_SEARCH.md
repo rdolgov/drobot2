@@ -427,3 +427,93 @@ unknown stair localization; friction tuning becomes important only after a
 true top contact begins to slip. No V54 success video is published because no
 strict tread-top placement passed; the existing seed-943 external-camera video
 remains evidence only for the independently reproduced 190 mm lift capability.
+
+## V55-V62 stance, hip, body-position, and loaded-contact sweep
+
+The next bounded sweep keeps the exact `180 mm` rise, `250 mm` tread, measured
+`0.8825985 Nm` effort cap, and camera-blind 81-value policy observation. A new
+`--first-tread-profile` selector applies reproducible posture/approach variants
+to training, evaluation, and recording. `probe_first_tread_profiles.py` runs
+the same analytic placement reference with a zero PPO residual and reports the
+strict geometry-qualified top load separately from raw distal-link contact.
+
+The representative probe command was:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\probe_first_tread_profiles.py `
+  --profile forward-preposition-load `
+  --placement-level quarter-tread-load --seed 1012 `
+  --report simulation\isaac\output\rl\first-tread-profile-v61-forward-preposition-load-seed1012.json
+```
+
+The profile findings were:
+
+- fully folded at a measured-limit-safe `119 deg` knee: only `75.128 mm`
+  front-right lift, `-81.709 mm` support margin, and `41.693 deg` tilt;
+- `220 mm` low crouch: no measurable lift, `-53.813 mm` support margin, and
+  `1.127 rad` swing tracking error under the hardware effort cap;
+- sideways `90 deg`: `9.465 mm` lift, `-50.880 mm` margin, `46.460 mm` slip;
+- diagonal `45 deg`: `2.254 mm` lift, `-77.140 mm` margin, `39.130 deg` tilt;
+- angled `20 deg`: `216.304 mm` lift but `-171.098 mm` margin and `272.626 mm`
+  backward motion;
+- forward baseline: stable `199.850 mm` lift, `-2.249 mm` margin, `3.411 mm`
+  slip, and `0 N` qualified top load;
+- forward pre-position (`30 mm` closer with the same world foothold): stable
+  `198.628 mm` lift, `-1.566 mm` margin, `3.415 mm` slip, and `0 N` top load;
+- a `130 mm` landing-lift command ended at `z=195.180 mm`, preserved a
+  `+1.648 mm` minimum margin, but still carried `0 N`;
+- a `110 mm` landing-lift command produced the first true top contact at
+  `8.870 N`, but the abrupt load transfer slid the body backward and tipped;
+- doubling the lower phase to `3.0 s` still tipped and is rejected.
+
+Thus the low/folded and sideways/hip-first hypotheses are negative evidence.
+Moving the torso closer is useful because it keeps the lift stable and improves
+the support boundary, while a deeper landing proves the foot can physically
+load the tread. The current problem is retaining three-foot support during the
+first 10-12 N load transient.
+
+Two 1,024-step CPU PPO smoke trainings were run. The loaded-contact command was:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v10_front_right_single_tread_placement.yaml `
+  --first-tread-profile forward-preposition-load `
+  --output-dir simulation\isaac\output\rl\ppo-stairs-v61-forward-preposition-load-1024-seed1013 `
+  --total-timesteps 1024 --curriculum-total-timesteps 1024 `
+  --fixed-placement-level quarter-tread-load --seed 1013 --device cpu `
+  --ppo-learning-rate 0.00003 --ppo-initial-log-std -3.5 `
+  --ppo-entropy-coefficient 0.0005
+```
+
+Training completed in `32.123 s` and observed `10.302 N` qualified load, but
+its rollout tipped and the optimizer hit the `0.03` target-KL stop. Independent
+seed-1022 evaluation used three episodes: all reached `11.464-12.559 N` true
+top load and `197.914-198.932 mm` lift, but strict placement remained `0/3`.
+One episode ran the full `14 s` with `4.991 deg` maximum tilt, `18.182 mm`
+maximum slip, and `-1.481 mm` minimum support margin; two moved about
+`305-311 mm` backward and tipped. This is a contact-capable training boundary,
+not a reliable stair policy and not a completed climb.
+
+The exact stable-contact replay was recorded with:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\record_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v10_front_right_single_tread_placement.yaml `
+  --first-tread-profile forward-preposition-load `
+  --model simulation\isaac\output\rl\ppo-stairs-v61-forward-preposition-load-1024-seed1013\drobot_stairs_ppo_final.zip `
+  --seed 1022 --device cpu --active-steps 1 `
+  --placement-level quarter-tread-load --camera-view external `
+  --fps 30 --width 960 --height 540 `
+  --video reviews\ppo-stairs-v61-forward-preposition-load-contact-eval-seed1022.mp4 `
+  --thumbnail reviews\ppo-stairs-v61-forward-preposition-load-contact-eval-seed1022.png `
+  --report simulation\isaac\output\rl\ppo-stairs-v61-forward-preposition-load-record-seed1022.json
+```
+
+The 420-frame H.264 MP4 is `16,602,005` bytes with SHA-256
+`38954f339916d29bd8c80efc2b07734b61641c45df0f1c2580c0106d407792a1`.
+The three-episode evaluation report SHA-256 is
+`4f6c23b2a5a98dfcb7beac1f62fa4637c9d2c30cf18444cefafb710fbfeb9275`.
+RGB remains recording-only. The next run should train a short, contact-triggered
+support/COM residual that acts only around touchdown; neither additional vision
+nor higher friction addresses the observed first-load instability yet.

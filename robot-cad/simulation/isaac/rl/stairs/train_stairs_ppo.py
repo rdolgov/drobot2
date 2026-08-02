@@ -41,6 +41,8 @@ from _run_support import (  # noqa: E402
     write_model_manifest,
 )
 from _stair_rl_contract import (  # noqa: E402
+    FIRST_TREAD_EXPERIMENT_PROFILES,
+    config_for_first_tread_experiment,
     config_for_height_stage,
     placement_policy_action_mask,
     progress_gate_failures,
@@ -89,6 +91,15 @@ parser.add_argument(
     help=(
         "Override landing_lift_m on --fixed-placement-level for a bounded "
         "tread-top touchdown run."
+    ),
+)
+parser.add_argument(
+    "--first-tread-profile",
+    choices=FIRST_TREAD_EXPERIMENT_PROFILES,
+    default="baseline-forward",
+    help=(
+        "Apply a reproducible stance/approach profile before constructing "
+        "the first-tread environment."
     ),
 )
 parser.add_argument(
@@ -520,7 +531,13 @@ try:
     config = config_for_height_stage(config, args.height_stage)
 except ValueError as exc:
     parser.error(str(exc))
-task_config = dict(config["task"])
+try:
+    task_config = config_for_first_tread_experiment(
+        config["task"],
+        args.first_tread_profile,
+    )
+except ValueError as exc:
+    parser.error(str(exc))
 if args.fixed_placement_landing_lift_m is not None:
     placement_levels = task_config["placement_curriculum"]["levels"]
     selected_level = next(
@@ -1190,6 +1207,7 @@ report: dict[str, object] = {
     "fixed_placement_landing_lift_m": (
         args.fixed_placement_landing_lift_m
     ),
+    "first_tread_profile": args.first_tread_profile,
     "phase_train_leg": args.phase_train_leg,
     "phase_train_transfer": args.phase_train_transfer,
     "phase_transfer_post_hold_seconds": (

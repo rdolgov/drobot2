@@ -49,6 +49,7 @@ from _stair_rl_contract import (
     staged_support_rear_pitch_scale,
     staged_swing_outward_offset_m,
     staged_swing_reference_base_delta,
+    stair_advance_reference_offsets,
     stair_failure_reasons,
     stair_goal_reached,
     stair_height_at_x,
@@ -1172,6 +1173,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             self.latest_step_normal_loads_n
         )
         self.latest_foot_tips_m = np.zeros((len(LEGS), 3), dtype=np.float32)
+        self.latest_base_yaw_rad = 0.0
         self.latest_support_load_sharing_correction_m = np.zeros(
             len(LEGS),
             dtype=np.float64,
@@ -2995,9 +2997,14 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             - body_shift_forward_m
             for leg in LEGS
         }
-        forward_by_leg[self.placement_swing_leg] += float(
-            placement_state["desired_forward_offset_m"]
+        stair_forward_m, stair_outward_m = stair_advance_reference_offsets(
+            leg=self.placement_swing_leg,
+            world_forward_m=float(
+                placement_state["desired_forward_offset_m"]
+            ),
+            body_yaw_rad=self.latest_base_yaw_rad,
         )
+        forward_by_leg[self.placement_swing_leg] += stair_forward_m
         foot_delta_lateral_m = body_shift_lateral_m
         abduction_by_leg_deg: dict[str, float] = {}
         for leg in LEGS:
@@ -3005,6 +3012,8 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             vertical = down_by_leg[leg] * np.cos(nominal_abduction)
             outward = down_by_leg[leg] * np.sin(nominal_abduction)
             shifted_outward = outward - side_sign * foot_delta_lateral_m
+            if leg == self.placement_swing_leg:
+                shifted_outward += stair_outward_m
             down_by_leg[leg] = float(np.hypot(vertical, shifted_outward))
             abduction_by_leg_deg[leg] = float(
                 np.degrees(np.arctan2(shifted_outward, vertical))
@@ -3298,7 +3307,14 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             self.latest_placement_com_position_m = (
                 self._sample_robot_com_position_m()
             )
-        heading_error = _yaw_from_wxyz(state["base_orientation"])
+        self.latest_base_yaw_rad = _yaw_from_wxyz(state["base_orientation"])
+        target_heading_yaw_rad = math.radians(
+            float(self.config.get("target_heading_yaw_deg", 0.0))
+        )
+        heading_error = math.atan2(
+            math.sin(self.latest_base_yaw_rad - target_heading_yaw_rad),
+            math.cos(self.latest_base_yaw_rad - target_heading_yaw_rad),
+        )
         terrain_observation = None
         if self.vl53l5cx_sensor is not None:
             terrain_observation = self.vl53l5cx_sensor.observe(

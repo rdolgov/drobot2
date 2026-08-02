@@ -32,11 +32,13 @@ from _run_support import (  # noqa: E402
 )
 from _stair_geometry import stair_layer_boxes  # noqa: E402
 from _stair_rl_contract import (  # noqa: E402
+    FIRST_TREAD_EXPERIMENT_PROFILES,
     PLACEMENT_REFERENCE_OBSERVATION_FIELDS,
     SUPPORT_REGULATION_OBSERVATION_FIELDS,
     balance_target_error_xy,
     bounded_support_incenter_target_xy,
     compose_bounded_residual_action,
+    config_for_first_tread_experiment,
     config_for_height_stage,
     curriculum_active_steps,
     equalized_foot_load_vertical_corrections,
@@ -70,6 +72,7 @@ from _stair_rl_contract import (  # noqa: E402
     staged_support_rear_pitch_scale,
     staged_swing_outward_offset_m,
     staged_swing_reference_base_delta,
+    stair_advance_reference_offsets,
     stair_failure_reasons,
     stair_goal_reached,
     stair_height_at_x,
@@ -92,6 +95,148 @@ def config() -> dict:
         encoding="utf-8",
     ) as stream:
         return yaml.safe_load(stream)
+
+
+def test_stair_advance_reference_offsets_rotate_world_x_into_body_frame() -> None:
+    assert stair_advance_reference_offsets(
+        leg="front_right",
+        world_forward_m=0.12,
+        body_yaw_rad=0.0,
+    ) == pytest.approx((0.12, 0.0))
+    assert stair_advance_reference_offsets(
+        leg="front_right",
+        world_forward_m=0.12,
+        body_yaw_rad=np.pi / 2.0,
+    ) == pytest.approx((0.0, 0.12), abs=1e-12)
+    assert stair_advance_reference_offsets(
+        leg="front_left",
+        world_forward_m=0.12,
+        body_yaw_rad=np.pi / 2.0,
+    ) == pytest.approx((0.0, -0.12), abs=1e-12)
+
+
+def test_first_tread_profiles_include_folded_crouch_and_sideways_hip(
+) -> None:
+    with (
+        STAIRS_DIR / "quadruped_stairs_v10_front_right_single_tread_placement.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        config = yaml.safe_load(stream)
+    task = config_for_first_tread_experiment(
+        config["task"],
+        "fully-folded-forward",
+    )
+    assert task["nominal_stance"]["down_m"] == pytest.approx(0.1603704915)
+    assert task["placement_curriculum"]["levels"][0]["apex_lift_m"] == 0.150
+
+    crouch = config_for_first_tread_experiment(
+        config["task"],
+        "low-crouch-forward",
+    )
+    assert crouch["nominal_stance"]["down_m"] == 0.220
+
+    sideways = config_for_first_tread_experiment(
+        config["task"],
+        "sideways-hip",
+    )
+    assert sideways["target_heading_yaw_deg"] == 90.0
+    assert sideways["reset_start_yaw_range_deg"] == [90.0, 90.0]
+    assert sideways["reset_start_x_range_m"] == [0.32, 0.34]
+    assert sideways["placement_reference"]["weight_shift"]["lateral_m"] == 0.015
+    assert (
+        sideways["placement_curriculum"]["levels"][1]["apex_lift_m"]
+        == 0.180
+    )
+    assert (
+        sideways["placement_residual_action_scale_rad"]["swing"]
+        ["hip_abduction"]
+        == 0.35
+    )
+    assert set(FIRST_TREAD_EXPERIMENT_PROFILES) == {
+        "baseline-forward",
+        "forward-preposition",
+        "forward-preposition-touchdown",
+        "forward-preposition-load",
+        "forward-preposition-load-slow",
+        "fully-folded-forward",
+        "low-crouch-forward",
+        "angled-hip",
+        "diagonal-hip",
+        "sideways-hip",
+        "low-crouch-sideways-hip",
+    }
+
+    diagonal = config_for_first_tread_experiment(
+        config["task"],
+        "diagonal-hip",
+    )
+    assert diagonal["target_heading_yaw_deg"] == 45.0
+    assert (
+        diagonal["placement_curriculum"]["levels"][1]
+        ["swing_forward_offset_m"]
+        == 0.080
+    )
+
+    angled = config_for_first_tread_experiment(
+        config["task"],
+        "angled-hip",
+    )
+    assert angled["target_heading_yaw_deg"] == 20.0
+    assert (
+        angled["placement_curriculum"]["levels"][1]
+        ["lift_forward_offset_m"]
+        == 0.080
+    )
+    assert (
+        angled["placement_curriculum"]["levels"][1]
+        ["swing_forward_offset_m"]
+        == 0.135
+    )
+
+    prepositioned = config_for_first_tread_experiment(
+        config["task"],
+        "forward-preposition",
+    )
+    assert prepositioned["reset_start_x_range_m"] == [0.35, 0.37]
+    assert (
+        prepositioned["placement_curriculum"]["levels"][1]
+        ["swing_forward_offset_m"]
+        == pytest.approx(0.165)
+    )
+    assert (
+        prepositioned["placement_curriculum"]["levels"][1]
+        ["landing_forward_offset_m"]
+        == pytest.approx(0.150)
+    )
+
+    touchdown = config_for_first_tread_experiment(
+        config["task"],
+        "forward-preposition-touchdown",
+    )
+    assert touchdown["reset_start_x_range_m"] == [0.35, 0.37]
+    assert (
+        touchdown["placement_curriculum"]["levels"][1]["landing_lift_m"]
+        == pytest.approx(0.130)
+    )
+
+    load = config_for_first_tread_experiment(
+        config["task"],
+        "forward-preposition-load",
+    )
+    assert (
+        load["placement_curriculum"]["levels"][1]["landing_lift_m"]
+        == pytest.approx(0.110)
+    )
+
+    slow_load = config_for_first_tread_experiment(
+        config["task"],
+        "forward-preposition-load-slow",
+    )
+    assert slow_load["placement_reference"]["timing"][
+        "lower_duration_seconds"
+    ] == pytest.approx(3.0)
+    assert slow_load["placement_curriculum"]["levels"][1][
+        "accept_early_tread_contact_after_clearance"
+    ] is True
 
 
 def test_foot_contact_patch_contract_preserves_fork_tip_reach() -> None:

@@ -60,6 +60,185 @@ STAIR_LEG_DOF_INDICES = (
     (3, 7, 11),
 )
 
+FIRST_TREAD_EXPERIMENT_PROFILES = (
+    "baseline-forward",
+    "forward-preposition",
+    "forward-preposition-touchdown",
+    "forward-preposition-load",
+    "forward-preposition-load-slow",
+    "fully-folded-forward",
+    "low-crouch-forward",
+    "angled-hip",
+    "diagonal-hip",
+    "sideways-hip",
+    "low-crouch-sideways-hip",
+)
+
+
+def stair_advance_reference_offsets(
+    *,
+    leg: str,
+    world_forward_m: float,
+    body_yaw_rad: float,
+) -> tuple[float, float]:
+    """Resolve world +X stair advance into sagittal and outward leg offsets."""
+
+    if leg not in STAIR_FOOT_NAMES:
+        raise ValueError(f"Unknown stair foot: {leg!r}")
+    values = np.asarray([world_forward_m, body_yaw_rad], dtype=np.float64)
+    if not np.all(np.isfinite(values)):
+        raise ValueError("stair advance and body yaw must be finite")
+    body_forward_m = float(world_forward_m) * float(np.cos(body_yaw_rad))
+    body_lateral_m = -float(world_forward_m) * float(np.sin(body_yaw_rad))
+    side_sign = 1.0 if leg.endswith("_left") else -1.0
+    return body_forward_m, side_sign * body_lateral_m
+
+
+def config_for_first_tread_experiment(
+    task_config: Mapping[str, object],
+    profile: str | None,
+) -> dict[str, object]:
+    """Return one reproducible first-tread stance/approach experiment."""
+
+    resolved = deepcopy(dict(task_config))
+    selected = "baseline-forward" if profile is None else str(profile)
+    if selected not in FIRST_TREAD_EXPERIMENT_PROFILES:
+        raise ValueError(
+            f"Unknown first-tread profile {selected!r}; "
+            f"available={list(FIRST_TREAD_EXPERIMENT_PROFILES)}"
+        )
+    resolved["first_tread_experiment_profile"] = selected
+    resolved.setdefault("target_heading_yaw_deg", 0.0)
+    if selected == "baseline-forward":
+        return resolved
+
+    nominal_stance = dict(resolved["nominal_stance"])
+    termination = dict(resolved["termination"])
+    reward = dict(resolved["reward"])
+    placement = deepcopy(dict(resolved["placement_reference"]))
+    placement_curriculum = deepcopy(dict(resolved["placement_curriculum"]))
+    residual_scale = deepcopy(
+        dict(resolved["placement_residual_action_scale_rad"])
+    )
+
+    if selected in {
+        "forward-preposition",
+        "forward-preposition-touchdown",
+        "forward-preposition-load",
+        "forward-preposition-load-slow",
+    }:
+        # Move the hips 30 mm closer to the riser while subtracting the same
+        # distance from every leg-relative reach target. The intended world
+        # tread target therefore stays fixed, but the swing leg works in a
+        # more vertical and less extended part of its workspace.
+        resolved["reset_start_x_range_m"] = [0.35, 0.37]
+        for level in placement_curriculum["levels"]:
+            for field in (
+                "lift_forward_offset_m",
+                "swing_forward_offset_m",
+                "landing_forward_offset_m",
+            ):
+                level[field] = float(level[field]) - 0.030
+            if selected == "forward-preposition-touchdown":
+                # V59 stopped with the foot-tip center around 199 mm and no
+                # qualified load on the 180 mm top. Command 15 mm farther
+                # down during landing while retaining the verified apex.
+                level["landing_lift_m"] = 0.130
+            elif selected in {
+                "forward-preposition-load",
+                "forward-preposition-load-slow",
+            }:
+                # V60's 130 mm landing command left the 12.5 mm-radius fork
+                # proxy roughly 2.7 mm above the tread. The deeper target is
+                # a bounded actuator-compliance probe, not a looser gate.
+                level["landing_lift_m"] = 0.110
+                if selected == "forward-preposition-load-slow":
+                    level["accept_early_tread_contact_after_clearance"] = True
+        if selected == "forward-preposition-load-slow":
+            timing = dict(placement["timing"])
+            timing["lower_duration_seconds"] = 3.0
+            placement["timing"] = timing
+    elif selected == "fully-folded-forward":
+        # 160.370 mm down with 25 mm fore/aft puts the knee at 119 degrees,
+        # one degree inside the measured 120-degree hardware limit.
+        nominal_stance["down_m"] = 0.1603704915
+        resolved["reset_start_z_m"] = 0.32
+        termination["minimum_base_clearance_m"] = 0.14
+        reward["target_body_clearance_m"] = 0.22
+        for level in placement_curriculum["levels"]:
+            level["apex_lift_m"] = 0.150
+            level["landing_lift_m"] = 0.130
+    elif selected == "low-crouch-forward":
+        nominal_stance["down_m"] = 0.220
+        resolved["reset_start_z_m"] = 0.38
+        termination["minimum_base_clearance_m"] = 0.18
+        reward["target_body_clearance_m"] = 0.28
+    else:
+        angled = selected == "angled-hip"
+        diagonal = selected == "diagonal-hip"
+        target_yaw_deg = 20.0 if angled else (45.0 if diagonal else 90.0)
+        resolved["target_heading_yaw_deg"] = target_yaw_deg
+        resolved["reset_start_yaw_range_deg"] = [
+            target_yaw_deg,
+            target_yaw_deg,
+        ]
+        resolved["reset_start_x_range_m"] = [0.32, 0.34]
+        termination["maximum_lateral_deviation_m"] = 0.35
+        placement["weight_shift"] = (
+            {"forward_m": 0.045, "lateral_m": 0.045}
+            if angled
+            else {"forward_m": 0.025, "lateral_m": 0.015}
+        )
+        sideways_offsets = (
+            (0.110, 0.135, 0.150)
+            if angled
+            else (
+                (0.070, 0.080, 0.090)
+                if diagonal
+                else (0.090, 0.100, 0.110)
+            )
+        )
+        for level, offset_m in zip(
+            placement_curriculum["levels"],
+            sideways_offsets,
+            strict=True,
+        ):
+            level["lift_forward_offset_m"] = 0.080 if angled else offset_m
+            level["swing_forward_offset_m"] = offset_m
+            level["apex_lift_m"] = (
+                0.200 if angled else (0.185 if diagonal else 0.180)
+            )
+            level["landing_forward_offset_m"] = max(0.060, offset_m - 0.010)
+        residual_scale["swing"].update(
+            {
+                "hip_abduction": (
+                    0.18 if angled else (0.28 if diagonal else 0.35)
+                ),
+                "hip_flexion": 0.18 if angled else (0.22 if diagonal else 0.12),
+                "knee": 0.24 if (angled or diagonal) else 0.18,
+            }
+        )
+        residual_scale["support"].update(
+            {
+                "hip_abduction": 0.18,
+                "hip_flexion": 0.20,
+                "knee": 0.28,
+            }
+        )
+        if selected == "low-crouch-sideways-hip":
+            nominal_stance["down_m"] = 0.220
+            resolved["reset_start_z_m"] = 0.38
+            termination["minimum_base_clearance_m"] = 0.18
+            reward["target_body_clearance_m"] = 0.28
+
+    resolved["nominal_stance"] = nominal_stance
+    resolved["termination"] = termination
+    resolved["reward"] = reward
+    resolved["placement_reference"] = placement
+    resolved["placement_curriculum"] = placement_curriculum
+    resolved["placement_residual_action_scale_rad"] = residual_scale
+    return resolved
+
 
 def config_for_height_stage(
     config: Mapping[str, object],
