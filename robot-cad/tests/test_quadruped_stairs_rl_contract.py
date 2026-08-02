@@ -60,6 +60,7 @@ from _stair_rl_contract import (  # noqa: E402
     placement_transfer_ready,
     progress_gate_failures,
     stabilized_support_reference_base_delta,
+    staged_support_rear_pitch_scale,
     stair_failure_reasons,
     stair_goal_reached,
     stair_height_at_x,
@@ -2259,6 +2260,35 @@ def test_support_pitch_feedback_levels_nose_down_attitude() -> None:
         )
 
 
+def test_staged_support_rear_pitch_scale_holds_then_blends() -> None:
+    assert staged_support_rear_pitch_scale(
+        elapsed_seconds=1.5,
+        front_only_seconds=2.0,
+        blend_seconds=2.0,
+    ) == pytest.approx(0.0)
+    assert staged_support_rear_pitch_scale(
+        elapsed_seconds=3.0,
+        front_only_seconds=2.0,
+        blend_seconds=2.0,
+    ) == pytest.approx(0.5)
+    assert staged_support_rear_pitch_scale(
+        elapsed_seconds=4.5,
+        front_only_seconds=2.0,
+        blend_seconds=2.0,
+    ) == pytest.approx(1.0)
+    assert staged_support_rear_pitch_scale(
+        elapsed_seconds=2.1,
+        front_only_seconds=2.0,
+        blend_seconds=0.0,
+    ) == pytest.approx(1.0)
+    with pytest.raises(ValueError, match="front_only_seconds"):
+        staged_support_rear_pitch_scale(
+            elapsed_seconds=1.0,
+            front_only_seconds=-0.1,
+            blend_seconds=2.0,
+        )
+
+
 def test_swing_support_abduction_mask_preserves_lift_authority() -> None:
     dof_names = (
         "front_left_hip_abduction",
@@ -2496,6 +2526,56 @@ def test_phase_training_replays_verified_prefix_before_exposing_target() -> None
     assert compact_stats["raw_action_size"] == 2
     with pytest.raises(ValueError, match="action shape"):
         compact.step(np.asarray((-0.75, 0.0), dtype=np.float32))
+
+
+def test_frozen_base_residual_policy_preserves_compact_swing_composition() -> None:
+    gym = pytest.importorskip("gymnasium")
+    from _placement_phase_training import FrozenBaseResidualPolicy
+
+    class FixedPolicy:
+        def __init__(self, action, observation_size) -> None:
+            self.action = np.asarray(action, dtype=np.float32)
+            self.observation_space = gym.spaces.Box(
+                -1.0,
+                1.0,
+                shape=(observation_size,),
+                dtype=np.float32,
+            )
+
+        def predict(self, observation, *, deterministic):
+            assert deterministic is True
+            assert observation.shape == self.observation_space.shape
+            return self.action.copy(), None
+
+    action_space = gym.spaces.Box(
+        -1.0,
+        1.0,
+        shape=(4,),
+        dtype=np.float32,
+    )
+    policy = FrozenBaseResidualPolicy(
+        base_policy=FixedPolicy((0.8, 0.7, -0.6, -0.5), 3),
+        residual_policy=FixedPolicy((0.4, -0.8), 5),
+        action_space=action_space,
+        residual_scale=0.5,
+        base_mask=np.asarray((1.0, 0.0, 1.0, 0.0), dtype=np.float32),
+        residual_mask=np.asarray((1.0, 0.0, 1.0, 0.0), dtype=np.float32),
+        compact_residual_action=True,
+    )
+    action, _ = policy.predict(
+        np.arange(5, dtype=np.float32),
+        deterministic=True,
+    )
+    np.testing.assert_allclose(action, (1.0, 0.0, -1.0, 0.0))
+    assert policy.observation_space.shape == (5,)
+    with pytest.raises(ValueError, match="requires residual_mask"):
+        FrozenBaseResidualPolicy(
+            base_policy=FixedPolicy((0.0,) * 4, 3),
+            residual_policy=FixedPolicy((0.0,), 3),
+            action_space=action_space,
+            residual_scale=0.5,
+            compact_residual_action=True,
+        )
 
 
 def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> None:

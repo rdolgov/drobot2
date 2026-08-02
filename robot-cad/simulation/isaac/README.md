@@ -249,9 +249,11 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/foot_lift/__init__.py` | Marks the supported single-foot-lift task as a separate Python source package | no runtime input | no generated data |
 | `simulation/isaac/rl/foot_lift/quadruped_foot_lift_v1.yaml` | Versions the supported 190 mm lift gate, 200 mm IK reference, measured hardware cap, residual action, reward, termination, and PPO settings | edited by foot-lift runners | no generated data |
 | `simulation/isaac/rl/foot_lift/quadruped_foot_lift_v2_balance.yaml` | Versions the unsupported 190 mm gate, five-stage clearance curriculum, 300 mm stance, 45 mm diagonal weight transfer, support-triangle reward, and measured hardware cap | edited by foot-lift runners | no generated data |
+| `simulation/isaac/rl/foot_lift/quadruped_foot_lift_v3_rear_right_balance.yaml` | Mirrors the unsupported balance task onto the rear-right leg needed next in the stair sequence, retaining the strict 190 mm hold gate and measured hardware cap | edited by foot-lift runners | no generated data |
 | `simulation/isaac/rl/foot_lift/_foot_lift_contract.py` | Defines the 56-value observation, smooth lift reference, reward, explicit failure reasons, and strict 190 mm hold gate | walking observation, measured skill state, and YAML values | observations and scalar contract results |
 | `simulation/isaac/rl/foot_lift/_quadruped_foot_lift_env.py` | Applies the raise-forward IK reference, optional torso pose hold, lift curriculum, bounded PPO residuals, support-triangle measurement, foot-tip measurements, and episode metrics | manual world and foot-lift config | actions, observations, rewards, and supported/unsupported lift metrics |
 | `simulation/isaac/rl/foot_lift/train_foot_lift_ppo.py` | Runs smoke/full/final-stage PPO training, optional flat or same-shape skill transfer, lift curriculum, checkpointing, and schema-2 model packaging | foot-lift YAML/world and optional initializer | model ZIP, manifest, monitor/TensorBoard data, and training report |
+| `simulation/isaac/rl/foot_lift/train_foot_lift_v3_rear_right_190mm_small.ps1` | Runs the bounded fresh 512-step rear-right 190 mm final-stage training job | V3 foot-lift YAML and manual world | V3 model, manifest, checkpoints, and training report |
 | `simulation/isaac/rl/foot_lift/evaluate_foot_lift_ppo.py` | Verifies the model manifest and runs deterministic supported-lift episodes | foot-lift YAML/world, model, and manifest | evaluation JSON and optional PNG |
 | `simulation/isaac/rl/foot_lift/record_foot_lift_ppo.py` | Records one deterministic supported lift with a best-lift thumbnail | foot-lift YAML/world, model, and manifest | H.264 MP4, thumbnail PNG, and recording JSON |
 | `simulation/isaac/rl/stairs/__init__.py` | Marks the stair experiment as a separate Python source package | no runtime input | no generated data |
@@ -275,15 +277,17 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/quadruped_stairs_v25_front_pair_load_sharing.yaml` | Tests direct stance-height load redistribution during the transferred 190 mm lift; retained as a rejected ablation | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/quadruped_stairs_v26_front_pair_smoothed_load_sharing.yaml` | Low-pass filters and bounds the rejected load-sharing ablation for a same-seed causal comparison | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/quadruped_stairs_v36_transfer_support_residual.yaml` | Isolates a two-second post-transfer support catch before the rear-right swing on the exact 180 x 250 mm stair, with a compact nine-action residual and measured hardware effort cap | edited by stair runners | no generated data |
+| `simulation/isaac/rl/stairs/quadruped_stairs_v37_joint_clearance_support.yaml` | Stages the post-transfer rear-pitch correction and joins the frozen V17/V35 rear-right swing with V36 support control on the exact 180 x 250 mm stair | edited by stair runners | no generated data |
 | `simulation/isaac/rl/stairs/_stair_geometry.py` | Defines the crack-free stacked collision layers for the four-step staircase | stair YAML values | pure Python geometry facts |
 | `simulation/isaac/rl/stairs/_vl53l5cx_contract.py` | Defines pure 8 x 8 ray geometry, 15 Hz mode validation, bounded noise/dropout, three-lane compression, and 24 depth observation fields | sensor YAML values and NumPy grids | rays and normalized depth observations |
 | `simulation/isaac/rl/stairs/_vl53l5cx_sensor.py` | Samples 64 PhysX closest-hit rays, rotates the body sensor into world space, and applies update cadence, hold, and latency | live base pose and sensor config | raw/noisy grids, hit paths, and 24-value depth observation |
-| `simulation/isaac/rl/stairs/_stair_rl_contract.py` | Defines selectable analytic or hardware-shaped terrain input, observation contracts through the 95-value support-regulation form, placement phases/contact gates, progress gates, strict stair/foot goals, support-load correction math, physical-height reward terms, and failure reasons | walking/terrain/placement observation and stair YAML values | observations and scalar contract results |
-| `simulation/isaac/rl/stairs/_quadruped_stairs_env.py` | Extends walking with exact DOF order, dynamic swing/support residual scales, pre-play force tracking, five-phase placement, mass-weighted whole-robot COM regulation, instrumented stance load-sharing ablations, per-leg slip and reachable-reference metrics, optional foot-friction sensitivity, selectable analytic/VL53L5CX perception, curriculum, and episode gates | stair world and task config | actions, observations, rewards, contact/sensor and episode state |
+| `simulation/isaac/rl/stairs/_stair_rl_contract.py` | Defines selectable analytic or hardware-shaped terrain input, observation contracts through the 95-value support-regulation form, placement phases/contact gates, staged rear-pitch handoff, progress gates, strict stair/foot goals, support-load correction math, physical-height reward terms, and failure reasons | walking/terrain/placement observation and stair YAML values | observations and scalar contract results |
+| `simulation/isaac/rl/stairs/_quadruped_stairs_env.py` | Extends walking with exact DOF order, dynamic swing/support residual scales, pre-play force tracking, five-phase placement, mass-weighted whole-robot COM regulation, staged pitch correction, instrumented stance load-sharing ablations, per-leg slip and reachable-reference metrics, optional foot-friction sensitivity, selectable analytic/VL53L5CX perception, curriculum, and episode gates | stair world and task config | actions, observations, rewards, contact/sensor and episode state |
+| `simulation/isaac/rl/stairs/_placement_phase_training.py` | Replays verified precursor phases and composes a frozen full-action base plus a second compact masked residual before exposing a bounded trainable target residual | stair environment and verified PPO policies | phase-local observations, actions, resets, and training metrics |
 | `simulation/isaac/rl/stairs/_policy_transfer.py` | Strictly expands the verified 48/12 ELU flat policy and can rescale output means to preserve physical actions across action boxes | source and target policy tensors | transferred policy state and report |
 | `simulation/isaac/rl/stairs/_run_support.py` | Creates/verifies schema-2 model, config, world/dependency, environment, PPO-mode, transfer, and resume contracts | model, YAML, composed world files, runtime/PPO contracts | adjacent `.contract.json` manifests |
 | `simulation/isaac/rl/stairs/create_stairs_world.py` | Sublayers the validated manual world and authors static stair collision layers | base world and stair YAML | stair-world USDA and static validation JSON |
-| `simulation/isaac/rl/stairs/train_stairs_ppo.py` | Trains, transfers, or resumes the separate stairs PPO policy, including 48-value shared-prefix transfer from unsupported balance and placement-aware observation sizing, with curriculum, checkpoint manifests, live metrics, and no-progress abort reports | stair YAML/world and optional model | model ZIPs, manifests, TensorBoard, monitor CSV, progress watchdog, training JSON |
+| `simulation/isaac/rl/stairs/train_stairs_ppo.py` | Trains, transfers, or resumes the separate stairs PPO policy, including verified nested frozen-base residual composition and placement-aware observation sizing, with curriculum, checkpoint manifests, live metrics, and no-progress abort reports | stair YAML/world and optional models | model ZIPs, manifests, TensorBoard, monitor CSV, progress watchdog, training JSON |
 | `simulation/isaac/rl/stairs/train_stairs_v3_ppo.py` | Runs the generic stair trainer with hardware-informed v3 config/output defaults while preserving all trainer overrides | v3 stair YAML/world and optional model | v3 model ZIPs, manifests, TensorBoard, monitor CSV, progress watchdog, training JSON |
 | `simulation/isaac/rl/stairs/train_stairs_v4_ppo.py` | Selects the transfer-safe v4 stair defaults | v4 stair YAML/world and optional model | v4 training outputs |
 | `simulation/isaac/rl/stairs/train_stairs_v5_ppo.py` | Selects the residual-policy v5 defaults and staged-height configuration | v5 stair YAML/world and optional model | v5 training outputs |
@@ -294,10 +298,11 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/search_stairs_transfer_pose.py` | Searches timing, support extension, COM feedback, friction, and effort-cap variants from either a cached target phase or the full continuous front-pair sequence | v16/V22 config, stair world, and verified per-leg policies | ranked JSON search report |
 | `simulation/isaac/rl/stairs/search_post_transfer_support.py` | Searches bounded constant support actions from the exact dynamic post-transfer snapshot before PPO training | V36 config, stair world, and verified precursor policies | ranked JSON action-search report |
 | `simulation/isaac/rl/stairs/train_stairs_v36_transfer_support_small.ps1` | Runs the bounded 4,096-step post-transfer-only V36 PPO experiment with the successful search action as actor-mean initialization | V36 config, stair world, and verified V10/V17 policies | V36 model, contract, checkpoints, and training report |
+| `simulation/isaac/rl/stairs/train_stairs_v37_joint_clearance_support_small.ps1` | Defines the corrected bounded V37 joint swing/support training job with full-strength V36 support authority; this corrected wrapper has not yet been run | V37 config and verified V10/V17/V35/V36 policies | prospective V37 model and training reports |
 | `simulation/isaac/rl/stairs/validate_vl53l5cx_stairs.py` | Verifies live 64-ray PhysX hits, 15 Hz cadence, latency, held observations, and writes an 8 x 8 review heatmap | v7 config and stair world | sensor validation JSON and PNG |
 | `simulation/isaac/rl/stairs/distill_successful_stairs.py` | Collects physically successful stochastic rollouts and behavior-clones their residual actions into the actor mean | v5 world, model, manifest | distilled model, rebound manifest, and collection report |
-| `simulation/isaac/rl/stairs/evaluate_stairs_ppo.py` | Runs deterministic stair episodes at a pinned curriculum level, verifies the primary contract, optionally composes hash-verified per-leg PPO models with zero transfer residual, and uses a close placement camera | stair YAML/world, primary/per-leg models, manifests | evaluation JSON and optional PNG |
-| `simulation/isaac/rl/stairs/record_stairs_ppo.py` | Records deterministic or stochastic stair episodes, optionally replaying seeded precursor episodes and using a close placement view so policy RNG, PhysX history, and visual evidence remain exact | stair YAML/world, model, manifest | H.264 MP4, thumbnail PNG, optional trajectory, recording JSON |
+| `simulation/isaac/rl/stairs/evaluate_stairs_ppo.py` | Runs deterministic stair episodes at a pinned curriculum level, verifies model hashes, and can compose a full base, compact frozen swing residual, and mapped support residual per leg | stair YAML/world, primary/per-leg models, manifests | evaluation JSON and optional PNG |
+| `simulation/isaac/rl/stairs/record_stairs_ppo.py` | Records deterministic or stochastic stair episodes with the same nested per-leg policy composition and a close external placement view | stair YAML/world, models, manifests | H.264 MP4, thumbnail PNG, optional trajectory, recording JSON |
 | `simulation/isaac/models/ppo-walk-v1-2m/` | Tracks the frozen flat-walking dependency used by v5 residual control | validated flat PPO ZIP | release dependency |
 | `simulation/isaac/models/ppo-stairs-v5-10mm-four-step/` | Tracks the source-equivalent shallow-stair policy, schema-2 manifest, and deterministic evaluation | v5 config/world and source policy | evaluable release package |
 | `simulation/isaac/models/ppo-stairs-v6-180mm-25cm-small/` | Tracks the bounded 180 mm x 250 mm evaluation policy, schema-2 manifest, training/evaluation/recording reports, and explicit failure result | v6 config/world and bounded policy | non-deployable evaluation package |
@@ -312,6 +317,7 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/models/ppo-stairs-v36-post-transfer-catch-small/` | Tracks the 4,096-step nine-action support catch, bounded initialization search, fresh 65/80-second evaluations, recording, and explicit precursor/lift limitations | V36 config, verified precursor/swing policies, and dynamic transfer snapshot | stable seed-832 post-transfer catch; not a 190 mm lift, tread landing, or complete climb |
 | `simulation/isaac/models/ppo-foot-lift-v1-190mm-small/` | Tracks the 512-step supported foot-lift smoke model, schema-2 manifest, three-episode evaluation, recording report, and strict 190 mm success | foot-lift config/world and supported policy | supported-skill evaluation package, not unsupported balance proof |
 | `simulation/isaac/models/ppo-foot-lift-v2-balance-190mm-small/` | Tracks the 512-step unsupported foot-lift smoke model, schema-2 manifest, 5/5 evaluation, screenshot report, recording report, and strict 190 mm success | v2 balance config/manual world | unsupported flat-ground clearance evaluation package |
+| `simulation/isaac/models/ppo-foot-lift-v3-rear-right-190mm-small/` | Tracks the fresh 512-step rear-right balance policy, schema-2 manifest, 5/5 evaluation, and successful recording | V3 balance config/manual world | rear-right flat-ground 190 mm clearance package; not stair-transfer evidence |
 | `simulation/isaac/experiments/stair_feasibility/__init__.py` | Marks the scripted real-stair feasibility experiment as a separate Python package | no runtime input | no generated data |
 | `simulation/isaac/experiments/stair_feasibility/real_stair_feasibility.yaml` | Versions the isolated block geometry, scripted motion, contact model, rated torque cap, and pass/fail thresholds | edited feasibility configuration | no generated data |
 | `simulation/isaac/experiments/stair_feasibility/_contract.py` | Defines pure IK targets, support-triangle margin, configuration validation, and trial gates | feasibility YAML and measured metrics | analytic targets and gate failures |
@@ -735,6 +741,55 @@ this support catch with the frozen V35 swing policy and reward clearance plus
 upright hold before introducing lowering/contact. The policy remains RGB-free:
 IMU/proprioception, contact/load, COM/support state, phase, and analytic stair
 geometry are inputs; the camera only records review evidence.
+
+V37 adds that joint composition without retraining the already verified swing
+policies: V17 supplies the full rear-right swing baseline, the compact V35 actor
+adds a bounded `0.5` swing residual, and V36 controls the other nine joints at
+the full action authority on which it was trained. Rear-stance pitch correction
+is held off for two seconds, then restored through a two-second smooth blend.
+The seed-832 controller diagnostic stayed upright for the full `65 s` horizon
+with no failure and `15.33 deg` worst tilt, but reached only about `155.5 mm`
+rear-right rise. Its report is tracked as
+`ppo-stairs-v36-post-transfer-catch-small/evaluation_v37_joint_composition_seed832.json`.
+The primary manifest check is explicitly marked skipped because no exact V37
+model existed; every composed dependency hash and observation adapter passed.
+This isolates the mixed-height pose/reference reach as the problem and is not a
+V37 training success. The corrected full-authority V37 training wrapper remains
+unrun.
+
+The exact diagnostic command was:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v37_joint_clearance_support.yaml `
+  --model simulation/isaac/models/ppo-stairs-v36-post-transfer-catch-small/drobot_stairs_ppo_final.zip `
+  --episodes 1 --seed 832 --device cpu --active-steps 1 `
+  --placement-level left-center-tread-load --episode-seconds 65 `
+  --maximum-lateral-deviation-m 0.30 `
+  --leg-model front_right=simulation/isaac/models/ppo-stairs-v10-180mm-25cm-front-right-placement-small/drobot_stairs_ppo_final.zip `
+  --leg-model front_left=simulation/isaac/models/ppo-stairs-v17-single-foot-190mm-small/drobot_stairs_ppo_final.zip `
+  --leg-model rear_right=simulation/isaac/models/ppo-stairs-v36-post-transfer-catch-small/drobot_stairs_ppo_final.zip `
+  --leg-residual-support-only rear_right --leg-compact-action rear_right `
+  --leg-residual-scale rear_right=1.0 `
+  --leg-base-model rear_right=simulation/isaac/models/ppo-stairs-v17-single-foot-190mm-small/drobot_stairs_ppo_final.zip `
+  --leg-base-swing-only rear_right `
+  --leg-base-residual-model rear_right=simulation/isaac/models/ppo-stairs-v35-rear-right-190mm-lift-small/drobot_stairs_ppo_final.zip `
+  --leg-base-residual-scale rear_right=0.5 `
+  --leg-base-residual-swing-only rear_right `
+  --leg-base-residual-compact-action rear_right `
+  --zero-action-leg rear_left --allow-unverified-model `
+  --report simulation/isaac/output/rl/ppo-stairs-v37-joint-clearance-support-4096-seed842/evaluation-staged-baseline-seed832.json
+```
+
+V3 then separates raw rear-leg capability from that stair-pose transfer. A
+fresh `512`-step policy raised the rear-right foot on flat ground while balancing
+on the other three physical feet. Independent seed-13291 evaluation passed
+`5/5`: every episode held the strict `190 mm` gate for `0.75 s`, maximum lift
+was `199.85-203.66 mm`, worst tilt was `2.12 deg`, and support-foot lift stayed
+below `4.99 mm`. The recording replay reached `200.81 mm` with `1.73 deg` worst
+tilt. There is no RGB policy input; the external camera only generated the MP4.
+This proves clearance and simple-pose balance, not mixed-height transfer,
+landing, or ascent. The stair experiments remain fixed at `250 mm` tread depth.
 
 The source map, complete commands, reward/termination formulas, manifest
 rules, measured smoke results, evaluation guidance, and sim-to-real limits are

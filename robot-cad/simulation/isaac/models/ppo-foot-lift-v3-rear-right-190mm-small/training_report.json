@@ -1,0 +1,390 @@
+{
+  "status": "PASS",
+  "task_id": "Drobot-Quadruped-Foot-Lift-v3-Rear-Right-190mm-Balance",
+  "config": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\foot_lift\\quadruped_foot_lift_v3_rear_right_balance.yaml",
+  "config_sha256": "ad36eb2d007672da39dfdea94af8d31506503722a7bf0c2166fafc43566020fc",
+  "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_manual_world.usda",
+  "world_sha256": "30c773a88564c21b87bb3da8fb0762f0d63f7350e2a31fc6d7ab7fae1542e3d9",
+  "world_dependencies": [
+    "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_floating.usdc"
+  ],
+  "output_dir": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\ppo-foot-lift-v3-rear-right-190mm-small",
+  "smoke_test": true,
+  "training_mode": "smoke",
+  "requested_total_timesteps": 512,
+  "lift_curriculum_total_timesteps": 300000,
+  "final_stage_only": true,
+  "seed": 13190,
+  "device_request": "cpu",
+  "isaac_sim_version": "6.0.1",
+  "torch_version": "2.10.0+cu128",
+  "stable_baselines3_version": "2.9.0",
+  "cuda_available": true,
+  "zero_action_mean_initialization": true,
+  "actual_total_timesteps": 512,
+  "model": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\ppo-foot-lift-v3-rear-right-190mm-small\\drobot_foot_lift_ppo_final.zip",
+  "model_bytes": 2001043,
+  "model_manifest": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\ppo-foot-lift-v3-rear-right-190mm-small\\drobot_foot_lift_ppo_final.zip.contract.json",
+  "ppo_algorithm_verification": {
+    "status": "PASS",
+    "verified_fields": [
+      "algorithm",
+      "policy_class",
+      "training_mode",
+      "observation_shape",
+      "action_shape",
+      "policy_hidden_layers",
+      "activation",
+      "rollout_steps",
+      "batch_size",
+      "epochs",
+      "learning_rate",
+      "gamma",
+      "gae_lambda",
+      "clip_range",
+      "entropy_coefficient",
+      "value_coefficient",
+      "maximum_gradient_norm",
+      "normalize_advantage",
+      "target_kl"
+    ],
+    "contract": {
+      "algorithm": "stable_baselines3.PPO",
+      "policy_class": "ActorCriticPolicy",
+      "training_mode": "smoke",
+      "observation_shape": [
+        56
+      ],
+      "action_shape": [
+        12
+      ],
+      "policy_hidden_layers": [
+        256,
+        256
+      ],
+      "activation": "ELU",
+      "rollout_steps": 128,
+      "batch_size": 64,
+      "epochs": 2,
+      "learning_rate": 3e-05,
+      "gamma": 0.997,
+      "gae_lambda": 0.95,
+      "clip_range": 0.2,
+      "entropy_coefficient": 0.001,
+      "value_coefficient": 0.5,
+      "maximum_gradient_norm": 0.5,
+      "normalize_advantage": true,
+      "target_kl": 0.03
+    }
+  },
+  "environment_contract": {
+    "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_manual_world.usda",
+    "dof_names": [
+      "front_left_hip_abduction",
+      "rear_left_hip_abduction",
+      "front_right_hip_abduction",
+      "rear_right_hip_abduction",
+      "front_left_hip_flexion",
+      "rear_left_hip_flexion",
+      "front_right_hip_flexion",
+      "rear_right_hip_flexion",
+      "front_left_knee",
+      "rear_left_knee",
+      "front_right_knee",
+      "rear_right_knee"
+    ],
+    "nominal_joint_positions_rad": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.2610241174697876,
+      0.2610241174697876,
+      -0.2610241174697876,
+      0.2610241174697876,
+      0.6883306503295898,
+      -0.6883306503295898,
+      0.6883306503295898,
+      -0.6883306503295898
+    ],
+    "action_scale_rad": [
+      0.10000000149011612,
+      0.10000000149011612,
+      0.10000000149011612,
+      0.03999999910593033,
+      0.2199999988079071,
+      0.2199999988079071,
+      0.2199999988079071,
+      0.07999999821186066,
+      0.30000001192092896,
+      0.30000001192092896,
+      0.30000001192092896,
+      0.11999999731779099
+    ],
+    "observation_fields": [
+      "command_forward_velocity_m_s",
+      "command_lateral_velocity_m_s",
+      "command_yaw_rate_rad_s",
+      "imu_angular_velocity_x_rad_s",
+      "imu_angular_velocity_y_rad_s",
+      "imu_angular_velocity_z_rad_s",
+      "imu_projected_gravity_x",
+      "imu_projected_gravity_y",
+      "imu_projected_gravity_z",
+      "imu_linear_acceleration_x_g",
+      "imu_linear_acceleration_y_g",
+      "imu_linear_acceleration_z_g",
+      "joint_position_error_0",
+      "joint_position_error_1",
+      "joint_position_error_2",
+      "joint_position_error_3",
+      "joint_position_error_4",
+      "joint_position_error_5",
+      "joint_position_error_6",
+      "joint_position_error_7",
+      "joint_position_error_8",
+      "joint_position_error_9",
+      "joint_position_error_10",
+      "joint_position_error_11",
+      "joint_velocity_normalized_0",
+      "joint_velocity_normalized_1",
+      "joint_velocity_normalized_2",
+      "joint_velocity_normalized_3",
+      "joint_velocity_normalized_4",
+      "joint_velocity_normalized_5",
+      "joint_velocity_normalized_6",
+      "joint_velocity_normalized_7",
+      "joint_velocity_normalized_8",
+      "joint_velocity_normalized_9",
+      "joint_velocity_normalized_10",
+      "joint_velocity_normalized_11",
+      "previous_action_0",
+      "previous_action_1",
+      "previous_action_2",
+      "previous_action_3",
+      "previous_action_4",
+      "previous_action_5",
+      "previous_action_6",
+      "previous_action_7",
+      "previous_action_8",
+      "previous_action_9",
+      "previous_action_10",
+      "previous_action_11",
+      "desired_swing_foot_lift_normalized",
+      "measured_swing_foot_lift_normalized",
+      "swing_foot_lift_error_normalized",
+      "maximum_swing_foot_lift_normalized",
+      "base_height_error_normalized",
+      "base_forward_displacement_normalized",
+      "base_lateral_displacement_normalized",
+      "maximum_support_foot_lift_normalized"
+    ],
+    "observation_size": 56,
+    "action_size": 12,
+    "imu_fields": [
+      "angular_velocity_x_rad_s",
+      "angular_velocity_y_rad_s",
+      "angular_velocity_z_rad_s",
+      "projected_gravity_x",
+      "projected_gravity_y",
+      "projected_gravity_z",
+      "linear_acceleration_x_g",
+      "linear_acceleration_y_g",
+      "linear_acceleration_z_g"
+    ],
+    "rated_effort_cap_nm": 0.980665,
+    "applied_effort_cap_nm": 0.8825985,
+    "applied_joint_lower_limits_rad": [
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -2.094395160675049,
+      -2.094395160675049,
+      -2.094395160675049,
+      -2.094395160675049
+    ],
+    "applied_joint_upper_limits_rad": [
+      0.7853981852531433,
+      0.7853981852531433,
+      0.7853981852531433,
+      0.7853981852531433,
+      1.5707963705062866,
+      1.5707963705062866,
+      1.5707963705062866,
+      1.5707963705062866,
+      2.094395160675049,
+      2.094395160675049,
+      2.094395160675049,
+      2.094395160675049
+    ],
+    "robot_hardware_profile": {
+      "id": "one-leg-real-test-2026-07-28",
+      "evidence": [
+        "hardware/one-leg-testbed/leg.toml",
+        "hardware/one-leg-testbed/calibration.json",
+        "conversations/2026-07-28-one-leg-wall-isaac-revisit.md"
+      ],
+      "center_tick": 2048,
+      "encoder_directions": {
+        "hip_abduction": 1,
+        "hip_flexion": -1,
+        "knee": -1
+      },
+      "joint_limits_deg": {
+        "hip_abduction": [
+          -45.0,
+          45.0
+        ],
+        "hip_flexion": [
+          -90.0,
+          90.0
+        ],
+        "knee": [
+          -120.0,
+          120.0
+        ]
+      },
+      "torque_limit_register": 300,
+      "torque_limit_register_full_scale": 1000,
+      "torque_limit_fraction": 0.3,
+      "stall_torque_nm": 2.941995,
+      "effort_cap_nm": 0.8825985,
+      "speed_register": 350,
+      "speed_register_applied_as_rad_s": false
+    },
+    "control_hz": 60,
+    "physics_hz": 120,
+    "task_id": "Drobot-Quadruped-Foot-Lift-v3-Rear-Right-190mm-Balance",
+    "walking_observation_size": 48,
+    "physics_steps_per_control": 2,
+    "control_action_mode": "ik_reference_plus_ppo_residual",
+    "swing_leg": "rear_right",
+    "target_lift_m": 0.19,
+    "foot_lift": {
+      "swing_leg": "rear_right",
+      "target_lift_m": 0.19,
+      "reference_lift_m": 0.2,
+      "target_forward_offset_m": 0.11,
+      "ramp_start_seconds": 2.5,
+      "ramp_duration_seconds": 3.0
+    },
+    "weight_shift": {
+      "start_seconds": 0.25,
+      "duration_seconds": 2.0,
+      "forward_m": 0.045,
+      "lateral_m": 0.045
+    },
+    "base_support": {
+      "mode": "none"
+    },
+    "success": {
+      "minimum_lift_m": 0.19,
+      "minimum_upright_cosine": 0.9781476,
+      "maximum_base_height_error_m": 0.05,
+      "maximum_base_displacement_m": 0.08,
+      "maximum_support_foot_lift_m": 0.02
+    },
+    "rgb_camera_policy_input": false,
+    "terrain_perception_policy_input": false,
+    "reference_note": "Analytic leg IK commands a raise-forward arc that stays inside the measured knee limit; PPO controls bounded residuals on all 12 joints for balance.",
+    "lift_curriculum": {
+      "mode": "timesteps",
+      "levels": [
+        {
+          "id": "unload-20mm",
+          "start_fraction": 0.0,
+          "target_lift_m": 0.02,
+          "reference_lift_m": 0.025
+        },
+        {
+          "id": "lift-50mm",
+          "start_fraction": 0.3,
+          "target_lift_m": 0.05,
+          "reference_lift_m": 0.06
+        },
+        {
+          "id": "lift-90mm",
+          "start_fraction": 0.5,
+          "target_lift_m": 0.09,
+          "reference_lift_m": 0.105
+        },
+        {
+          "id": "lift-140mm",
+          "start_fraction": 0.7,
+          "target_lift_m": 0.14,
+          "reference_lift_m": 0.15
+        },
+        {
+          "id": "lift-190mm",
+          "start_fraction": 0.85,
+          "target_lift_m": 0.19,
+          "reference_lift_m": 0.2
+        }
+      ]
+    }
+  },
+  "recent_completed_episodes": [
+    {
+      "return": 9440.195218642566,
+      "length_steps": 350,
+      "duration_s": 5.833333333333333,
+      "swing_leg": "rear_right",
+      "base_support_mode": "none",
+      "target_lift_m": 0.19,
+      "reference_lift_m": 0.2,
+      "final_target_lift_m": 0.19,
+      "lift_curriculum_level": "lift-190mm",
+      "maximum_swing_foot_lift_m": 0.19735008478164673,
+      "final_swing_foot_lift_m": 0.19395488500595093,
+      "maximum_support_foot_lift_m": 0.005005698651075363,
+      "minimum_support_triangle_margin_m": -2.3935619622733836e-05,
+      "base_displacement_m": [
+        0.03764370083808899,
+        0.0547354556620121,
+        0.0004908442497253418
+      ],
+      "final_base_position_m": [
+        0.02856353297829628,
+        0.051116980612277985,
+        0.3631058931350708
+      ],
+      "final_foot_tip_positions_m": [
+        [
+          0.0769621953368187,
+          0.20070314407348633,
+          0.009585863910615444
+        ],
+        [
+          0.0951818972826004,
+          -0.19673064351081848,
+          0.009944848716259003
+        ],
+        [
+          -0.11254654079675674,
+          0.19283640384674072,
+          0.011908750049769878
+        ],
+        [
+          -0.15380163490772247,
+          -0.17614701390266418,
+          0.20172853767871857
+        ]
+      ],
+      "minimum_base_height_m": 0.3619109094142914,
+      "maximum_body_tilt_deg": 2.337828935239225,
+      "goal_hold_duration_s": 0.75,
+      "skill_completed": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": []
+    }
+  ],
+  "elapsed_seconds": 15.912158700171858,
+  "scope": "Pipeline validation only",
+  "policy_inputs": "IMU, joint state, prior action, lift target/progress, and base drift; no RGB or terrain perception."
+}

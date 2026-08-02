@@ -259,6 +259,28 @@ def test_unsupported_balance_curriculum_reaches_190mm_final_stage() -> None:
     assert higher["lift_error"] > low["lift_error"]
 
 
+def test_rear_right_balance_task_mirrors_the_proven_190mm_contract() -> None:
+    with (
+        FOOT_LIFT_DIR / "quadruped_foot_lift_v3_rear_right_balance.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        rear_config = yaml.safe_load(stream)
+    with (FOOT_LIFT_DIR / "quadruped_foot_lift_v2_balance.yaml").open(
+        "r",
+        encoding="utf-8",
+    ) as stream:
+        front_config = yaml.safe_load(stream)
+
+    rear_task = rear_config["task"]
+    front_task = front_config["task"]
+    assert rear_task["foot_lift"]["swing_leg"] == "rear_right"
+    assert rear_task["foot_lift"]["target_lift_m"] == pytest.approx(0.19)
+    assert rear_task["foot_lift"]["reference_lift_m"] == pytest.approx(0.20)
+    assert rear_task["weight_shift"] == front_task["weight_shift"]
+    assert rear_task["robot_hardware_profile"] == front_task["robot_hardware_profile"]
+    assert rear_task["base_support"]["mode"] == "none"
+    assert "terrain_perception" not in rear_task
+
+
 def test_support_triangle_margin_is_positive_inside_and_negative_outside() -> None:
     support = ((0.0, 0.0), (1.0, 0.0), (0.0, 1.0))
 

@@ -10,6 +10,7 @@ import numpy as np
 from _policy_transfer import predict_with_observation_prefix
 from _stair_rl_contract import (
     compose_bounded_residual_action,
+    expand_compact_masked_action,
     placement_phase_ready,
     placement_transfer_ready,
 )
@@ -24,6 +25,116 @@ class DeterministicPolicy(Protocol):
         *,
         deterministic: bool,
     ) -> tuple[np.ndarray, object]: ...
+
+
+class FrozenBaseResidualPolicy:
+    """Expose a frozen full-action base plus a bounded residual as one policy.
+
+    The stair sequence already uses nested skills: V17 supplies the full
+    rear-right swing baseline and compact V35 corrects its three swing joints.
+    Phase PPO must see that exact composition as its frozen base before it can
+    learn disjoint support-joint corrections without replacing the verified
+    clearance motion.
+    """
+
+    def __init__(
+        self,
+        *,
+        base_policy: DeterministicPolicy,
+        residual_policy: DeterministicPolicy,
+        action_space: gym.spaces.Box,
+        residual_scale: float,
+        base_mask: np.ndarray | None = None,
+        residual_mask: np.ndarray | None = None,
+        compact_residual_action: bool = False,
+    ) -> None:
+        self.base_policy = base_policy
+        self.residual_policy = residual_policy
+        self.action_space = action_space
+        self.action_shape = tuple(action_space.shape)
+        if len(self.action_shape) != 1:
+            raise ValueError("composed policy action space must be flat")
+        self.residual_scale = float(residual_scale)
+        if not 0.0 < self.residual_scale <= 1.0:
+            raise ValueError("residual_scale must be within (0, 1]")
+        self.base_mask = self._validated_mask(base_mask, "base_mask")
+        self.residual_mask = self._validated_mask(
+            residual_mask,
+            "residual_mask",
+        )
+        self.compact_residual_action = bool(compact_residual_action)
+        if self.compact_residual_action and self.residual_mask is None:
+            raise ValueError(
+                "compact_residual_action requires residual_mask"
+            )
+        observation_spaces = (
+            getattr(base_policy, "observation_space", None),
+            getattr(residual_policy, "observation_space", None),
+        )
+        if any(space is None for space in observation_spaces):
+            raise ValueError("composed policies require observation spaces")
+        self.observation_space = max(
+            observation_spaces,
+            key=lambda space: int(space.shape[0]),
+        )
+
+    def _validated_mask(
+        self,
+        value: np.ndarray | None,
+        label: str,
+    ) -> np.ndarray | None:
+        if value is None:
+            return None
+        mask = np.asarray(value, dtype=np.float32).copy()
+        if mask.shape != self.action_shape:
+            raise ValueError(f"{label} must match the action space")
+        if np.any((mask != 0.0) & (mask != 1.0)):
+            raise ValueError(f"{label} must be binary")
+        return mask
+
+    def predict(
+        self,
+        observation: np.ndarray,
+        *,
+        deterministic: bool,
+    ) -> tuple[np.ndarray, object]:
+        """Predict the same nested frozen action used by composed evaluation."""
+
+        base_action, _ = predict_with_observation_prefix(
+            self.base_policy,
+            observation,
+            deterministic=deterministic,
+        )
+        base_action = np.asarray(base_action, dtype=np.float32)
+        if base_action.shape != self.action_shape:
+            raise ValueError("base policy action must match the action space")
+        if self.base_mask is not None:
+            base_action = base_action * self.base_mask
+
+        residual_action, state = predict_with_observation_prefix(
+            self.residual_policy,
+            observation,
+            deterministic=deterministic,
+        )
+        residual_action = np.asarray(residual_action, dtype=np.float32)
+        if self.compact_residual_action:
+            residual_action = expand_compact_masked_action(
+                residual_action,
+                self.residual_mask,
+            )
+        elif residual_action.shape != self.action_shape:
+            raise ValueError(
+                "residual policy action must match the action space"
+            )
+        return (
+            compose_bounded_residual_action(
+                base_action,
+                residual_action,
+                residual_scale=self.residual_scale,
+                residual_mask=self.residual_mask,
+            ),
+            state,
+        )
 
 
 class PlacementPhaseTrainingEnv(gym.Wrapper):

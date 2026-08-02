@@ -25,6 +25,7 @@ for module_dir in (str(ISAAC_DIR), str(RL_DIR), str(SCRIPT_DIR)):
     if module_dir not in sys.path:
         sys.path.insert(0, module_dir)
 
+from _placement_phase_training import FrozenBaseResidualPolicy  # noqa: E402
 from _policy_transfer import (  # noqa: E402
     policy_observation_prefix_compatibility,
     predict_with_observation_prefix,
@@ -136,6 +137,37 @@ parser.add_argument(
     help="Mask a frozen per-leg base model to the swing joints.",
 )
 parser.add_argument(
+    "--leg-base-residual-model",
+    action="append",
+    default=[],
+    metavar="LEG=MODEL",
+    help=(
+        "Second frozen compact swing policy composed over --leg-base-model "
+        "before the mapped trainable support policy."
+    ),
+)
+parser.add_argument(
+    "--leg-base-residual-scale",
+    action="append",
+    default=[],
+    metavar="LEG=SCALE",
+    help="Bounded scale for each --leg-base-residual-model.",
+)
+parser.add_argument(
+    "--leg-base-residual-swing-only",
+    action="append",
+    default=[],
+    metavar="LEG",
+    help="Mask the second frozen base residual to the named swing leg.",
+)
+parser.add_argument(
+    "--leg-base-residual-compact-action",
+    action="append",
+    default=[],
+    metavar="LEG",
+    help="Expand the second frozen base residual from three swing outputs.",
+)
+parser.add_argument(
     "--leg-residual-scale",
     action="append",
     default=[],
@@ -212,14 +244,17 @@ def _parse_leg_models(values: list[str], option_name: str) -> dict[str, Path]:
     return result
 
 
-def _parse_leg_scales(values: list[str]) -> dict[str, float]:
+def _parse_leg_scales(
+    values: list[str],
+    option_name: str = "--leg-residual-scale",
+) -> dict[str, float]:
     result: dict[str, float] = {}
     for value in values:
         leg, separator, scale_text = str(value).partition("=")
         if not separator or not leg or not scale_text:
-            parser.error("--leg-residual-scale must use LEG=SCALE syntax")
+            parser.error(f"{option_name} must use LEG=SCALE syntax")
         if leg in result:
-            parser.error(f"duplicate --leg-residual-scale for {leg}")
+            parser.error(f"duplicate {option_name} for {leg}")
         try:
             scale = float(scale_text)
         except ValueError:
@@ -294,6 +329,18 @@ leg_base_model_paths = _parse_leg_models(
     args.leg_base_model,
     "--leg-base-model",
 )
+leg_base_residual_model_paths = _parse_leg_models(
+    args.leg_base_residual_model,
+    "--leg-base-residual-model",
+)
+leg_base_residual_scales = _parse_leg_scales(
+    args.leg_base_residual_scale,
+    "--leg-base-residual-scale",
+)
+leg_base_residual_swing_only = set(args.leg_base_residual_swing_only)
+leg_base_residual_compact_actions = set(
+    args.leg_base_residual_compact_action
+)
 leg_base_swing_only = set(args.leg_base_swing_only)
 if len(leg_base_swing_only) != len(args.leg_base_swing_only):
     parser.error("duplicate --leg-base-swing-only leg")
@@ -330,6 +377,23 @@ if set(leg_base_model_paths) != set(leg_residual_scales):
     )
 if not leg_base_swing_only.issubset(leg_base_model_paths):
     parser.error("swing-only base masks require --leg-base-model")
+if set(leg_base_residual_model_paths) != set(leg_base_residual_scales):
+    parser.error(
+        "--leg-base-residual-model and --leg-base-residual-scale must "
+        "select the same legs"
+    )
+if set(leg_base_residual_model_paths) != leg_base_residual_swing_only:
+    parser.error(
+        "each leg base residual requires --leg-base-residual-swing-only"
+    )
+if not leg_base_residual_compact_actions.issubset(
+    leg_base_residual_model_paths
+):
+    parser.error(
+        "base residual compact expansion requires a base residual model"
+    )
+if not set(leg_base_residual_model_paths).issubset(leg_base_model_paths):
+    parser.error("each leg base residual requires --leg-base-model")
 if not set(leg_base_model_paths).issubset(leg_model_paths):
     parser.error("each leg base model requires a residual --leg-model")
 if not leg_residual_support_only.issubset(leg_model_paths):
@@ -464,6 +528,17 @@ report: dict[str, object] = {
         leg: str(path) for leg, path in leg_base_model_paths.items()
     },
     "leg_base_swing_only": sorted(leg_base_swing_only),
+    "leg_base_residual_models": {
+        leg: str(path)
+        for leg, path in leg_base_residual_model_paths.items()
+    },
+    "leg_base_residual_scales": leg_base_residual_scales,
+    "leg_base_residual_swing_only": sorted(
+        leg_base_residual_swing_only
+    ),
+    "leg_base_residual_compact_actions": sorted(
+        leg_base_residual_compact_actions
+    ),
     "leg_residual_scales": leg_residual_scales,
     "leg_residual_support_only": sorted(leg_residual_support_only),
     "leg_residual_swing_only": sorted(leg_residual_swing_only),
@@ -539,6 +614,7 @@ try:
         (
             set(leg_model_paths)
             | set(leg_base_model_paths)
+            | set(leg_base_residual_model_paths)
             | set(transfer_model_paths)
             | set(post_transfer_model_paths)
             | zero_action_legs
@@ -649,6 +725,73 @@ try:
             "manifest": str(manifest_path),
             "source_task_id": manifest.get("task_id"),
             "residual_scale": leg_residual_scales[leg],
+            "observation_compatibility": observation_compatibility,
+        }
+    leg_composed_base_policies: dict[str, FrozenBaseResidualPolicy] = {}
+    leg_base_residual_model_verification: dict[str, dict[str, object]] = {}
+    for leg, path in leg_base_residual_model_paths.items():
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        manifest_path = Path(str(path) + ".contract.json")
+        if not manifest_path.is_file():
+            raise FileNotFoundError(manifest_path)
+        with manifest_path.open("r", encoding="utf-8") as stream:
+            manifest = json.load(stream)
+        model_sha256 = _sha256_file(path)
+        if str(manifest.get("model_sha256")) != model_sha256:
+            raise RuntimeError(
+                f"Per-leg base residual model hash mismatch for {leg}: {path}"
+            )
+        residual_model = PPO.load(str(path), device=args.device)
+        residual_mask = placement_policy_action_mask(
+            raw_env.dof_names,
+            target_leg=leg,
+            mode="swing_only",
+        )
+        expected_action_size = (
+            int(np.count_nonzero(residual_mask))
+            if leg in leg_base_residual_compact_actions
+            else raw_env.action_space.shape[0]
+        )
+        if tuple(residual_model.action_space.shape) != (expected_action_size,):
+            raise RuntimeError(
+                "Per-leg base residual action space does not match for "
+                f"{leg}: {residual_model.action_space.shape}"
+            )
+        observation_compatibility = policy_observation_prefix_compatibility(
+            residual_model,
+            manifest,
+            raw_env.contract,
+        )
+        base_mask = (
+            placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=leg,
+                mode="swing_only",
+            )
+            if leg in leg_base_swing_only
+            else None
+        )
+        leg_composed_base_policies[leg] = FrozenBaseResidualPolicy(
+            base_policy=leg_base_models[leg],
+            residual_policy=residual_model,
+            action_space=raw_env.action_space,
+            residual_scale=leg_base_residual_scales[leg],
+            base_mask=base_mask,
+            residual_mask=residual_mask,
+            compact_residual_action=(
+                leg in leg_base_residual_compact_actions
+            ),
+        )
+        leg_base_residual_model_verification[leg] = {
+            "status": "PASS",
+            "model": str(path),
+            "model_sha256": model_sha256,
+            "manifest": str(manifest_path),
+            "source_task_id": manifest.get("task_id"),
+            "residual_scale": leg_base_residual_scales[leg],
+            "residual_mask": "swing_only",
+            "compact_action": leg in leg_base_residual_compact_actions,
             "observation_compatibility": observation_compatibility,
         }
     transfer_models: dict[str, PPO] = {}
@@ -829,14 +972,20 @@ try:
                         f"Compact action for {active_leg} has no residual mask"
                     )
                 action = expand_compact_masked_action(action, residual_mask)
-            base_model = leg_base_models.get(active_leg)
+            base_model = leg_composed_base_policies.get(
+                active_leg,
+                leg_base_models.get(active_leg),
+            )
             if base_model is not None:
                 base_action, _ = predict_with_observation_prefix(
                     base_model,
                     observation,
                     deterministic=True,
                 )
-                if active_leg in leg_base_swing_only:
+                if (
+                    active_leg in leg_base_swing_only
+                    and active_leg not in leg_composed_base_policies
+                ):
                     base_action = np.asarray(
                         base_action,
                         dtype=np.float32,
@@ -913,6 +1062,9 @@ try:
             "transfer_model_verification": transfer_model_verification,
             "post_transfer_model_verification": (
                 post_transfer_model_verification
+            ),
+            "leg_base_residual_model_verification": (
+                leg_base_residual_model_verification
             ),
             "policy_composition": (
                 "per_leg_frozen_base_plus_bounded_residual"

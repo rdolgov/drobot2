@@ -11,6 +11,7 @@ import traceback
 from collections import deque
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch._dynamo  # noqa: F401
 import yaml
@@ -201,6 +202,35 @@ parser.add_argument(
     action="store_true",
     help="Mask the frozen phase base policy to the target swing leg.",
 )
+parser.add_argument(
+    "--phase-base-residual-model",
+    default=None,
+    help=(
+        "Second frozen policy composed as a bounded residual over "
+        "--phase-base-model before the trainable PPO correction."
+    ),
+)
+parser.add_argument(
+    "--phase-base-residual-scale",
+    type=float,
+    default=0.5,
+)
+parser.add_argument(
+    "--phase-base-residual-mode",
+    choices=(
+        "swing_only",
+        "support_only",
+        "support_abduction_only",
+        "swing_plus_support_abduction",
+    ),
+    default=None,
+    help="Joint mask used by --phase-base-residual-model.",
+)
+parser.add_argument(
+    "--phase-base-residual-compact-action",
+    action="store_true",
+    help="Expand the second frozen policy from its compact masked action.",
+)
 parser.add_argument("--phase-residual-scale", type=float, default=0.25)
 parser.add_argument(
     "--phase-residual-support-only",
@@ -298,10 +328,34 @@ phase_base_model_path = (
     if args.phase_base_model
     else None
 )
+phase_base_residual_model_path = (
+    _resolve_project_path(args.phase_base_residual_model)
+    if args.phase_base_residual_model
+    else None
+)
 if phase_base_model_path is not None and not args.phase_train_leg:
     parser.error("--phase-base-model requires --phase-train-leg")
 if args.phase_base_swing_only and phase_base_model_path is None:
     parser.error("--phase-base-swing-only requires --phase-base-model")
+if phase_base_residual_model_path is not None and phase_base_model_path is None:
+    parser.error(
+        "--phase-base-residual-model requires --phase-base-model"
+    )
+if phase_base_residual_model_path is not None and (
+    args.phase_base_residual_mode is None
+):
+    parser.error(
+        "--phase-base-residual-model requires --phase-base-residual-mode"
+    )
+if phase_base_residual_model_path is None and (
+    args.phase_base_residual_mode is not None
+    or args.phase_base_residual_compact_action
+):
+    parser.error(
+        "phase base residual options require --phase-base-residual-model"
+    )
+if not 0.0 < args.phase_base_residual_scale <= 1.0:
+    parser.error("--phase-base-residual-scale must be within (0, 1]")
 if args.phase_train_transfer and not args.phase_train_leg:
     parser.error("--phase-train-transfer requires --phase-train-leg")
 if args.phase_post_transfer_hold_only and not args.phase_train_transfer:
@@ -515,7 +569,10 @@ simulation_app = SimulationApp(
 )
 
 import stable_baselines3  # noqa: E402
-from _placement_phase_training import PlacementPhaseTrainingEnv  # noqa: E402
+from _placement_phase_training import (  # noqa: E402
+    FrozenBaseResidualPolicy,
+    PlacementPhaseTrainingEnv,
+)
 from _quadruped_stairs_env import QuadrupedStairsEnv  # noqa: E402
 from _run_support import validate_model_manifest  # noqa: E402
 from stable_baselines3 import PPO  # noqa: E402
@@ -911,6 +968,16 @@ report: dict[str, object] = {
         else None
     ),
     "phase_base_swing_only": args.phase_base_swing_only,
+    "phase_base_residual_model": (
+        str(phase_base_residual_model_path)
+        if phase_base_residual_model_path is not None
+        else None
+    ),
+    "phase_base_residual_scale": args.phase_base_residual_scale,
+    "phase_base_residual_mode": args.phase_base_residual_mode,
+    "phase_base_residual_compact_action": (
+        args.phase_base_residual_compact_action
+    ),
     "phase_residual_scale": args.phase_residual_scale,
     "phase_residual_support_only": args.phase_residual_support_only,
     "phase_residual_swing_only": args.phase_residual_swing_only,
@@ -1061,6 +1128,80 @@ try:
                 target_leg=str(args.phase_train_leg),
                 mode="support_only",
             )
+        if phase_base_residual_model_path is not None:
+            if not phase_base_residual_model_path.is_file():
+                raise FileNotFoundError(phase_base_residual_model_path)
+            residual_manifest_path = model_manifest_path(
+                phase_base_residual_model_path
+            )
+            if not residual_manifest_path.is_file():
+                raise FileNotFoundError(residual_manifest_path)
+            residual_manifest = read_model_manifest(
+                phase_base_residual_model_path
+            )
+            residual_hash = sha256_file(phase_base_residual_model_path)
+            if residual_manifest.get("model_sha256") != residual_hash:
+                raise RuntimeError(
+                    "Phase base residual model hash mismatch: "
+                    f"{phase_base_residual_model_path}"
+                )
+            base_residual_model = PPO.load(
+                str(phase_base_residual_model_path),
+                device=args.device,
+            )
+            base_residual_mask = placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=str(args.phase_train_leg),
+                mode=str(args.phase_base_residual_mode),
+            )
+            expected_residual_action_size = int(
+                np.count_nonzero(base_residual_mask)
+                if args.phase_base_residual_compact_action
+                else raw_env.action_space.shape[0]
+            )
+            if tuple(base_residual_model.action_space.shape) != (
+                expected_residual_action_size,
+            ):
+                raise RuntimeError(
+                    "Phase base residual action space does not match: "
+                    f"{base_residual_model.action_space.shape} != "
+                    f"({expected_residual_action_size},)"
+                )
+            observation_compatibility = (
+                policy_observation_prefix_compatibility(
+                    base_residual_model,
+                    residual_manifest,
+                    raw_env.contract,
+                )
+            )
+            report["phase_base_residual_model_verification"] = {
+                "status": "PASS",
+                "model": str(phase_base_residual_model_path),
+                "model_sha256": residual_hash,
+                "manifest": str(residual_manifest_path),
+                "source_task_id": residual_manifest.get("task_id"),
+                "residual_scale": args.phase_base_residual_scale,
+                "residual_mode": args.phase_base_residual_mode,
+                "compact_action": args.phase_base_residual_compact_action,
+                "observation_compatibility": observation_compatibility,
+            }
+            if target_base_model is None:
+                raise RuntimeError(
+                    "Phase base residual composition has no base policy"
+                )
+            target_base_model = FrozenBaseResidualPolicy(
+                base_policy=target_base_model,
+                residual_policy=base_residual_model,
+                action_space=raw_env.action_space,
+                residual_scale=args.phase_base_residual_scale,
+                base_mask=target_base_mask,
+                residual_mask=base_residual_mask,
+                compact_residual_action=(
+                    args.phase_base_residual_compact_action
+                ),
+            )
+            # The adapter already applies the base mask before composing V35.
+            target_base_mask = None
         phase_training_env = PlacementPhaseTrainingEnv(
             raw_env,
             target_leg=str(args.phase_train_leg),

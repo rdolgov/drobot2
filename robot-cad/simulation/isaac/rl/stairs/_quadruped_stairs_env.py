@@ -41,6 +41,7 @@ from _stair_rl_contract import (
     placement_reference_state,
     placement_success_mode,
     stabilized_support_reference_base_delta,
+    staged_support_rear_pitch_scale,
     stair_failure_reasons,
     stair_goal_reached,
     stair_height_at_x,
@@ -870,6 +871,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         )
         self.minimum_support_contact_fraction = 1.0
         self.minimum_placement_support_margin_m = float("inf")
+        self.latest_placement_pitch_rear_correction_scale = 1.0
         self.maximum_swing_tread_normal_load_n = 0.0
         self.maximum_tread_normal_load_n_by_leg = np.zeros(
             len(LEGS),
@@ -1704,6 +1706,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self,
         placement_state: Mapping[str, object],
     ) -> np.ndarray:
+        self.latest_placement_pitch_rear_correction_scale = 1.0
         actual_base_delta = (
             self.latest_placement_base_position_m
             - self.placement_leg_baseline_base_position_m
@@ -1963,20 +1966,45 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     )
                 ),
             )
-            for leg, correction_m in pitch_corrections.items():
-                if (
-                    self.placement_swing_leg
-                    in tuple(
+            front_only_legs = tuple(
+                self.pitch_feedback_config.get(
+                    "front_only_by_swing_leg",
+                    (),
+                )
+            )
+            if self.placement_swing_leg in front_only_legs:
+                rear_correction_scale = 0.0
+            else:
+                front_only_seconds = float(
+                    dict(
                         self.pitch_feedback_config.get(
-                            "front_only_by_swing_leg",
-                            (),
+                            "front_only_seconds_by_swing_leg",
+                            {},
                         )
-                    )
-                    and leg.startswith("rear_")
-                ):
-                    continue
+                    ).get(self.placement_swing_leg, 0.0)
+                )
+                blend_seconds = float(
+                    dict(
+                        self.pitch_feedback_config.get(
+                            "rear_blend_seconds_by_swing_leg",
+                            {},
+                        )
+                    ).get(self.placement_swing_leg, 0.0)
+                )
+                rear_correction_scale = staged_support_rear_pitch_scale(
+                    elapsed_seconds=float(placement_state["elapsed_seconds"]),
+                    front_only_seconds=front_only_seconds,
+                    blend_seconds=blend_seconds,
+                )
+            self.latest_placement_pitch_rear_correction_scale = (
+                rear_correction_scale
+            )
+            for leg, correction_m in pitch_corrections.items():
+                correction_scale = (
+                    rear_correction_scale if leg.startswith("rear_") else 1.0
+                )
                 adjusted[leg]["vertical_m"] += (
-                    correction_m * shift_fraction
+                    correction_m * shift_fraction * correction_scale
                 )
         squat_by_swing = dict(
             self.com_regulation_config.get(
@@ -2737,6 +2765,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.maximum_support_slip_m_by_leg.fill(0.0)
         self.minimum_support_contact_fraction = 1.0
         self.minimum_placement_support_margin_m = float("inf")
+        self.latest_placement_pitch_rear_correction_scale = 1.0
         self.maximum_swing_tread_normal_load_n = 0.0
         self.maximum_tread_normal_load_n_by_leg.fill(0.0)
         self.placement_tread_contact_sample_count = 0
@@ -3218,6 +3247,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.maximum_support_slip_m_by_leg.fill(0.0)
         self.minimum_support_contact_fraction = 1.0
         self.minimum_placement_support_margin_m = float("inf")
+        self.latest_placement_pitch_rear_correction_scale = 1.0
         self.maximum_swing_tread_normal_load_n = 0.0
         self.maximum_tread_normal_load_n_by_leg.fill(0.0)
         self.placement_tread_contact_sample_count = 0
@@ -4433,6 +4463,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 placement_support_contact_fraction
             ),
             "placement_support_margin_m": placement_support_margin,
+            "placement_pitch_rear_correction_scale": (
+                self.latest_placement_pitch_rear_correction_scale
+            ),
             "placement_transfer_active": self.placement_transfer_active,
             "placement_transfer_fraction": (
                 float(placement_state.get("transfer_fraction", 0.0))

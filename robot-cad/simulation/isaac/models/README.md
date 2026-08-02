@@ -11,6 +11,7 @@ ignored under `simulation/isaac/output/`.
 | `ppo-stairs-v6-180mm-25cm-small/` | Bounded full-size stair evaluation policy, schema-2 manifest, packaging/training/evaluation/recording reports; objective failed | `c29cb71ab596392c36292a57ca98473e7c4807a9de700bc7824bf2e0d73f91bc` |
 | `ppo-stairs-v12-front-right-190mm-lift-small/` | Support-only mixed-height lift residual, manifest, training/evaluation/recording reports; strict 190 mm objective failed | `e0147f16ea942d751c8cec49616fa3aed62fc6b5f6a263aa0625600ee75e5f62` |
 | `ppo-stairs-v13-front-right-190mm-lift-small/` | Direct front-right lift PPO residual, manifest, training/evaluation/recording reports; 3/3 strict 190 mm lift-hold successes | `b53a8d3d0087f816403461f328c758657d85ab6b19a08d79e951a8f4b85a9494` |
+| `ppo-foot-lift-v3-rear-right-190mm-small/` | Fresh 512-step rear-right unsupported-balance PPO, manifest, 5/5 strict evaluation, and recording report | `376d1e02e09ea9d5d25eacdc38bf46432c8ed9bf6b3efc65cccdbec6214e636b` |
 
 The stair checkpoint has one verified stochastic four-step `10 mm` climb but
 scored `0/10` deterministic completions. It is an evaluation artifact, not a
@@ -35,3 +36,9 @@ training episodes, and strict deterministic evaluation passed `3/3` with
 `204.61-205.05 mm` lift and no measurable support slip. It is a successful
 simulation prerequisite, not yet a tread-placement, ascent, or hardware
 deployment policy. See `docs/rl-stairs-v13-direct-lift/README.md`.
+
+The foot-lift V3 checkpoint isolates the rear-right leg on flat ground with
+three physical support feet and no torso pose pinning. Five fresh deterministic
+episodes all passed the strict `190 mm`/`0.75 s` gate with `199.85-203.66 mm`
+maximum lift and at most `2.12 deg` tilt. This proves clearance and balance in
+the simple pose, not the mixed-height stair transfer, landing, or ascent.

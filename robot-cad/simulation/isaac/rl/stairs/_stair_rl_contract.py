@@ -357,6 +357,7 @@ def placement_reference_state(
     else:
         phase = "hold"
     return {
+        "elapsed_seconds": elapsed,
         "phase": phase,
         "phase_one_hot": tuple(float(phase == name) for name in PLACEMENT_PHASES),
         "shift_fraction": shift_fraction,
@@ -1037,6 +1038,31 @@ def support_pitch_vertical_corrections(
         leg: correction if leg.startswith("front_") else -correction
         for leg in legs
     }
+
+
+def staged_support_rear_pitch_scale(
+    *,
+    elapsed_seconds: float,
+    front_only_seconds: float,
+    blend_seconds: float,
+) -> float:
+    """Smoothly restore rear-stance pitch correction after a front-only catch."""
+
+    elapsed = float(elapsed_seconds)
+    hold = float(front_only_seconds)
+    blend = float(blend_seconds)
+    if not np.isfinite(elapsed) or elapsed < 0.0:
+        raise ValueError("elapsed_seconds must be finite and nonnegative")
+    if not np.isfinite(hold) or hold < 0.0:
+        raise ValueError("front_only_seconds must be finite and nonnegative")
+    if not np.isfinite(blend) or blend < 0.0:
+        raise ValueError("blend_seconds must be finite and nonnegative")
+    if elapsed <= hold:
+        return 0.0
+    if blend == 0.0:
+        return 1.0
+    fraction = float(np.clip((elapsed - hold) / blend, 0.0, 1.0))
+    return fraction * fraction * (3.0 - 2.0 * fraction)
 
 
 def placement_contact_reached(
