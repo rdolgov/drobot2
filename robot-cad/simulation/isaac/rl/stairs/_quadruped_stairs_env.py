@@ -3925,7 +3925,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                                 placement_transfer_swing_total_load_n
                             ),
                             minimum_next_swing_preload_n=(
-                                self.minimum_next_swing_preload_n
+                                float(
+                                    active_transfer_config.get(
+                                        "minimum_next_swing_preload_n",
+                                        self.minimum_next_swing_preload_n,
+                                    )
+                                )
                             ),
                             support_margin_m=placement_support_margin,
                             minimum_support_margin_m=float(

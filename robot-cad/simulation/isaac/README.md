@@ -791,6 +791,51 @@ tilt. There is no RGB policy input; the external camera only generated the MP4.
 This proves clearance and simple-pose balance, not mixed-height transfer,
 landing, or ascent. The stair experiments remain fixed at `250 mm` tread depth.
 
+V38 reintroduces the mixed-height pose but keeps the outcome deliberately
+bounded: front-right and front-left first complete their verified tread
+placements, an analytic composite-COM transfer unloads rear-right, and a small
+support-residual PPO policy is scored only on a physical `190 mm` rear-right
+lift and no-fall hold. A cached-state target search added `20 mm` forward and
+`40 mm` toward rear-left, changing the old rear transfer from a negative margin
+to about `40 mm` positive margin. The uninterrupted replay required a
+rear-right-specific `3 N` preload gate held for `0.50 s`; other legs keep the
+global `5 N` threshold, and the unloaded gate remains `<= 1 N`.
+
+Two `1,024`-step transfer-residual pilots were run and rejected: both actors
+slightly reduced next-foot preload and timed out before unload. The accepted
+controller therefore keeps the positive-margin analytic transfer and trains
+PPO only after that handoff. The final bounded training ran for `512` steps at
+seed `847`. Independent seed `848` passed model and loaded-algorithm checks,
+completed both transfers, raised rear-right `217.319 mm`, and terminated with
+no failure. Rear-transfer completion margin was `38.519 mm`; maximum body tilt
+was `11.2504 deg` under the exact `0.8825985 N m` effort cap.
+
+This is not a stair-climb claim. Rear-right was not lowered onto the tread,
+rear-left did not move, and the controller did not ascend even one complete
+stair. Maximum simulated support slip was `57.582 mm`, and requested PD effort
+was at or above `95%` of the cap in `42.29%` of samples. The next experiment
+must isolate rear-right lowering/contact, then mirror an independently searched
+positive-margin rear-left transfer. Real rubber-pad friction and compliance
+should be measured before changing traction parameters; RGB vision is not the
+current bottleneck. The policy uses IMU/proprioception, joint state,
+contact/load, composite COM/support state, phase, previous action, and analytic
+stair geometry. The external camera is recording-only.
+
+The exact bounded training command is:
+
+```powershell
+& simulation\isaac\rl\stairs\train_stairs_v38_rear_right_lift_small.ps1 `
+  -OutputDir simulation\isaac\output\rl\ppo-stairs-v38-rear-right-190mm-512-seed847 `
+  -Seed 847
+```
+
+The accepted policy, exact config, reports, limitations, and full evaluation
+command are packaged under
+`simulation/isaac/models/ppo-stairs-v38-rear-right-190mm-small/`. The accepted
+external-camera video is tracked as
+`reviews/ppo-stairs-v38-rear-right-190mm-lift-seed848.mp4` and hosted privately
+at https://drobot-design-review.romka.chatgpt.site.
+
 The source map, complete commands, reward/termination formulas, manifest
 rules, measured smoke results, evaluation guidance, and sim-to-real limits are
 owned by [`docs/rl-stairs/README.md`](../../docs/rl-stairs/README.md), with

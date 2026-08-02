@@ -269,6 +269,22 @@ def v36_config() -> dict:
         return yaml.safe_load(stream)
 
 
+@pytest.fixture
+def v37_config() -> dict:
+    with (
+        STAIRS_DIR / "quadruped_stairs_v37_joint_clearance_support.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v38_config() -> dict:
+    with (
+        STAIRS_DIR / "quadruped_stairs_v38_positive_margin_rear_transfer.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
 def test_stair_layers_match_the_reviewed_four_step_profile(config: dict) -> None:
     staircase = config["task"]["staircase"]
     boxes = stair_layer_boxes(staircase)
@@ -1555,6 +1571,53 @@ def test_v36_exposes_only_bounded_support_residual_during_transfer(
             -0.001008772,
         ]
     )
+
+
+def test_v38_requires_positive_margin_for_rear_right_transfer(
+    v37_config: dict,
+    v38_config: dict,
+) -> None:
+    baseline = v37_config["task"]
+    task = v38_config["task"]
+    transfer = task["placement_reference"]["inter_leg_transfer"]
+    rear_right = transfer["override_by_next_swing_leg"]["rear_right"]
+    regulation = transfer["com_regulation"]
+
+    assert task["id"] == (
+        "Drobot-Quadruped-Stairs-v38-Positive-Margin-Rear-Transfer"
+    )
+    assert task["staircase"] == baseline["staircase"]
+    assert task["staircase"]["tread_depth_m"] == pytest.approx(0.250)
+    assert task["staircase"]["rise_m"] == pytest.approx(0.180)
+    assert task["robot_hardware_profile"] == baseline["robot_hardware_profile"]
+    assert task["robot_hardware_profile"]["effort_cap_nm"] == pytest.approx(
+        0.8825985
+    )
+    assert task["placement_reference"]["sequence_legs"] == [
+        "front_right",
+        "front_left",
+        "rear_right",
+    ]
+    assert task["placement_reference"]["advance_clearance_gate"]["legs"] == [
+        "front_left",
+        "rear_right",
+    ]
+    assert rear_right["minimum_support_margin_m"] == pytest.approx(0.015)
+    assert transfer["minimum_next_swing_preload_n"] == pytest.approx(5.0)
+    assert rear_right["minimum_next_swing_preload_n"] == pytest.approx(3.0)
+    assert rear_right["swing_unload_lift_m"] == pytest.approx(0.140)
+    assert rear_right["minimum_upright_cosine"] == pytest.approx(0.9781476)
+    assert transfer["residual_action_scale"] == pytest.approx(0.02)
+    assert regulation["target_offset_by_swing_leg"]["rear_right"] == {
+        "forward": pytest.approx(0.020),
+        "lateral": pytest.approx(0.040),
+    }
+    assert regulation["maximum_correction_m_by_swing_leg"]["rear_right"][
+        "forward"
+    ] == pytest.approx(0.100)
+    assert regulation["maximum_correction_m_by_swing_leg"]["rear_left"][
+        "forward"
+    ] == pytest.approx(0.080)
 
 
 def test_v9_front_pair_uses_dynamic_swing_support_action_contract(
