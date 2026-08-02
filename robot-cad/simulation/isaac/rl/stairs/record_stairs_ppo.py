@@ -479,7 +479,10 @@ try:
         environment_contract=raw_env.contract,
         allow_unverified=args.allow_unverified_model,
     )
-    model = PPO.load(str(model_path), env=raw_env, device=args.device)
+    # Keep the default model unbound so a compact phase policy can provide
+    # the exact manifest/config contract while explicit per-leg mappings
+    # expand its outputs before the raw 12-joint environment is stepped.
+    model = PPO.load(str(model_path), device=args.device)
     algorithm_verification = (
         validate_ppo_algorithm_contract(
             model,
@@ -500,6 +503,17 @@ try:
         raise ValueError(
             "Leg-model mapping is outside the placement sequence: "
             f"{unknown_leg_models}"
+        )
+    default_policy_legs = (
+        known_placement_legs - set(leg_model_paths) - zero_action_legs
+    )
+    if (
+        tuple(model.action_space.shape) != tuple(raw_env.action_space.shape)
+        and default_policy_legs
+    ):
+        raise RuntimeError(
+            "Compact default model cannot control unmapped placement legs: "
+            f"{sorted(default_policy_legs)}"
         )
     leg_models: dict[str, PPO] = {}
     leg_model_verification: dict[str, dict[str, object]] = {}

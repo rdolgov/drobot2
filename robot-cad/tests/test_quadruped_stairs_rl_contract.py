@@ -64,6 +64,7 @@ from _stair_rl_contract import (  # noqa: E402
     stair_observation_fields,
     stair_reward_terms,
     support_load_share_vertical_corrections,
+    support_pitch_vertical_corrections,
     support_triangle_incenter_xy,
 )
 
@@ -213,6 +214,46 @@ def v29_config() -> dict:
     with (
         STAIRS_DIR
         / "quadruped_stairs_v29_preunload_com_gate.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v31_config() -> dict:
+    with (
+        STAIRS_DIR / "quadruped_stairs_v31_clearance_tracking.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v32_config() -> dict:
+    with (
+        STAIRS_DIR / "quadruped_stairs_v32_compact_support_regulation.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v33_config() -> dict:
+    with (
+        STAIRS_DIR / "quadruped_stairs_v33_compact_support_pitch.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v34_config() -> dict:
+    with (
+        STAIRS_DIR / "quadruped_stairs_v34_imu_pitch_feedback.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v35_config() -> dict:
+    with (
+        STAIRS_DIR / "quadruped_stairs_v35_full_first_tread.yaml"
     ).open("r", encoding="utf-8") as stream:
         return yaml.safe_load(stream)
 
@@ -1217,6 +1258,55 @@ def test_support_regulation_reward_penalizes_com_and_drive_saturation(
     assert terms["pd_effort_saturation"] < 0.0
 
 
+def test_clearance_tracking_rewards_height_and_penalizes_gate_deficit(
+    v29_config: dict,
+) -> None:
+    reward = {
+        **v29_config["task"]["reward"],
+        "swing_height_tracking_sigma_m": 0.02,
+        "swing_height_tracking": 18.0,
+        "clearance_gate_deficit": -6000.0,
+    }
+    common = {
+        "command_velocity_xyz": (0.0, 0.0, 0.0),
+        "body_linear_velocity_xyz": (0.0, 0.0, 0.0),
+        "body_angular_velocity_xyz": (0.0, 0.0, 0.0),
+        "projected_gravity_xyz": (0.0, 0.0, -1.0),
+        "base_clearance_m": 0.36,
+        "lateral_position_m": 0.0,
+        "forward_progress_m": 0.0,
+        "base_height_gain_m": 0.0,
+        "terrain_height_gain_m": 0.0,
+        "heading_error_rad": 0.0,
+        "joint_velocities_normalized": np.zeros(12),
+        "action": np.zeros(12),
+        "previous_action": np.zeros(12),
+        "failed": False,
+        "succeeded": False,
+        "reward_config": reward,
+    }
+    tracked = stair_reward_terms(
+        **common,
+        swing_height_error_m=0.005,
+        clearance_gate_deficit_m=0.0,
+    )
+    low = stair_reward_terms(
+        **common,
+        swing_height_error_m=0.045,
+        clearance_gate_deficit_m=0.025,
+    )
+    assert tracked["swing_height_tracking"] > low["swing_height_tracking"]
+    assert tracked["clearance_gate_deficit"] == pytest.approx(0.0)
+    assert low["clearance_gate_deficit"] == pytest.approx(-150.0)
+    assert tracked["total"] > low["total"]
+    with pytest.raises(ValueError, match="nonnegative"):
+        stair_reward_terms(
+            **common,
+            swing_height_error_m=0.0,
+            clearance_gate_deficit_m=-0.001,
+        )
+
+
 def test_support_load_sharing_extends_the_underloaded_leg() -> None:
     triangle = ((0.0, 0.0), (1.0, 0.0), (0.0, 1.0))
     correction = support_load_share_vertical_corrections(
@@ -1284,6 +1374,134 @@ def test_v29_requires_a_strict_stable_pre_unload_gate(
         + transfer["unload_duration_seconds"]
         + transfer["pre_unload_gate_hold_seconds"]
     )
+
+
+def test_v31_targets_measured_clearance_without_changing_stair_contract(
+    v29_config: dict,
+    v31_config: dict,
+) -> None:
+    baseline = v29_config["task"]
+    task = v31_config["task"]
+    reward = task["reward"]
+    lift_level = next(
+        level
+        for level in task["placement_curriculum"]["levels"]
+        if level["id"] == "left-supported-190mm-lift"
+    )
+
+    assert task["id"] == "Drobot-Quadruped-Stairs-v31-Clearance-Tracking"
+    assert task["staircase"] == baseline["staircase"]
+    assert task["robot_hardware_profile"] == baseline["robot_hardware_profile"]
+    assert task["placement_reference"]["inter_leg_transfer"] == (
+        baseline["placement_reference"]["inter_leg_transfer"]
+    )
+    assert task["placement_reference"]["advance_clearance_gate"] == (
+        baseline["placement_reference"]["advance_clearance_gate"]
+    )
+    assert lift_level["minimum_lift_m"] == pytest.approx(0.190)
+    assert lift_level["apex_lift_m"] == pytest.approx(0.220)
+    assert reward["swing_target_tracking"] == pytest.approx(0.0)
+    assert reward["swing_height_tracking"] > 0.0
+    assert reward["clearance_gate_deficit"] < 0.0
+
+
+def test_v32_prioritizes_compact_support_regulation_without_changing_hardware(
+    v31_config: dict,
+    v32_config: dict,
+) -> None:
+    baseline = v31_config["task"]
+    task = v32_config["task"]
+    reward = task["reward"]
+
+    assert task["id"] == "Drobot-Quadruped-Stairs-v32-Compact-Support-Regulation"
+    assert task["staircase"] == baseline["staircase"]
+    assert task["robot_hardware_profile"] == baseline["robot_hardware_profile"]
+    assert task["placement_reference"] == baseline["placement_reference"]
+    assert reward["upright_deviation"] < baseline["reward"]["upright_deviation"]
+    assert reward["roll_pitch_rate"] < baseline["reward"]["roll_pitch_rate"]
+    assert reward["support_margin"] > baseline["reward"]["support_margin"]
+    assert reward["balance_target_error"] < baseline["reward"]["balance_target_error"]
+
+
+def test_v33_reduces_exploration_for_support_pitch_training(
+    v32_config: dict,
+    v33_config: dict,
+) -> None:
+    baseline = v32_config["task"]
+    task = v33_config["task"]
+
+    assert task["id"] == "Drobot-Quadruped-Stairs-v33-Compact-Support-Pitch"
+    assert task["staircase"] == baseline["staircase"]
+    assert task["robot_hardware_profile"] == baseline["robot_hardware_profile"]
+    assert task["placement_reference"] == baseline["placement_reference"]
+    assert task["reward"] == baseline["reward"]
+    assert v33_config["ppo"]["learning_rate"] < v32_config["ppo"]["learning_rate"]
+    assert v33_config["ppo"]["target_kl"] < v32_config["ppo"]["target_kl"]
+    assert v33_config["ppo"]["initial_log_std"] < v32_config["ppo"]["initial_log_std"]
+
+
+def test_v34_enables_bounded_imu_pitch_feedback(
+    v33_config: dict,
+    v34_config: dict,
+) -> None:
+    baseline = v33_config["task"]
+    task = v34_config["task"]
+    feedback = task["placement_reference"]["inter_leg_transfer"][
+        "com_regulation"
+    ]["pitch_attitude_feedback"]
+    center_level = next(
+        level
+        for level in task["placement_curriculum"]["levels"]
+        if level["id"] == "left-center-tread-load"
+    )
+
+    assert task["id"] == "Drobot-Quadruped-Stairs-v34-IMU-Pitch-Feedback"
+    assert task["staircase"] == baseline["staircase"]
+    assert task["robot_hardware_profile"] == baseline["robot_hardware_profile"]
+    assert feedback == {
+        "enabled": True,
+        "proportional_gain_m": pytest.approx(0.080),
+        "maximum_correction_m": pytest.approx(0.025),
+    }
+    assert center_level["apex_lift_m"] == pytest.approx(0.235)
+    assert center_level["landing_lift_m"] == pytest.approx(0.125)
+
+
+def test_v35_preserves_rear_unload_pose_for_190mm_clearance(
+    v34_config: dict,
+    v35_config: dict,
+) -> None:
+    baseline = v34_config["task"]
+    task = v35_config["task"]
+    placement = task["placement_reference"]
+    transfer = placement["inter_leg_transfer"]
+    rear_right = transfer["override_by_next_swing_leg"]["rear_right"]
+
+    assert task["id"] == "Drobot-Quadruped-Stairs-v35-Full-First-Tread"
+    assert task["staircase"] == baseline["staircase"]
+    assert task["staircase"]["tread_depth_m"] == pytest.approx(0.25)
+    assert task["staircase"]["rise_m"] == pytest.approx(0.18)
+    assert placement["sequence_legs"] == [
+        "front_right",
+        "front_left",
+        "rear_right",
+        "rear_left",
+    ]
+    assert placement["advance_clearance_gate"]["minimum_clearance_m"] == (
+        pytest.approx(0.190)
+    )
+    assert rear_right["swing_unload_lift_m"] == pytest.approx(0.120)
+    assert rear_right["minimum_support_margin_m"] == pytest.approx(-0.010)
+    assert transfer["post_transfer_swing_reference_mode_by_leg"] == {
+        "rear_right": "phase_baseline",
+        "rear_left": "phase_baseline",
+    }
+    assert placement["level_override_by_leg"]["rear_right"][
+        "lift_forward_offset_m"
+    ] == pytest.approx(0.050)
+    assert placement["level_override_by_leg"]["rear_left"][
+        "lift_forward_offset_m"
+    ] == pytest.approx(0.050)
 
 
 def test_v9_front_pair_uses_dynamic_swing_support_action_contract(
@@ -1956,6 +2174,36 @@ def test_support_reference_feedback_amplifies_body_drift_rejection() -> None:
             actual_base_delta_m=actual,
             anchor_follow_gain=0.0,
             error_feedback_gain_xyz=(0.0, 2.1, 0.0),
+        )
+
+
+def test_support_pitch_feedback_levels_nose_down_attitude() -> None:
+    corrections = support_pitch_vertical_corrections(
+        support_legs=("front_right", "rear_left", "rear_right"),
+        projected_gravity_x=-0.246,
+        proportional_gain_m=0.120,
+        maximum_correction_m=0.035,
+    )
+    assert corrections == {
+        "front_right": pytest.approx(-0.02952),
+        "rear_left": pytest.approx(0.02952),
+        "rear_right": pytest.approx(0.02952),
+    }
+
+    saturated = support_pitch_vertical_corrections(
+        support_legs=("front_right", "rear_left", "rear_right"),
+        projected_gravity_x=0.5,
+        proportional_gain_m=0.120,
+        maximum_correction_m=0.035,
+    )
+    assert saturated["front_right"] == pytest.approx(0.035)
+    assert saturated["rear_left"] == pytest.approx(-0.035)
+    with pytest.raises(ValueError, match="known robot legs"):
+        support_pitch_vertical_corrections(
+            support_legs=("middle_left",),
+            projected_gravity_x=0.0,
+            proportional_gain_m=0.120,
+            maximum_correction_m=0.035,
         )
 
 

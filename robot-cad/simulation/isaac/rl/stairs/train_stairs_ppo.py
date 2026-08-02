@@ -288,10 +288,20 @@ if sum(phase_mask_flags) > 1:
     parser.error("phase residual joint masks are mutually exclusive")
 if any(phase_mask_flags) and not args.phase_train_leg:
     parser.error("phase residual joint masks require --phase-train-leg")
-if args.phase_compact_residual_action and not args.phase_residual_swing_only:
+if args.phase_compact_residual_action and not any(phase_mask_flags):
     parser.error(
-        "--phase-compact-residual-action requires --phase-residual-swing-only"
+        "--phase-compact-residual-action requires a phase residual joint mask"
     )
+
+phase_policy_action_size = 12
+if args.phase_compact_residual_action:
+    if args.phase_residual_swing_support_abduction:
+        phase_policy_action_size = 6
+    elif args.phase_residual_support_only:
+        phase_policy_action_size = 9
+    else:
+        # Both swing-only and support-abduction-only expose three joints.
+        phase_policy_action_size = 3
 config_path = _resolve_project_path(args.config)
 with config_path.open("r", encoding="utf-8") as stream:
     config = yaml.safe_load(stream)
@@ -414,12 +424,7 @@ algorithm_contract = expected_ppo_algorithm_contract(
     batch_size=batch_size,
     epochs=epochs,
     observation_size=policy_observation_size,
-    action_size=(
-        3
-        if args.phase_compact_residual_action
-        and args.phase_residual_swing_only
-        else 12
-    ),
+    action_size=phase_policy_action_size,
 )
 
 from isaacsim import SimulationApp  # noqa: E402

@@ -954,6 +954,40 @@ def stabilized_support_reference_base_delta(
     ).astype(np.float64)
 
 
+def support_pitch_vertical_corrections(
+    *,
+    support_legs: Sequence[str],
+    projected_gravity_x: float,
+    proportional_gain_m: float,
+    maximum_correction_m: float,
+) -> dict[str, float]:
+    """Level sagittal attitude by differentially extending stance legs.
+
+    For this robot's IMU/joint convention, negative projected gravity X is
+    corrected by shortening front stance legs and extending rear stance legs.
+    This creates the restoring pitch moment without camera input.
+    """
+
+    gravity_x = float(projected_gravity_x)
+    gain = float(proportional_gain_m)
+    maximum = float(maximum_correction_m)
+    legs = tuple(str(leg) for leg in support_legs)
+    if not np.isfinite(gravity_x):
+        raise ValueError("projected_gravity_x must be finite")
+    if not np.isfinite(gain) or gain <= 0.0:
+        raise ValueError("proportional_gain_m must be finite and positive")
+    if not np.isfinite(maximum) or maximum <= 0.0:
+        raise ValueError("maximum_correction_m must be finite and positive")
+    if not legs or any(leg not in STAIR_FOOT_NAMES for leg in legs):
+        raise ValueError("support_legs must contain known robot legs")
+
+    correction = float(np.clip(gain * gravity_x, -maximum, maximum))
+    return {
+        leg: correction if leg.startswith("front_") else -correction
+        for leg in legs
+    }
+
+
 def placement_contact_reached(
     *,
     swing_tip_position_m: Sequence[float],
@@ -1480,6 +1514,8 @@ def stair_reward_terms(
     requested_pd_effort_nm: Sequence[float] | None = None,
     effort_cap_nm: float = 1.0,
     contact_load_normalization_n: float = 50.0,
+    swing_height_error_m: float | None = None,
+    clearance_gate_deficit_m: float = 0.0,
 ) -> dict[str, float]:
     """Return individually reviewable stair-climbing reward terms."""
 
@@ -1514,6 +1550,23 @@ def stair_reward_terms(
     )
     if placement_sigma <= 0.0:
         raise ValueError("swing_target_tracking_sigma_m must be positive")
+    height_sigma = float(
+        reward_config.get("swing_height_tracking_sigma_m", 0.02)
+    )
+    if height_sigma <= 0.0:
+        raise ValueError("swing_height_tracking_sigma_m must be positive")
+    height_error = (
+        None
+        if swing_height_error_m is None
+        else float(swing_height_error_m)
+    )
+    gate_deficit = float(clearance_gate_deficit_m)
+    if height_error is not None and not np.isfinite(height_error):
+        raise ValueError("swing_height_error_m must be finite")
+    if not np.isfinite(gate_deficit) or gate_deficit < 0.0:
+        raise ValueError(
+            "clearance_gate_deficit_m must be finite and nonnegative"
+        )
     balance_error = (
         np.zeros(2, dtype=np.float32)
         if balance_target_error_xy_m is None
@@ -1639,6 +1692,18 @@ def stair_reward_terms(
                     * (float(swing_target_distance_m) / placement_sigma) ** 2
                 )
             )
+        ),
+        "swing_height_tracking": (
+            float(reward_config.get("swing_height_tracking", 0.0))
+            * (
+                float(np.exp(-0.5 * (height_error / height_sigma) ** 2))
+                if height_error is not None
+                else 0.0
+            )
+        ),
+        "clearance_gate_deficit": (
+            float(reward_config.get("clearance_gate_deficit", 0.0))
+            * gate_deficit
         ),
         "tread_contact": (
             float(reward_config.get("tread_contact", 0.0))

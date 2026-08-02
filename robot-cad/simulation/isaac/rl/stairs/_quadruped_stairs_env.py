@@ -48,6 +48,7 @@ from _stair_rl_contract import (
     stair_observation_fields,
     stair_reward_terms,
     support_load_share_vertical_corrections,
+    support_pitch_vertical_corrections,
     validate_staircase_config,
 )
 from _vl53l5cx_contract import (
@@ -359,6 +360,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.base_policy_sha256: str | None = None
         self.base_action_scale = np.zeros(12, dtype=np.float32)
         self.latest_walking_observation = np.zeros(48, dtype=np.float32)
+        self.latest_projected_gravity_xyz = np.asarray(
+            (0.0, 0.0, -1.0),
+            dtype=np.float64,
+        )
         self.previous_residual_action = np.zeros(12, dtype=np.float32)
         if self.residual_policy_enabled:
             configured_path = Path(
@@ -620,6 +625,29 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.com_regulation_enabled = bool(
             self.com_regulation_config.get("enabled", False)
         )
+        self.pitch_feedback_config = dict(
+            self.com_regulation_config.get("pitch_attitude_feedback", {})
+        )
+        self.pitch_feedback_enabled = bool(
+            self.pitch_feedback_config.get("enabled", False)
+        )
+        if self.pitch_feedback_enabled:
+            pitch_gain_m = float(
+                self.pitch_feedback_config.get("proportional_gain_m", 0.12)
+            )
+            pitch_maximum_m = float(
+                self.pitch_feedback_config.get("maximum_correction_m", 0.035)
+            )
+            if not 0.0 < pitch_gain_m <= 0.50:
+                raise ValueError(
+                    "com_regulation.pitch_attitude_feedback."
+                    "proportional_gain_m must be within (0, 0.50]"
+                )
+            if not 0.0 < pitch_maximum_m <= 0.08:
+                raise ValueError(
+                    "com_regulation.pitch_attitude_feedback."
+                    "maximum_correction_m must be within (0, 0.08]"
+                )
         balance_point = str(
             self.com_regulation_config.get("balance_point", "composite_com")
         )
@@ -639,6 +667,16 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             )
         maximum_correction = dict(
             self.com_regulation_config.get("maximum_correction_m", {})
+        )
+        maximum_correction.update(
+            dict(
+                dict(
+                    self.com_regulation_config.get(
+                        "maximum_correction_m_by_swing_leg",
+                        {},
+                    )
+                ).get(self.placement_swing_leg, {})
+            )
         )
         if any(
             float(maximum_correction.get(axis, 0.12)) <= 0.0
@@ -1139,8 +1177,16 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             / total_mass
         ).astype(np.float64)
 
-    def _placement_balance_target_xy_m(self) -> np.ndarray:
+    def _placement_balance_target_xy_m(
+        self,
+        *,
+        hold_offset_scale: float = 1.0,
+    ) -> np.ndarray:
         """Return the retained whole-robot balance target for this phase."""
+
+        hold_offset_scale = float(hold_offset_scale)
+        if not 0.0 <= hold_offset_scale <= 1.0:
+            raise ValueError("hold_offset_scale must be within [0, 1]")
 
         target = self.placement_transfer_target_balance_position_m[:2].copy()
         if not np.any(np.abs(target) > 1e-9):
@@ -1159,7 +1205,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     ).get(self.placement_swing_leg, {})
                 )
             )
-            target += np.asarray(
+            target += hold_offset_scale * np.asarray(
                 [
                     float(hold_target_offset.get("forward", 0.0)),
                     float(hold_target_offset.get("lateral", 0.0)),
@@ -1394,6 +1440,16 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         maximum_correction = dict(
             self.com_regulation_config.get("maximum_correction_m", {})
         )
+        maximum_correction.update(
+            dict(
+                dict(
+                    self.com_regulation_config.get(
+                        "maximum_correction_m_by_swing_leg",
+                        {},
+                    )
+                ).get(self.placement_swing_leg, {})
+            )
+        )
         target_balance_xy = bounded_support_incenter_target_xy(
             reference_point_xy_m=balance_position[:2],
             support_points_xy_m=support_points,
@@ -1445,6 +1501,20 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             foot_tips_m,
             dtype=np.float32,
         ).copy()
+
+    def _active_inter_leg_transfer_config(self) -> dict[str, object]:
+        """Return transfer timing with an optional next-leg override."""
+
+        config = dict(self.inter_leg_transfer_config)
+        config.update(
+            dict(
+                dict(config.get("override_by_next_swing_leg", {})).get(
+                    self.placement_swing_leg,
+                    {},
+                )
+            )
+        )
+        return config
 
     def _inter_leg_transfer_targets(
         self,
@@ -1517,8 +1587,69 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "outward_m": float(stored["outward_m"])
                 - side_sign * float(desired_base_delta[1]),
             }
+        if (
+            self.pitch_feedback_enabled
+            and bool(
+                self.pitch_feedback_config.get(
+                    "apply_during_inter_leg_transfer",
+                    False,
+                )
+            )
+            and self.placement_swing_leg
+            in tuple(
+                self.pitch_feedback_config.get(
+                    "inter_leg_transfer_legs",
+                    LEGS,
+                )
+            )
+            and transfer_fraction > 0.0
+        ):
+            # A front-pair-on-tread/rear-pair-on-ground transfer spans the
+            # full stair rise. Regulate sagittal attitude while the COM moves,
+            # before asking the next rear foot to unload. This is opt-in so
+            # the already accepted V34 front-pair controller is unchanged.
+            pitch_corrections = support_pitch_vertical_corrections(
+                support_legs=(
+                    LEGS[index] for index in self.placement_support_leg_indices
+                ),
+                projected_gravity_x=float(
+                    self.latest_projected_gravity_xyz[0]
+                ),
+                proportional_gain_m=float(
+                    self.pitch_feedback_config.get(
+                        "inter_leg_transfer_proportional_gain_m",
+                        self.pitch_feedback_config.get(
+                            "proportional_gain_m",
+                            0.12,
+                        ),
+                    )
+                ),
+                maximum_correction_m=float(
+                    self.pitch_feedback_config.get(
+                        "inter_leg_transfer_maximum_correction_m",
+                        self.pitch_feedback_config.get(
+                            "maximum_correction_m",
+                            0.035,
+                        ),
+                    )
+                ),
+            )
+            for leg, correction_m in pitch_corrections.items():
+                if bool(
+                    self.pitch_feedback_config.get(
+                        "inter_leg_transfer_front_only",
+                        False,
+                    )
+                ) and self.placement_swing_leg.startswith(
+                    "rear_"
+                ) and leg.startswith("rear_"):
+                    continue
+                # The same feedback was active at the end of the preceding
+                # placement phase. Keep it continuous across the phase
+                # boundary instead of dropping it to zero and ramping again.
+                adjusted[leg]["vertical_m"] += correction_m
         adjusted[self.placement_swing_leg]["vertical_m"] -= float(
-            self.inter_leg_transfer_config.get(
+            self._active_inter_leg_transfer_config().get(
                 "swing_unload_lift_m",
                 0.0,
             )
@@ -1553,7 +1684,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             else self.placement_leg_baseline_base_position_m.copy()
         )
         self.placement_leg_baseline_lift_offset_m = float(
-            self.inter_leg_transfer_config.get(
+            self._active_inter_leg_transfer_config().get(
                 "swing_unload_lift_m",
                 0.0,
             )
@@ -1603,7 +1734,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             dtype=np.float64,
         )
         if self.com_regulation_enabled:
-            target_balance_xy = self._placement_balance_target_xy_m()
+            # A hold offset is a touchdown/load-transfer command, not a swing
+            # command. Ramp it in with the lower phase so clearance remains
+            # governed by the already verified transfer and lift targets.
+            target_balance_xy = self._placement_balance_target_xy_m(
+                hold_offset_scale=float(placement_state["lower_fraction"]),
+            )
             desired_base_delta[:2] = shift_fraction * (
                 target_balance_xy
                 - self.placement_leg_baseline_balance_position_m[:2]
@@ -1695,9 +1831,17 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             error_feedback_gain_xyz=(0.0, 0.0, 0.0),
         )
         swing_reference_mode = str(
-            self.inter_leg_transfer_config.get(
-                "post_transfer_swing_reference_mode",
-                "phase_baseline",
+            dict(
+                self.inter_leg_transfer_config.get(
+                    "post_transfer_swing_reference_mode_by_leg",
+                    {},
+                )
+            ).get(
+                self.placement_swing_leg,
+                self.inter_leg_transfer_config.get(
+                    "post_transfer_swing_reference_mode",
+                    "phase_baseline",
+                ),
             )
         )
         if swing_reference_mode not in {
@@ -1782,6 +1926,31 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             adjusted[leg]["vertical_m"] += (
                 float(extension_m) * shift_fraction
             )
+        if self.pitch_feedback_enabled and shift_fraction > 0.0:
+            pitch_corrections = support_pitch_vertical_corrections(
+                support_legs=(
+                    LEGS[index] for index in self.placement_support_leg_indices
+                ),
+                projected_gravity_x=float(
+                    self.latest_projected_gravity_xyz[0]
+                ),
+                proportional_gain_m=float(
+                    self.pitch_feedback_config.get(
+                        "proportional_gain_m",
+                        0.12,
+                    )
+                ),
+                maximum_correction_m=float(
+                    self.pitch_feedback_config.get(
+                        "maximum_correction_m",
+                        0.035,
+                    )
+                ),
+            )
+            for leg, correction_m in pitch_corrections.items():
+                adjusted[leg]["vertical_m"] += (
+                    correction_m * shift_fraction
+                )
         squat_by_swing = dict(
             self.com_regulation_config.get(
                 "support_squat_thrust_by_swing_leg",
@@ -2256,6 +2425,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             state["observation"],
             dtype=np.float32,
         ).copy()
+        self.latest_projected_gravity_xyz = np.asarray(
+            state["imu_observation"],
+            dtype=np.float64,
+        )[3:6].copy()
         base_position = np.asarray(state["base_position"])
         if self.placement_reference_enabled:
             self.latest_placement_base_position_m = np.asarray(
@@ -3056,13 +3229,16 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                             * self.control_dt_s,
                         )
                     )
+                active_transfer_config = (
+                    self._active_inter_leg_transfer_config()
+                )
                 placement_state = inter_leg_transfer_state(
                     transfer_elapsed_seconds,
                     duration_seconds=float(
-                        self.inter_leg_transfer_config["duration_seconds"]
+                        active_transfer_config["duration_seconds"]
                     ),
                     unload_duration_seconds=float(
-                        self.inter_leg_transfer_config.get(
+                        active_transfer_config.get(
                             "unload_duration_seconds",
                             0.0,
                         )
@@ -3271,6 +3447,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         upright_cosine = float(np.clip(-projected_gravity[2], -1.0, 1.0))
         placement_contact_now = False
         placement_swing_lift_m = 0.0
+        placement_swing_height_error_m: float | None = None
         placement_support_contact_fraction = 0.0
         placement_support_margin = 0.0
         placement_current_support_slip_m = 0.0
@@ -3390,6 +3567,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 swing_tip[2]
                 - self.initial_foot_bottom_z_m[self.placement_swing_leg_index]
             )
+            placement_swing_height_error_m = float(
+                float(placement_state["desired_lift_m"])
+                - placement_swing_lift_m
+            )
             target_world_x = self._placement_target_world_x_m()
             target_world_z = float(self.staircase_config["rise_m"])
             placement_swing_target_distance = float(
@@ -3490,6 +3671,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     "or swing_lift_hold"
                 )
             if self.placement_transfer_active:
+                active_transfer_config = (
+                    self._active_inter_leg_transfer_config()
+                )
                 placement_transfer_base_target_error_m = float(
                     np.linalg.norm(
                         balance_position[:2]
@@ -3544,14 +3728,14 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 if not completed_tread_loaded:
                     transfer_gate_failures.append("placed_tread_unloaded")
                 swing_unload_lift_m = float(
-                    self.inter_leg_transfer_config.get(
+                    active_transfer_config.get(
                         "swing_unload_lift_m",
                         0.0,
                     )
                 )
                 if swing_unload_lift_m > 0.0:
                     if placement_transfer_swing_total_load_n > float(
-                        self.inter_leg_transfer_config[
+                        active_transfer_config[
                             "maximum_swing_unloaded_load_n"
                         ]
                     ):
@@ -3564,33 +3748,39 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 ):
                     transfer_gate_failures.append("next_swing_unloaded")
                 if placement_support_margin < float(
-                    self.inter_leg_transfer_config[
+                    active_transfer_config[
                         "minimum_support_margin_m"
                     ]
                 ):
                     transfer_gate_failures.append("support_margin_low")
                 if placement_transfer_base_target_error_m > float(
-                    self.inter_leg_transfer_config[
+                    active_transfer_config[
                         "base_target_tolerance_m"
                     ]
                 ):
                     transfer_gate_failures.append("base_target_error_high")
                 if placement_transfer_base_speed_m_s > float(
-                    self.inter_leg_transfer_config[
+                    active_transfer_config[
                         "maximum_base_speed_m_s"
                     ]
                 ):
                     transfer_gate_failures.append("base_not_settled")
                 if placement_transfer_body_rate_rad_s > float(
-                    self.inter_leg_transfer_config[
+                    active_transfer_config[
                         "maximum_body_rate_rad_s"
                     ]
                 ):
                     transfer_gate_failures.append("body_rate_high")
-                if float(-projected_gravity[2]) < float(
-                    self.placement_reference_config[
-                        "minimum_success_upright_cosine"
-                    ]
+                transfer_minimum_upright_cosine = float(
+                    active_transfer_config.get(
+                        "minimum_upright_cosine",
+                        self.placement_reference_config[
+                            "minimum_success_upright_cosine"
+                        ],
+                    )
+                )
+                if float(-projected_gravity[2]) < (
+                    transfer_minimum_upright_cosine
                 ):
                     transfer_gate_failures.append("body_not_upright")
                 placement_transfer_gate_failures = tuple(
@@ -3620,7 +3810,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                             ),
                             support_margin_m=placement_support_margin,
                             minimum_support_margin_m=float(
-                                self.inter_leg_transfer_config[
+                                active_transfer_config[
                                     "minimum_support_margin_m"
                                 ]
                             ),
@@ -3628,13 +3818,13 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                                 placement_transfer_base_target_error_m
                             ),
                             maximum_balance_target_error_m=float(
-                                self.inter_leg_transfer_config[
+                                active_transfer_config[
                                     "base_target_tolerance_m"
                                 ]
                             ),
                             base_speed_m_s=placement_transfer_base_speed_m_s,
                             maximum_base_speed_m_s=float(
-                                self.inter_leg_transfer_config[
+                                active_transfer_config[
                                     "maximum_base_speed_m_s"
                                 ]
                             ),
@@ -3642,15 +3832,13 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                                 placement_transfer_body_rate_rad_s
                             ),
                             maximum_body_rate_rad_s=float(
-                                self.inter_leg_transfer_config[
+                                active_transfer_config[
                                     "maximum_body_rate_rad_s"
                                 ]
                             ),
                             upright_cosine=upright_cosine,
-                            minimum_upright_cosine=float(
-                                self.placement_reference_config[
-                                    "minimum_success_upright_cosine"
-                                ]
+                            minimum_upright_cosine=(
+                                transfer_minimum_upright_cosine
                             ),
                         )
                     )
@@ -3727,7 +3915,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         if (
             self.placement_transfer_active
             and transfer_elapsed_seconds
-            >= float(self.inter_leg_transfer_config["maximum_seconds"])
+            >= float(
+                self._active_inter_leg_transfer_config()["maximum_seconds"]
+            )
             and not placement_transfer_gate_now
         ):
             failure_reasons.append("body_transfer_failed")
@@ -4006,6 +4196,16 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     "contact_load_normalization_n",
                     50.0,
                 )
+            ),
+            swing_height_error_m=placement_swing_height_error_m,
+            clearance_gate_deficit_m=(
+                max(
+                    0.0,
+                    self.advance_clearance_gate_minimum_m
+                    - placement_swing_lift_m,
+                )
+                if placement_clearance_gate_active
+                else 0.0
             ),
         )
         reward = float(reward_terms["total"])
@@ -4425,6 +4625,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "maximum_terrain_height_m": self.maximum_terrain_height_m,
                 "minimum_base_clearance_m": self.minimum_base_clearance_m,
                 "maximum_body_tilt_deg": self.maximum_tilt_deg,
+                "final_projected_gravity_xyz": projected_gravity.tolist(),
                 "goal_hold_duration_s": (
                     self.goal_hold_step_count / self.control_hz
                 ),
