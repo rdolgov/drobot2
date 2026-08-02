@@ -370,13 +370,52 @@ def placement_reference_state(
     }
 
 
+def placement_advance_clearance_gate_state(
+    *,
+    candidate_phase: str,
+    measured_clearance_m: float,
+    minimum_clearance_m: float,
+    held_steps: int,
+    maximum_hold_steps: int,
+) -> dict[str, object]:
+    """Gate forward swing on measured clearance with a bounded safe hold."""
+
+    phase = str(candidate_phase)
+    if phase not in PLACEMENT_PHASES:
+        raise ValueError(f"unknown placement phase: {phase}")
+    measured = float(measured_clearance_m)
+    minimum = float(minimum_clearance_m)
+    if not np.isfinite(measured) or not np.isfinite(minimum):
+        raise ValueError("clearance values must be finite")
+    if minimum <= 0.0:
+        raise ValueError("minimum clearance must be positive")
+    held = int(held_steps)
+    maximum = int(maximum_hold_steps)
+    if held < 0 or maximum < 1:
+        raise ValueError("clearance hold steps must be non-negative and bounded")
+
+    advance_due = phase in {"advance", "lower", "hold"}
+    released = bool(advance_due and measured >= minimum)
+    hold_reference = bool(advance_due and not released)
+    next_held = held + int(hold_reference)
+    return {
+        "advance_due": advance_due,
+        "released": released,
+        "hold_reference": hold_reference,
+        "held_steps": next_held,
+        "timed_out": bool(hold_reference and next_held >= maximum),
+        "clearance_error_m": max(0.0, minimum - measured),
+    }
+
+
 def inter_leg_transfer_state(
     elapsed_seconds: float,
     *,
     duration_seconds: float,
     unload_duration_seconds: float = 0.0,
+    unload_elapsed_seconds: float | None = None,
 ) -> dict[str, object]:
-    """Return a smooth all-feet-loaded transfer encoded as weight shift."""
+    """Return a smooth transfer with an optionally gated unload clock."""
 
     duration = float(duration_seconds)
     if duration <= 0.0:
@@ -391,8 +430,13 @@ def inter_leg_transfer_state(
     transfer_fraction = linear_fraction * linear_fraction * (
         3.0 - 2.0 * linear_fraction
     )
+    unload_elapsed = (
+        max(0.0, elapsed - duration)
+        if unload_elapsed_seconds is None
+        else max(0.0, float(unload_elapsed_seconds))
+    )
     unload_linear_fraction = (
-        float(np.clip((elapsed - duration) / unload_duration, 0.0, 1.0))
+        float(np.clip(unload_elapsed / unload_duration, 0.0, 1.0))
         if unload_duration > 0.0
         else 1.0
     )
@@ -414,7 +458,91 @@ def inter_leg_transfer_state(
         "contact_expected": False,
         "transfer_fraction": transfer_fraction,
         "unload_fraction": unload_fraction,
+        "unload_elapsed_seconds": unload_elapsed,
+        "transfer_stage": (
+            "shift"
+            if transfer_fraction < 1.0 - 1e-9
+            else (
+                "pre_unload_settle"
+                if unload_fraction <= 1e-9
+                else ("unload" if unload_fraction < 1.0 - 1e-9 else "gate")
+            )
+        ),
     }
+
+
+def inter_leg_pre_unload_gate_failures(
+    *,
+    transfer_fraction: float,
+    support_contact_fraction: float,
+    completed_tread_loaded: bool,
+    next_swing_total_load_n: float,
+    minimum_next_swing_preload_n: float,
+    support_margin_m: float,
+    minimum_support_margin_m: float,
+    balance_target_error_m: float,
+    maximum_balance_target_error_m: float,
+    base_speed_m_s: float,
+    maximum_base_speed_m_s: float,
+    body_rate_rad_s: float,
+    maximum_body_rate_rad_s: float,
+    upright_cosine: float,
+    minimum_upright_cosine: float,
+) -> tuple[str, ...]:
+    """Return reasons a four-foot transfer state is not ready to unload."""
+
+    values = np.asarray(
+        [
+            transfer_fraction,
+            support_contact_fraction,
+            next_swing_total_load_n,
+            minimum_next_swing_preload_n,
+            support_margin_m,
+            minimum_support_margin_m,
+            balance_target_error_m,
+            maximum_balance_target_error_m,
+            base_speed_m_s,
+            maximum_base_speed_m_s,
+            body_rate_rad_s,
+            maximum_body_rate_rad_s,
+            upright_cosine,
+            minimum_upright_cosine,
+        ],
+        dtype=np.float64,
+    )
+    if not np.all(np.isfinite(values)):
+        raise ValueError("pre-unload gate inputs must be finite")
+    if any(
+        value < 0.0
+        for value in (
+            minimum_next_swing_preload_n,
+            maximum_balance_target_error_m,
+            maximum_base_speed_m_s,
+            maximum_body_rate_rad_s,
+        )
+    ):
+        raise ValueError("pre-unload gate thresholds cannot be negative")
+
+    failures: list[str] = []
+    if float(transfer_fraction) < 1.0 - 1e-6:
+        failures.append("transfer_incomplete")
+    if float(support_contact_fraction) < 1.0 - 1e-6:
+        failures.append("support_contact_lost")
+    if not bool(completed_tread_loaded):
+        failures.append("placed_tread_unloaded")
+    if float(next_swing_total_load_n) < float(minimum_next_swing_preload_n):
+        failures.append("next_swing_not_preloaded")
+    if float(support_margin_m) < float(minimum_support_margin_m):
+        failures.append("support_margin_low")
+    if float(balance_target_error_m) > float(maximum_balance_target_error_m):
+        failures.append("balance_target_error_high")
+    if float(base_speed_m_s) > float(maximum_base_speed_m_s):
+        failures.append("base_not_settled")
+    if float(body_rate_rad_s) > float(maximum_body_rate_rad_s):
+        failures.append("body_rate_high")
+    if float(upright_cosine) < float(minimum_upright_cosine):
+        failures.append("body_not_upright")
+    return tuple(failures)
 
 
 def support_triangle_incenter_xy(

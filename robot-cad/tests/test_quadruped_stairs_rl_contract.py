@@ -41,12 +41,14 @@ from _stair_rl_contract import (  # noqa: E402
     curriculum_active_steps,
     foot_tread_progress,
     goal_x_for_active_steps,
+    inter_leg_pre_unload_gate_failures,
     inter_leg_transfer_state,
     joint_effort_telemetry_sample,
     next_foot_target_index,
     pack_placement_reference_observation,
     pack_stair_policy_observation,
     pack_support_regulation_observation,
+    placement_advance_clearance_gate_state,
     placement_contact_reached,
     placement_curriculum_level,
     placement_lift_hold_reached,
@@ -202,6 +204,15 @@ def v24_config() -> dict:
     with (
         STAIRS_DIR
         / "quadruped_stairs_v24_front_pair_conservative_support.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v29_config() -> dict:
+    with (
+        STAIRS_DIR
+        / "quadruped_stairs_v29_preunload_com_gate.yaml"
     ).open("r", encoding="utf-8") as stream:
         return yaml.safe_load(stream)
 
@@ -1030,6 +1041,56 @@ def test_placement_reference_has_explicit_shift_lift_lower_and_hold_phases(
     assert held["contact_expected"] is True
 
 
+def test_advance_clearance_gate_holds_then_times_out_safely() -> None:
+    before_advance = placement_advance_clearance_gate_state(
+        candidate_phase="lift",
+        measured_clearance_m=0.160,
+        minimum_clearance_m=0.190,
+        held_steps=0,
+        maximum_hold_steps=120,
+    )
+    assert before_advance == {
+        "advance_due": False,
+        "released": False,
+        "hold_reference": False,
+        "held_steps": 0,
+        "timed_out": False,
+        "clearance_error_m": pytest.approx(0.030),
+    }
+
+    held = placement_advance_clearance_gate_state(
+        candidate_phase="advance",
+        measured_clearance_m=0.170,
+        minimum_clearance_m=0.190,
+        held_steps=118,
+        maximum_hold_steps=120,
+    )
+    assert held["hold_reference"] is True
+    assert held["held_steps"] == 119
+    assert held["timed_out"] is False
+
+    timed_out = placement_advance_clearance_gate_state(
+        candidate_phase="advance",
+        measured_clearance_m=0.170,
+        minimum_clearance_m=0.190,
+        held_steps=119,
+        maximum_hold_steps=120,
+    )
+    assert timed_out["hold_reference"] is True
+    assert timed_out["timed_out"] is True
+
+    released = placement_advance_clearance_gate_state(
+        candidate_phase="advance",
+        measured_clearance_m=0.191,
+        minimum_clearance_m=0.190,
+        held_steps=37,
+        maximum_hold_steps=120,
+    )
+    assert released["released"] is True
+    assert released["hold_reference"] is False
+    assert released["held_steps"] == 37
+
+
 def test_placement_observation_and_contact_gate_require_loaded_support(
     v8_config: dict,
 ) -> None:
@@ -1191,6 +1252,38 @@ def test_v24_reward_and_termination_make_drift_worse_than_success(
     assert reward["support_margin"] < 100.0
     assert v24_config["ppo"]["learning_rate"] <= 1e-5
     assert v24_config["ppo"]["initial_log_std"] <= -4.0
+
+
+def test_v29_requires_a_strict_stable_pre_unload_gate(
+    v29_config: dict,
+) -> None:
+    task = v29_config["task"]
+    transfer = task["placement_reference"]["inter_leg_transfer"]
+
+    assert task["id"] == "Drobot-Quadruped-Stairs-v29-Pre-Unload-COM-Gate"
+    assert task["staircase"]["tread_depth_m"] == pytest.approx(0.25)
+    assert task["staircase"]["rise_m"] == pytest.approx(0.18)
+    assert task["robot_hardware_profile"]["effort_cap_nm"] == pytest.approx(
+        0.8825985
+    )
+    assert transfer["pre_unload_gate_hold_seconds"] == pytest.approx(0.50)
+    assert transfer["minimum_next_swing_preload_n"] == pytest.approx(5.0)
+    assert transfer["minimum_support_margin_m"] >= 0.025
+    assert transfer["base_target_tolerance_m"] <= 0.020
+    assert transfer["maximum_base_speed_m_s"] <= 0.020
+    assert transfer["maximum_body_rate_rad_s"] <= 0.200
+    assert v29_config["ppo"]["learning_rate"] == pytest.approx(1e-4)
+    assert v29_config["ppo"]["initial_log_std"] == pytest.approx(-2.0)
+    clearance_gate = task["placement_reference"]["advance_clearance_gate"]
+    assert clearance_gate["enabled"] is True
+    assert clearance_gate["legs"] == ["front_left"]
+    assert clearance_gate["minimum_clearance_m"] == pytest.approx(0.190)
+    assert clearance_gate["maximum_hold_seconds"] == pytest.approx(2.0)
+    assert transfer["maximum_seconds"] > (
+        transfer["duration_seconds"]
+        + transfer["unload_duration_seconds"]
+        + transfer["pre_unload_gate_hold_seconds"]
+    )
 
 
 def test_v9_front_pair_uses_dynamic_swing_support_action_contract(
@@ -1655,6 +1748,16 @@ def test_inter_leg_transfer_uses_smooth_weight_shift_and_support_incenter() -> N
     halfway = inter_leg_transfer_state(2.0, **transfer_options)
     done = inter_leg_transfer_state(4.0, **transfer_options)
     unloaded = inter_leg_transfer_state(5.5, **transfer_options)
+    held_loaded = inter_leg_transfer_state(
+        5.5,
+        **transfer_options,
+        unload_elapsed_seconds=0.0,
+    )
+    gated_halfway = inter_leg_transfer_state(
+        8.0,
+        **transfer_options,
+        unload_elapsed_seconds=0.75,
+    )
 
     assert start["phase"] == "weight_shift"
     assert start["phase_one_hot"] == (1.0, 0.0, 0.0, 0.0, 0.0)
@@ -1663,6 +1766,10 @@ def test_inter_leg_transfer_uses_smooth_weight_shift_and_support_incenter() -> N
     assert done["transfer_fraction"] == pytest.approx(1.0)
     assert done["unload_fraction"] == pytest.approx(0.0)
     assert unloaded["unload_fraction"] == pytest.approx(1.0)
+    assert held_loaded["unload_fraction"] == pytest.approx(0.0)
+    assert held_loaded["transfer_stage"] == "pre_unload_settle"
+    assert gated_halfway["unload_fraction"] == pytest.approx(0.5)
+    assert gated_halfway["transfer_stage"] == "unload"
     assert done["desired_lift_m"] == pytest.approx(0.0)
     assert done["contact_expected"] is False
 
@@ -1676,6 +1783,53 @@ def test_inter_leg_transfer_uses_smooth_weight_shift_and_support_incenter() -> N
         support_triangle_incenter_xy(
             ((0.0, 0.0), (1.0, 0.0), (2.0, 0.0))
         )
+
+
+def test_pre_unload_gate_requires_stable_four_foot_support() -> None:
+    ready = {
+        "transfer_fraction": 1.0,
+        "support_contact_fraction": 1.0,
+        "completed_tread_loaded": True,
+        "next_swing_total_load_n": 18.0,
+        "minimum_next_swing_preload_n": 5.0,
+        "support_margin_m": 0.08,
+        "minimum_support_margin_m": 0.015,
+        "balance_target_error_m": 0.008,
+        "maximum_balance_target_error_m": 0.020,
+        "base_speed_m_s": 0.008,
+        "maximum_base_speed_m_s": 0.020,
+        "body_rate_rad_s": 0.04,
+        "maximum_body_rate_rad_s": 0.10,
+        "upright_cosine": 0.998,
+        "minimum_upright_cosine": 0.978,
+    }
+    assert inter_leg_pre_unload_gate_failures(**ready) == ()
+
+    unstable = dict(ready)
+    unstable.update(
+        {
+            "transfer_fraction": 0.9,
+            "support_contact_fraction": 0.67,
+            "completed_tread_loaded": False,
+            "next_swing_total_load_n": 0.0,
+            "support_margin_m": 0.010,
+            "balance_target_error_m": 0.030,
+            "base_speed_m_s": 0.030,
+            "body_rate_rad_s": 0.20,
+            "upright_cosine": 0.95,
+        }
+    )
+    assert inter_leg_pre_unload_gate_failures(**unstable) == (
+        "transfer_incomplete",
+        "support_contact_lost",
+        "placed_tread_unloaded",
+        "next_swing_not_preloaded",
+        "support_margin_low",
+        "balance_target_error_high",
+        "base_not_settled",
+        "body_rate_high",
+        "body_not_upright",
+    )
 
 
 def test_com_target_moves_toward_support_incenter_with_bounded_shift() -> None:

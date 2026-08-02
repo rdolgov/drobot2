@@ -27,12 +27,14 @@ from _stair_rl_contract import (
     curriculum_active_steps,
     foot_tread_progress,
     goal_x_for_active_steps,
+    inter_leg_pre_unload_gate_failures,
     inter_leg_transfer_state,
     joint_effort_telemetry_sample,
     next_foot_target_index,
     pack_placement_reference_observation,
     pack_stair_policy_observation,
     pack_support_regulation_observation,
+    placement_advance_clearance_gate_state,
     placement_contact_reached,
     placement_curriculum_level,
     placement_lift_hold_reached,
@@ -532,6 +534,58 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "placement_reference.sequence_legs must be unique known legs"
             )
         self.placement_sequence_legs = configured_placement_sequence
+        self.advance_clearance_gate_config = dict(
+            self.placement_reference_config.get(
+                "advance_clearance_gate",
+                {},
+            )
+        )
+        self.advance_clearance_gate_enabled = bool(
+            self.advance_clearance_gate_config.get("enabled", False)
+        )
+        self.advance_clearance_gate_legs = tuple(
+            str(leg)
+            for leg in self.advance_clearance_gate_config.get(
+                "legs",
+                self.placement_sequence_legs,
+            )
+        )
+        if any(leg not in self.placement_sequence_legs for leg in (
+            self.advance_clearance_gate_legs
+        )):
+            raise ValueError(
+                "advance_clearance_gate.legs must be placement sequence legs"
+            )
+        self.advance_clearance_gate_minimum_m = float(
+            self.advance_clearance_gate_config.get(
+                "minimum_clearance_m",
+                0.190,
+            )
+        )
+        if not 0.0 < self.advance_clearance_gate_minimum_m <= 0.40:
+            raise ValueError(
+                "advance_clearance_gate.minimum_clearance_m must be within "
+                "(0, 0.40]"
+            )
+        maximum_clearance_hold_seconds = float(
+            self.advance_clearance_gate_config.get(
+                "maximum_hold_seconds",
+                2.0,
+            )
+        )
+        if not 0.0 < maximum_clearance_hold_seconds <= 5.0:
+            raise ValueError(
+                "advance_clearance_gate.maximum_hold_seconds must be within "
+                "(0, 5]"
+            )
+        self.advance_clearance_gate_maximum_hold_steps = max(
+            1,
+            int(round(maximum_clearance_hold_seconds * self.control_hz)),
+        )
+        self.placement_clearance_gate_hold_step_count = 0
+        self.placement_clearance_gate_released = False
+        self.placement_clearance_gate_timeout = False
+        self.maximum_placement_clearance_gate_hold_steps = 0
         self.placement_sequence_position = 0
         self.placement_swing_leg = self.placement_sequence_legs[0]
         self.placement_swing_leg_index = 0
@@ -612,6 +666,34 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             self.inter_leg_transfer_config.get("enabled", False)
             and len(self.placement_sequence_legs) > 1
         )
+        pre_unload_gate_hold_seconds = float(
+            self.inter_leg_transfer_config.get(
+                "pre_unload_gate_hold_seconds",
+                0.0,
+            )
+        )
+        if not 0.0 <= pre_unload_gate_hold_seconds <= 5.0:
+            raise ValueError(
+                "inter_leg_transfer.pre_unload_gate_hold_seconds must be "
+                "within [0, 5]"
+            )
+        self.pre_unload_gate_hold_steps = int(
+            round(pre_unload_gate_hold_seconds * self.control_hz)
+        )
+        self.minimum_next_swing_preload_n = float(
+            self.inter_leg_transfer_config.get(
+                "minimum_next_swing_preload_n",
+                self.placement_reference_config.get(
+                    "contact_on_threshold_n",
+                    1.0,
+                ),
+            )
+        )
+        if self.minimum_next_swing_preload_n < 0.0:
+            raise ValueError(
+                "inter_leg_transfer.minimum_next_swing_preload_n cannot be "
+                "negative"
+            )
         self.phase_snapshot_restore_settle_control_steps = int(
             self.inter_leg_transfer_config.get(
                 "phase_snapshot_restore_settle_control_steps",
@@ -674,6 +756,8 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.placement_transfer_active = False
         self.placement_transfer_start_step = 0
         self.placement_transfer_gate_step_count = 0
+        self.placement_transfer_pre_unload_gate_step_count = 0
+        self.placement_transfer_unload_start_step: int | None = None
         self.placement_transfer_reference_by_leg: dict[
             str,
             dict[str, float],
@@ -889,6 +973,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             for index, name in enumerate(LEGS)
             if name != self.placement_swing_leg
         )
+        if hasattr(self, "placement_clearance_gate_hold_step_count"):
+            self.placement_clearance_gate_hold_step_count = 0
+            self.placement_clearance_gate_released = False
+            self.placement_clearance_gate_timeout = False
         if (
             self.placement_reference_enabled
             and hasattr(self, "action_scale")
@@ -1242,6 +1330,8 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.placement_transfer_active = True
         self.placement_transfer_start_step = self.episode_step + 1
         self.placement_transfer_gate_step_count = 0
+        self.placement_transfer_pre_unload_gate_step_count = 0
+        self.placement_transfer_unload_start_step = None
         self.placement_phase_elapsed_offset_s = 0.0
         self.placement_transfer_reference_by_leg = (
             self._reference_parameters_from_joint_positions(
@@ -1474,6 +1564,8 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         ).copy()
         self.placement_transfer_active = False
         self.placement_transfer_gate_step_count = 0
+        self.placement_transfer_pre_unload_gate_step_count = 0
+        self.placement_transfer_unload_start_step = None
         self.placement_phase_start_step = self.episode_step + 1
         self.placement_phase_elapsed_offset_s = 0.0
 
@@ -2411,6 +2503,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.maximum_foot_lift_m.fill(0.0)
         self.highest_foot_step.fill(0)
         self.maximum_foot_tread_progress.fill(0.0)
+        self.maximum_placement_clearance_gate_hold_steps = 0
         self.next_foot_target_index = self.foot_placement_sequence_indices[0]
         self.placement_sequence_position = 0
         self._set_placement_swing_leg(self.placement_sequence_legs[0])
@@ -2425,6 +2518,8 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.placement_transfer_active = False
         self.placement_transfer_start_step = 0
         self.placement_transfer_gate_step_count = 0
+        self.placement_transfer_pre_unload_gate_step_count = 0
+        self.placement_transfer_unload_start_step = None
         self.placement_transfer_reference_by_leg = {}
         self.placement_leg_baseline_reference_by_leg = {}
         self.placement_leg_baseline_base_position_m.fill(0.0)
@@ -2729,6 +2824,8 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.placement_transfer_active = False
         self.placement_transfer_start_step = 0
         self.placement_transfer_gate_step_count = 0
+        self.placement_transfer_pre_unload_gate_step_count = 0
+        self.placement_transfer_unload_start_step = None
         self.placement_transfer_reference_by_leg = {}
         self.placement_transfer_start_base_position_m.fill(0.0)
         self.placement_transfer_target_base_position_m = np.asarray(
@@ -2930,6 +3027,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         placement_state: dict[str, object] | None = None
         reference_target: np.ndarray | None = None
         transfer_elapsed_seconds = 0.0
+        placement_clearance_gate_active = False
+        placement_clearance_gate_released_event = False
+        placement_clearance_gate_measured_m = 0.0
         if self.placement_reference_enabled:
             if self.placement_transfer_active:
                 transfer_elapsed_seconds = max(
@@ -2941,6 +3041,21 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     )
                     * self.control_dt_s,
                 )
+                unload_elapsed_seconds: float | None = None
+                if self.pre_unload_gate_hold_steps > 0:
+                    unload_elapsed_seconds = (
+                        0.0
+                        if self.placement_transfer_unload_start_step is None
+                        else max(
+                            0.0,
+                            (
+                                self.episode_step
+                                + 1
+                                - self.placement_transfer_unload_start_step
+                            )
+                            * self.control_dt_s,
+                        )
+                    )
                 placement_state = inter_leg_transfer_state(
                     transfer_elapsed_seconds,
                     duration_seconds=float(
@@ -2952,6 +3067,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                             0.0,
                         )
                     ),
+                    unload_elapsed_seconds=unload_elapsed_seconds,
                 )
                 reference_target = self._inter_leg_transfer_targets(
                     placement_state
@@ -2966,6 +3082,60 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 placement_state = self._placement_state(
                     (self.episode_step + 1) * self.control_dt_s
                 )
+                if (
+                    self.advance_clearance_gate_enabled
+                    and self.placement_swing_leg
+                    in self.advance_clearance_gate_legs
+                    and not self.placement_clearance_gate_released
+                ):
+                    current_foot_tips = self._sample_foot_tips()
+                    placement_clearance_gate_measured_m = float(
+                        current_foot_tips[
+                            self.placement_swing_leg_index,
+                            2,
+                        ]
+                        - self.initial_foot_bottom_z_m[
+                            self.placement_swing_leg_index
+                        ]
+                    )
+                    clearance_gate_state = (
+                        placement_advance_clearance_gate_state(
+                            candidate_phase=str(placement_state["phase"]),
+                            measured_clearance_m=(
+                                placement_clearance_gate_measured_m
+                            ),
+                            minimum_clearance_m=(
+                                self.advance_clearance_gate_minimum_m
+                            ),
+                            held_steps=(
+                                self.placement_clearance_gate_hold_step_count
+                            ),
+                            maximum_hold_steps=(
+                                self.advance_clearance_gate_maximum_hold_steps
+                            ),
+                        )
+                    )
+                    if bool(clearance_gate_state["released"]):
+                        self.placement_clearance_gate_released = True
+                        placement_clearance_gate_released_event = True
+                    elif bool(clearance_gate_state["hold_reference"]):
+                        placement_clearance_gate_active = True
+                        self.placement_clearance_gate_hold_step_count = int(
+                            clearance_gate_state["held_steps"]
+                        )
+                        self.maximum_placement_clearance_gate_hold_steps = max(
+                            self.maximum_placement_clearance_gate_hold_steps,
+                            self.placement_clearance_gate_hold_step_count,
+                        )
+                        self.placement_clearance_gate_timeout = bool(
+                            clearance_gate_state["timed_out"]
+                        )
+                        # Move the phase origin forward by one control tick so
+                        # the reference remains at the completed lift apex.
+                        self.placement_phase_start_step += 1
+                        placement_state = self._placement_state(
+                            (self.episode_step + 1) * self.control_dt_s
+                        )
                 reference_target = self._placement_reference_targets(
                     placement_state
                 )
@@ -3113,6 +3283,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         placement_transfer_base_speed_m_s = 0.0
         placement_transfer_body_rate_rad_s = 0.0
         placement_transfer_gate_failures: tuple[str, ...] = ()
+        placement_pre_unload_gate_now = False
+        placement_pre_unload_gate_failures: tuple[str, ...] = ()
+        placement_unload_started_event = False
         placement_balance_position = np.asarray(
             base_position,
             dtype=np.float64,
@@ -3426,6 +3599,64 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 placement_transfer_gate_now = not (
                     placement_transfer_gate_failures
                 )
+                if (
+                    self.pre_unload_gate_hold_steps > 0
+                    and self.placement_transfer_unload_start_step is None
+                ):
+                    placement_pre_unload_gate_failures = (
+                        inter_leg_pre_unload_gate_failures(
+                            transfer_fraction=float(
+                                placement_state["transfer_fraction"]
+                            ),
+                            support_contact_fraction=(
+                                placement_support_contact_fraction
+                            ),
+                            completed_tread_loaded=completed_tread_loaded,
+                            next_swing_total_load_n=(
+                                placement_transfer_swing_total_load_n
+                            ),
+                            minimum_next_swing_preload_n=(
+                                self.minimum_next_swing_preload_n
+                            ),
+                            support_margin_m=placement_support_margin,
+                            minimum_support_margin_m=float(
+                                self.inter_leg_transfer_config[
+                                    "minimum_support_margin_m"
+                                ]
+                            ),
+                            balance_target_error_m=(
+                                placement_transfer_base_target_error_m
+                            ),
+                            maximum_balance_target_error_m=float(
+                                self.inter_leg_transfer_config[
+                                    "base_target_tolerance_m"
+                                ]
+                            ),
+                            base_speed_m_s=placement_transfer_base_speed_m_s,
+                            maximum_base_speed_m_s=float(
+                                self.inter_leg_transfer_config[
+                                    "maximum_base_speed_m_s"
+                                ]
+                            ),
+                            body_rate_rad_s=(
+                                placement_transfer_body_rate_rad_s
+                            ),
+                            maximum_body_rate_rad_s=float(
+                                self.inter_leg_transfer_config[
+                                    "maximum_body_rate_rad_s"
+                                ]
+                            ),
+                            upright_cosine=upright_cosine,
+                            minimum_upright_cosine=float(
+                                self.placement_reference_config[
+                                    "minimum_success_upright_cosine"
+                                ]
+                            ),
+                        )
+                    )
+                    placement_pre_unload_gate_now = not (
+                        placement_pre_unload_gate_failures
+                    )
             if str(placement_state["phase"]) != "weight_shift":
                 self.placement_active_sample_count += 1
                 self.placement_tread_contact_sample_count += int(
@@ -3500,6 +3731,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             and not placement_transfer_gate_now
         ):
             failure_reasons.append("body_transfer_failed")
+        if (
+            self.placement_reference_enabled
+            and not self.placement_transfer_active
+            and self.placement_clearance_gate_timeout
+        ):
+            failure_reasons.append("swing_clearance_timeout")
         failure_reasons = tuple(failure_reasons)
         failed = bool(failure_reasons)
         minimum_success_elevation = (
@@ -3521,6 +3758,23 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         placement_transfer_was_active = self.placement_transfer_active
         placement_transfer_completed_event: str | None = None
         if self.placement_reference_enabled and placement_transfer_was_active:
+            if (
+                self.pre_unload_gate_hold_steps > 0
+                and self.placement_transfer_unload_start_step is None
+            ):
+                if not failed and placement_pre_unload_gate_now:
+                    self.placement_transfer_pre_unload_gate_step_count += 1
+                else:
+                    self.placement_transfer_pre_unload_gate_step_count = 0
+                if (
+                    not failed
+                    and self.placement_transfer_pre_unload_gate_step_count
+                    >= self.pre_unload_gate_hold_steps
+                ):
+                    self.placement_transfer_unload_start_step = (
+                        self.episode_step + 1
+                    )
+                    placement_unload_started_event = True
             if not failed and placement_transfer_gate_now:
                 self.placement_transfer_gate_step_count += 1
             else:
@@ -3562,6 +3816,22 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     "base_speed_m_s": placement_transfer_base_speed_m_s,
                     "body_rate_rad_s": placement_transfer_body_rate_rad_s,
                     "body_tilt_deg": self.maximum_tilt_deg,
+                    "pre_unload_gate_enabled": (
+                        self.pre_unload_gate_hold_steps > 0
+                    ),
+                    "pre_unload_gate_hold_duration_s": (
+                        self.placement_transfer_pre_unload_gate_step_count
+                        / self.control_hz
+                    ),
+                    "unload_start_elapsed_s": (
+                        (
+                            self.placement_transfer_unload_start_step
+                            - self.placement_transfer_start_step
+                        )
+                        * self.control_dt_s
+                        if self.placement_transfer_unload_start_step is not None
+                        else None
+                    ),
                     "balance_position_m": (
                         placement_balance_position.tolist()
                     ),
@@ -3880,9 +4150,59 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 if placement_state is not None
                 else 0.0
             ),
+            "placement_transfer_unload_fraction": (
+                float(placement_state.get("unload_fraction", 0.0))
+                if placement_state is not None
+                else 0.0
+            ),
+            "placement_transfer_stage": (
+                str(placement_state.get("transfer_stage", "inactive"))
+                if placement_state is not None
+                else "inactive"
+            ),
             "placement_transfer_gate_now": placement_transfer_gate_now,
             "placement_transfer_gate_failures": (
                 placement_transfer_gate_failures
+            ),
+            "placement_pre_unload_gate_now": placement_pre_unload_gate_now,
+            "placement_pre_unload_gate_failures": (
+                placement_pre_unload_gate_failures
+            ),
+            "placement_pre_unload_gate_step_count": (
+                self.placement_transfer_pre_unload_gate_step_count
+            ),
+            "placement_pre_unload_gate_required_steps": (
+                self.pre_unload_gate_hold_steps
+            ),
+            "placement_unload_started_event": placement_unload_started_event,
+            "placement_clearance_gate_enabled": (
+                self.advance_clearance_gate_enabled
+                and self.placement_swing_leg
+                in self.advance_clearance_gate_legs
+            ),
+            "placement_clearance_gate_active": (
+                placement_clearance_gate_active
+            ),
+            "placement_clearance_gate_released": (
+                self.placement_clearance_gate_released
+            ),
+            "placement_clearance_gate_released_event": (
+                placement_clearance_gate_released_event
+            ),
+            "placement_clearance_gate_measured_m": (
+                placement_clearance_gate_measured_m
+            ),
+            "placement_clearance_gate_minimum_m": (
+                self.advance_clearance_gate_minimum_m
+            ),
+            "placement_clearance_gate_hold_step_count": (
+                self.placement_clearance_gate_hold_step_count
+            ),
+            "placement_clearance_gate_maximum_hold_steps": (
+                self.advance_clearance_gate_maximum_hold_steps
+            ),
+            "placement_clearance_gate_timeout": (
+                self.placement_clearance_gate_timeout
             ),
             "placement_transfer_base_target_error_m": (
                 placement_transfer_base_target_error_m
@@ -4008,12 +4328,47 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "final_placement_transfer_gate_failures": list(
                     placement_transfer_gate_failures
                 ),
+                "final_placement_pre_unload_gate_failures": list(
+                    placement_pre_unload_gate_failures
+                ),
+                "pre_unload_gate_enabled": (
+                    self.pre_unload_gate_hold_steps > 0
+                ),
+                "pre_unload_gate_hold_steps": self.pre_unload_gate_hold_steps,
+                "advance_clearance_gate_enabled": (
+                    self.advance_clearance_gate_enabled
+                ),
+                "advance_clearance_gate_legs": list(
+                    self.advance_clearance_gate_legs
+                ),
+                "advance_clearance_gate_minimum_m": (
+                    self.advance_clearance_gate_minimum_m
+                ),
+                "advance_clearance_gate_maximum_hold_steps": (
+                    self.advance_clearance_gate_maximum_hold_steps
+                ),
+                "maximum_advance_clearance_gate_hold_steps": (
+                    self.maximum_placement_clearance_gate_hold_steps
+                ),
+                "final_advance_clearance_gate_released": (
+                    self.placement_clearance_gate_released
+                ),
+                "final_advance_clearance_gate_timeout": (
+                    self.placement_clearance_gate_timeout
+                ),
                 "final_placement_transfer_support_margin_m": (
                     placement_support_margin
                 ),
                 "final_placement_transfer_base_target_error_m": (
                     placement_transfer_base_target_error_m
                 ),
+                "final_placement_transfer_base_speed_m_s": (
+                    placement_transfer_base_speed_m_s
+                ),
+                "final_placement_transfer_body_rate_rad_s": (
+                    placement_transfer_body_rate_rad_s
+                ),
+                "final_placement_transfer_upright_cosine": upright_cosine,
                 "final_placement_transfer_completed_tread_min_load_n": (
                     placement_transfer_completed_tread_min_load_n
                 ),
