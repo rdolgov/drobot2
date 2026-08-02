@@ -7,6 +7,7 @@ from typing import Any, Protocol
 
 import gymnasium as gym
 import numpy as np
+from _policy_transfer import predict_with_observation_prefix
 from _stair_rl_contract import (
     compose_bounded_residual_action,
     placement_phase_ready,
@@ -213,7 +214,11 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             raise RuntimeError(
                 f"No deterministic precursor policy for {active_leg}"
             ) from exc
-        action, _ = policy.predict(observation, deterministic=True)
+        action, _ = predict_with_observation_prefix(
+            policy,
+            observation,
+            deterministic=True,
+        )
         return np.asarray(action, dtype=np.float32)
 
     def _phase_info(
@@ -316,7 +321,8 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         if self.target_base_policy is not None:
             if self.latest_observation is None:
                 raise RuntimeError("Target phase has no current observation")
-            predicted, _ = self.target_base_policy.predict(
+            predicted, _ = predict_with_observation_prefix(
+                self.target_base_policy,
                 self.latest_observation,
                 deterministic=True,
             )

@@ -32,6 +32,7 @@ from _stair_rl_contract import (
     next_foot_target_index,
     pack_placement_reference_observation,
     pack_stair_policy_observation,
+    pack_support_regulation_observation,
     placement_contact_reached,
     placement_curriculum_level,
     placement_lift_hold_reached,
@@ -44,6 +45,7 @@ from _stair_rl_contract import (
     stair_index_at_x,
     stair_observation_fields,
     stair_reward_terms,
+    support_load_share_vertical_corrections,
     validate_staircase_config,
 )
 from _vl53l5cx_contract import (
@@ -467,6 +469,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             self.placement_reference_enabled
             and self.config.get("include_placement_reference_observation", True)
         )
+        self.include_support_regulation_observation = bool(
+            self.include_placement_reference_observation
+            and self.config.get("include_support_regulation_observation", False)
+        )
         self.observation_fields = stair_observation_fields(
             offsets,
             include_navigation_observation=self.include_navigation_observation,
@@ -475,6 +481,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ),
             include_placement_reference_observation=(
                 self.include_placement_reference_observation
+            ),
+            include_support_regulation_observation=(
+                self.include_support_regulation_observation
             ),
             terrain_observation_fields=terrain_field_override,
         )
@@ -547,6 +556,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         )
         self.com_regulation_config = dict(
             self.inter_leg_transfer_config.get("com_regulation", {})
+        )
+        self.support_load_sharing_config = dict(
+            self.com_regulation_config.get("load_sharing", {})
+        )
+        self.support_load_sharing_enabled = bool(
+            self.support_load_sharing_config.get("enabled", False)
         )
         self.com_regulation_enabled = bool(
             self.com_regulation_config.get("enabled", False)
@@ -714,6 +729,18 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             (len(LEGS), int(self.staircase_config["step_count"])),
             dtype=np.float32,
         )
+        self.latest_foot_tips_m = np.zeros((len(LEGS), 3), dtype=np.float32)
+        self.latest_support_load_sharing_correction_m = np.zeros(
+            len(LEGS),
+            dtype=np.float64,
+        )
+        self.maximum_abs_support_load_sharing_correction_m = 0.0
+        self.maximum_abs_support_load_sharing_correction_m_by_leg = np.zeros(
+            len(LEGS),
+            dtype=np.float64,
+        )
+        self.support_load_sharing_active_sample_count = 0
+        self.support_load_sharing_saturated_sample_count = 0
         self.maximum_support_slip_m = 0.0
         self.maximum_support_slip_m_by_leg = np.zeros(
             len(LEGS),
@@ -736,6 +763,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self._reset_joint_effort_telemetry()
 
     def _reset_joint_effort_telemetry(self) -> None:
+        self.latest_requested_pd_effort_nm = np.zeros(12, dtype=np.float64)
         self.maximum_abs_joint_tracking_error_rad_by_joint = np.zeros(
             12,
             dtype=np.float64,
@@ -1698,6 +1726,104 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                         "support squat thrust must select stance legs"
                     )
                 adjusted[leg]["vertical_m"] -= crouch_m * squat_fraction
+        if self.support_load_sharing_enabled and shift_fraction > 0.0:
+            support_indices = list(self.placement_support_leg_indices)
+            support_loads = self.latest_ground_normal_loads_n[
+                support_indices
+            ] + np.sum(
+                self.latest_step_normal_loads_n[support_indices, :],
+                axis=1,
+            )
+            raw_corrections = support_load_share_vertical_corrections(
+                support_points_xy_m=self.latest_foot_tips_m[
+                    support_indices,
+                    :2,
+                ],
+                target_position_xy_m=self._placement_balance_target_xy_m(),
+                measured_normal_loads_n=support_loads,
+                proportional_gain_m=float(
+                    self.support_load_sharing_config.get(
+                        "proportional_gain_m",
+                        0.030,
+                    )
+                ),
+                maximum_correction_m=float(
+                    self.support_load_sharing_config.get(
+                        "maximum_correction_m",
+                        0.012,
+                    )
+                ),
+                minimum_total_load_n=float(
+                    self.support_load_sharing_config.get(
+                        "minimum_total_load_n",
+                        1.0,
+                    )
+                ),
+                minimum_desired_fraction=float(
+                    self.support_load_sharing_config.get(
+                        "minimum_desired_fraction",
+                        0.05,
+                    )
+                ),
+            ) * shift_fraction
+            smoothing_factor = float(
+                self.support_load_sharing_config.get("smoothing_factor", 1.0)
+            )
+            if not 0.0 < smoothing_factor <= 1.0:
+                raise ValueError(
+                    "support load-sharing smoothing_factor must be within "
+                    "(0, 1]"
+                )
+            previous_corrections = (
+                self.latest_support_load_sharing_correction_m[
+                    support_indices
+                ].copy()
+            )
+            corrections = previous_corrections + smoothing_factor * (
+                raw_corrections - previous_corrections
+            )
+            corrections -= float(np.mean(corrections))
+            maximum_correction_m = float(
+                self.support_load_sharing_config.get(
+                    "maximum_correction_m",
+                    0.012,
+                )
+            )
+            corrections = np.clip(
+                corrections,
+                -maximum_correction_m,
+                maximum_correction_m,
+            )
+            self.latest_support_load_sharing_correction_m.fill(0.0)
+            for leg_index, correction in zip(
+                support_indices,
+                corrections,
+                strict=True,
+            ):
+                leg = LEGS[leg_index]
+                adjusted[leg]["vertical_m"] += float(correction)
+                self.latest_support_load_sharing_correction_m[leg_index] = (
+                    correction
+                )
+                self.maximum_abs_support_load_sharing_correction_m_by_leg[
+                    leg_index
+                ] = max(
+                    self.maximum_abs_support_load_sharing_correction_m_by_leg[
+                        leg_index
+                    ],
+                    abs(float(correction)),
+                )
+            self.maximum_abs_support_load_sharing_correction_m = max(
+                self.maximum_abs_support_load_sharing_correction_m,
+                float(np.max(np.abs(corrections))),
+            )
+            self.support_load_sharing_active_sample_count += 1
+            if np.any(
+                np.abs(corrections) >= 0.99 * maximum_correction_m
+            ):
+                self.support_load_sharing_saturated_sample_count += 1
+        else:
+            self.latest_support_load_sharing_correction_m.fill(0.0)
         swing = adjusted[self.placement_swing_leg]
         swing["forward_m"] += float(
             placement_state["desired_forward_offset_m"]
@@ -2059,6 +2185,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         next_target_one_hot = None
         if self.include_foot_progress_observation:
             foot_tips = self._sample_foot_tips()
+            self.latest_foot_tips_m = foot_tips.copy()
             raw_foot_progress = foot_tread_progress(
                 foot_tip_positions_m=foot_tips,
                 highest_foot_steps=self.highest_foot_step,
@@ -2178,6 +2305,26 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     ]
                 ),
             )
+            if self.include_support_regulation_observation:
+                total_foot_loads = ground_loads + np.sum(step_loads, axis=1)
+                com_target_error = balance_target_error_xy(
+                    balance_position_xy_m=balance_point_xy,
+                    target_position_xy_m=self._placement_balance_target_xy_m(),
+                )
+                state["observation"] = pack_support_regulation_observation(
+                    stair_observation=state["observation"],
+                    total_foot_normal_loads_n=total_foot_loads,
+                    com_target_error_xy_m=com_target_error,
+                    # Position-drive demand is sampled after state packing, so
+                    # this is the causal one-control-step-lagged value.
+                    requested_pd_effort_nm=self.latest_requested_pd_effort_nm,
+                    effort_cap_nm=self.effort_cap_nm,
+                    contact_load_normalization_n=float(
+                        self.placement_reference_config[
+                            "contact_load_normalization_n"
+                        ]
+                    ),
+                )
         if np.asarray(state["observation"]).shape != (self.observation_size,):
             raise RuntimeError(
                 "Runtime stair observation does not match its declared contract: "
@@ -2304,6 +2451,11 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.maximum_placement_desired_lift_m = 0.0
         self.maximum_swing_reference_tracking_error_rad = 0.0
         self.maximum_balance_lateral_deviation_m = 0.0
+        self.latest_support_load_sharing_correction_m.fill(0.0)
+        self.maximum_abs_support_load_sharing_correction_m = 0.0
+        self.maximum_abs_support_load_sharing_correction_m_by_leg.fill(0.0)
+        self.support_load_sharing_active_sample_count = 0
+        self.support_load_sharing_saturated_sample_count = 0
         self._reset_joint_effort_telemetry()
         if self.vl53l5cx_sensor is not None:
             self.vl53l5cx_sensor.reset()
@@ -2892,6 +3044,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             effort_telemetry["requested_pd_effort_nm"],
             dtype=np.float64,
         )
+        self.latest_requested_pd_effort_nm = requested_pd_effort_nm.copy()
         self.peak_abs_requested_pd_effort_nm_by_joint = np.maximum(
             self.peak_abs_requested_pd_effort_nm_by_joint,
             np.abs(requested_pd_effort_nm),
@@ -2968,6 +3121,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             [0.0, base_y],
             dtype=np.float64,
         )
+        support_loads = np.zeros(0, dtype=np.float32)
         if self.placement_reference_enabled:
             if placement_state is None or self.current_placement_level is None:
                 raise RuntimeError("Placement state was not initialized")
@@ -3563,6 +3717,26 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             support_margin_m=(
                 0.0 if failed else placement_support_margin
             ),
+            balance_target_error_xy_m=(
+                np.zeros(2, dtype=np.float64)
+                if failed
+                else placement_balance_target_error_xy_m
+            ),
+            support_normal_loads_n=(
+                np.zeros(0, dtype=np.float32) if failed else support_loads
+            ),
+            requested_pd_effort_nm=(
+                np.zeros(12, dtype=np.float64)
+                if failed
+                else requested_pd_effort_nm
+            ),
+            effort_cap_nm=self.effort_cap_nm,
+            contact_load_normalization_n=float(
+                self.placement_reference_config.get(
+                    "contact_load_normalization_n",
+                    50.0,
+                )
+            ),
         )
         reward = float(reward_terms["total"])
         self.episode_return += reward
@@ -3741,6 +3915,29 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             "placement_balance_target_error_xy_m": (
                 placement_balance_target_error_xy_m.copy()
             ),
+            "support_load_sharing_vertical_correction_m_by_leg": dict(
+                zip(
+                    LEGS,
+                    self.latest_support_load_sharing_correction_m.tolist(),
+                    strict=True,
+                )
+            ),
+            "maximum_abs_support_load_sharing_correction_m": (
+                self.maximum_abs_support_load_sharing_correction_m
+            ),
+            "maximum_abs_support_load_sharing_correction_m_by_leg": dict(
+                zip(
+                    LEGS,
+                    self.maximum_abs_support_load_sharing_correction_m_by_leg.tolist(),
+                    strict=True,
+                )
+            ),
+            "support_load_sharing_saturated_sample_fraction": (
+                self.support_load_sharing_saturated_sample_count
+                / self.support_load_sharing_active_sample_count
+                if self.support_load_sharing_active_sample_count
+                else 0.0
+            ),
             "placement_com_position_m": (
                 self.latest_placement_com_position_m.copy()
                 if self.placement_reference_enabled
@@ -3909,6 +4106,28 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     self.minimum_placement_support_margin_m
                     if self.placement_reference_enabled
                     else None
+                ),
+                "maximum_abs_support_load_sharing_correction_m": (
+                    self.maximum_abs_support_load_sharing_correction_m
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "maximum_abs_support_load_sharing_correction_m_by_leg": (
+                    dict(
+                        zip(
+                            LEGS,
+                            self.maximum_abs_support_load_sharing_correction_m_by_leg.tolist(),
+                            strict=True,
+                        )
+                    )
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "support_load_sharing_saturated_sample_fraction": (
+                    self.support_load_sharing_saturated_sample_count
+                    / self.support_load_sharing_active_sample_count
+                    if self.support_load_sharing_active_sample_count
+                    else 0.0
                 ),
                 "maximum_support_slip_m": (
                     self.maximum_support_slip_m

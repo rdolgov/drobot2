@@ -25,6 +25,10 @@ for module_dir in (str(ISAAC_DIR), str(RL_DIR), str(SCRIPT_DIR)):
     if module_dir not in sys.path:
         sys.path.insert(0, module_dir)
 
+from _policy_transfer import (  # noqa: E402
+    policy_observation_prefix_compatibility,
+    predict_with_observation_prefix,
+)
 from _run_support import (  # noqa: E402
     validate_model_manifest,
     validate_ppo_algorithm_contract,
@@ -485,15 +489,15 @@ try:
                 f"Per-leg model hash mismatch for {leg}: {path}"
             )
         leg_model = PPO.load(str(path), device=args.device)
-        if (
-            tuple(leg_model.observation_space.shape)
-            != tuple(raw_env.observation_space.shape)
-            or tuple(leg_model.action_space.shape)
-            != tuple(raw_env.action_space.shape)
-        ):
+        if tuple(leg_model.action_space.shape) != tuple(raw_env.action_space.shape):
             raise RuntimeError(
-                f"Per-leg model spaces do not match the sequence for {leg}"
+                f"Per-leg action space does not match the sequence for {leg}"
             )
+        observation_compatibility = policy_observation_prefix_compatibility(
+            leg_model,
+            manifest,
+            raw_env.contract,
+        )
         leg_models[leg] = leg_model
         leg_model_verification[leg] = {
             "status": "PASS",
@@ -503,6 +507,7 @@ try:
             "source_task_id": manifest.get("task_id"),
             "observation_shape": list(leg_model.observation_space.shape),
             "action_shape": list(leg_model.action_space.shape),
+            "observation_compatibility": observation_compatibility,
         }
     leg_base_models: dict[str, PPO] = {}
     leg_base_model_verification: dict[str, dict[str, object]] = {}
@@ -520,15 +525,15 @@ try:
                 f"Per-leg base model hash mismatch for {leg}: {path}"
             )
         base_model = PPO.load(str(path), device=args.device)
-        if (
-            tuple(base_model.observation_space.shape)
-            != tuple(raw_env.observation_space.shape)
-            or tuple(base_model.action_space.shape)
-            != tuple(raw_env.action_space.shape)
-        ):
+        if tuple(base_model.action_space.shape) != tuple(raw_env.action_space.shape):
             raise RuntimeError(
-                f"Per-leg base model spaces do not match for {leg}"
+                f"Per-leg base model action space does not match for {leg}"
             )
+        observation_compatibility = policy_observation_prefix_compatibility(
+            base_model,
+            manifest,
+            raw_env.contract,
+        )
         leg_base_models[leg] = base_model
         leg_base_model_verification[leg] = {
             "status": "PASS",
@@ -537,6 +542,7 @@ try:
             "manifest": str(manifest_path),
             "source_task_id": manifest.get("task_id"),
             "residual_scale": leg_residual_scales[leg],
+            "observation_compatibility": observation_compatibility,
         }
     observation, _ = raw_env.reset(seed=args.seed)
     episode_metrics: list[dict[str, object]] = []
@@ -553,7 +559,8 @@ try:
                 )
             else:
                 active_model = leg_models.get(active_leg, model)
-                action, _ = active_model.predict(
+                action, _ = predict_with_observation_prefix(
+                    active_model,
                     observation,
                     deterministic=True,
                 )
@@ -584,7 +591,8 @@ try:
                 )
             base_model = leg_base_models.get(active_leg)
             if base_model is not None:
-                base_action, _ = base_model.predict(
+                base_action, _ = predict_with_observation_prefix(
+                    base_model,
                     observation,
                     deterministic=True,
                 )

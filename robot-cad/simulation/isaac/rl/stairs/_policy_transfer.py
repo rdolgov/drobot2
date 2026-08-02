@@ -6,10 +6,91 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+import numpy as np
+
 EXPANDABLE_INPUT_WEIGHTS = (
     "mlp_extractor.policy_net.0.weight",
     "mlp_extractor.value_net.0.weight",
 )
+
+
+def observation_prefix_compatibility(
+    *,
+    source_observation_fields: Sequence[str],
+    target_observation_fields: Sequence[str],
+    source_observation_size: int,
+    target_observation_size: int,
+) -> dict[str, object]:
+    """Validate that an older policy can consume a target observation prefix."""
+
+    source_fields = tuple(str(field) for field in source_observation_fields)
+    target_fields = tuple(str(field) for field in target_observation_fields)
+    source_size = int(source_observation_size)
+    target_size = int(target_observation_size)
+    if source_size <= 0 or target_size <= 0:
+        raise ValueError("observation sizes must be positive")
+    if len(source_fields) != source_size:
+        raise ValueError("source observation fields do not match model size")
+    if len(target_fields) != target_size:
+        raise ValueError("target observation fields do not match environment size")
+    if source_size > target_size:
+        raise ValueError("source observation is larger than target observation")
+    if source_fields != target_fields[:source_size]:
+        raise ValueError("source observation fields are not a target prefix")
+    return {
+        "mode": (
+            "exact" if source_size == target_size else "target_prefix_adapter"
+        ),
+        "source_observation_size": source_size,
+        "target_observation_size": target_size,
+        "appended_target_observation_count": target_size - source_size,
+    }
+
+
+def policy_observation_prefix_compatibility(
+    policy: Any,
+    source_manifest: Mapping[str, object],
+    target_environment_contract: Mapping[str, object],
+) -> dict[str, object]:
+    """Validate a model manifest against an equal or expanded environment."""
+
+    source_contract = dict(source_manifest.get("environment_contract", {}))
+    if "observation_fields" not in source_contract:
+        raise ValueError("source manifest has no observation field contract")
+    if "observation_fields" not in target_environment_contract:
+        raise ValueError("target environment has no observation field contract")
+    source_shape = tuple(policy.observation_space.shape)
+    if len(source_shape) != 1:
+        raise ValueError(f"policy observation space must be flat: {source_shape}")
+    target_fields = tuple(target_environment_contract["observation_fields"])
+    return observation_prefix_compatibility(
+        source_observation_fields=source_contract["observation_fields"],
+        target_observation_fields=target_fields,
+        source_observation_size=int(source_shape[0]),
+        target_observation_size=len(target_fields),
+    )
+
+
+def predict_with_observation_prefix(
+    policy: Any,
+    observation: np.ndarray,
+    *,
+    deterministic: bool,
+) -> tuple[np.ndarray, object]:
+    """Predict with the prefix matching a legacy policy's observation space."""
+
+    expected_shape = tuple(policy.observation_space.shape)
+    if len(expected_shape) != 1:
+        raise ValueError(f"policy observation space must be flat: {expected_shape}")
+    expected_size = int(expected_shape[0])
+    values = np.asarray(observation, dtype=np.float32)
+    if values.ndim not in (1, 2) or values.shape[-1] < expected_size:
+        raise ValueError(
+            "observation cannot supply the policy prefix: "
+            f"{values.shape} -> ({expected_size},)"
+        )
+    adapted = values[..., :expected_size]
+    return policy.predict(adapted, deterministic=deterministic)
 
 
 def physical_action_output_ratios(

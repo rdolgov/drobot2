@@ -18,7 +18,9 @@ for module_dir in (str(ISAAC_DIR), str(RL_DIR), str(STAIRS_DIR)):
         sys.path.insert(0, module_dir)
 
 from _policy_transfer import (  # noqa: E402
+    observation_prefix_compatibility,
     physical_action_output_ratios,
+    predict_with_observation_prefix,
     transfer_policy_state,
 )
 from _run_support import (  # noqa: E402
@@ -31,6 +33,7 @@ from _run_support import (  # noqa: E402
 from _stair_geometry import stair_layer_boxes  # noqa: E402
 from _stair_rl_contract import (  # noqa: E402
     PLACEMENT_REFERENCE_OBSERVATION_FIELDS,
+    SUPPORT_REGULATION_OBSERVATION_FIELDS,
     balance_target_error_xy,
     bounded_support_incenter_target_xy,
     compose_bounded_residual_action,
@@ -43,6 +46,7 @@ from _stair_rl_contract import (  # noqa: E402
     next_foot_target_index,
     pack_placement_reference_observation,
     pack_stair_policy_observation,
+    pack_support_regulation_observation,
     placement_contact_reached,
     placement_curriculum_level,
     placement_lift_hold_reached,
@@ -57,6 +61,7 @@ from _stair_rl_contract import (  # noqa: E402
     stair_height_at_x,
     stair_observation_fields,
     stair_reward_terms,
+    support_load_share_vertical_corrections,
     support_triangle_incenter_xy,
 )
 
@@ -188,6 +193,15 @@ def v16_config() -> dict:
     with (
         STAIRS_DIR
         / "quadruped_stairs_v16_front_pair_proprioceptive_support.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v24_config() -> dict:
+    with (
+        STAIRS_DIR
+        / "quadruped_stairs_v24_front_pair_conservative_support.yaml"
     ).open("r", encoding="utf-8") as stream:
         return yaml.safe_load(stream)
 
@@ -459,6 +473,56 @@ def test_flat_policy_transfer_expands_only_the_two_input_layers() -> None:
         transferred["mlp_extractor.policy_net.0.weight"][:, 48:] == 0.0
     )
     assert torch.all(transferred["action_net.bias"] == 4.0)
+
+
+def test_legacy_policy_uses_an_unchanged_observation_prefix() -> None:
+    report = observation_prefix_compatibility(
+        source_observation_fields=("a", "b", "c"),
+        target_observation_fields=("a", "b", "c", "load", "com"),
+        source_observation_size=3,
+        target_observation_size=5,
+    )
+    assert report == {
+        "mode": "target_prefix_adapter",
+        "source_observation_size": 3,
+        "target_observation_size": 5,
+        "appended_target_observation_count": 2,
+    }
+
+    class FakePolicy:
+        class ObservationSpace:
+            shape = (3,)
+
+        observation_space = ObservationSpace()
+
+        def __init__(self) -> None:
+            self.seen: np.ndarray | None = None
+
+        def predict(
+            self,
+            observation: np.ndarray,
+            *,
+            deterministic: bool,
+        ) -> tuple[np.ndarray, None]:
+            assert deterministic is True
+            self.seen = np.asarray(observation).copy()
+            return np.ones(2, dtype=np.float32), None
+
+    policy = FakePolicy()
+    action, _ = predict_with_observation_prefix(
+        policy,
+        np.asarray([1.0, 2.0, 3.0, 99.0, 100.0], dtype=np.float32),
+        deterministic=True,
+    )
+    assert policy.seen == pytest.approx((1.0, 2.0, 3.0))
+    assert action == pytest.approx((1.0, 1.0))
+    with pytest.raises(ValueError, match="not a target prefix"):
+        observation_prefix_compatibility(
+            source_observation_fields=("a", "wrong"),
+            target_observation_fields=("a", "b", "c"),
+            source_observation_size=2,
+            target_observation_size=3,
+        )
 
 
 def test_flat_policy_transfer_can_preserve_physical_action_mean() -> None:
@@ -1014,6 +1078,119 @@ def test_placement_observation_and_contact_gate_require_loaded_support(
         **common,
         support_ground_normal_loads_n=(10.0, 0.0, 12.0),
     )
+
+
+def test_support_regulation_observation_exposes_load_com_and_saturation(
+    v8_config: dict,
+) -> None:
+    staircase = v8_config["task"]["staircase"]
+    base_fields = stair_observation_fields(
+        staircase["terrain_sample_offsets_m"],
+        include_placement_reference_observation=True,
+        include_support_regulation_observation=True,
+    )
+    assert base_fields[-len(SUPPORT_REGULATION_OBSERVATION_FIELDS) :] == (
+        SUPPORT_REGULATION_OBSERVATION_FIELDS
+    )
+    requested_effort = np.zeros(12, dtype=np.float32)
+    requested_effort[[0, 4, 8]] = (0.2, 0.96, 1.2)
+    requested_effort[[2, 6, 10]] = (0.1, 0.2, 0.3)
+    requested_effort[[1, 5, 9]] = (0.95, 0.95, 0.1)
+    requested_effort[[3, 7, 11]] = (0.0, 0.0, 0.0)
+    packed = pack_support_regulation_observation(
+        stair_observation=np.zeros(5, dtype=np.float32),
+        total_foot_normal_loads_n=(10.0, 20.0, 30.0, 40.0),
+        com_target_error_xy_m=(0.02, -0.03),
+        requested_pd_effort_nm=requested_effort,
+        effort_cap_nm=1.0,
+        contact_load_normalization_n=50.0,
+    )
+    extras = packed[5:]
+    assert extras[:4] == pytest.approx((0.2, 0.4, 0.6, 0.8))
+    assert extras[4:6] == pytest.approx((0.2, -0.3))
+    assert extras[6:10] == pytest.approx((1.2, 0.3, 0.95, 0.0))
+    assert extras[10:] == pytest.approx((2 / 3, 0.0, 2 / 3, 0.0))
+    with pytest.raises(ValueError, match="requires placement reference"):
+        stair_observation_fields(
+            staircase["terrain_sample_offsets_m"],
+            include_support_regulation_observation=True,
+        )
+
+
+def test_support_regulation_reward_penalizes_com_and_drive_saturation(
+    v8_config: dict,
+) -> None:
+    reward = {
+        **v8_config["task"]["reward"],
+        "balance_target_error": -4.0,
+        "minimum_support_load": 2.0,
+        "pd_effort_saturation": -0.5,
+    }
+    requested = np.zeros(12, dtype=np.float32)
+    requested[:6] = 1.5
+    terms = stair_reward_terms(
+        command_velocity_xyz=(0.0, 0.0, 0.0),
+        body_linear_velocity_xyz=(0.0, 0.0, 0.0),
+        body_angular_velocity_xyz=(0.0, 0.0, 0.0),
+        projected_gravity_xyz=(0.0, 0.0, -1.0),
+        base_clearance_m=0.36,
+        lateral_position_m=0.0,
+        forward_progress_m=0.0,
+        base_height_gain_m=0.0,
+        terrain_height_gain_m=0.0,
+        heading_error_rad=0.0,
+        joint_velocities_normalized=np.zeros(12),
+        action=np.zeros(12),
+        previous_action=np.zeros(12),
+        failed=False,
+        succeeded=False,
+        reward_config=reward,
+        balance_target_error_xy_m=(0.05, -0.05),
+        support_normal_loads_n=(10.0, 20.0, 30.0),
+        requested_pd_effort_nm=requested,
+        effort_cap_nm=1.0,
+        contact_load_normalization_n=50.0,
+    )
+    assert terms["balance_target_error"] == pytest.approx(-2.0)
+    assert terms["minimum_support_load"] == pytest.approx(0.4)
+    assert terms["pd_effort_saturation"] < 0.0
+
+
+def test_support_load_sharing_extends_the_underloaded_leg() -> None:
+    triangle = ((0.0, 0.0), (1.0, 0.0), (0.0, 1.0))
+    correction = support_load_share_vertical_corrections(
+        support_points_xy_m=triangle,
+        target_position_xy_m=(1.0 / 3.0, 1.0 / 3.0),
+        measured_normal_loads_n=(0.0, 15.0, 15.0),
+        proportional_gain_m=0.030,
+        maximum_correction_m=0.012,
+    )
+    assert correction == pytest.approx((0.010, -0.005, -0.005))
+    assert float(np.sum(correction)) == pytest.approx(0.0)
+    assert support_load_share_vertical_corrections(
+        support_points_xy_m=triangle,
+        target_position_xy_m=(1.0 / 3.0, 1.0 / 3.0),
+        measured_normal_loads_n=(10.0, 10.0, 10.0),
+        proportional_gain_m=0.030,
+        maximum_correction_m=0.012,
+    ) == pytest.approx((0.0, 0.0, 0.0))
+
+
+def test_v24_reward_and_termination_make_drift_worse_than_success(
+    v24_config: dict,
+) -> None:
+    task = v24_config["task"]
+    reward = task["reward"]
+    assert task["staircase"]["tread_depth_m"] == pytest.approx(0.25)
+    assert task["include_support_regulation_observation"] is True
+    assert task["termination"]["maximum_lateral_deviation_m"] == pytest.approx(
+        0.20
+    )
+    assert task["termination"]["minimum_upright_cosine"] >= 0.94
+    assert reward["failure"] < -2.0 * reward["success"]
+    assert reward["support_margin"] < 100.0
+    assert v24_config["ppo"]["learning_rate"] <= 1e-5
+    assert v24_config["ppo"]["initial_log_std"] <= -4.0
 
 
 def test_v9_front_pair_uses_dynamic_swing_support_action_contract(

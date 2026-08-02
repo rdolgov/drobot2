@@ -37,6 +37,28 @@ PLACEMENT_REFERENCE_OBSERVATION_FIELDS = (
     "placement_support_margin_normalized",
     "placement_maximum_support_slip_normalized",
 )
+SUPPORT_REGULATION_OBSERVATION_FIELDS = (
+    *(
+        f"placement_total_normal_load_{name}_normalized"
+        for name in STAIR_FOOT_NAMES
+    ),
+    "placement_com_target_error_x_normalized",
+    "placement_com_target_error_y_normalized",
+    *(
+        f"placement_pd_effort_cap_ratio_{name}"
+        for name in STAIR_FOOT_NAMES
+    ),
+    *(
+        f"placement_pd_saturated_joint_fraction_{name}"
+        for name in STAIR_FOOT_NAMES
+    ),
+)
+STAIR_LEG_DOF_INDICES = (
+    (0, 4, 8),
+    (2, 6, 10),
+    (1, 5, 9),
+    (3, 7, 11),
+)
 
 
 def config_for_height_stage(
@@ -490,6 +512,76 @@ def balance_target_error_xy(
     return balance.astype(np.float64) - target.astype(np.float64)
 
 
+def support_load_share_vertical_corrections(
+    *,
+    support_points_xy_m: Sequence[Sequence[float]],
+    target_position_xy_m: Sequence[float],
+    measured_normal_loads_n: Sequence[float],
+    proportional_gain_m: float,
+    maximum_correction_m: float,
+    minimum_total_load_n: float = 1.0,
+    minimum_desired_fraction: float = 0.05,
+) -> np.ndarray:
+    """Return zero-sum stance-leg extension corrections from load error."""
+
+    points = np.asarray(support_points_xy_m, dtype=np.float64)
+    if points.shape != (3, 2) or not np.all(np.isfinite(points)):
+        raise ValueError("support_points_xy_m must contain three finite XY points")
+    target = _finite_vector(
+        target_position_xy_m,
+        2,
+        "target_position_xy_m",
+    ).astype(np.float64)
+    loads = _finite_vector(
+        measured_normal_loads_n,
+        3,
+        "measured_normal_loads_n",
+    ).astype(np.float64)
+    if np.any(loads < 0.0):
+        raise ValueError("measured_normal_loads_n must be nonnegative")
+    gain = float(proportional_gain_m)
+    maximum = float(maximum_correction_m)
+    minimum_total = float(minimum_total_load_n)
+    minimum_fraction = float(minimum_desired_fraction)
+    if gain <= 0.0 or not np.isfinite(gain):
+        raise ValueError("proportional_gain_m must be finite and positive")
+    if maximum <= 0.0 or not np.isfinite(maximum):
+        raise ValueError("maximum_correction_m must be finite and positive")
+    if minimum_total < 0.0 or not np.isfinite(minimum_total):
+        raise ValueError("minimum_total_load_n must be finite and nonnegative")
+    if not 0.0 <= minimum_fraction < 1.0 / 3.0:
+        raise ValueError("minimum_desired_fraction must be within [0, 1/3)")
+    total_load = float(np.sum(loads))
+    if total_load < minimum_total:
+        return np.zeros(3, dtype=np.float64)
+
+    barycentric_matrix = np.asarray(
+        [
+            [points[0, 0], points[1, 0], points[2, 0]],
+            [points[0, 1], points[1, 1], points[2, 1]],
+            [1.0, 1.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+    determinant = float(np.linalg.det(barycentric_matrix))
+    if abs(determinant) < 1e-9:
+        raise ValueError("support points do not form a triangle")
+    desired_fractions = np.linalg.solve(
+        barycentric_matrix,
+        np.asarray([target[0], target[1], 1.0], dtype=np.float64),
+    )
+    desired_fractions = np.maximum(desired_fractions, minimum_fraction)
+    desired_fractions /= float(np.sum(desired_fractions))
+    measured_fractions = loads / total_load
+    correction = gain * (desired_fractions - measured_fractions)
+    correction -= float(np.mean(correction))
+    correction = np.clip(correction, -maximum, maximum)
+    correction -= float(np.mean(correction))
+    correction = np.clip(correction, -maximum, maximum)
+    correction[np.abs(correction) < 1e-9] = 0.0
+    return correction.astype(np.float64)
+
+
 def joint_effort_telemetry_sample(
     *,
     target_joint_positions_rad: Sequence[float],
@@ -834,6 +926,72 @@ def pack_placement_reference_observation(
     ).astype(np.float32)
 
 
+def pack_support_regulation_observation(
+    *,
+    stair_observation: Sequence[float],
+    total_foot_normal_loads_n: Sequence[float],
+    com_target_error_xy_m: Sequence[float],
+    requested_pd_effort_nm: Sequence[float],
+    effort_cap_nm: float,
+    contact_load_normalization_n: float,
+    com_error_normalization_m: float = 0.10,
+) -> np.ndarray:
+    """Append load distribution, COM error, and per-leg drive saturation."""
+
+    base = np.asarray(stair_observation, dtype=np.float32).reshape(-1)
+    if base.size == 0 or not np.all(np.isfinite(base)):
+        raise ValueError("stair_observation must contain finite values")
+    loads = _finite_vector(
+        total_foot_normal_loads_n,
+        len(STAIR_FOOT_NAMES),
+        "total_foot_normal_loads_n",
+    )
+    com_error = _finite_vector(
+        com_target_error_xy_m,
+        2,
+        "com_target_error_xy_m",
+    )
+    requested_effort = _finite_vector(
+        requested_pd_effort_nm,
+        JOINT_COUNT,
+        "requested_pd_effort_nm",
+    )
+    effort_cap = float(effort_cap_nm)
+    load_scale = float(contact_load_normalization_n)
+    com_scale = float(com_error_normalization_m)
+    if effort_cap <= 0.0 or not np.isfinite(effort_cap):
+        raise ValueError("effort_cap_nm must be finite and positive")
+    if load_scale <= 0.0 or not np.isfinite(load_scale):
+        raise ValueError(
+            "contact_load_normalization_n must be finite and positive"
+        )
+    if com_scale <= 0.0 or not np.isfinite(com_scale):
+        raise ValueError("com_error_normalization_m must be finite and positive")
+
+    effort_cap_ratios: list[float] = []
+    saturated_joint_fractions: list[float] = []
+    for indices in STAIR_LEG_DOF_INDICES:
+        leg_effort = np.abs(requested_effort[list(indices)])
+        effort_cap_ratios.append(float(np.max(leg_effort) / effort_cap))
+        saturated_joint_fractions.append(
+            float(np.mean(leg_effort >= 0.95 * effort_cap - 1e-6))
+        )
+    extras = np.asarray(
+        [
+            *(loads / load_scale),
+            *(com_error / com_scale),
+            *effort_cap_ratios,
+            *saturated_joint_fractions,
+        ],
+        dtype=np.float32,
+    )
+    return np.clip(
+        np.concatenate((base, extras)),
+        -POLICY_OBSERVATION_CLIP,
+        POLICY_OBSERVATION_CLIP,
+    ).astype(np.float32)
+
+
 def progress_gate_failures(
     *,
     completed_episodes: int,
@@ -1005,6 +1163,7 @@ def stair_observation_fields(
     include_navigation_observation: bool = False,
     include_foot_progress_observation: bool = False,
     include_placement_reference_observation: bool = False,
+    include_support_regulation_observation: bool = False,
     terrain_observation_fields: Sequence[str] | None = None,
 ) -> tuple[str, ...]:
     if terrain_observation_fields is None:
@@ -1036,6 +1195,12 @@ def stair_observation_fields(
         )
     if include_placement_reference_observation:
         fields += PLACEMENT_REFERENCE_OBSERVATION_FIELDS
+    if include_support_regulation_observation:
+        if not include_placement_reference_observation:
+            raise ValueError(
+                "support regulation observation requires placement reference"
+            )
+        fields += SUPPORT_REGULATION_OBSERVATION_FIELDS
     return fields
 
 
@@ -1157,6 +1322,11 @@ def stair_reward_terms(
     support_contact_fraction: float = 0.0,
     support_slip_m: float = 0.0,
     support_margin_m: float = 0.0,
+    balance_target_error_xy_m: Sequence[float] | None = None,
+    support_normal_loads_n: Sequence[float] | None = None,
+    requested_pd_effort_nm: Sequence[float] | None = None,
+    effort_cap_nm: float = 1.0,
+    contact_load_normalization_n: float = 50.0,
 ) -> dict[str, float]:
     """Return individually reviewable stair-climbing reward terms."""
 
@@ -1191,6 +1361,39 @@ def stair_reward_terms(
     )
     if placement_sigma <= 0.0:
         raise ValueError("swing_target_tracking_sigma_m must be positive")
+    balance_error = (
+        np.zeros(2, dtype=np.float32)
+        if balance_target_error_xy_m is None
+        else _finite_vector(
+            balance_target_error_xy_m,
+            2,
+            "balance_target_error_xy_m",
+        )
+    )
+    support_loads = np.asarray(
+        () if support_normal_loads_n is None else support_normal_loads_n,
+        dtype=np.float32,
+    ).reshape(-1)
+    if not np.all(np.isfinite(support_loads)) or np.any(support_loads < 0.0):
+        raise ValueError("support_normal_loads_n must be finite and nonnegative")
+    effort_cap = float(effort_cap_nm)
+    load_scale = float(contact_load_normalization_n)
+    if effort_cap <= 0.0 or not np.isfinite(effort_cap):
+        raise ValueError("effort_cap_nm must be finite and positive")
+    if load_scale <= 0.0 or not np.isfinite(load_scale):
+        raise ValueError(
+            "contact_load_normalization_n must be finite and positive"
+        )
+    requested_effort = np.asarray(
+        () if requested_pd_effort_nm is None else requested_pd_effort_nm,
+        dtype=np.float32,
+    ).reshape(-1)
+    if requested_effort.size not in (0, JOINT_COUNT) or not np.all(
+        np.isfinite(requested_effort)
+    ):
+        raise ValueError(
+            f"requested_pd_effort_nm must contain {JOINT_COUNT} finite values"
+        )
 
     velocity_error = float(linear[0] - command[0])
     velocity_tracking = float(np.exp(-((velocity_error / sigma) ** 2)))
@@ -1300,6 +1503,34 @@ def stair_reward_terms(
         "support_margin": (
             float(reward_config.get("support_margin", 0.0))
             * float(np.clip(support_margin_m, -0.10, 0.10))
+        ),
+        "balance_target_error": (
+            float(reward_config.get("balance_target_error", 0.0))
+            * float(np.sum(np.square(balance_error / 0.10)))
+        ),
+        "minimum_support_load": (
+            float(reward_config.get("minimum_support_load", 0.0))
+            * (
+                float(np.clip(np.min(support_loads) / load_scale, 0.0, 1.0))
+                if support_loads.size
+                else 0.0
+            )
+        ),
+        "pd_effort_saturation": (
+            float(reward_config.get("pd_effort_saturation", 0.0))
+            * (
+                float(
+                    np.mean(
+                        np.clip(
+                            np.abs(requested_effort) / effort_cap - 0.95,
+                            0.0,
+                            2.0,
+                        )
+                    )
+                )
+                if requested_effort.size
+                else 0.0
+            )
         ),
         "failure": float(reward_config["failure"]) if failed else 0.0,
         "success": float(reward_config["success"]) if succeeded else 0.0,

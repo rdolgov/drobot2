@@ -26,6 +26,7 @@ for module_dir in (str(ISAAC_DIR), str(RL_DIR), str(SCRIPT_DIR)):
 from _policy_transfer import (  # noqa: E402
     EXPANDABLE_INPUT_WEIGHTS,
     physical_action_output_ratios,
+    policy_observation_prefix_compatibility,
     transfer_policy_state,
 )
 from _run_support import (  # noqa: E402
@@ -73,6 +74,11 @@ parser.add_argument(
     "--placement-start-level",
     default=None,
     help="Start a mastery run at one named placement curriculum level.",
+)
+parser.add_argument(
+    "--fixed-placement-level",
+    default=None,
+    help="Pin every training episode to one placement curriculum level.",
 )
 parser.add_argument(
     "--output-dir",
@@ -203,6 +209,10 @@ parser.add_argument(
 )
 parser.add_argument("--gui", action="store_true")
 args, _ = parser.parse_known_args()
+if args.placement_start_level and args.fixed_placement_level:
+    parser.error(
+        "--placement-start-level and --fixed-placement-level are mutually exclusive"
+    )
 
 
 def _resolve_project_path(value: str | os.PathLike[str]) -> Path:
@@ -333,6 +343,17 @@ policy_observation_size = len(
                 True,
             )
         ),
+        include_support_regulation_observation=bool(
+            task_config.get("placement_reference", {}).get("enabled", False)
+            and task_config.get(
+                "include_placement_reference_observation",
+                True,
+            )
+            and task_config.get(
+                "include_support_regulation_observation",
+                False,
+            )
+        ),
         terrain_observation_fields=terrain_observation_fields,
     )
 )
@@ -408,6 +429,7 @@ class TrainingControlCallback(BaseCallback):
         task_config: dict[str, object],
         total_for_curriculum: int,
         report_path: Path,
+        fixed_placement_level: str | None = None,
     ) -> None:
         super().__init__(verbose=0)
         self.task_config = task_config
@@ -453,6 +475,11 @@ class TrainingControlCallback(BaseCallback):
             )
         self.placement_mastery_level_id: str | None = None
         self.placement_mastery_successes = 0
+        self.fixed_placement_level = (
+            None
+            if fixed_placement_level is None
+            else str(fixed_placement_level)
+        )
         self.watchdog = dict(task_config.get("progress_watchdog", {}))
         self.watchdog_enabled = bool(self.watchdog.get("enabled", False))
         self.report_path = report_path
@@ -493,6 +520,7 @@ class TrainingControlCallback(BaseCallback):
             "placement_mastery_successes_required": (
                 self.placement_mastery_successes_required
             ),
+            "fixed_placement_level": self.fixed_placement_level,
             "completed_episodes": self.completed_episodes,
             "successful_episodes": self.successful_episodes,
             "first_step_climb_episodes": self.first_step_climb_episodes,
@@ -565,6 +593,8 @@ class TrainingControlCallback(BaseCallback):
         raw = self._raw_env()
         placement_level_id = metrics.get("placement_curriculum_level")
         if (
+            self.fixed_placement_level is None
+            and
             self.placement_curriculum_mode == "mastery"
             and placement_level_id is not None
         ):
@@ -592,6 +622,9 @@ class TrainingControlCallback(BaseCallback):
                     self.placement_mastery_level_id = str(next_level["id"])
                     self.placement_mastery_successes = 0
                     self.last_progress_step = int(self.num_timesteps)
+        elif self.fixed_placement_level is not None:
+            raw.set_placement_level(self.fixed_placement_level)
+            self.placement_mastery_level_id = self.fixed_placement_level
         if active_steps == raw.active_step_count:
             self.level_outcomes.append(succeeded)
         if self.curriculum_mode != "mastery":
@@ -757,6 +790,7 @@ report: dict[str, object] = {
     "height_stage": args.height_stage,
     "fixed_active_steps": args.fixed_active_steps,
     "placement_start_level": args.placement_start_level,
+    "fixed_placement_level": args.fixed_placement_level,
     "phase_train_leg": args.phase_train_leg,
     "precursor_leg_models": {
         leg: str(path) for leg, path in precursor_leg_model_paths.items()
@@ -805,7 +839,9 @@ try:
         task_config=task_config,
         render_mode="human" if args.gui else None,
     )
-    if args.placement_start_level is not None:
+    if args.fixed_placement_level is not None:
+        raw_env.set_placement_level(args.fixed_placement_level)
+    elif args.placement_start_level is not None:
         raw_env.set_placement_level(args.placement_start_level)
     training_env = raw_env
     precursor_model_verification: dict[str, dict[str, object]] = {}
@@ -824,14 +860,19 @@ try:
                     f"Precursor model hash mismatch for {leg}: {precursor_path}"
                 )
             precursor_model = PPO.load(str(precursor_path), device=args.device)
-            if tuple(precursor_model.observation_space.shape) != tuple(
-                raw_env.observation_space.shape
-            ) or tuple(precursor_model.action_space.shape) != tuple(
+            if tuple(precursor_model.action_space.shape) != tuple(
                 raw_env.action_space.shape
             ):
                 raise RuntimeError(
-                    f"Precursor model spaces do not match the target for {leg}"
+                    f"Precursor action space does not match the target for {leg}"
                 )
+            observation_compatibility = (
+                policy_observation_prefix_compatibility(
+                    precursor_model,
+                    precursor_manifest,
+                    raw_env.contract,
+                )
+            )
             precursor_models[leg] = precursor_model
             precursor_model_verification[leg] = {
                 "status": "PASS",
@@ -839,6 +880,7 @@ try:
                 "model_sha256": precursor_hash,
                 "manifest": str(precursor_manifest_path),
                 "source_task_id": precursor_manifest.get("task_id"),
+                "observation_compatibility": observation_compatibility,
             }
         target_base_model: PPO | None = None
         if phase_base_model_path is not None:
@@ -857,18 +899,22 @@ try:
                 str(phase_base_model_path),
                 device=args.device,
             )
-            if tuple(target_base_model.observation_space.shape) != tuple(
-                raw_env.observation_space.shape
-            ) or tuple(target_base_model.action_space.shape) != tuple(
+            if tuple(target_base_model.action_space.shape) != tuple(
                 raw_env.action_space.shape
             ):
-                raise RuntimeError("Phase base model spaces do not match target")
+                raise RuntimeError("Phase base model action space does not match")
+            observation_compatibility = policy_observation_prefix_compatibility(
+                target_base_model,
+                base_manifest,
+                raw_env.contract,
+            )
             report["phase_base_model_verification"] = {
                 "status": "PASS",
                 "model": str(phase_base_model_path),
                 "model_sha256": base_hash,
                 "manifest": str(base_manifest_path),
                 "source_task_id": base_manifest.get("task_id"),
+                "observation_compatibility": observation_compatibility,
             }
         target_residual_mask = None
         target_base_mask = None
@@ -1231,6 +1277,7 @@ try:
             task_config=task_config,
             total_for_curriculum=curriculum_total_timesteps,
             report_path=output_dir / "progress_watchdog.json",
+            fixed_placement_level=args.fixed_placement_level,
         )
         callbacks = CallbackList(
             [
