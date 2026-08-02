@@ -146,6 +146,24 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--ppo-learning-rate",
+    type=float,
+    default=None,
+    help="Optional run-local PPO learning-rate override.",
+)
+parser.add_argument(
+    "--ppo-initial-log-std",
+    type=float,
+    default=None,
+    help="Optional run-local initial policy log-standard-deviation override.",
+)
+parser.add_argument(
+    "--ppo-entropy-coefficient",
+    type=float,
+    default=None,
+    help="Optional run-local PPO entropy coefficient override.",
+)
+parser.add_argument(
     "--phase-train-leg",
     default=None,
     help=(
@@ -276,6 +294,14 @@ parser.add_argument(
         "across live transfer-state variation."
     ),
 )
+parser.add_argument(
+    "--phase-snapshot",
+    default=None,
+    help=(
+        "Verified JSON simulator boundary used instead of replaying phase "
+        "precursor policies."
+    ),
+)
 parser.add_argument("--gui", action="store_true")
 args, _ = parser.parse_known_args()
 if args.placement_start_level and args.fixed_placement_level:
@@ -314,6 +340,13 @@ if sum(value is not None for value in initialization_options) > 1:
     )
 if args.total_timesteps is not None and args.total_timesteps <= 0:
     parser.error("--total-timesteps must be positive")
+if args.ppo_learning_rate is not None and args.ppo_learning_rate <= 0.0:
+    parser.error("--ppo-learning-rate must be positive")
+if (
+    args.ppo_entropy_coefficient is not None
+    and args.ppo_entropy_coefficient < 0.0
+):
+    parser.error("--ppo-entropy-coefficient cannot be negative")
 if args.smoke_test and args.initialize_only:
     parser.error("--smoke-test and --initialize-only are mutually exclusive")
 if args.phase_reset_attempts < 1:
@@ -321,6 +354,13 @@ if args.phase_reset_attempts < 1:
 if args.phase_precursor_max_steps < 1:
     parser.error("--phase-precursor-max-steps must be positive")
 precursor_leg_model_paths = _parse_leg_model_paths(args.precursor_leg_model)
+phase_snapshot_path = (
+    _resolve_project_path(args.phase_snapshot) if args.phase_snapshot else None
+)
+if phase_snapshot_path is not None and not args.phase_train_leg:
+    parser.error("--phase-snapshot requires --phase-train-leg")
+if phase_snapshot_path is not None and args.phase_disable_snapshot_cache:
+    parser.error("--phase-snapshot requires phase snapshot caching")
 if precursor_leg_model_paths and not args.phase_train_leg:
     parser.error("--precursor-leg-model requires --phase-train-leg")
 phase_base_model_path = (
@@ -443,6 +483,14 @@ if args.fixed_active_steps is not None:
     ]
     task_config["curriculum"] = curriculum
 ppo_config = dict(config["ppo"])
+if args.ppo_learning_rate is not None:
+    ppo_config["learning_rate"] = float(args.ppo_learning_rate)
+if args.ppo_initial_log_std is not None:
+    ppo_config["initial_log_std"] = float(args.ppo_initial_log_std)
+if args.ppo_entropy_coefficient is not None:
+    ppo_config["entropy_coefficient"] = float(
+        args.ppo_entropy_coefficient
+    )
 initial_action_bias = ppo_config.get("initial_action_bias")
 if initial_action_bias is not None:
     if not isinstance(initial_action_bias, list):
@@ -521,6 +569,62 @@ world_dependency_paths = tuple(
     _resolve_project_path(value)
     for value in task_config.get("world_dependencies", ())
 )
+phase_snapshot_payload: dict[str, object] | None = None
+initial_phase_snapshot: dict[str, object] | None = None
+initial_phase_snapshot_mode: str | None = None
+if phase_snapshot_path is not None:
+    if not phase_snapshot_path.is_file():
+        raise FileNotFoundError(phase_snapshot_path)
+    with phase_snapshot_path.open("r", encoding="utf-8") as stream:
+        loaded_snapshot = json.load(stream)
+    if not isinstance(loaded_snapshot, dict):
+        parser.error("--phase-snapshot must contain a JSON object")
+    phase_snapshot_payload = loaded_snapshot
+    if int(phase_snapshot_payload.get("schema_version", 0)) != 1:
+        parser.error("unsupported phase snapshot schema")
+    if str(phase_snapshot_payload.get("target_leg")) != str(
+        args.phase_train_leg
+    ):
+        parser.error("phase snapshot target_leg does not match --phase-train-leg")
+    expected_snapshot_mode = (
+        "inter_leg_transfer" if args.phase_train_transfer else "placement"
+    )
+    initial_phase_snapshot_mode = str(
+        phase_snapshot_payload.get("phase_snapshot_mode", "")
+    )
+    if initial_phase_snapshot_mode != expected_snapshot_mode:
+        parser.error(
+            "phase snapshot mode does not match the requested training mode"
+        )
+    snapshot_sequence = tuple(
+        phase_snapshot_payload.get("placement_sequence_legs", ())
+    )
+    configured_sequence = tuple(
+        task_config["placement_reference"]["sequence_legs"]
+    )
+    if snapshot_sequence != configured_sequence:
+        parser.error("phase snapshot placement sequence does not match config")
+    immutable_snapshot_values = {
+        "stair_rise_m": float(task_config["staircase"]["rise_m"]),
+        "stair_tread_depth_m": float(
+            task_config["staircase"]["tread_depth_m"]
+        ),
+        "effort_cap_nm": float(
+            task_config["robot_hardware_profile"]["effort_cap_nm"]
+        ),
+    }
+    for label, expected_value in immutable_snapshot_values.items():
+        if not np.isclose(
+            float(phase_snapshot_payload.get(label, float("nan"))),
+            expected_value,
+            rtol=0.0,
+            atol=1e-9,
+        ):
+            parser.error(f"phase snapshot {label} does not match config")
+    stored_snapshot = phase_snapshot_payload.get("snapshot")
+    if not isinstance(stored_snapshot, dict):
+        parser.error("phase snapshot payload has no simulator snapshot object")
+    initial_phase_snapshot = stored_snapshot
 output_dir = _resolve_project_path(args.output_dir)
 output_dir.mkdir(parents=True, exist_ok=True)
 report_path = output_dir / "training_report.json"
@@ -947,6 +1051,11 @@ report: dict[str, object] = {
     "training_mode": training_mode,
     "algorithm_contract_requested": algorithm_contract,
     "requested_total_timesteps": total_timesteps,
+    "ppo_run_overrides": {
+        "learning_rate": args.ppo_learning_rate,
+        "initial_log_std": args.ppo_initial_log_std,
+        "entropy_coefficient": args.ppo_entropy_coefficient,
+    },
     "curriculum_total_timesteps": curriculum_total_timesteps,
     "requested_seed": args.seed,
     "height_stage": args.height_stage,
@@ -989,6 +1098,18 @@ report: dict[str, object] = {
     ),
     "phase_compact_residual_action": args.phase_compact_residual_action,
     "phase_snapshot_cache_enabled": not args.phase_disable_snapshot_cache,
+    "phase_snapshot": (
+        {
+            "path": str(phase_snapshot_path),
+            "sha256": sha256_file(phase_snapshot_path),
+            "source_task_id": phase_snapshot_payload.get("source_task_id"),
+            "target_leg": phase_snapshot_payload.get("target_leg"),
+            "mode": phase_snapshot_payload.get("phase_snapshot_mode"),
+        }
+        if phase_snapshot_path is not None
+        and phase_snapshot_payload is not None
+        else None
+    ),
     "initial_action_bias_requested": initial_action_bias,
     "terrain_perception_mode": terrain_perception_mode,
     "terrain_perception": terrain_perception_config,
@@ -1223,6 +1344,8 @@ try:
             maximum_reset_attempts=args.phase_reset_attempts,
             maximum_precursor_steps=args.phase_precursor_max_steps,
             cache_phase_snapshot=not args.phase_disable_snapshot_cache,
+            initial_phase_snapshot=initial_phase_snapshot,
+            initial_phase_snapshot_mode=initial_phase_snapshot_mode,
         )
         training_env = phase_training_env
         report["precursor_model_verification"] = precursor_model_verification

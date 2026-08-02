@@ -35,6 +35,7 @@ from _stair_rl_contract import (
     pack_stair_policy_observation,
     pack_support_regulation_observation,
     placement_advance_clearance_gate_state,
+    placement_completion_settle_gate_failures,
     placement_contact_reached,
     placement_curriculum_level,
     placement_lift_hold_reached,
@@ -43,6 +44,7 @@ from _stair_rl_contract import (
     split_post_clearance_advance_fractions,
     stabilized_support_reference_base_delta,
     staged_support_rear_pitch_scale,
+    staged_swing_outward_offset_m,
     staged_swing_reference_base_delta,
     stair_failure_reasons,
     stair_goal_reached,
@@ -880,6 +882,23 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                         f"inter_leg_transfer.{label} {axis} must be within "
                         "[0, 2]"
                     )
+        swing_outward_offsets = dict(
+            self.inter_leg_transfer_config.get(
+                "swing_outward_offset_m_by_leg",
+                {},
+            )
+        )
+        for leg, offset_m in swing_outward_offsets.items():
+            if leg not in LEGS:
+                raise ValueError(
+                    "inter_leg_transfer.swing_outward_offset_m_by_leg "
+                    f"contains unknown leg {leg!r}"
+                )
+            if not np.isfinite(float(offset_m)) or abs(float(offset_m)) > 0.15:
+                raise ValueError(
+                    "inter_leg_transfer.swing_outward_offset_m_by_leg "
+                    "values must be finite and within [-0.15, 0.15] m"
+                )
         self.placement_transfer_active = False
         self.placement_transfer_start_step = 0
         self.placement_transfer_gate_step_count = 0
@@ -1724,6 +1743,18 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             # full stair rise. Regulate sagittal attitude while the COM moves,
             # before asking the next rear foot to unload. This is opt-in so
             # the already accepted V34 front-pair controller is unchanged.
+            pitch_gain_by_leg = dict(
+                self.pitch_feedback_config.get(
+                    "inter_leg_transfer_proportional_gain_m_by_swing_leg",
+                    {},
+                )
+            )
+            pitch_maximum_by_leg = dict(
+                self.pitch_feedback_config.get(
+                    "inter_leg_transfer_maximum_correction_m_by_swing_leg",
+                    {},
+                )
+            )
             pitch_corrections = support_pitch_vertical_corrections(
                 support_legs=(
                     LEGS[index] for index in self.placement_support_leg_indices
@@ -1732,33 +1763,51 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     self.latest_projected_gravity_xyz[0]
                 ),
                 proportional_gain_m=float(
-                    self.pitch_feedback_config.get(
-                        "inter_leg_transfer_proportional_gain_m",
+                    pitch_gain_by_leg.get(
+                        self.placement_swing_leg,
                         self.pitch_feedback_config.get(
-                            "proportional_gain_m",
-                            0.12,
+                            "inter_leg_transfer_proportional_gain_m",
+                            self.pitch_feedback_config.get(
+                                "proportional_gain_m",
+                                0.12,
+                            ),
                         ),
                     )
                 ),
                 maximum_correction_m=float(
-                    self.pitch_feedback_config.get(
-                        "inter_leg_transfer_maximum_correction_m",
+                    pitch_maximum_by_leg.get(
+                        self.placement_swing_leg,
                         self.pitch_feedback_config.get(
-                            "maximum_correction_m",
-                            0.035,
+                            "inter_leg_transfer_maximum_correction_m",
+                            self.pitch_feedback_config.get(
+                                "maximum_correction_m",
+                                0.035,
+                            ),
                         ),
                     )
                 ),
             )
-            for leg, correction_m in pitch_corrections.items():
-                if bool(
+            front_only_by_leg = dict(
+                self.pitch_feedback_config.get(
+                    "inter_leg_transfer_front_only_by_swing_leg",
+                    {},
+                )
+            )
+            inter_leg_transfer_front_only = bool(
+                front_only_by_leg.get(
+                    self.placement_swing_leg,
                     self.pitch_feedback_config.get(
                         "inter_leg_transfer_front_only",
                         False,
-                    )
-                ) and self.placement_swing_leg.startswith(
-                    "rear_"
-                ) and leg.startswith("rear_"):
+                    ),
+                )
+            )
+            for leg, correction_m in pitch_corrections.items():
+                if (
+                    inter_leg_transfer_front_only
+                    and self.placement_swing_leg.startswith("rear_")
+                    and leg.startswith("rear_")
+                ):
                     continue
                 # The same feedback was active at the end of the preceding
                 # placement phase. Keep it continuous across the phase
@@ -2132,6 +2181,20 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "outward_m": float(stored["outward_m"])
                 - side_sign * float(base_delta[1]),
             }
+        swing_outward_offset_m = float(
+            dict(
+                self.inter_leg_transfer_config.get(
+                    "swing_outward_offset_m_by_leg",
+                    {},
+                )
+            ).get(self.placement_swing_leg, 0.0)
+        )
+        adjusted[self.placement_swing_leg]["outward_m"] += (
+            staged_swing_outward_offset_m(
+                maximum_offset_m=swing_outward_offset_m,
+                advance_fraction=swing_advance_fraction,
+            )
+        )
         support_extension_by_swing = dict(
             self.com_regulation_config.get(
                 "support_extension_m_by_swing_leg",
@@ -3681,9 +3744,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     placement_state
                 )
                 residual_scale = float(
-                    self.inter_leg_transfer_config.get(
+                    active_transfer_config.get(
                         "residual_action_scale",
-                        0.0,
+                        self.inter_leg_transfer_config.get(
+                            "residual_action_scale",
+                            0.0,
+                        ),
                     )
                 )
             else:
@@ -3895,6 +3961,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         placement_transfer_gate_failures: tuple[str, ...] = ()
         placement_pre_unload_gate_now = False
         placement_pre_unload_gate_failures: tuple[str, ...] = ()
+        placement_completion_gate_failures: tuple[str, ...] = ()
         placement_unload_started_event = False
         placement_balance_position = np.asarray(
             base_position,
@@ -4546,6 +4613,42 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             not placement_transfer_was_active
             and self.goal_hold_step_count >= placement_hold_steps
         )
+        if succeeded and self.placement_reference_enabled:
+            completion_settle_gate = dict(
+                self._active_placement_level().get(
+                    "completion_settle_gate",
+                    {},
+                )
+            )
+            if bool(completion_settle_gate.get("enabled", False)):
+                placement_completion_gate_failures = (
+                    placement_completion_settle_gate_failures(
+                        base_linear_velocity_xyz_m_s=state[
+                            "body_linear_velocity"
+                        ],
+                        body_angular_velocity_xyz_rad_s=imu_observation[:3],
+                        upright_cosine=upright_cosine,
+                        maximum_base_speed_m_s=float(
+                            completion_settle_gate[
+                                "maximum_base_speed_m_s"
+                            ]
+                        ),
+                        maximum_body_rate_rad_s=float(
+                            completion_settle_gate[
+                                "maximum_body_rate_rad_s"
+                            ]
+                        ),
+                        minimum_upright_cosine=float(
+                            completion_settle_gate.get(
+                                "minimum_upright_cosine",
+                                self.placement_reference_config[
+                                    "minimum_success_upright_cosine"
+                                ],
+                            )
+                        ),
+                    )
+                )
+                succeeded = not placement_completion_gate_failures
         placement_leg_completed_event: str | None = None
         if self.placement_reference_enabled and succeeded:
             placement_leg_completed_event = self.placement_swing_leg
@@ -4797,6 +4900,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             "placement_swing_lift_m": placement_swing_lift_m,
             "placement_upright_cosine": upright_cosine,
             "placement_goal_hold_step_count": self.goal_hold_step_count,
+            "placement_completion_gate_failures": (
+                placement_completion_gate_failures
+            ),
             "placement_success_mode": (
                 self._placement_success_mode()
                 if self.placement_reference_enabled

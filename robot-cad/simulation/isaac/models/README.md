@@ -12,6 +12,7 @@ ignored under `simulation/isaac/output/`.
 | `ppo-stairs-v12-front-right-190mm-lift-small/` | Support-only mixed-height lift residual, manifest, training/evaluation/recording reports; strict 190 mm objective failed | `e0147f16ea942d751c8cec49616fa3aed62fc6b5f6a263aa0625600ee75e5f62` |
 | `ppo-stairs-v13-front-right-190mm-lift-small/` | Direct front-right lift PPO residual, manifest, training/evaluation/recording reports; 3/3 strict 190 mm lift-hold successes | `b53a8d3d0087f816403461f328c758657d85ab6b19a08d79e951a8f4b85a9494` |
 | `ppo-foot-lift-v3-rear-right-190mm-small/` | Fresh 512-step rear-right unsupported-balance PPO, manifest, 5/5 strict evaluation, and recording report | `376d1e02e09ea9d5d25eacdc38bf46432c8ed9bf6b3efc65cccdbec6214e636b` |
+| `ppo-stairs-v45-rear-left-dynamic-transfer-4096/` | Exact-snapshot 4,096-step rear-left dynamic-transfer diagnostic, deterministic failed replay, and controller-authority evidence; objective failed | `c97cb2d5c4f1f7cb1cf70c011026b36033c4e71317c82e416f6d4529a48ab5c0` |
 
 The stair checkpoint has one verified stochastic four-step `10 mm` climb but
 scored `0/10` deterministic completions. It is an evaluation artifact, not a
@@ -42,3 +43,9 @@ three physical support feet and no torso pose pinning. Five fresh deterministic
 episodes all passed the strict `190 mm`/`0.75 s` gate with `199.85-203.66 mm`
 maximum lift and at most `2.12 deg` tilt. This proves clearance and balance in
 the simple pose, not the mixed-height stair transfer, landing, or ascent.
+
+The V45 checkpoint starts after the accepted V44 rear-right tread landing and
+controls all 12 joint residuals during the rear-right-to-rear-left transfer.
+Its 4,096-step seed-875 run completed zero transfers, and deterministic replay
+tipped after 3.583 s. It is retained to make the rejected controller direction
+reproducible; it is not a stair-climbing or hardware-deployment checkpoint.

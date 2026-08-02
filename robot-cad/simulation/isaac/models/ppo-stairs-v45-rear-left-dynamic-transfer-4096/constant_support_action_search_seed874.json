@@ -1,0 +1,916 @@
+{
+  "status": "PASS",
+  "task_id": "Drobot-Quadruped-Stairs-v45-Rear-Left-Transfer",
+  "scope": "Exact-snapshot rear-left transfer stance-action authority audit",
+  "config": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\stairs\\quadruped_stairs_v45_rear_left_transfer.yaml",
+  "phase_snapshot": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\v45-rear-left-transfer-start-seed870.json",
+  "seed": 874,
+  "stair_rise_m": 0.18,
+  "stair_tread_depth_m": 0.25,
+  "effort_cap_nm": 0.8825985,
+  "amplitudes": [
+    -1.0,
+    0.0,
+    1.0
+  ],
+  "candidate_count": 27,
+  "maximum_seconds": 5.0,
+  "support_action_indices": [
+    0,
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+    10,
+    11
+  ],
+  "support_dof_names": [
+    "front_left_hip_abduction",
+    "front_right_hip_abduction",
+    "rear_right_hip_abduction",
+    "front_left_hip_flexion",
+    "front_right_hip_flexion",
+    "rear_right_hip_flexion",
+    "front_left_knee",
+    "front_right_knee",
+    "rear_right_knee"
+  ],
+  "probed_abduction_action_positions": [
+    0,
+    1,
+    2
+  ],
+  "completed_count": 0,
+  "best": {
+    "id": "+0.0-+1.0-+1.0",
+    "action_by_joint": {
+      "front_left_hip_abduction": 0.0,
+      "front_right_hip_abduction": 1.0,
+      "rear_right_hip_abduction": 1.0
+    },
+    "steps": 148,
+    "completed": false,
+    "terminated": true,
+    "truncated": false,
+    "failure_reasons": [
+      "body_tipped"
+    ],
+    "initial_balance_target_error_m": 0.1283023882827408,
+    "minimum_balance_target_error_m": 0.12733122476594483,
+    "final_balance_target_error_m": 0.1445348969748295,
+    "balance_target_error_reduction_m": -0.0162325086920887,
+    "maximum_support_margin_m": -0.08315310164314207,
+    "final_support_margin_m": -0.08315310164314207,
+    "maximum_body_tilt_deg": 19.954959360929266,
+    "final_balance_position_m": [
+      0.4670245860245693,
+      0.0708706878591567,
+      0.3187687606592466
+    ],
+    "final_target_error_xy_m": [
+      -0.10053440928459167,
+      0.10384203866124153
+    ]
+  },
+  "ranked_candidates": [
+    {
+      "id": "+0.0-+1.0-+1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 0.0,
+        "front_right_hip_abduction": 1.0,
+        "rear_right_hip_abduction": 1.0
+      },
+      "steps": 148,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12733122476594483,
+      "final_balance_target_error_m": 0.1445348969748295,
+      "balance_target_error_reduction_m": -0.0162325086920887,
+      "maximum_support_margin_m": -0.08315310164314207,
+      "final_support_margin_m": -0.08315310164314207,
+      "maximum_body_tilt_deg": 19.954959360929266,
+      "final_balance_position_m": [
+        0.4670245860245693,
+        0.0708706878591567,
+        0.3187687606592466
+      ],
+      "final_target_error_xy_m": [
+        -0.10053440928459167,
+        0.10384203866124153
+      ]
+    },
+    {
+      "id": "-1.0-+1.0-+1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": -1.0,
+        "front_right_hip_abduction": 1.0,
+        "rear_right_hip_abduction": 1.0
+      },
+      "steps": 151,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12716169652657974,
+      "final_balance_target_error_m": 0.14577457562824073,
+      "balance_target_error_reduction_m": -0.017472187345499934,
+      "maximum_support_margin_m": -0.0805730983497205,
+      "final_support_margin_m": -0.0805730983497205,
+      "maximum_body_tilt_deg": 20.359433425925957,
+      "final_balance_position_m": [
+        0.4661053996294073,
+        0.07170622019397355,
+        0.3180564357093265
+      ],
+      "final_target_error_xy_m": [
+        -0.10145360231399536,
+        0.10467756912112236
+      ]
+    },
+    {
+      "id": "+0.0--1.0-+1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 0.0,
+        "front_right_hip_abduction": -1.0,
+        "rear_right_hip_abduction": 1.0
+      },
+      "steps": 225,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12821232263454074,
+      "final_balance_target_error_m": 0.14609954213234674,
+      "balance_target_error_reduction_m": -0.01779715384960595,
+      "maximum_support_margin_m": -0.02384768311498888,
+      "final_support_margin_m": -0.02384768311498888,
+      "maximum_body_tilt_deg": 20.183626790123395,
+      "final_balance_position_m": [
+        0.4705942726519304,
+        0.07631231781124796,
+        0.3201525710121017
+      ],
+      "final_target_error_xy_m": [
+        -0.09696471691131592,
+        0.10928366705775261
+      ]
+    },
+    {
+      "id": "+0.0-+0.0-+1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 0.0,
+        "front_right_hip_abduction": 0.0,
+        "rear_right_hip_abduction": 1.0
+      },
+      "steps": 223,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.1279989513756036,
+      "final_balance_target_error_m": 0.1461590026691151,
+      "balance_target_error_reduction_m": -0.017856614386374314,
+      "maximum_support_margin_m": -0.02390926410772882,
+      "final_support_margin_m": -0.02390926410772882,
+      "maximum_body_tilt_deg": 20.36046408887305,
+      "final_balance_position_m": [
+        0.4689799655035676,
+        0.07493891511617899,
+        0.3200692825323704
+      ],
+      "final_target_error_xy_m": [
+        -0.0985790491104126,
+        0.10791026428341866
+      ]
+    },
+    {
+      "id": "-1.0--1.0-+1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": -1.0,
+        "front_right_hip_abduction": -1.0,
+        "rear_right_hip_abduction": 1.0
+      },
+      "steps": 224,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12816395593514213,
+      "final_balance_target_error_m": 0.14641694522947665,
+      "balance_target_error_reduction_m": -0.01811455694673586,
+      "maximum_support_margin_m": -0.025294929313119264,
+      "final_support_margin_m": -0.025294929313119264,
+      "maximum_body_tilt_deg": 20.070505943948163,
+      "final_balance_position_m": [
+        0.4712297879997447,
+        0.0772947138020064,
+        0.32021932062967917
+      ],
+      "final_target_error_xy_m": [
+        -0.0963292121887207,
+        0.11026606336236
+      ]
+    },
+    {
+      "id": "+1.0-+0.0-+1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 1.0,
+        "front_right_hip_abduction": 0.0,
+        "rear_right_hip_abduction": 1.0
+      },
+      "steps": 224,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.1283023882827408,
+      "final_balance_target_error_m": 0.14642751559545977,
+      "balance_target_error_reduction_m": -0.01812512731271898,
+      "maximum_support_margin_m": -0.023528327675687306,
+      "final_support_margin_m": -0.023528327675687306,
+      "maximum_body_tilt_deg": 20.38704774723684,
+      "final_balance_position_m": [
+        0.4693430079682211,
+        0.07563175865382142,
+        0.3200214115531075
+      ],
+      "final_target_error_xy_m": [
+        -0.0982159972190857,
+        0.1086031086742878
+      ]
+    },
+    {
+      "id": "-1.0-+0.0-+1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": -1.0,
+        "front_right_hip_abduction": 0.0,
+        "rear_right_hip_abduction": 1.0
+      },
+      "steps": 226,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.1283023882827408,
+      "final_balance_target_error_m": 0.1467311113931341,
+      "balance_target_error_reduction_m": -0.018428723110393314,
+      "maximum_support_margin_m": -0.02423170430766062,
+      "final_support_margin_m": -0.02423170430766062,
+      "maximum_body_tilt_deg": 20.25471280403363,
+      "final_balance_position_m": [
+        0.4714125252075904,
+        0.07787032232777201,
+        0.3200369623573564
+      ],
+      "final_target_error_xy_m": [
+        -0.09614646434783936,
+        0.11084167286753654
+      ]
+    },
+    {
+      "id": "+1.0-+1.0-+1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 1.0,
+        "front_right_hip_abduction": 1.0,
+        "rear_right_hip_abduction": 1.0
+      },
+      "steps": 148,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12740544591069616,
+      "final_balance_target_error_m": 0.14677368239232694,
+      "balance_target_error_reduction_m": -0.018471294109586145,
+      "maximum_support_margin_m": -0.08263670590045136,
+      "final_support_margin_m": -0.08277037366846014,
+      "maximum_body_tilt_deg": 21.08550916143961,
+      "final_balance_position_m": [
+        0.4640578723091323,
+        0.0710960726923788,
+        0.3169729357072775
+      ],
+      "final_target_error_xy_m": [
+        -0.10350114107131958,
+        0.10406741872429848
+      ]
+    },
+    {
+      "id": "+0.0--1.0--1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 0.0,
+        "front_right_hip_abduction": -1.0,
+        "rear_right_hip_abduction": -1.0
+      },
+      "steps": 195,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12608253407414127,
+      "final_balance_target_error_m": 0.14795844016097062,
+      "balance_target_error_reduction_m": -0.01965605187822983,
+      "maximum_support_margin_m": -0.05108530836117662,
+      "final_support_margin_m": -0.0649151107134584,
+      "maximum_body_tilt_deg": 19.99598634041474,
+      "final_balance_position_m": [
+        0.5174006255562015,
+        0.10622576302644217,
+        0.3311147640228244
+      ],
+      "final_target_error_xy_m": [
+        -0.05015838146209717,
+        0.13919711485505104
+      ]
+    },
+    {
+      "id": "+0.0-+1.0--1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 0.0,
+        "front_right_hip_abduction": 1.0,
+        "rear_right_hip_abduction": -1.0
+      },
+      "steps": 193,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.125530482501665,
+      "final_balance_target_error_m": 0.14834116808991238,
+      "balance_target_error_reduction_m": -0.020038779807171586,
+      "maximum_support_margin_m": -0.04984214234235855,
+      "final_support_margin_m": -0.06545076774499509,
+      "maximum_body_tilt_deg": 20.08833131924585,
+      "final_balance_position_m": [
+        0.5170755478669786,
+        0.10651529169800472,
+        0.33126550193684007
+      ],
+      "final_target_error_xy_m": [
+        -0.05048346519470215,
+        0.1394866369664669
+      ]
+    },
+    {
+      "id": "-1.0-+0.0--1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": -1.0,
+        "front_right_hip_abduction": 0.0,
+        "rear_right_hip_abduction": -1.0
+      },
+      "steps": 193,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12555730487672187,
+      "final_balance_target_error_m": 0.14835341832745114,
+      "balance_target_error_reduction_m": -0.020051030044710344,
+      "maximum_support_margin_m": -0.05027875152140002,
+      "final_support_margin_m": -0.0654957448384688,
+      "maximum_body_tilt_deg": 20.09251688943522,
+      "final_balance_position_m": [
+        0.517051787728314,
+        0.10651972844279388,
+        0.3312160283093271
+      ],
+      "final_target_error_xy_m": [
+        -0.050507187843322754,
+        0.13949107751250267
+      ]
+    },
+    {
+      "id": "+1.0--1.0--1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 1.0,
+        "front_right_hip_abduction": -1.0,
+        "rear_right_hip_abduction": -1.0
+      },
+      "steps": 197,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.1262030607451901,
+      "final_balance_target_error_m": 0.14845860055700513,
+      "balance_target_error_reduction_m": -0.02015621227426434,
+      "maximum_support_margin_m": -0.051251473125267046,
+      "final_support_margin_m": -0.0648199472093694,
+      "maximum_body_tilt_deg": 20.170082019567158,
+      "final_balance_position_m": [
+        0.517817125337959,
+        0.10690610622144775,
+        0.3309105902484736
+      ],
+      "final_target_error_xy_m": [
+        -0.04974186420440674,
+        0.13987745717167854
+      ]
+    },
+    {
+      "id": "-1.0--1.0--1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": -1.0,
+        "front_right_hip_abduction": -1.0,
+        "rear_right_hip_abduction": -1.0
+      },
+      "steps": 193,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.1261220394617211,
+      "final_balance_target_error_m": 0.148541406200699,
+      "balance_target_error_reduction_m": -0.020239017917958207,
+      "maximum_support_margin_m": -0.05054956081681527,
+      "final_support_margin_m": -0.06529339617249828,
+      "maximum_body_tilt_deg": 20.053412357854494,
+      "final_balance_position_m": [
+        0.5168173712906486,
+        0.10663466233578384,
+        0.33134050599962794
+      ],
+      "final_target_error_xy_m": [
+        -0.050741612911224365,
+        0.13960601016879082
+      ]
+    },
+    {
+      "id": "+1.0-+0.0--1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 1.0,
+        "front_right_hip_abduction": 0.0,
+        "rear_right_hip_abduction": -1.0
+      },
+      "steps": 193,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.1254431558531991,
+      "final_balance_target_error_m": 0.14893620165138782,
+      "balance_target_error_reduction_m": -0.02063381336864703,
+      "maximum_support_margin_m": -0.049682215801092354,
+      "final_support_margin_m": -0.06638939629238623,
+      "maximum_body_tilt_deg": 20.445043788269757,
+      "final_balance_position_m": [
+        0.518149104057104,
+        0.10753008168015984,
+        0.33124015375174426
+      ],
+      "final_target_error_xy_m": [
+        -0.04940992593765259,
+        0.14050142839550972
+      ]
+    },
+    {
+      "id": "+1.0-+1.0--1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 1.0,
+        "front_right_hip_abduction": 1.0,
+        "rear_right_hip_abduction": -1.0
+      },
+      "steps": 193,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.1254966977071496,
+      "final_balance_target_error_m": 0.14896543848752203,
+      "balance_target_error_reduction_m": -0.020663050204781236,
+      "maximum_support_margin_m": -0.049236116766396915,
+      "final_support_margin_m": -0.06603053110694114,
+      "maximum_body_tilt_deg": 20.3109554539735,
+      "final_balance_position_m": [
+        0.5173929056406863,
+        0.10729292962763691,
+        0.3314347223299686
+      ],
+      "final_target_error_xy_m": [
+        -0.05016607046127319,
+        0.14026427641510963
+      ]
+    },
+    {
+      "id": "+0.0-+0.0--1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 0.0,
+        "front_right_hip_abduction": 0.0,
+        "rear_right_hip_abduction": -1.0
+      },
+      "steps": 193,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.1254015426385446,
+      "final_balance_target_error_m": 0.14918482648252862,
+      "balance_target_error_reduction_m": -0.02088243819978783,
+      "maximum_support_margin_m": -0.04994009817168773,
+      "final_support_margin_m": -0.0665872358399372,
+      "maximum_body_tilt_deg": 20.53185090975814,
+      "final_balance_position_m": [
+        0.5182617022349469,
+        0.10783309568710281,
+        0.33112641747411087
+      ],
+      "final_target_error_xy_m": [
+        -0.0492972731590271,
+        0.1408044435083866
+      ]
+    },
+    {
+      "id": "+1.0--1.0-+1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 1.0,
+        "front_right_hip_abduction": -1.0,
+        "rear_right_hip_abduction": 1.0
+      },
+      "steps": 224,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12808589112308477,
+      "final_balance_target_error_m": 0.14922589766286015,
+      "balance_target_error_reduction_m": -0.02092350938011936,
+      "maximum_support_margin_m": -0.028464168348934994,
+      "final_support_margin_m": -0.028464168348934994,
+      "maximum_body_tilt_deg": 20.173785914551857,
+      "final_balance_position_m": [
+        0.47461472955538136,
+        0.08377509430421573,
+        0.3192431595848994
+      ],
+      "final_target_error_xy_m": [
+        -0.09294426441192627,
+        0.1167464442551136
+      ]
+    },
+    {
+      "id": "+0.0-+0.0-+0.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 0.0,
+        "front_right_hip_abduction": 0.0,
+        "rear_right_hip_abduction": 0.0
+      },
+      "steps": 201,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12660066727594754,
+      "final_balance_target_error_m": 0.14998311067168726,
+      "balance_target_error_reduction_m": -0.021680722388946472,
+      "maximum_support_margin_m": -0.05150908171015437,
+      "final_support_margin_m": -0.06434989543999099,
+      "maximum_body_tilt_deg": 20.23711676066899,
+      "final_balance_position_m": [
+        0.5160067375581271,
+        0.10787357882179288,
+        0.3303302072135241
+      ],
+      "final_target_error_xy_m": [
+        -0.05155229568481445,
+        0.1408449299633503
+      ]
+    },
+    {
+      "id": "+0.0--1.0-+0.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 0.0,
+        "front_right_hip_abduction": -1.0,
+        "rear_right_hip_abduction": 0.0
+      },
+      "steps": 206,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.1271008276780342,
+      "final_balance_target_error_m": 0.15005526367773292,
+      "balance_target_error_reduction_m": -0.021752875394992127,
+      "maximum_support_margin_m": -0.049167584736993925,
+      "final_support_margin_m": -0.06260757165884749,
+      "maximum_body_tilt_deg": 20.125961484041166,
+      "final_balance_position_m": [
+        0.5156957389111078,
+        0.10783626836832477,
+        0.32990030291182243
+      ],
+      "final_target_error_xy_m": [
+        -0.051863253116607666,
+        0.1408076174557209
+      ]
+    },
+    {
+      "id": "-1.0-+1.0--1.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": -1.0,
+        "front_right_hip_abduction": 1.0,
+        "rear_right_hip_abduction": -1.0
+      },
+      "steps": 194,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12536604606660223,
+      "final_balance_target_error_m": 0.1503095805345972,
+      "balance_target_error_reduction_m": -0.022007192251856406,
+      "maximum_support_margin_m": -0.049794652618211914,
+      "final_support_margin_m": -0.06743830650020599,
+      "maximum_body_tilt_deg": 20.99555370526471,
+      "final_balance_position_m": [
+        0.5195809399716156,
+        0.10947540072197315,
+        0.3308946595722226
+      ],
+      "final_target_error_xy_m": [
+        -0.04797804355621338,
+        0.14244675263762474
+      ]
+    },
+    {
+      "id": "+1.0--1.0-+0.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 1.0,
+        "front_right_hip_abduction": -1.0,
+        "rear_right_hip_abduction": 0.0
+      },
+      "steps": 201,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12679901828063045,
+      "final_balance_target_error_m": 0.15070026993743635,
+      "balance_target_error_reduction_m": -0.022397881654695556,
+      "maximum_support_margin_m": -0.05134489340133774,
+      "final_support_margin_m": -0.06505613439364062,
+      "maximum_body_tilt_deg": 20.59094227385394,
+      "final_balance_position_m": [
+        0.5172718802568748,
+        0.10909122955450413,
+        0.3303269442953566
+      ],
+      "final_target_error_xy_m": [
+        -0.05028712749481201,
+        0.14206257835030556
+      ]
+    },
+    {
+      "id": "-1.0-+0.0-+0.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": -1.0,
+        "front_right_hip_abduction": 0.0,
+        "rear_right_hip_abduction": 0.0
+      },
+      "steps": 206,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12663393309317608,
+      "final_balance_target_error_m": 0.15119035091073638,
+      "balance_target_error_reduction_m": -0.022887962627995584,
+      "maximum_support_margin_m": -0.04931602401540696,
+      "final_support_margin_m": -0.06360544405439363,
+      "maximum_body_tilt_deg": 20.482221634856153,
+      "final_balance_position_m": [
+        0.5166098659920478,
+        0.10937578325556423,
+        0.32960005224721955
+      ],
+      "final_target_error_xy_m": [
+        -0.050949156284332275,
+        0.14234713092446327
+      ]
+    },
+    {
+      "id": "+0.0-+1.0-+0.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 0.0,
+        "front_right_hip_abduction": 1.0,
+        "rear_right_hip_abduction": 0.0
+      },
+      "steps": 214,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12606132575150503,
+      "final_balance_target_error_m": 0.1512299356194822,
+      "balance_target_error_reduction_m": -0.022927547336741405,
+      "maximum_support_margin_m": -0.04565000808067659,
+      "final_support_margin_m": -0.06068167023922934,
+      "maximum_body_tilt_deg": 20.08831143330663,
+      "final_balance_position_m": [
+        0.5117917253878241,
+        0.10760070625534476,
+        0.3281704502745301
+      ],
+      "final_target_error_xy_m": [
+        -0.05576729774475098,
+        0.14057205244898796
+      ]
+    },
+    {
+      "id": "-1.0--1.0-+0.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": -1.0,
+        "front_right_hip_abduction": -1.0,
+        "rear_right_hip_abduction": 0.0
+      },
+      "steps": 204,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12669494534233194,
+      "final_balance_target_error_m": 0.15179508584058785,
+      "balance_target_error_reduction_m": -0.023492697557847053,
+      "maximum_support_margin_m": -0.05023878966945069,
+      "final_support_margin_m": -0.06531615879340885,
+      "maximum_body_tilt_deg": 20.958043839854504,
+      "final_balance_position_m": [
+        0.5181366641902871,
+        0.11055280027594931,
+        0.3301648117891325
+      ],
+      "final_target_error_xy_m": [
+        -0.04942232370376587,
+        0.1435241512954235
+      ]
+    },
+    {
+      "id": "+1.0-+0.0-+0.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 1.0,
+        "front_right_hip_abduction": 0.0,
+        "rear_right_hip_abduction": 0.0
+      },
+      "steps": 201,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.1263453849875843,
+      "final_balance_target_error_m": 0.1519516069983173,
+      "balance_target_error_reduction_m": -0.023649218715576514,
+      "maximum_support_margin_m": -0.05150113455562746,
+      "final_support_margin_m": -0.06623805609290713,
+      "maximum_body_tilt_deg": 21.086012267757983,
+      "final_balance_position_m": [
+        0.5185512289005338,
+        0.11086025225519983,
+        0.3302474467490733
+      ],
+      "final_target_error_xy_m": [
+        -0.04900777339935303,
+        0.14383159950375557
+      ]
+    },
+    {
+      "id": "-1.0-+1.0-+0.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": -1.0,
+        "front_right_hip_abduction": 1.0,
+        "rear_right_hip_abduction": 0.0
+      },
+      "steps": 212,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12597544973712418,
+      "final_balance_target_error_m": 0.15198382762440002,
+      "balance_target_error_reduction_m": -0.023681439341659227,
+      "maximum_support_margin_m": -0.046735518155307194,
+      "final_support_margin_m": -0.06282191551331617,
+      "maximum_body_tilt_deg": 20.598340345614663,
+      "final_balance_position_m": [
+        0.5151426087292186,
+        0.1096877081838665,
+        0.3286350069033944
+      ],
+      "final_target_error_xy_m": [
+        -0.05241638422012329,
+        0.14265905693173409
+      ]
+    },
+    {
+      "id": "+1.0-+1.0-+0.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 1.0,
+        "front_right_hip_abduction": 1.0,
+        "rear_right_hip_abduction": 0.0
+      },
+      "steps": 208,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.1283023882827408,
+      "minimum_balance_target_error_m": 0.12555103327175665,
+      "final_balance_target_error_m": 0.1522027335733032,
+      "balance_target_error_reduction_m": -0.023900345290562397,
+      "maximum_support_margin_m": -0.04887048757508827,
+      "final_support_margin_m": -0.06452779550488004,
+      "maximum_body_tilt_deg": 20.886567223394618,
+      "final_balance_position_m": [
+        0.5171399245883305,
+        0.1106377959847991,
+        0.3292714861861101
+      ],
+      "final_target_error_xy_m": [
+        -0.05041909217834473,
+        0.14360914751887321
+      ]
+    }
+  ]
+}

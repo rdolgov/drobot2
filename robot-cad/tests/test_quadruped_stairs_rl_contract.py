@@ -50,6 +50,7 @@ from _stair_rl_contract import (  # noqa: E402
     pack_stair_policy_observation,
     pack_support_regulation_observation,
     placement_advance_clearance_gate_state,
+    placement_completion_settle_gate_failures,
     placement_contact_reached,
     placement_curriculum_level,
     placement_lift_hold_reached,
@@ -62,6 +63,7 @@ from _stair_rl_contract import (  # noqa: E402
     split_post_clearance_advance_fractions,
     stabilized_support_reference_base_delta,
     staged_support_rear_pitch_scale,
+    staged_swing_outward_offset_m,
     staged_swing_reference_base_delta,
     stair_failure_reasons,
     stair_goal_reached,
@@ -2384,6 +2386,31 @@ def test_support_pitch_feedback_levels_nose_down_attitude() -> None:
         )
 
 
+def test_placement_completion_waits_for_proprioceptive_settling() -> None:
+    assert placement_completion_settle_gate_failures(
+        base_linear_velocity_xyz_m_s=(0.004, -0.003, 0.010),
+        body_angular_velocity_xyz_rad_s=(0.03, 0.04, 0.02),
+        upright_cosine=0.99,
+        maximum_base_speed_m_s=0.025,
+        maximum_body_rate_rad_s=0.20,
+        minimum_upright_cosine=0.9781476,
+    ) == ()
+
+    failures = placement_completion_settle_gate_failures(
+        base_linear_velocity_xyz_m_s=(0.066, 0.0, 0.066),
+        body_angular_velocity_xyz_rad_s=(0.16, 0.16, 0.0),
+        upright_cosine=0.97,
+        maximum_base_speed_m_s=0.025,
+        maximum_body_rate_rad_s=0.20,
+        minimum_upright_cosine=0.9781476,
+    )
+    assert failures == (
+        "base_not_settled",
+        "body_rate_high",
+        "body_not_upright",
+    )
+
+
 def test_staged_swing_reference_releases_only_during_advance() -> None:
     base_delta = (0.020, 0.040, -0.010)
 
@@ -2418,6 +2445,32 @@ def test_staged_swing_reference_releases_only_during_advance() -> None:
             base_delta_m=base_delta,
             advance_fraction=0.5,
             end_scale_xyz=(-0.1, 1.0, 1.0),
+        )
+
+
+def test_staged_swing_outward_offset_ramps_during_advance() -> None:
+    assert staged_swing_outward_offset_m(
+        maximum_offset_m=0.005,
+        advance_fraction=0.0,
+    ) == pytest.approx(0.0)
+    assert staged_swing_outward_offset_m(
+        maximum_offset_m=0.005,
+        advance_fraction=0.5,
+    ) == pytest.approx(0.0025)
+    assert staged_swing_outward_offset_m(
+        maximum_offset_m=-0.005,
+        advance_fraction=1.0,
+    ) == pytest.approx(-0.005)
+
+    with pytest.raises(ValueError, match="maximum_offset_m"):
+        staged_swing_outward_offset_m(
+            maximum_offset_m=0.151,
+            advance_fraction=0.5,
+        )
+    with pytest.raises(ValueError, match="advance_fraction"):
+        staged_swing_outward_offset_m(
+            maximum_offset_m=0.005,
+            advance_fraction=-0.1,
         )
 
 
@@ -2819,6 +2872,13 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
             self.placement_sequence_legs = ("front_left", "front_right")
             self.control_hz = 10
             self.reward_config = {"success": 100.0}
+            self.inter_leg_transfer_config = {
+                "training_reward": {
+                    "balance_target_error_progress_per_m": 1000.0,
+                    "support_margin_progress_per_m": 2000.0,
+                    "maximum_progress_m_per_step": 0.010,
+                }
+            }
             self.actions: list[np.ndarray] = []
             self.snapshot_restores = 0
 
@@ -2866,11 +2926,15 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
                 {
                     "placement_transfer_completed_event": transfer_event,
                     "base_clearance_m": 0.31,
-                    "placement_support_margin_m": 0.012,
+                    "placement_support_margin_m": (
+                        0.018 if len(self.actions) == 2 else 0.012
+                    ),
                     "placement_support_contact_fraction": 1.0,
                     "maximum_support_slip_m": 0.004,
                     "placement_upright_cosine": 0.985,
-                    "placement_transfer_base_target_error_m": 0.009,
+                    "placement_transfer_base_target_error_m": (
+                        0.004 if len(self.actions) == 2 else 0.009
+                    ),
                     "placement_transfer_body_rate_rad_s": 0.08,
                     "placement_transfer_swing_total_load_n": 0.2,
                 },
@@ -2899,7 +2963,7 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
         np.asarray((-0.5,), dtype=np.float32)
     )
     np.testing.assert_allclose(raw.actions[1], (-0.5, 0.0))
-    assert reward == pytest.approx(102.0)
+    assert reward == pytest.approx(119.0)
     assert terminated is True
     assert truncated is False
     assert result["phase_training_transfer_completed"] is True
@@ -2907,9 +2971,18 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
     assert stats["target_mode"] == "inter_leg_transfer"
     assert stats["completed_target_transfers"] == 1
     assert stats["maximum_target_transfer_balance_error_m"] == pytest.approx(
-        0.009
+        0.004
     )
     assert stats["minimum_target_transfer_swing_load_n"] == pytest.approx(0.2)
+    assert stats["transfer_progress_reward"]["cumulative_reward"] == (
+        pytest.approx(17.0)
+    )
+    assert result["phase_training_transfer_balance_error_progress_m"] == (
+        pytest.approx(0.005)
+    )
+    assert result["phase_training_transfer_support_margin_progress_m"] == (
+        pytest.approx(0.006)
+    )
 
     observation, info = wrapped.reset(seed=12)
     np.testing.assert_allclose(observation, (9.0, 9.0, 9.0))

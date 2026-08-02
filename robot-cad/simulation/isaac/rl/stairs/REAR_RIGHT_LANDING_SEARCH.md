@@ -202,3 +202,53 @@ then search rear-left unloading. Longer end-to-end PPO or RGB vision is not yet
 justified; hardware traction/compliance measurements remain useful for
 sim-to-real calibration, but the immediate simulated failure is transfer
 attitude rather than unseen geometry.
+
+## V45 exact-snapshot transfer training
+
+V45 now waits for a low-rate rear-right landing state, allows per-next-leg
+transfer residual authority, supports per-leg pitch feedback, and can ramp a
+bounded body-relative outward foothold offset during swing advance. The source
+also supports an exact phase snapshot and clipped potential-difference COM
+progress reward, so every short PPO episode starts from the same verified
+physical boundary without replaying the fragile prefix.
+
+The fine rear-right offset search used candidate 91 with offsets `5, 10, 15,
+20, 25, 30 mm`. Only `5 mm` retained the complete landing: `217.990 mm` lift,
+all `45/45` hold frames, `39.443 mm` minimum support margin, `14.000 mm`
+maximum support slip, and `13.819 N` maximum tread load. Offsets at or above
+`10 mm` tipped before contact. The selected 5 mm reference did not materially
+widen the physical foothold, so it is not presented as a transfer fix.
+
+The exact boundary snapshot has SHA-256
+`587ffc5e447e8f36f877490dae7525848529480304565cc7cc1c04e7a1143f85`.
+Its COM starts at `[0.487750, 0.067301, 0.337153] m` and the analytic target is
+`[0.567750, -0.033200, 0.337153] m`: an `80.0 mm` forward and `100.5 mm`
+lateral move. Zero action still tipped, and all 27 constant loaded-support
+hip-abduction combinations worsened the final COM error.
+
+The bounded dynamic policy was trained with:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v45_rear_left_transfer.yaml `
+  --output-dir simulation\isaac\models\ppo-stairs-v45-rear-left-dynamic-transfer-4096 `
+  --seed 875 --total-timesteps 4096 `
+  --phase-train-leg rear_left --phase-train-transfer `
+  --phase-snapshot simulation\isaac\models\ppo-stairs-v45-rear-left-dynamic-transfer-4096\phase_snapshot_seed870.json `
+  --fixed-placement-level left-center-tread-load `
+  --ppo-learning-rate 0.0001 --ppo-initial-log-std -0.3 `
+  --ppo-entropy-coefficient 0.001 --device cuda
+```
+
+It completed 4,096 steps in `135.744 s`, with `0` successful transfers and
+only `15.136 mm` maximum rear-left lift. The deterministic seed-876 replay
+tipped after 215 control steps; COM-target error increased from `128.454 mm`
+to `153.372 mm` and maximum tilt reached `20.790 deg`. The external-camera
+clip has 107 frames at 30 fps, but RGB remains absent from the policy.
+
+This rejects longer training on the same boundary/controller geometry. The
+next justified stage is a post-landing rear-right sidestep-and-settle controller
+that creates a physically wider support polygon before asking rear-left to
+unload. Validate positive margin and COM capture first, then train the 190 mm
+rear-left lift. Better traction remains a sim-to-real calibration item; better
+vision is not needed for this known fixed 180 x 250 mm stair failure.

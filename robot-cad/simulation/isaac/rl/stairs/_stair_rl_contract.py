@@ -1137,6 +1137,24 @@ def staged_swing_reference_base_delta(
     return (base_delta * scale).astype(np.float64)
 
 
+def staged_swing_outward_offset_m(
+    *,
+    maximum_offset_m: float,
+    advance_fraction: float,
+) -> float:
+    """Ramp a bounded lateral foothold offset during swing advance."""
+
+    offset = float(maximum_offset_m)
+    fraction = float(advance_fraction)
+    if not np.isfinite(offset) or abs(offset) > 0.15:
+        raise ValueError(
+            "maximum_offset_m must be finite and within [-0.15, 0.15]"
+        )
+    if not np.isfinite(fraction) or fraction < 0.0 or fraction > 1.0:
+        raise ValueError("advance_fraction must be finite and within [0, 1]")
+    return offset * fraction
+
+
 def split_post_clearance_advance_fractions(
     *,
     advance_fraction: float,
@@ -1174,6 +1192,60 @@ def split_post_clearance_advance_fractions(
             (fraction - swing_fraction) / split
         )
     return body_shift_fraction, swing_advance_fraction
+
+
+def placement_completion_settle_gate_failures(
+    *,
+    base_linear_velocity_xyz_m_s: Sequence[float],
+    body_angular_velocity_xyz_rad_s: Sequence[float],
+    upright_cosine: float,
+    maximum_base_speed_m_s: float,
+    maximum_body_rate_rad_s: float,
+    minimum_upright_cosine: float,
+) -> tuple[str, ...]:
+    """Gate foot-placement completion on measured whole-body settling.
+
+    This gate is evaluated only after the force-backed contact hold succeeds.
+    It prevents an inter-leg COM transfer from starting at an arbitrary point
+    in the landing oscillation, using only base/IMU proprioception.
+    """
+
+    linear_velocity = _finite_vector(
+        base_linear_velocity_xyz_m_s,
+        3,
+        "base_linear_velocity_xyz_m_s",
+    )
+    angular_velocity = _finite_vector(
+        body_angular_velocity_xyz_rad_s,
+        3,
+        "body_angular_velocity_xyz_rad_s",
+    )
+    upright = float(upright_cosine)
+    maximum_speed = float(maximum_base_speed_m_s)
+    maximum_rate = float(maximum_body_rate_rad_s)
+    minimum_upright = float(minimum_upright_cosine)
+    if not np.isfinite(upright) or not -1.0 <= upright <= 1.0:
+        raise ValueError("upright_cosine must be finite and within [-1, 1]")
+    if not np.isfinite(maximum_speed) or maximum_speed <= 0.0:
+        raise ValueError("maximum_base_speed_m_s must be finite and positive")
+    if not np.isfinite(maximum_rate) or maximum_rate <= 0.0:
+        raise ValueError("maximum_body_rate_rad_s must be finite and positive")
+    if not np.isfinite(minimum_upright) or not 0.0 < minimum_upright <= 1.0:
+        raise ValueError(
+            "minimum_upright_cosine must be finite and within (0, 1]"
+        )
+
+    failures: list[str] = []
+    # Match the transfer settle gate: vertical contact-solver velocity can
+    # alias at the control sample rate even while the foot is force-backed.
+    # Horizontal drift is the quantity that shrinks the support margin.
+    if float(np.linalg.norm(linear_velocity[:2])) > maximum_speed:
+        failures.append("base_not_settled")
+    if float(np.linalg.norm(angular_velocity)) > maximum_rate:
+        failures.append("body_rate_high")
+    if upright < minimum_upright:
+        failures.append("body_not_upright")
+    return tuple(failures)
 
 
 def support_pitch_vertical_corrections(

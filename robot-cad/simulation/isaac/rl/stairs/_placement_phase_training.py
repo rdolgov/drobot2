@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 from typing import Any, Protocol
 
 import gymnasium as gym
@@ -165,6 +166,8 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         maximum_reset_attempts: int = 8,
         maximum_precursor_steps: int = 1800,
         cache_phase_snapshot: bool = True,
+        initial_phase_snapshot: Mapping[str, object] | None = None,
+        initial_phase_snapshot_mode: str | None = None,
     ) -> None:
         super().__init__(env)
         if maximum_reset_attempts < 1:
@@ -226,7 +229,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         missing = sorted(
             set(self.required_precursor_legs) - set(self.precursor_policies)
         )
-        if missing:
+        if missing and initial_phase_snapshot is None:
             raise ValueError(f"Missing precursor policies for: {missing}")
         self.target_base_policy = target_base_policy
         self.target_base_mask = (
@@ -282,10 +285,27 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         self.maximum_reset_attempts = int(maximum_reset_attempts)
         self.maximum_precursor_steps = int(maximum_precursor_steps)
         self.cache_phase_snapshot = bool(cache_phase_snapshot)
-        self.phase_snapshot: object | None = None
+        self.initial_phase_snapshot_supplied = initial_phase_snapshot is not None
+        self.phase_snapshot: object | None = (
+            deepcopy(initial_phase_snapshot)
+            if initial_phase_snapshot is not None
+            else None
+        )
         self.phase_snapshot_mode = (
+            str(initial_phase_snapshot_mode)
+            if initial_phase_snapshot_mode is not None
+            else (
+                "inter_leg_transfer" if self.train_transfer else self.target_mode
+            )
+        )
+        expected_snapshot_mode = (
             "inter_leg_transfer" if self.train_transfer else self.target_mode
         )
+        if self.phase_snapshot_mode != expected_snapshot_mode:
+            raise ValueError(
+                "initial_phase_snapshot_mode does not match the target mode: "
+                f"{self.phase_snapshot_mode!r} != {expected_snapshot_mode!r}"
+            )
         self.reset_calls = 0
         self.reset_attempts = 0
         self.failed_precursor_attempts = 0
@@ -320,6 +340,126 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         self.maximum_target_transfer_balance_error_m = 0.0
         self.maximum_target_transfer_body_rate_rad_s = 0.0
         self.minimum_target_transfer_swing_load_n = float("inf")
+        transfer_training_config = dict(
+            getattr(self.raw_env, "inter_leg_transfer_config", {}).get(
+                "training_reward",
+                {},
+            )
+        )
+        self.transfer_balance_progress_reward_per_m = float(
+            transfer_training_config.get(
+                "balance_target_error_progress_per_m",
+                0.0,
+            )
+        )
+        self.transfer_support_margin_progress_reward_per_m = float(
+            transfer_training_config.get(
+                "support_margin_progress_per_m",
+                0.0,
+            )
+        )
+        self.transfer_progress_reward_clip_m = float(
+            transfer_training_config.get(
+                "maximum_progress_m_per_step",
+                0.010,
+            )
+        )
+        transfer_reward_values = (
+            self.transfer_balance_progress_reward_per_m,
+            self.transfer_support_margin_progress_reward_per_m,
+            self.transfer_progress_reward_clip_m,
+        )
+        if not all(np.isfinite(value) for value in transfer_reward_values):
+            raise ValueError("transfer training reward values must be finite")
+        if any(value < 0.0 for value in transfer_reward_values):
+            raise ValueError(
+                "transfer training reward values cannot be negative"
+            )
+        self.previous_transfer_balance_error_m: float | None = None
+        self.previous_transfer_support_margin_m: float | None = None
+        self.cumulative_transfer_progress_reward = 0.0
+        self.cumulative_transfer_balance_error_progress_m = 0.0
+        self.cumulative_transfer_support_margin_progress_m = 0.0
+
+    @staticmethod
+    def _transfer_balance_error_m(info: Mapping[str, Any]) -> float | None:
+        error_xy = info.get("placement_balance_target_error_xy_m")
+        if error_xy is not None:
+            vector = np.asarray(error_xy, dtype=np.float64).reshape(-1)
+            if vector.shape == (2,) and np.all(np.isfinite(vector)):
+                return float(np.linalg.norm(vector))
+        scalar = info.get("placement_transfer_base_target_error_m")
+        if scalar is None or not np.isfinite(float(scalar)):
+            return None
+        return max(0.0, float(scalar))
+
+    def _reset_transfer_progress_baseline(
+        self,
+        info: Mapping[str, Any],
+    ) -> None:
+        self.previous_transfer_balance_error_m = (
+            self._transfer_balance_error_m(info)
+        )
+        margin = info.get("placement_support_margin_m")
+        self.previous_transfer_support_margin_m = (
+            float(margin)
+            if margin is not None and np.isfinite(float(margin))
+            else None
+        )
+
+    def _transfer_progress_reward(
+        self,
+        info: Mapping[str, Any],
+    ) -> tuple[float, float, float]:
+        if not self.train_transfer:
+            return 0.0, 0.0, 0.0
+        balance_error = self._transfer_balance_error_m(info)
+        margin_value = info.get("placement_support_margin_m")
+        support_margin = (
+            float(margin_value)
+            if margin_value is not None
+            and np.isfinite(float(margin_value))
+            else None
+        )
+        balance_progress = 0.0
+        if (
+            balance_error is not None
+            and self.previous_transfer_balance_error_m is not None
+        ):
+            balance_progress = float(
+                self.previous_transfer_balance_error_m - balance_error
+            )
+        margin_progress = 0.0
+        if (
+            support_margin is not None
+            and self.previous_transfer_support_margin_m is not None
+        ):
+            margin_progress = float(
+                support_margin - self.previous_transfer_support_margin_m
+            )
+        self.previous_transfer_balance_error_m = balance_error
+        self.previous_transfer_support_margin_m = support_margin
+        clip_m = self.transfer_progress_reward_clip_m
+        clipped_balance_progress = float(
+            np.clip(balance_progress, -clip_m, clip_m)
+        )
+        clipped_margin_progress = float(
+            np.clip(margin_progress, -clip_m, clip_m)
+        )
+        progress_reward = (
+            self.transfer_balance_progress_reward_per_m
+            * clipped_balance_progress
+            + self.transfer_support_margin_progress_reward_per_m
+            * clipped_margin_progress
+        )
+        self.cumulative_transfer_progress_reward += progress_reward
+        self.cumulative_transfer_balance_error_progress_m += (
+            clipped_balance_progress
+        )
+        self.cumulative_transfer_support_margin_progress_m += (
+            clipped_margin_progress
+        )
+        return progress_reward, clipped_balance_progress, clipped_margin_progress
 
     def _capture_phase_snapshot(
         self,
@@ -451,6 +591,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         self.transfer_post_hold_steps_remaining = 0
         restored = self._restore_phase_snapshot(seed=seed, options=options)
         if restored is not None:
+            self._reset_transfer_progress_baseline(restored[1])
             return restored
         last_info: dict[str, Any] = {}
         for attempt in range(1, self.maximum_reset_attempts + 1):
@@ -468,11 +609,13 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                     observation,
                     dtype=np.float32,
                 ).copy()
-                return observation, self._phase_info(
+                phase_info = self._phase_info(
                     info,
                     attempt=attempt,
                     precursor_steps=0,
                 )
+                self._reset_transfer_progress_baseline(phase_info)
+                return observation, phase_info
 
             for precursor_steps in range(1, self.maximum_precursor_steps + 1):
                 action = self._predict_precursor_action(observation)
@@ -487,11 +630,13 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                         observation,
                         dtype=np.float32,
                     ).copy()
-                    return observation, self._phase_info(
+                    phase_info = self._phase_info(
                         info,
                         attempt=attempt,
                         precursor_steps=precursor_steps,
                     )
+                    self._reset_transfer_progress_baseline(phase_info)
+                    return observation, phase_info
                 if terminated or truncated:
                     last_info = dict(info)
                     break
@@ -571,6 +716,21 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         )
         self.latest_observation = np.asarray(observation, dtype=np.float32).copy()
         result_info = dict(info)
+        (
+            transfer_progress_reward,
+            transfer_balance_progress_m,
+            transfer_margin_progress_m,
+        ) = self._transfer_progress_reward(result_info)
+        reward = float(reward) + transfer_progress_reward
+        result_info["phase_training_transfer_progress_reward"] = (
+            transfer_progress_reward
+        )
+        result_info["phase_training_transfer_balance_error_progress_m"] = (
+            transfer_balance_progress_m
+        )
+        result_info["phase_training_transfer_support_margin_progress_m"] = (
+            transfer_margin_progress_m
+        )
         transfer_completed = bool(
             self.train_transfer
             and result_info.get("placement_transfer_completed_event")
@@ -788,6 +948,9 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             "maximum_reset_attempts": self.maximum_reset_attempts,
             "maximum_precursor_steps": self.maximum_precursor_steps,
             "phase_snapshot_cache_enabled": self.cache_phase_snapshot,
+            "initial_phase_snapshot_supplied": (
+                self.initial_phase_snapshot_supplied
+            ),
             "phase_snapshot_cached": self.phase_snapshot is not None,
             "phase_snapshot_mode": self.phase_snapshot_mode,
             "cached_phase_restores": self.cached_phase_restores,
@@ -866,6 +1029,26 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             "completed_target_transfer_holds": (
                 self.completed_target_transfer_holds
             ),
+            "transfer_progress_reward": {
+                "balance_target_error_progress_per_m": (
+                    self.transfer_balance_progress_reward_per_m
+                ),
+                "support_margin_progress_per_m": (
+                    self.transfer_support_margin_progress_reward_per_m
+                ),
+                "maximum_progress_m_per_step": (
+                    self.transfer_progress_reward_clip_m
+                ),
+                "cumulative_reward": (
+                    self.cumulative_transfer_progress_reward
+                ),
+                "cumulative_balance_error_progress_m": (
+                    self.cumulative_transfer_balance_error_progress_m
+                ),
+                "cumulative_support_margin_progress_m": (
+                    self.cumulative_transfer_support_margin_progress_m
+                ),
+            },
             "maximum_target_transfer_balance_error_m": (
                 self.maximum_target_transfer_balance_error_m
             ),

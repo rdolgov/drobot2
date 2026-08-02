@@ -308,6 +308,7 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/train_stairs_v42_com_margin_rear_right_landing_small.ps1` | Runs the bounded V42 support-margin residual ablation | V42 config and verified V10/V17/V35/V38 policies | local model, contract, and training report |
 | `simulation/isaac/rl/stairs/train_stairs_v44_early_contact_rear_right_landing_small.ps1` | Runs the accepted bounded 512-step V44 compact support-residual pilot | V44 config and verified V10/V17/V35/V38 policies | model, contract, checkpoints, and training report |
 | `simulation/isaac/rl/stairs/search_rear_right_landing.py` | Restores one verified rear-right handoff snapshot and searches geometry, per-front-foot support reach, swing actions, pitch feedback, touchdown, and staged body-shift variants without relaxing the 190 mm/margin/effort gates | V39-V44 configs and verified composed policies | ranked local JSON reports and optional success-gated phase video/thumbnail |
+| `simulation/isaac/rl/stairs/search_rear_left_transfer_support_actions.py` | Restores the exact V45 rear-left transfer boundary, audits constant support-hip authority or deterministically evaluates a 12-action PPO, and optionally records an external-camera failure clip | V45 config, phase snapshot, and optional PPO model | ranked JSON authority/evaluation report and optional MP4/PNG |
 | `simulation/isaac/rl/stairs/search_rear_left_transfer_com.py` | Replays the accepted V44 three-foot prefix and searches the next rear-left transfer COM deltas from one cached boundary state | V45 config and verified V10/V17/V35/V44 policies | ranked local JSON report |
 | `simulation/isaac/rl/stairs/REAR_RIGHT_LANDING_SEARCH.md` | Records V39-V45 inputs, exact small-run commands, measured rejects, accepted V44 evidence, V45 boundary failure, assumptions, and next gate | training/evaluation/search reports | reproducible landing and transfer diagnosis |
 | `simulation/isaac/rl/stairs/validate_vl53l5cx_stairs.py` | Verifies live 64-ray PhysX hits, 15 Hz cadence, latency, held observations, and writes an 8 x 8 review heatmap | v7 config and stair world | sensor validation JSON and PNG |
@@ -327,6 +328,7 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/models/ppo-stairs-v27-support-abduction-190mm-small/` | Tracks the 1,024-step three-action support-abduction residual, 2/5 fresh evaluation, successful recording, and rejected load-sharing A/B | v24 config, verified front-right prefix, and frozen v17 swing policy | experimental transferred 190 mm lift; not robust or a complete climb |
 | `simulation/isaac/models/ppo-stairs-v36-post-transfer-catch-small/` | Tracks the 4,096-step nine-action support catch, bounded initialization search, fresh 65/80-second evaluations, recording, and explicit precursor/lift limitations | V36 config, verified precursor/swing policies, and dynamic transfer snapshot | stable seed-832 post-transfer catch; not a 190 mm lift, tread landing, or complete climb |
 | `simulation/isaac/models/ppo-stairs-v44-early-contact-rear-right-landing-small/` | Tracks the 512-step compact support policy, schema-2 manifest, deterministic search acceptance, fresh seed-870 force-backed landing evaluation, recording report, and exact limitations | V44 config and verified V10/V17/V35/V38 composition | accepted first-tread rear-right landing package; not rear-left transfer or a complete climb |
+| `simulation/isaac/models/ppo-stairs-v45-rear-left-dynamic-transfer-4096/` | Tracks the rejected 4,096-step exact-snapshot 12-action transfer policy, deterministic failed replay, and controller-authority evidence | V45 config, accepted V44 boundary snapshot, and real-test effort cap | diagnostic policy package; not a successful transfer or climb |
 | `simulation/isaac/models/ppo-foot-lift-v1-190mm-small/` | Tracks the 512-step supported foot-lift smoke model, schema-2 manifest, three-episode evaluation, recording report, and strict 190 mm success | foot-lift config/world and supported policy | supported-skill evaluation package, not unsupported balance proof |
 | `simulation/isaac/models/ppo-foot-lift-v2-balance-190mm-small/` | Tracks the 512-step unsupported foot-lift smoke model, schema-2 manifest, 5/5 evaluation, screenshot report, recording report, and strict 190 mm success | v2 balance config/manual world | unsupported flat-ground clearance evaluation package |
 | `simulation/isaac/models/ppo-foot-lift-v3-rear-right-190mm-small/` | Tracks the fresh 512-step rear-right balance policy, schema-2 manifest, 5/5 evaluation, and successful recording | V3 balance config/manual world | rear-right flat-ground 190 mm clearance package; not stair-transfer evidence |
@@ -875,10 +877,14 @@ maximum support slip, and `10.238 N` maximum tread load. The exact stair remains
 `0.8825985 N m`.
 
 This advances the first-tread sequence through rear-right but is still not a
-complete stair. V45 adds rear-left only to probe the next transfer; four
-seed-870 prefix attempts terminated with `body_tipped` before the rear-left
-transfer snapshot. The next target is pitch/body-rate and COM regulation across
-that boundary, then rear-left unloading and swing. The policy remains
+complete stair. V45 now caches the exact accepted rear-right landing boundary
+and trains all 12 joint residuals only on the next COM transfer. The bounded
+seed-875 run completed 4,096 steps in `135.744 s`, but completed `0` transfers
+and lifted rear-left only `15.136 mm`. A deterministic seed-876 replay tipped
+after 215 steps as COM-target error grew from `128.454 mm` to `153.372 mm`.
+All 27 constant loaded-support hip-abduction probes also failed. The next
+target is a post-landing rear-right sidestep-and-settle stage that physically
+widens the support polygon before rear-left unloading. The policy remains
 camera-blind: the external camera only records review video, while inference
 uses IMU/proprioception, joint, contact/load, COM/support, phase, previous
 action, and known fixed-stair geometry.
@@ -890,6 +896,11 @@ The accepted 331-frame video is a phase-local seed-870 replay that completes
 the strict landing hold. A separate four-attempt reset-to-contact recording
 search found no full-prefix success, so the site and package label that
 instability instead of presenting the phase clip as an end-to-end climb.
+
+The rejected V45 model, exact snapshot, 4,096-step training report,
+deterministic evaluation, controller audits, and negative-evidence recording
+are packaged under
+`simulation/isaac/models/ppo-stairs-v45-rear-left-dynamic-transfer-4096/`.
 
 The source map, complete commands, reward/termination formulas, manifest
 rules, measured smoke results, evaluation guidance, and sim-to-real limits are

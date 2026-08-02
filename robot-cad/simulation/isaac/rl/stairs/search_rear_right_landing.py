@@ -58,6 +58,14 @@ parser.add_argument(
     help="Override the full rear-right composite-COM transfer offset.",
 )
 parser.add_argument(
+    "--swing-outward-offsets-m",
+    default=None,
+    help=(
+        "Optional comma-separated rear-right body-relative outward offsets. "
+        "Each selected landing candidate is replayed once per value."
+    ),
+)
+parser.add_argument(
     "--report",
     default=(
         "simulation/isaac/output/rl/"
@@ -755,6 +763,30 @@ SELECTED_CANDIDATES = CANDIDATES[
 ]
 if not SELECTED_CANDIDATES:
     parser.error("candidate slice is empty")
+if args.swing_outward_offsets_m:
+    outward_offsets = tuple(
+        float(item.strip())
+        for item in args.swing_outward_offsets_m.split(",")
+        if item.strip()
+    )
+    if (
+        not outward_offsets
+        or not all(math.isfinite(value) for value in outward_offsets)
+        or any(abs(value) > 0.15 for value in outward_offsets)
+    ):
+        parser.error(
+            "--swing-outward-offsets-m values must be finite and within "
+            "[-0.15, 0.15]"
+        )
+    SELECTED_CANDIDATES = tuple(
+        {
+            **dict(values),
+            "id": f"{values['id']}-outward-{offset_m:.3f}",
+            "swing_outward_offset_m": offset_m,
+        }
+        for values in SELECTED_CANDIDATES
+        for offset_m in outward_offsets
+    )
 
 config_path = project_path(args.config)
 with config_path.open("r", encoding="utf-8") as stream:
@@ -953,6 +985,19 @@ try:
     recording_result: dict[str, object] | None = None
     for relative_index, values in enumerate(SELECTED_CANDIDATES):
         index = args.candidate_start + relative_index
+        if "swing_outward_offset_m" in values:
+            swing_outward_offsets = dict(
+                raw_env.inter_leg_transfer_config.get(
+                    "swing_outward_offset_m_by_leg",
+                    {},
+                )
+            )
+            swing_outward_offsets["rear_right"] = float(
+                values["swing_outward_offset_m"]
+            )
+            raw_env.inter_leg_transfer_config[
+                "swing_outward_offset_m_by_leg"
+            ] = swing_outward_offsets
         level_overrides = dict(
             raw_env.placement_reference_config["level_override_by_leg"]
         )
@@ -1288,7 +1333,11 @@ try:
                 completed
                 or info.get("placement_leg_completed_event") == "rear_right"
             )
-            if terminated or truncated:
+            # A non-terminal sequence advances to the next swing leg as soon
+            # as the rear-right landing completes.  Stop this phase-local
+            # search at that exact boundary instead of requesting a rear-right
+            # policy action while the raw environment is already on rear-left.
+            if completed or terminated or truncated:
                 break
         target_x_m = float(task_config["staircase"]["start_x_m"]) + float(
             values["target_tread_fraction"]
