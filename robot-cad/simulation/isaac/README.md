@@ -299,6 +299,10 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/search_post_transfer_support.py` | Searches bounded constant support actions from the exact dynamic post-transfer snapshot before PPO training | V36 config, stair world, and verified precursor policies | ranked JSON action-search report |
 | `simulation/isaac/rl/stairs/train_stairs_v36_transfer_support_small.ps1` | Runs the bounded 4,096-step post-transfer-only V36 PPO experiment with the successful search action as actor-mean initialization | V36 config, stair world, and verified V10/V17 policies | V36 model, contract, checkpoints, and training report |
 | `simulation/isaac/rl/stairs/train_stairs_v37_joint_clearance_support_small.ps1` | Defines the corrected bounded V37 joint swing/support training job with full-strength V36 support authority; this corrected wrapper has not yet been run | V37 config and verified V10/V17/V35/V36 policies | prospective V37 model and training reports |
+| `simulation/isaac/rl/stairs/train_stairs_v39_rear_right_landing_small.ps1` | Runs the rejected bounded 512-step rear-right landing support-residual pilot | V39 config and verified V10/V17/V35/V38 policies | local model, contract, and training report |
+| `simulation/isaac/rl/stairs/train_stairs_v40_rear_right_swing_landing_small.ps1` | Runs the rejected bounded 1,024-step compact rear-right swing-residual landing pilot | V40 config and verified V10/V17/V35/V38 policies | local model, contract, and training report |
+| `simulation/isaac/rl/stairs/search_rear_right_landing.py` | Restores one verified V38 handoff snapshot and searches rear-right geometry, swing actions, pitch feedback, touchdown, and staged body-shift variants without relaxing the 190 mm/margin/effort gates | V39-V41 configs and verified composed policies | ranked local JSON reports |
+| `simulation/isaac/rl/stairs/REAR_RIGHT_LANDING_SEARCH.md` | Records V39-V41 inputs, exact small-run commands, measured rejects, output locations, assumptions, and next gate | training/evaluation/search reports | reproducible landing diagnosis |
 | `simulation/isaac/rl/stairs/validate_vl53l5cx_stairs.py` | Verifies live 64-ray PhysX hits, 15 Hz cadence, latency, held observations, and writes an 8 x 8 review heatmap | v7 config and stair world | sensor validation JSON and PNG |
 | `simulation/isaac/rl/stairs/distill_successful_stairs.py` | Collects physically successful stochastic rollouts and behavior-clones their residual actions into the actor mean | v5 world, model, manifest | distilled model, rebound manifest, and collection report |
 | `simulation/isaac/rl/stairs/evaluate_stairs_ppo.py` | Runs deterministic stair episodes at a pinned curriculum level, verifies model hashes, and can compose a full base, compact frozen swing residual, and mapped support residual per leg | stair YAML/world, primary/per-leg models, manifests | evaluation JSON and optional PNG |
@@ -835,6 +839,19 @@ command are packaged under
 external-camera video is tracked as
 `reviews/ppo-stairs-v38-rear-right-190mm-lift-seed848.mp4` and hosted privately
 at https://drobot-design-review.romka.chatgpt.site.
+
+V39-V41 then isolated rear-right landing without changing the exact
+`180 x 250 mm` stair or `0.8825985 N m` effort cap. The `512`-step V39 support
+pilot preserved `218.095 mm` lift but produced a `351.313 N` edge contact and
+`19.9904 deg` tip. The `1,024`-step V40 swing pilot stayed at `10.7597 deg` and
+`37.939 mm` margin but stopped at world X `0.318371 m` with no tread load. A
+bounded V41 search reached world X `0.557554 m`, still short of clearing the
+`12.5 mm` foot radius past the `0.550 m` riser, and corner contact tipped the
+body. A sequenced body-shift test stayed upright but exposed rear-hip tracking
+of only about `0.68 rad` against a `1.83 rad` reference under the measured cap.
+No landing pilot is promoted. Commands, assumptions, local report names, and
+the traction-versus-vision conclusion are recorded in
+[`simulation/isaac/rl/stairs/REAR_RIGHT_LANDING_SEARCH.md`](rl/stairs/REAR_RIGHT_LANDING_SEARCH.md).
 
 The source map, complete commands, reward/termination formulas, manifest
 rules, measured smoke results, evaluation guidance, and sim-to-real limits are

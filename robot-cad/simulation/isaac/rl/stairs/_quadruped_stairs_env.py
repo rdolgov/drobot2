@@ -40,8 +40,10 @@ from _stair_rl_contract import (
     placement_lift_hold_reached,
     placement_reference_state,
     placement_success_mode,
+    split_post_clearance_advance_fractions,
     stabilized_support_reference_base_delta,
     staged_support_rear_pitch_scale,
+    staged_swing_reference_base_delta,
     stair_failure_reasons,
     stair_goal_reached,
     stair_height_at_x,
@@ -1768,6 +1770,34 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 ],
                 dtype=np.float64,
             )
+        post_clearance_shift = dict(
+            dict(
+                self.inter_leg_transfer_config.get(
+                    "post_clearance_body_shift_by_leg",
+                    {},
+                )
+            ).get(self.placement_swing_leg, {})
+        )
+        advance_fraction = float(placement_state["advance_fraction"])
+        body_shift_fraction = advance_fraction
+        swing_advance_fraction = advance_fraction
+        split_fraction = post_clearance_shift.get(
+            "body_shift_fraction_of_advance"
+        )
+        if split_fraction is not None:
+            body_shift_fraction, swing_advance_fraction = (
+                split_post_clearance_advance_fractions(
+                    advance_fraction=advance_fraction,
+                    body_shift_fraction_of_advance=float(split_fraction),
+                )
+            )
+        desired_base_delta[:2] += body_shift_fraction * np.asarray(
+            [
+                float(post_clearance_shift.get("forward_m", 0.0)),
+                float(post_clearance_shift.get("lateral_m", 0.0)),
+            ],
+            dtype=np.float64,
+        )
         anchor_follow_by_axis = self.inter_leg_transfer_config.get(
             "support_world_anchor_follow_gain_xyz"
         )
@@ -1855,6 +1885,30 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             raise ValueError(
                 "post_transfer_swing_reference_mode must be phase_baseline "
                 "nominal_stance, or blend_to_nominal_stance"
+            )
+        swing_advance_scale_by_leg = dict(
+            self.inter_leg_transfer_config.get(
+                "post_clearance_swing_base_delta_end_scale_by_leg",
+                {},
+            )
+        )
+        swing_advance_scale = swing_advance_scale_by_leg.get(
+            self.placement_swing_leg
+        )
+        if swing_advance_scale is not None:
+            if not isinstance(swing_advance_scale, Mapping):
+                raise ValueError(
+                    "post_clearance_swing_base_delta_end_scale_by_leg values "
+                    "must map forward, lateral, and vertical scales"
+                )
+            swing_base_delta = staged_swing_reference_base_delta(
+                base_delta_m=swing_base_delta,
+                advance_fraction=swing_advance_fraction,
+                end_scale_xyz=(
+                    float(swing_advance_scale.get("forward", 1.0)),
+                    float(swing_advance_scale.get("lateral", 1.0)),
+                    float(swing_advance_scale.get("vertical", 1.0)),
+                ),
             )
         reference_by_leg = {
             leg: dict(stored)
@@ -2141,9 +2195,20 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         else:
             self.latest_support_load_sharing_correction_m.fill(0.0)
         swing = adjusted[self.placement_swing_leg]
-        swing["forward_m"] += float(
+        desired_forward_offset_m = float(
             placement_state["desired_forward_offset_m"]
         )
+        if split_fraction is not None and placement_state["phase"] == "advance":
+            active_level = self._active_placement_level()
+            final_forward_m = float(active_level["swing_forward_offset_m"])
+            lift_forward_m = min(
+                final_forward_m,
+                float(active_level.get("lift_forward_offset_m", 0.11)),
+            )
+            desired_forward_offset_m = lift_forward_m + (
+                swing_advance_fraction * (final_forward_m - lift_forward_m)
+            )
+        swing["forward_m"] += desired_forward_offset_m
         swing["vertical_m"] -= max(
             0.0,
             float(placement_state["desired_lift_m"])

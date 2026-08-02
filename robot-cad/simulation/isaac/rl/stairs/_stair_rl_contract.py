@@ -1006,6 +1006,62 @@ def stabilized_support_reference_base_delta(
     ).astype(np.float64)
 
 
+def staged_swing_reference_base_delta(
+    *,
+    base_delta_m: Sequence[float],
+    advance_fraction: float,
+    end_scale_xyz: Sequence[float],
+) -> np.ndarray:
+    """Release a swing foot from its world anchor only after clearance.
+
+    The placement controller normally subtracts the desired base motion from
+    the swing reference so the raised foot remains fixed in world space.  A
+    scale of one preserves that behavior. During the advance phase this helper
+    smoothly approaches ``end_scale_xyz``; a forward end scale of zero lets
+    body translation carry the cleared foot without changing the lift
+    trajectory or actuator authority.
+    """
+
+    base_delta = _finite_vector(base_delta_m, 3, "base_delta_m").astype(
+        np.float64
+    )
+    end_scale = _finite_vector(end_scale_xyz, 3, "end_scale_xyz").astype(
+        np.float64
+    )
+    fraction = float(advance_fraction)
+    if not np.isfinite(fraction) or fraction < 0.0 or fraction > 1.0:
+        raise ValueError("advance_fraction must be finite and within [0, 1]")
+    if np.any(end_scale < 0.0) or np.any(end_scale > 1.0):
+        raise ValueError("end_scale_xyz values must be within [0, 1]")
+    scale = 1.0 + fraction * (end_scale - 1.0)
+    return (base_delta * scale).astype(np.float64)
+
+
+def split_post_clearance_advance_fractions(
+    *,
+    advance_fraction: float,
+    body_shift_fraction_of_advance: float,
+) -> tuple[float, float]:
+    """Sequence body shift before swing advance inside one clearance gate."""
+
+    fraction = float(advance_fraction)
+    split = float(body_shift_fraction_of_advance)
+    if not np.isfinite(fraction) or fraction < 0.0 or fraction > 1.0:
+        raise ValueError("advance_fraction must be finite and within [0, 1]")
+    if not np.isfinite(split) or split <= 0.0 or split >= 1.0:
+        raise ValueError(
+            "body_shift_fraction_of_advance must be finite and within (0, 1)"
+        )
+
+    def smoothstep(value: float) -> float:
+        clipped = float(np.clip(value, 0.0, 1.0))
+        return clipped * clipped * (3.0 - 2.0 * clipped)
+
+    body_shift_fraction = smoothstep(fraction / split)
+    swing_advance_fraction = smoothstep((fraction - split) / (1.0 - split))
+    return body_shift_fraction, swing_advance_fraction
+
+
 def support_pitch_vertical_corrections(
     *,
     support_legs: Sequence[str],

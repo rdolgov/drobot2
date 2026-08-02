@@ -59,8 +59,10 @@ from _stair_rl_contract import (  # noqa: E402
     placement_success_mode,
     placement_transfer_ready,
     progress_gate_failures,
+    split_post_clearance_advance_fractions,
     stabilized_support_reference_base_delta,
     staged_support_rear_pitch_scale,
+    staged_swing_reference_base_delta,
     stair_failure_reasons,
     stair_goal_reached,
     stair_height_at_x,
@@ -2320,6 +2322,68 @@ def test_support_pitch_feedback_levels_nose_down_attitude() -> None:
             projected_gravity_x=0.0,
             proportional_gain_m=0.120,
             maximum_correction_m=0.035,
+        )
+
+
+def test_staged_swing_reference_releases_only_during_advance() -> None:
+    base_delta = (0.020, 0.040, -0.010)
+
+    before_advance = staged_swing_reference_base_delta(
+        base_delta_m=base_delta,
+        advance_fraction=0.0,
+        end_scale_xyz=(0.0, 1.0, 1.0),
+    )
+    halfway = staged_swing_reference_base_delta(
+        base_delta_m=base_delta,
+        advance_fraction=0.5,
+        end_scale_xyz=(0.0, 1.0, 1.0),
+    )
+    fully_advanced = staged_swing_reference_base_delta(
+        base_delta_m=base_delta,
+        advance_fraction=1.0,
+        end_scale_xyz=(0.0, 1.0, 1.0),
+    )
+
+    np.testing.assert_allclose(before_advance, base_delta)
+    np.testing.assert_allclose(halfway, (0.010, 0.040, -0.010))
+    np.testing.assert_allclose(fully_advanced, (0.0, 0.040, -0.010))
+
+    with pytest.raises(ValueError, match="advance_fraction"):
+        staged_swing_reference_base_delta(
+            base_delta_m=base_delta,
+            advance_fraction=1.01,
+            end_scale_xyz=(0.0, 1.0, 1.0),
+        )
+    with pytest.raises(ValueError, match="end_scale_xyz"):
+        staged_swing_reference_base_delta(
+            base_delta_m=base_delta,
+            advance_fraction=0.5,
+            end_scale_xyz=(-0.1, 1.0, 1.0),
+        )
+
+
+def test_post_clearance_advance_shifts_body_before_swing() -> None:
+    assert split_post_clearance_advance_fractions(
+        advance_fraction=0.0,
+        body_shift_fraction_of_advance=0.5,
+    ) == pytest.approx((0.0, 0.0))
+    assert split_post_clearance_advance_fractions(
+        advance_fraction=0.5,
+        body_shift_fraction_of_advance=0.5,
+    ) == pytest.approx((1.0, 0.0))
+    assert split_post_clearance_advance_fractions(
+        advance_fraction=0.75,
+        body_shift_fraction_of_advance=0.5,
+    ) == pytest.approx((1.0, 0.5))
+    assert split_post_clearance_advance_fractions(
+        advance_fraction=1.0,
+        body_shift_fraction_of_advance=0.5,
+    ) == pytest.approx((1.0, 1.0))
+
+    with pytest.raises(ValueError, match="body_shift_fraction_of_advance"):
+        split_post_clearance_advance_fractions(
+            advance_fraction=0.5,
+            body_shift_fraction_of_advance=1.0,
         )
 
 
