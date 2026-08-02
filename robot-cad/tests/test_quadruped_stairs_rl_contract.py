@@ -39,6 +39,7 @@ from _stair_rl_contract import (  # noqa: E402
     compose_bounded_residual_action,
     config_for_height_stage,
     curriculum_active_steps,
+    equalized_foot_load_vertical_corrections,
     foot_tread_progress,
     goal_x_for_active_steps,
     inter_leg_pre_unload_gate_failures,
@@ -61,6 +62,7 @@ from _stair_rl_contract import (  # noqa: E402
     placement_transfer_ready,
     post_landing_reposition_snapshot,
     progress_gate_failures,
+    reanchor_inter_leg_transfer_snapshot,
     split_post_clearance_advance_fractions,
     stabilized_support_reference_base_delta,
     staged_support_rear_pitch_scale,
@@ -1361,6 +1363,21 @@ def test_support_load_sharing_extends_the_underloaded_leg() -> None:
     ) == pytest.approx((0.0, 0.0, 0.0))
 
 
+def test_four_foot_preload_extends_the_unloaded_foot() -> None:
+    correction = equalized_foot_load_vertical_corrections(
+        measured_normal_loads_n=(10.0, 10.0, 10.0, 0.0),
+        proportional_gain_m=0.030,
+        maximum_correction_m=0.012,
+    )
+    assert correction == pytest.approx((-0.0025, -0.0025, -0.0025, 0.0075))
+    assert float(np.sum(correction)) == pytest.approx(0.0)
+    assert equalized_foot_load_vertical_corrections(
+        measured_normal_loads_n=(0.0, 0.0, 0.0, 0.0),
+        proportional_gain_m=0.030,
+        maximum_correction_m=0.012,
+    ) == pytest.approx((0.0, 0.0, 0.0, 0.0))
+
+
 def test_v24_reward_and_termination_make_drift_worse_than_success(
     v24_config: dict,
 ) -> None:
@@ -2549,6 +2566,73 @@ def test_post_landing_reposition_snapshot_rewinds_only_state_machine() -> None:
     invalid["placement_transfer_active"] = False
     with pytest.raises(ValueError, match="active inter-leg transfer"):
         post_landing_reposition_snapshot(invalid, leg="rear_right")
+
+
+def test_reanchor_inter_leg_transfer_snapshot_uses_measured_state() -> None:
+    references = {
+        leg: {
+            "forward_m": 0.01 * index,
+            "vertical_m": 0.20,
+            "outward_m": 0.02,
+        }
+        for index, leg in enumerate(
+            ("front_left", "front_right", "rear_left", "rear_right")
+        )
+    }
+    snapshot = {
+        "schema_version": 1,
+        "placement_transfer_active": True,
+        "base_position_m": [0.48, 0.08, 0.36],
+        "joint_positions_rad": [0.01 * index for index in range(12)],
+        "joint_position_targets_rad": [0.5] * 12,
+        "placement_transfer_reference_by_leg": {"stale": {}},
+        "placement_transfer_start_base_position_m": [0.40, 0.10, 0.36],
+        "placement_transfer_target_base_position_m": [0.56, -0.02, 0.36],
+        "placement_transfer_start_balance_position_m": [0.41, 0.09, 0.34],
+        "placement_transfer_target_balance_position_m": [0.57, -0.03, 0.34],
+        "placement_leg_baseline_reference_by_leg": {"stale": {}},
+        "placement_leg_baseline_base_position_m": [0.40, 0.10, 0.36],
+        "placement_leg_baseline_balance_position_m": [0.41, 0.09, 0.34],
+        "previous_action": [0.1] * 12,
+        "previous_residual_action": [-0.1] * 12,
+    }
+
+    reanchored = reanchor_inter_leg_transfer_snapshot(
+        snapshot,
+        balance_position_m=(0.49, 0.07, 0.34),
+        target_delta_xy_m=(0.02, -0.015),
+        reference_by_leg=references,
+    )
+
+    assert reanchored["placement_transfer_start_base_position_m"] == (
+        pytest.approx((0.48, 0.08, 0.36))
+    )
+    assert reanchored["placement_transfer_target_base_position_m"] == (
+        pytest.approx((0.50, 0.065, 0.36))
+    )
+    assert reanchored["placement_transfer_start_balance_position_m"] == (
+        pytest.approx((0.49, 0.07, 0.34))
+    )
+    assert reanchored["placement_transfer_target_balance_position_m"] == (
+        pytest.approx((0.51, 0.055, 0.34))
+    )
+    assert reanchored["placement_transfer_reference_by_leg"] == references
+    assert reanchored["joint_position_targets_rad"] == pytest.approx(
+        snapshot["joint_position_targets_rad"]
+    )
+    assert reanchored["previous_action"] == [0.0] * 12
+    assert reanchored["previous_residual_action"] == [0.0] * 12
+    assert snapshot["placement_transfer_reference_by_leg"] == {"stale": {}}
+
+    inactive = dict(snapshot)
+    inactive["placement_transfer_active"] = False
+    with pytest.raises(ValueError, match="active inter-leg transfer"):
+        reanchor_inter_leg_transfer_snapshot(
+            inactive,
+            balance_position_m=(0.49, 0.07, 0.34),
+            target_delta_xy_m=(0.02, -0.015),
+            reference_by_leg=references,
+        )
 
 
 def test_post_clearance_advance_shifts_body_before_swing() -> None:

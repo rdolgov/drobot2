@@ -811,6 +811,50 @@ def support_load_share_vertical_corrections(
     return correction.astype(np.float64)
 
 
+def equalized_foot_load_vertical_corrections(
+    *,
+    measured_normal_loads_n: Sequence[float],
+    proportional_gain_m: float,
+    maximum_correction_m: float,
+    minimum_total_load_n: float = 1.0,
+) -> np.ndarray:
+    """Return zero-sum corrections that preload four contacting feet equally."""
+
+    loads = _finite_vector(
+        measured_normal_loads_n,
+        len(STAIR_FOOT_NAMES),
+        "measured_normal_loads_n",
+    ).astype(np.float64)
+    if np.any(loads < 0.0):
+        raise ValueError("measured_normal_loads_n must be nonnegative")
+    gain = float(proportional_gain_m)
+    maximum = float(maximum_correction_m)
+    minimum_total = float(minimum_total_load_n)
+    if gain <= 0.0 or not np.isfinite(gain):
+        raise ValueError("proportional_gain_m must be finite and positive")
+    if maximum <= 0.0 or not np.isfinite(maximum):
+        raise ValueError("maximum_correction_m must be finite and positive")
+    if minimum_total < 0.0 or not np.isfinite(minimum_total):
+        raise ValueError("minimum_total_load_n must be finite and nonnegative")
+    total_load = float(np.sum(loads))
+    if total_load < minimum_total:
+        return np.zeros(len(STAIR_FOOT_NAMES), dtype=np.float64)
+
+    measured_fractions = loads / total_load
+    desired_fractions = np.full(
+        len(STAIR_FOOT_NAMES),
+        1.0 / len(STAIR_FOOT_NAMES),
+        dtype=np.float64,
+    )
+    correction = gain * (desired_fractions - measured_fractions)
+    correction -= float(np.mean(correction))
+    correction = np.clip(correction, -maximum, maximum)
+    correction -= float(np.mean(correction))
+    correction = np.clip(correction, -maximum, maximum)
+    correction[np.abs(correction) < 1e-9] = 0.0
+    return correction.astype(np.float64)
+
+
 def joint_effort_telemetry_sample(
     *,
     target_joint_positions_rad: Sequence[float],
@@ -971,6 +1015,82 @@ def post_landing_reposition_snapshot(
     stored["placement_transfer_target_base_position_m"] = current_base
     stored["placement_transfer_start_balance_position_m"] = current_balance
     stored["placement_transfer_target_balance_position_m"] = current_balance
+    for key in ("previous_action", "previous_residual_action"):
+        values = list(stored.get(key, ()))
+        stored[key] = [0.0] * len(values)
+    return stored
+
+
+def reanchor_inter_leg_transfer_snapshot(
+    snapshot: Mapping[str, object],
+    *,
+    balance_position_m: Sequence[float],
+    target_delta_xy_m: Sequence[float],
+    reference_by_leg: Mapping[str, Mapping[str, float]],
+) -> dict[str, object]:
+    """Restart an active transfer from one measured four-foot equilibrium.
+
+    Progressive COM preload uses this between bounded target increments.  The
+    articulation state remains physical, while the analytic transfer's base,
+    composite-COM, and leg-reference origins are moved to the newly settled
+    state.  This avoids accumulating a large reference error from the first
+    stair-transfer boundary.
+    """
+
+    stored = deepcopy(dict(snapshot))
+    if int(stored.get("schema_version", 0)) != 1:
+        raise ValueError("Unsupported placement phase snapshot schema")
+    if not bool(stored.get("placement_transfer_active", False)):
+        raise ValueError("Progressive preload requires an active inter-leg transfer")
+
+    current_base = _finite_vector(
+        stored["base_position_m"],
+        3,
+        "base_position_m",
+    ).astype(np.float64)
+    current_balance = _finite_vector(
+        balance_position_m,
+        3,
+        "balance_position_m",
+    ).astype(np.float64)
+    target_delta = _finite_vector(
+        target_delta_xy_m,
+        2,
+        "target_delta_xy_m",
+    ).astype(np.float64)
+    if np.any(np.abs(target_delta) > 0.15):
+        raise ValueError("Progressive preload target delta cannot exceed 0.15 m")
+
+    references = deepcopy(dict(reference_by_leg))
+    if set(references) != set(STAIR_FOOT_NAMES):
+        raise ValueError("Progressive preload requires a four-leg reference")
+    for leg, parameters in references.items():
+        if not isinstance(parameters, Mapping):
+            raise ValueError(f"Progressive preload reference for {leg} is invalid")
+        values = np.asarray(tuple(parameters.values()), dtype=np.float64)
+        if not values.size or not np.all(np.isfinite(values)):
+            raise ValueError(
+                f"Progressive preload reference for {leg} must be finite"
+            )
+
+    target_base = current_base.copy()
+    target_base[:2] += target_delta
+    target_balance = current_balance.copy()
+    target_balance[:2] += target_delta
+    stored["placement_transfer_reference_by_leg"] = references
+    stored["placement_transfer_start_base_position_m"] = current_base.tolist()
+    stored["placement_transfer_target_base_position_m"] = target_base.tolist()
+    stored["placement_transfer_start_balance_position_m"] = (
+        current_balance.tolist()
+    )
+    stored["placement_transfer_target_balance_position_m"] = (
+        target_balance.tolist()
+    )
+    stored["placement_leg_baseline_reference_by_leg"] = deepcopy(references)
+    stored["placement_leg_baseline_base_position_m"] = current_base.tolist()
+    stored["placement_leg_baseline_balance_position_m"] = (
+        current_balance.tolist()
+    )
     for key in ("previous_action", "previous_residual_action"):
         values = list(stored.get(key, ()))
         stored[key] = [0.0] * len(values)

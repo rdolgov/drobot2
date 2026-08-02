@@ -25,6 +25,7 @@ from _stair_rl_contract import (
     balance_target_error_xy,
     bounded_support_incenter_target_xy,
     curriculum_active_steps,
+    equalized_foot_load_vertical_corrections,
     foot_tread_progress,
     goal_x_for_active_steps,
     inter_leg_pre_unload_gate_failures,
@@ -630,6 +631,41 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.support_load_sharing_enabled = bool(
             self.support_load_sharing_config.get("enabled", False)
         )
+        self.four_foot_preload_load_sharing_config = dict(
+            self.com_regulation_config.get(
+                "four_foot_preload_load_sharing",
+                {},
+            )
+        )
+        self.four_foot_preload_load_sharing_enabled = bool(
+            self.four_foot_preload_load_sharing_config.get("enabled", False)
+        )
+        if self.four_foot_preload_load_sharing_enabled:
+            preload_legs = tuple(
+                str(value)
+                for value in self.four_foot_preload_load_sharing_config.get(
+                    "next_swing_legs",
+                    LEGS,
+                )
+            )
+            if any(leg not in LEGS for leg in preload_legs):
+                raise ValueError(
+                    "four_foot_preload_load_sharing.next_swing_legs contains "
+                    "an unknown leg"
+                )
+            for name, default, maximum in (
+                ("proportional_gain_m", 0.030, 0.20),
+                ("maximum_correction_m", 0.012, 0.05),
+                ("smoothing_factor", 0.50, 1.0),
+            ):
+                value = float(
+                    self.four_foot_preload_load_sharing_config.get(name, default)
+                )
+                if not 0.0 < value <= maximum:
+                    raise ValueError(
+                        "four_foot_preload_load_sharing."
+                        f"{name} must be within (0, {maximum}]"
+                    )
         self.support_margin_regulation_config = dict(
             self.com_regulation_config.get(
                 "support_margin_regulation",
@@ -1813,6 +1849,56 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 # placement phase. Keep it continuous across the phase
                 # boundary instead of dropping it to zero and ramping again.
                 adjusted[leg]["vertical_m"] += correction_m
+        preload_load_config = self.four_foot_preload_load_sharing_config
+        if (
+            self.four_foot_preload_load_sharing_enabled
+            and self.placement_transfer_unload_start_step is None
+            and self.placement_swing_leg
+            in tuple(preload_load_config.get("next_swing_legs", LEGS))
+            and transfer_fraction > 0.0
+        ):
+            total_foot_loads = self.latest_ground_normal_loads_n + np.sum(
+                self.latest_step_normal_loads_n,
+                axis=1,
+            )
+            raw_corrections = equalized_foot_load_vertical_corrections(
+                measured_normal_loads_n=total_foot_loads,
+                proportional_gain_m=float(
+                    preload_load_config.get("proportional_gain_m", 0.030)
+                ),
+                maximum_correction_m=float(
+                    preload_load_config.get("maximum_correction_m", 0.012)
+                ),
+                minimum_total_load_n=float(
+                    preload_load_config.get("minimum_total_load_n", 1.0)
+                ),
+            ) * transfer_fraction
+            smoothing_factor = float(
+                preload_load_config.get("smoothing_factor", 0.50)
+            )
+            corrections = self.latest_support_load_sharing_correction_m + (
+                smoothing_factor
+                * (
+                    raw_corrections
+                    - self.latest_support_load_sharing_correction_m
+                )
+            )
+            corrections -= float(np.mean(corrections))
+            maximum_correction_m = float(
+                preload_load_config.get("maximum_correction_m", 0.012)
+            )
+            corrections = np.clip(
+                corrections,
+                -maximum_correction_m,
+                maximum_correction_m,
+            )
+            for leg_index, leg in enumerate(LEGS):
+                adjusted[leg]["vertical_m"] += float(corrections[leg_index])
+            self.latest_support_load_sharing_correction_m = corrections.copy()
+            self.maximum_abs_support_load_sharing_correction_m = max(
+                self.maximum_abs_support_load_sharing_correction_m,
+                float(np.max(np.abs(corrections))),
+            )
         adjusted[self.placement_swing_leg]["vertical_m"] -= float(
             self._active_inter_leg_transfer_config().get(
                 "swing_unload_lift_m",

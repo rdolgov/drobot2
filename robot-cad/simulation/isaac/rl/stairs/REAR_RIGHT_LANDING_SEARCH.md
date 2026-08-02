@@ -289,3 +289,33 @@ tilt. Therefore the modeled robot can raise the foot above the 180 mm riser;
 the unresolved stair problem is the loaded mixed-height COM transfer and
 controller sequence. The next stage should add an all-four-feet settle/preload
 phase before rear-left unload. More RGB vision is not the immediate need.
+
+## V47 progressive four-foot preload
+
+V47 implements that next gate without changing the exact `180 mm` rise,
+`250 mm` tread, or measured `0.8825985 Nm` effort cap. It preserves the active
+load-bearing PD targets, re-anchors each analytic COM increment at measured
+base/joint/composite-COM state, and optionally applies bounded zero-sum
+four-foot load sharing before rear-left unload.
+
+The strict `12 deg` seed-946 search tested 24 combinations of `5-10 mm`
+increments, `5/8 s` timing, and off/front-only/all pitch feedback. None passed.
+The apparent best margin gains lost rear-right tread load or exceeded the slip
+and attitude gates, so they are negative evidence rather than PPO
+initialization states.
+
+With four-foot load sharing at `0.060 m` proportional gain, `0.020 m` maximum
+correction, and `0.50` smoothing, seed 950 ended with measured total loads
+`[38.331, 19.342, 27.564, 1.462] N` in simulator foot order, `11.742 mm`
+maximum slip, `0.0185 m/s` base speed, and `0.0630 rad/s` body rate. Support
+margin improved only from `-103.083` to `-95.425 mm`, and tilt reached
+`14.989 deg`; the strict 12-degree gate correctly rejected it.
+
+An explicitly relaxed `15.5 deg` seed-952 diagnostic held that first increment
+for `0.40 s` without a simulator failure, but a fresh seed-953 search from its
+saved state rejected all 12 second-increment candidates. The best second-stage
+margin remained `-88.998 mm` and the least candidate tilt was `17.771 deg`.
+Therefore the first increment is a short-horizon diagnostic, not a stable
+transfer or training boundary. No additional transfer PPO was trained because
+the analytic safety prerequisite did not pass. See
+`PROGRESSIVE_PRELOAD_SEARCH.md` for exact commands and hashes.

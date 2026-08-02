@@ -1,0 +1,396 @@
+{
+  "accepted_preload_stages": [
+    {
+      "accepted": true,
+      "duration_seconds": 5.0,
+      "failure_reasons": [],
+      "final_all_foot_loads_n": [
+        38.330718994140625,
+        19.339479446411133,
+        27.565040588378906,
+        1.4619038105010986
+      ],
+      "final_balance_position_m": [
+        0.47390986435987587,
+        0.056610723854005736,
+        0.325284430725433
+      ],
+      "final_base_speed_m_s": 0.018546452704954627,
+      "final_body_rate_rad_s": 0.06297566741704941,
+      "final_completed_tread_loads_n": [
+        19.339479446411133,
+        38.330718994140625,
+        1.4619038105010986
+      ],
+      "final_pre_unload_gate_failures": [
+        "support_margin_low"
+      ],
+      "final_support_margin_m": -0.09542489132072,
+      "final_target_error_m": 0.009095161839389947,
+      "final_transfer_fraction": 1.0,
+      "id": "stage1-pitchoff-loadgain0.060-duration5.0-forward+0.005-lateral-0.005",
+      "initial_balance_position_m": [
+        0.47700438290573677,
+        0.05746334623294372,
+        0.3312902581690405
+      ],
+      "initial_support_margin_m": -0.10308315838736702,
+      "load_sharing_gain_m": 0.06,
+      "maximum_all_foot_slip_m": 0.011742355301976204,
+      "maximum_body_tilt_deg": 14.988902071059364,
+      "measured_balance_delta_xy_m": [
+        -0.0030945185458609026,
+        -0.0008526223789379825
+      ],
+      "minimum_all_foot_load_n": 0.0,
+      "minimum_completed_tread_load_n": 0.0,
+      "pitch_feedback_mode": "off",
+      "settled": true,
+      "stage": 1,
+      "steps": 323,
+      "support_margin_progress_m": 0.007658267066647018,
+      "target_delta_xy_m": [
+        0.005,
+        -0.005
+      ],
+      "terminated": false,
+      "truncated": false
+    }
+  ],
+  "achieved_support_margin_m": -0.09542489132072,
+  "effort_cap_nm": 0.8825985,
+  "phase_snapshot_mode": "inter_leg_transfer",
+  "placement_sequence_legs": [
+    "front_right",
+    "front_left",
+    "rear_right",
+    "rear_left"
+  ],
+  "schema_version": 1,
+  "seed": 952,
+  "snapshot": {
+    "active_step_count": 1,
+    "base_angular_velocity_rad_s": [
+      0.013126682490110397,
+      0.050497595220804214,
+      -0.05104978382587433
+    ],
+    "base_linear_velocity_m_s": [
+      -0.0005647361977025867,
+      -0.0008225178462453187,
+      0.07202848792076111
+    ],
+    "base_orientation_wxyz": [
+      0.9887199997901917,
+      -0.05172407999634743,
+      -0.11978460848331451,
+      -0.07354557514190674
+    ],
+    "base_position_m": [
+      0.47152867913246155,
+      0.07709071040153503,
+      0.34523728489875793
+    ],
+    "completed_inter_leg_transfers": [
+      "front_right->front_left",
+      "front_left->rear_right"
+    ],
+    "completed_placement_joint_targets_by_leg": {
+      "front_left": [
+        0.001459613093174994,
+        0.365602970123291,
+        1.0463999509811401
+      ],
+      "front_right": [
+        0.30804842710494995,
+        0.7378504872322083,
+        0.6432979702949524
+      ],
+      "rear_right": [
+        -0.44087672233581543,
+        1.5697963237762451,
+        -1.8682360649108887
+      ]
+    },
+    "completed_placement_legs": [
+      "front_right",
+      "front_left",
+      "rear_right"
+    ],
+    "completed_placement_reference_by_leg": {
+      "front_left": {
+        "base_position_m": [
+          0.35400521755218506,
+          -0.12202291935682297,
+          0.36497223377227783
+        ],
+        "forward_m": 0.215,
+        "outward_m": 0.0,
+        "vertical_m": 0.175
+      },
+      "front_right": {
+        "base_position_m": [
+          0.2920761704444885,
+          0.04405093565583229,
+          0.3636249601840973
+        ],
+        "forward_m": 0.26460290809327847,
+        "outward_m": 0.04499999999999999,
+        "vertical_m": 0.1411912757201646
+      },
+      "rear_right": {
+        "base_position_m": [
+          0.47281530499458313,
+          0.07809203863143921,
+          0.34990763664245605
+        ],
+        "forward_m": 0.1188650539119743,
+        "outward_m": -0.06332201439217583,
+        "vertical_m": 0.1341988896794387
+      }
+    },
+    "current_placement_level": {
+      "apex_lift_m": 0.235,
+      "contact_hold_seconds": 0.75,
+      "id": "left-center-tread-load",
+      "landing_forward_offset_m": 0.19,
+      "landing_lift_m": 0.125,
+      "lift_forward_offset_m": 0.11,
+      "start_fraction": 0.94,
+      "success_mode": "tread_contact",
+      "swing_forward_offset_m": 0.21,
+      "target_tread_fraction": 0.5
+    },
+    "highest_foot_step": [
+      1,
+      1,
+      0,
+      0
+    ],
+    "initial_foot_bottom_z_m": [
+      0.0076317866332829,
+      0.007416106294840574,
+      0.007436873856931925,
+      0.007756994105875492
+    ],
+    "initial_placement_foot_tips_m": [
+      [
+        0.4340920150279999,
+        0.19501827657222748,
+        0.0076317866332829
+      ],
+      [
+        0.4343971312046051,
+        -0.20253680646419525,
+        0.007416106294840574
+      ],
+      [
+        0.25216904282569885,
+        0.19447873532772064,
+        0.007436873856931925
+      ],
+      [
+        0.25155937671661377,
+        -0.2021177113056183,
+        0.007756994105875492
+      ]
+    ],
+    "joint_position_targets_rad": [
+      -0.7637096047401428,
+      -0.20168088376522064,
+      0.12902916967868805,
+      -0.46786537766456604,
+      -0.26312822103500366,
+      -0.798690140247345,
+      -0.2885189950466156,
+      1.3575472831726074,
+      2.093395233154297,
+      -0.050017453730106354,
+      1.9796676635742188,
+      -1.8083380460739136
+    ],
+    "joint_positions_rad": [
+      -0.7855569124221802,
+      -0.30633386969566345,
+      0.20813854038715363,
+      -0.4340441823005676,
+      -0.27588951587677,
+      -0.8936825394630432,
+      -0.23908129334449768,
+      1.2711260318756104,
+      2.094539165496826,
+      -0.051337823271751404,
+      1.9801838397979736,
+      -1.8118641376495361
+    ],
+    "joint_velocities_rad_s": [
+      0.0013632383197546005,
+      -0.00435744971036911,
+      -0.03262171894311905,
+      0.08216536045074463,
+      0.050346799194812775,
+      0.00620791781693697,
+      0.16064302623271942,
+      -0.39625346660614014,
+      0.04447957128286362,
+      0.16717463731765747,
+      -0.1406497061252594,
+      0.2084638774394989
+    ],
+    "last_completed_inter_leg_transfer_metrics": {
+      "balance_position_m": [
+        0.46993471832002237,
+        0.038868018919230043,
+        0.3271733690070114
+      ],
+      "balance_target_position_m": [
+        0.47147832065820694,
+        0.018758781254291534,
+        0.32948696745635264
+      ],
+      "base_speed_m_s": 0.009769860958737688,
+      "base_target_error_m": 0.020168394771112312,
+      "body_rate_rad_s": 0.10873422771692276,
+      "body_tilt_deg": 11.286047445586314,
+      "completed_tread_min_load_n": 27.837112426757812,
+      "next_swing_total_load_n": 0.0,
+      "pre_unload_gate_enabled": true,
+      "pre_unload_gate_hold_duration_s": 0.5,
+      "support_margin_m": 0.039265429330006596,
+      "transition": "front_left->rear_right",
+      "unload_start_elapsed_s": 8.483333333333333
+    },
+    "maximum_foot_lift_m": [
+      0.245305135846138,
+      0.2039923220872879,
+      0.0,
+      0.18110576272010803
+    ],
+    "maximum_foot_tread_progress": [
+      1.0,
+      1.0,
+      0.0,
+      0.699516236782074
+    ],
+    "placement_curriculum_level": "left-center-tread-load",
+    "placement_leg_baseline_balance_position_m": [
+      0.473909854888916,
+      0.056610722094774246,
+      0.3252844214439392
+    ],
+    "placement_leg_baseline_base_position_m": [
+      0.47152867913246155,
+      0.07709071040153503,
+      0.34523728489875793
+    ],
+    "placement_leg_baseline_lift_offset_m": 0.1810525506734848,
+    "placement_leg_baseline_reference_by_leg": {
+      "front_left": {
+        "forward_m": 0.11145412640503194,
+        "outward_m": -0.08106392849450979,
+        "vertical_m": 0.08103819494029137
+      },
+      "front_right": {
+        "forward_m": 0.11971829064871882,
+        "outward_m": 0.026501164320253446,
+        "vertical_m": 0.12548066797585813
+      },
+      "rear_left": {
+        "forward_m": -0.2542186535699437,
+        "outward_m": -0.05845490849445718,
+        "vertical_m": 0.18481432768527029
+      },
+      "rear_right": {
+        "forward_m": 0.07046086493430265,
+        "outward_m": -0.07750042964621912,
+        "vertical_m": 0.16719796629899095
+      }
+    },
+    "placement_sequence_legs": [
+      "front_right",
+      "front_left",
+      "rear_right",
+      "rear_left"
+    ],
+    "placement_sequence_position": 3,
+    "placement_swing_leg": "rear_left",
+    "placement_transfer_active": true,
+    "placement_transfer_reference_by_leg": {
+      "front_left": {
+        "forward_m": 0.11145412640503194,
+        "outward_m": -0.08106392849450979,
+        "vertical_m": 0.08103819494029137
+      },
+      "front_right": {
+        "forward_m": 0.11971829064871882,
+        "outward_m": 0.026501164320253446,
+        "vertical_m": 0.12548066797585813
+      },
+      "rear_left": {
+        "forward_m": -0.2542186535699437,
+        "outward_m": -0.05845490849445718,
+        "vertical_m": 0.18481432768527029
+      },
+      "rear_right": {
+        "forward_m": 0.07046086493430265,
+        "outward_m": -0.07750042964621912,
+        "vertical_m": 0.16719796629899095
+      }
+    },
+    "placement_transfer_start_balance_position_m": [
+      0.473909854888916,
+      0.056610722094774246,
+      0.3252844214439392
+    ],
+    "placement_transfer_start_base_position_m": [
+      0.47152867913246155,
+      0.07709071040153503,
+      0.34523728489875793
+    ],
+    "placement_transfer_target_balance_position_m": [
+      0.473909854888916,
+      0.056610722094774246,
+      0.3252844214439392
+    ],
+    "placement_transfer_target_base_position_m": [
+      0.47152867913246155,
+      0.07709071040153503,
+      0.34523728489875793
+    ],
+    "previous_action": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "previous_residual_action": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "schema_version": 1
+  },
+  "source_task_id": "Drobot-Quadruped-Stairs-v46-Rear-Right-Sidestep",
+  "stair_rise_m": 0.18,
+  "stair_tread_depth_m": 0.25,
+  "target_leg": "rear_left",
+  "target_support_margin_reached": false,
+  "task_id": "Drobot-Quadruped-Stairs-v47-Progressive-Rear-Left-Preload"
+}
