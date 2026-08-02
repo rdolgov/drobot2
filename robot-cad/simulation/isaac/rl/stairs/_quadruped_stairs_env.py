@@ -1935,19 +1935,46 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     self.latest_projected_gravity_xyz[0]
                 ),
                 proportional_gain_m=float(
-                    self.pitch_feedback_config.get(
-                        "proportional_gain_m",
-                        0.12,
+                    dict(
+                        self.pitch_feedback_config.get(
+                            "proportional_gain_m_by_swing_leg",
+                            {},
+                        )
+                    ).get(
+                        self.placement_swing_leg,
+                        self.pitch_feedback_config.get(
+                            "proportional_gain_m",
+                            0.12,
+                        ),
                     )
                 ),
                 maximum_correction_m=float(
-                    self.pitch_feedback_config.get(
-                        "maximum_correction_m",
-                        0.035,
+                    dict(
+                        self.pitch_feedback_config.get(
+                            "maximum_correction_m_by_swing_leg",
+                            {},
+                        )
+                    ).get(
+                        self.placement_swing_leg,
+                        self.pitch_feedback_config.get(
+                            "maximum_correction_m",
+                            0.035,
+                        ),
                     )
                 ),
             )
             for leg, correction_m in pitch_corrections.items():
+                if (
+                    self.placement_swing_leg
+                    in tuple(
+                        self.pitch_feedback_config.get(
+                            "front_only_by_swing_leg",
+                            (),
+                        )
+                    )
+                    and leg.startswith("rear_")
+                ):
+                    continue
                 adjusted[leg]["vertical_m"] += (
                     correction_m * shift_fraction
                 )
@@ -2792,12 +2819,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         return observation, info
 
     def capture_placement_phase_snapshot(self) -> dict[str, object]:
-        """Capture one verified post-transfer state for phase-only training."""
+        """Capture one verified placement or inter-leg-transfer training state."""
 
         if not self.placement_reference_enabled:
             raise RuntimeError("Placement snapshot requires placement reference mode")
-        if self.placement_transfer_active:
-            raise RuntimeError("Cannot snapshot an active inter-leg transfer")
         if not self.completed_placement_legs:
             raise RuntimeError("Placement snapshot has no completed precursor leg")
 
@@ -2871,6 +2896,16 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ),
             "placement_transfer_target_base_position_m": (
                 self.placement_transfer_target_base_position_m.copy()
+            ),
+            "placement_transfer_active": self.placement_transfer_active,
+            "placement_transfer_reference_by_leg": deepcopy(
+                self.placement_transfer_reference_by_leg
+            ),
+            "placement_transfer_start_base_position_m": (
+                self.placement_transfer_start_base_position_m.copy()
+            ),
+            "placement_transfer_start_balance_position_m": (
+                self.placement_transfer_start_balance_position_m.copy()
             ),
             "placement_transfer_target_balance_position_m": (
                 self.placement_transfer_target_balance_position_m.copy()
@@ -2994,28 +3029,64 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.last_completed_inter_leg_transfer_metrics = deepcopy(
             stored["last_completed_inter_leg_transfer_metrics"]
         )
-        self.placement_transfer_active = False
+        restored_transfer_active = bool(
+            stored.get("placement_transfer_active", False)
+        )
+        transfer_start_base = np.asarray(
+            stored.get(
+                "placement_transfer_start_base_position_m",
+                stored["placement_leg_baseline_base_position_m"],
+            ),
+            dtype=np.float64,
+        ).reshape(3)
+        transfer_target_base = np.asarray(
+            stored.get(
+                "placement_transfer_target_base_position_m",
+                transfer_start_base,
+            ),
+            dtype=np.float64,
+        ).reshape(3)
+        transfer_base_delta = transfer_target_base - transfer_start_base
+        transfer_start_balance = np.asarray(
+            stored.get(
+                "placement_transfer_start_balance_position_m",
+                stored.get(
+                    "placement_leg_baseline_balance_position_m",
+                    stored["placement_leg_baseline_base_position_m"],
+                ),
+            ),
+            dtype=np.float64,
+        ).reshape(3)
+        transfer_target_balance = np.asarray(
+            stored.get(
+                "placement_transfer_target_balance_position_m",
+                transfer_start_balance,
+            ),
+            dtype=np.float64,
+        ).reshape(3)
+        transfer_balance_delta = (
+            transfer_target_balance - transfer_start_balance
+        )
+        self.placement_transfer_active = restored_transfer_active
         self.placement_transfer_start_step = 0
         self.placement_transfer_gate_step_count = 0
         self.placement_transfer_pre_unload_gate_step_count = 0
         self.placement_transfer_unload_start_step = None
-        self.placement_transfer_reference_by_leg = {}
-        self.placement_transfer_start_base_position_m.fill(0.0)
-        self.placement_transfer_target_base_position_m = np.asarray(
-            stored.get(
-                "placement_transfer_target_base_position_m",
-                self.placement_leg_baseline_base_position_m,
-            ),
-            dtype=np.float64,
-        ).reshape(3).copy()
-        self.placement_transfer_start_balance_position_m.fill(0.0)
-        self.placement_transfer_target_balance_position_m = np.asarray(
-            stored.get(
-                "placement_transfer_target_balance_position_m",
-                self.placement_leg_baseline_balance_position_m,
-            ),
-            dtype=np.float64,
-        ).reshape(3).copy()
+        self.placement_transfer_reference_by_leg = deepcopy(
+            stored.get("placement_transfer_reference_by_leg", {})
+        )
+        self.placement_transfer_start_base_position_m = (
+            transfer_start_base.copy()
+        )
+        self.placement_transfer_target_base_position_m = (
+            transfer_target_base.copy()
+        )
+        self.placement_transfer_start_balance_position_m = (
+            transfer_start_balance.copy()
+        )
+        self.placement_transfer_target_balance_position_m = (
+            transfer_target_balance.copy()
+        )
         self.placement_phase_start_step = 0
         self.placement_phase_elapsed_offset_s = 0.0
         self.goal_hold_step_count = 0
@@ -3057,6 +3128,24 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         restored_base = np.asarray(base_state["base_position"], dtype=np.float32)
         foot_tips = self._sample_foot_tips()
         restored_com = self._sample_robot_com_position_m()
+        if restored_transfer_active:
+            # The zero-velocity settle can move the articulation a few
+            # millimetres. Re-anchor the cached transfer at the settled state
+            # while preserving the exact learned COM displacement target.
+            self.placement_transfer_start_base_position_m = (
+                restored_base.astype(np.float64).copy()
+            )
+            self.placement_transfer_target_base_position_m = (
+                self.placement_transfer_start_base_position_m
+                + transfer_base_delta
+            )
+            self.placement_transfer_start_balance_position_m = (
+                restored_com.copy()
+            )
+            self.placement_transfer_target_balance_position_m = (
+                self.placement_transfer_start_balance_position_m
+                + transfer_balance_delta
+            )
         if self.phase_snapshot_restore_settle_control_steps:
             self.placement_leg_baseline_reference_by_leg = (
                 self._reference_parameters_from_joint_positions(

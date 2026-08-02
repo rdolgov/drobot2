@@ -153,6 +153,32 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--phase-train-transfer",
+    action="store_true",
+    help=(
+        "Train the inter-leg COM/support transfer into --phase-train-leg "
+        "instead of the target leg's swing/landing phase."
+    ),
+)
+parser.add_argument(
+    "--phase-transfer-post-hold-seconds",
+    type=float,
+    default=None,
+    help=(
+        "After a learned transfer gate opens, keep the support policy active "
+        "for this many target-leg seconds before awarding success. Defaults "
+        "to placement_reference.inter_leg_transfer.policy_post_hold_seconds."
+    ),
+)
+parser.add_argument(
+    "--phase-post-transfer-hold-only",
+    action="store_true",
+    help=(
+        "Keep PPO actions at zero during the analytic transfer and train the "
+        "support policy only after the transfer gate opens."
+    ),
+)
+parser.add_argument(
     "--precursor-leg-model",
     action="append",
     default=[],
@@ -276,6 +302,24 @@ if phase_base_model_path is not None and not args.phase_train_leg:
     parser.error("--phase-base-model requires --phase-train-leg")
 if args.phase_base_swing_only and phase_base_model_path is None:
     parser.error("--phase-base-swing-only requires --phase-base-model")
+if args.phase_train_transfer and not args.phase_train_leg:
+    parser.error("--phase-train-transfer requires --phase-train-leg")
+if args.phase_post_transfer_hold_only and not args.phase_train_transfer:
+    parser.error(
+        "--phase-post-transfer-hold-only requires --phase-train-transfer"
+    )
+if (
+    args.phase_transfer_post_hold_seconds is not None
+    and args.phase_transfer_post_hold_seconds < 0.0
+):
+    parser.error("--phase-transfer-post-hold-seconds cannot be negative")
+if (
+    args.phase_transfer_post_hold_seconds is not None
+    and not args.phase_train_transfer
+):
+    parser.error(
+        "--phase-transfer-post-hold-seconds requires --phase-train-transfer"
+    )
 if not 0.0 < args.phase_residual_scale <= 1.0:
     parser.error("--phase-residual-scale must be within (0, 1]")
 phase_mask_flags = (
@@ -312,6 +356,27 @@ try:
 except ValueError as exc:
     parser.error(str(exc))
 task_config = dict(config["task"])
+configured_transfer_post_hold_seconds = float(
+    task_config.get("placement_reference", {})
+    .get("inter_leg_transfer", {})
+    .get("policy_post_hold_seconds", 0.0)
+)
+phase_transfer_post_hold_seconds = (
+    configured_transfer_post_hold_seconds
+    if args.phase_transfer_post_hold_seconds is None
+    else float(args.phase_transfer_post_hold_seconds)
+)
+if phase_transfer_post_hold_seconds < 0.0:
+    parser.error(
+        "placement transfer policy_post_hold_seconds cannot be negative"
+    )
+if (
+    args.phase_post_transfer_hold_only
+    and phase_transfer_post_hold_seconds <= 0.0
+):
+    parser.error(
+        "--phase-post-transfer-hold-only requires a positive post hold"
+    )
 if args.fixed_active_steps is not None:
     maximum_steps = int(task_config["staircase"]["step_count"])
     if args.fixed_active_steps < 1 or args.fixed_active_steps > maximum_steps:
@@ -324,6 +389,18 @@ if args.fixed_active_steps is not None:
     ]
     task_config["curriculum"] = curriculum
 ppo_config = dict(config["ppo"])
+initial_action_bias = ppo_config.get("initial_action_bias")
+if initial_action_bias is not None:
+    if not isinstance(initial_action_bias, list):
+        parser.error("ppo.initial_action_bias must be a list")
+    initial_action_bias = [float(value) for value in initial_action_bias]
+    if len(initial_action_bias) != phase_policy_action_size:
+        parser.error(
+            "ppo.initial_action_bias length must match the policy action size: "
+            f"{len(initial_action_bias)} != {phase_policy_action_size}"
+        )
+    if any(abs(value) > 1.0 for value in initial_action_bias):
+        parser.error("ppo.initial_action_bias values must be within [-1, 1]")
 residual_policy_config = dict(task_config.get("residual_policy", {}))
 if bool(residual_policy_config.get("enabled", False)) and args.initialize_from_flat:
     parser.error(
@@ -820,6 +897,11 @@ report: dict[str, object] = {
     "placement_start_level": args.placement_start_level,
     "fixed_placement_level": args.fixed_placement_level,
     "phase_train_leg": args.phase_train_leg,
+    "phase_train_transfer": args.phase_train_transfer,
+    "phase_transfer_post_hold_seconds": (
+        phase_transfer_post_hold_seconds
+    ),
+    "phase_post_transfer_hold_only": args.phase_post_transfer_hold_only,
     "precursor_leg_models": {
         leg: str(path) for leg, path in precursor_leg_model_paths.items()
     },
@@ -840,6 +922,7 @@ report: dict[str, object] = {
     ),
     "phase_compact_residual_action": args.phase_compact_residual_action,
     "phase_snapshot_cache_enabled": not args.phase_disable_snapshot_cache,
+    "initial_action_bias_requested": initial_action_bias,
     "terrain_perception_mode": terrain_perception_mode,
     "terrain_perception": terrain_perception_config,
     "device_request": args.device,
@@ -987,6 +1070,15 @@ try:
             target_residual_scale=args.phase_residual_scale,
             target_residual_mask=target_residual_mask,
             compact_residual_action=args.phase_compact_residual_action,
+            train_transfer=args.phase_train_transfer,
+            transfer_post_hold_seconds=(
+                phase_transfer_post_hold_seconds
+                if args.phase_train_transfer
+                else 0.0
+            ),
+            train_post_transfer_hold_only=(
+                args.phase_post_transfer_hold_only
+            ),
             maximum_reset_attempts=args.phase_reset_attempts,
             maximum_precursor_steps=args.phase_precursor_max_steps,
             cache_phase_snapshot=not args.phase_disable_snapshot_cache,
@@ -1060,7 +1152,22 @@ try:
             device=args.device,
             verbose=1,
         )
-        if bool(ppo_config.get("zero_action_mean_init", False)):
+        if initial_action_bias is not None:
+            with torch.no_grad():
+                model.policy.action_net.weight.zero_()
+                model.policy.action_net.bias.copy_(
+                    torch.as_tensor(
+                        initial_action_bias,
+                        dtype=model.policy.action_net.bias.dtype,
+                        device=model.policy.action_net.bias.device,
+                    )
+                )
+            report["action_mean_initialization"] = {
+                "weight": "all_zero",
+                "bias": initial_action_bias,
+                "source": "ppo.initial_action_bias",
+            }
+        elif bool(ppo_config.get("zero_action_mean_init", False)):
             with torch.no_grad():
                 model.policy.action_net.weight.zero_()
                 model.policy.action_net.bias.zero_()
@@ -1409,7 +1516,11 @@ try:
                 "Policy initialization without PPO updates"
                 if args.initialize_only
                 else (
-                    "Target-leg PPO after deterministic placement-prefix replay"
+                    (
+                        "Target-transfer PPO after deterministic placement-prefix replay"
+                        if args.phase_train_transfer
+                        else "Target-leg PPO after deterministic placement-prefix replay"
+                    )
                     if phase_training_env is not None
                     else (
                         "Pipeline validation only"

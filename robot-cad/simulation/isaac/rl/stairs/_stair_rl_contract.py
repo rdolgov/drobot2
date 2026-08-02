@@ -816,6 +816,30 @@ def placement_phase_ready(
     )
 
 
+def placement_transfer_ready(
+    *,
+    sequence_legs: Sequence[str],
+    completed_legs: Sequence[str],
+    active_leg: str,
+    transfer_active: bool,
+    target_leg: str,
+) -> bool:
+    """Return whether PPO should control the transfer into ``target_leg``."""
+
+    sequence = tuple(str(leg) for leg in sequence_legs)
+    if target_leg not in sequence:
+        raise ValueError(f"Unknown placement transfer target: {target_leg}")
+    target_position = sequence.index(target_leg)
+    if target_position == 0:
+        return False
+    completed = tuple(str(leg) for leg in completed_legs)
+    return bool(
+        transfer_active
+        and active_leg == target_leg
+        and completed == sequence[:target_position]
+    )
+
+
 def compose_bounded_residual_action(
     base_action: Sequence[float],
     residual_action: Sequence[float],
@@ -844,6 +868,33 @@ def compose_bounded_residual_action(
     if scale <= 0.0 or scale > 1.0:
         raise ValueError("residual_scale must be within (0, 1]")
     return np.clip(base + scale * mask * residual, -1.0, 1.0).astype(np.float32)
+
+
+def overlay_masked_action(
+    base_action: Sequence[float],
+    overlay_action: Sequence[float],
+    action_mask: Sequence[float],
+) -> np.ndarray:
+    """Replace selected joints in ``base_action`` with an overlay policy.
+
+    This keeps a swing-leg policy active while a disjoint support policy spans
+    the controller handoff immediately after an inter-leg transfer.
+    """
+
+    base = np.asarray(base_action, dtype=np.float32)
+    overlay = np.asarray(overlay_action, dtype=np.float32)
+    mask = np.asarray(action_mask, dtype=np.float32)
+    if base.ndim != 1 or overlay.shape != base.shape or mask.shape != base.shape:
+        raise ValueError("base, overlay, and action_mask must be matching vectors")
+    if not all(np.all(np.isfinite(value)) for value in (base, overlay, mask)):
+        raise ValueError("masked action inputs must be finite")
+    if np.any((mask != 0.0) & (mask != 1.0)):
+        raise ValueError("action_mask must be binary")
+    return np.clip(
+        base * (1.0 - mask) + overlay * mask,
+        -1.0,
+        1.0,
+    ).astype(np.float32)
 
 
 def expand_compact_masked_action(

@@ -37,6 +37,7 @@ from _stair_rl_contract import (  # noqa: E402
     compose_bounded_residual_action,
     config_for_height_stage,
     expand_compact_masked_action,
+    overlay_masked_action,
     placement_policy_action_mask,
 )
 
@@ -98,6 +99,26 @@ parser.add_argument(
     help=(
         "Use a force-verified per-leg PPO policy outside inter-leg transfer; "
         "repeat for each composed skill."
+    ),
+)
+parser.add_argument(
+    "--transfer-model",
+    action="append",
+    default=[],
+    metavar="LEG=MODEL",
+    help=(
+        "Use a compact nine-output support-joint PPO during the inter-leg "
+        "transfer into LEG; repeat for each learned transfer."
+    ),
+)
+parser.add_argument(
+    "--post-transfer-model",
+    action="append",
+    default=[],
+    metavar="LEG=MODEL",
+    help=(
+        "Use a compact nine-output support-joint PPO only during the "
+        "configured post-transfer hold into LEG."
     ),
 )
 parser.add_argument(
@@ -221,6 +242,19 @@ try:
 except ValueError as exc:
     parser.error(str(exc))
 task_config = dict(config["task"])
+transfer_policy_post_hold_seconds = float(
+    task_config.get("placement_reference", {})
+    .get("inter_leg_transfer", {})
+    .get("policy_post_hold_seconds", 0.0)
+)
+if transfer_policy_post_hold_seconds < 0.0:
+    parser.error("transfer policy_post_hold_seconds cannot be negative")
+transfer_policy_post_hold_steps = int(
+    round(
+        transfer_policy_post_hold_seconds
+        * float(task_config["control_hz"])
+    )
+)
 if args.episode_seconds is not None:
     if args.episode_seconds <= 0.0:
         parser.error("--episode-seconds must be positive")
@@ -248,6 +282,14 @@ world_dependency_paths = tuple(
 )
 model_path = _resolve_project_path(args.model)
 leg_model_paths = _parse_leg_models(args.leg_model, "--leg-model")
+transfer_model_paths = _parse_leg_models(
+    args.transfer_model,
+    "--transfer-model",
+)
+post_transfer_model_paths = _parse_leg_models(
+    args.post_transfer_model,
+    "--post-transfer-model",
+)
 leg_base_model_paths = _parse_leg_models(
     args.leg_base_model,
     "--leg-base-model",
@@ -408,6 +450,16 @@ report: dict[str, object] = {
     "leg_models": {
         leg: str(path) for leg, path in leg_model_paths.items()
     },
+    "transfer_models": {
+        leg: str(path) for leg, path in transfer_model_paths.items()
+    },
+    "post_transfer_models": {
+        leg: str(path) for leg, path in post_transfer_model_paths.items()
+    },
+    "transfer_policy_post_hold_seconds": (
+        transfer_policy_post_hold_seconds
+    ),
+    "transfer_policy_post_hold_steps": transfer_policy_post_hold_steps,
     "leg_base_models": {
         leg: str(path) for leg, path in leg_base_model_paths.items()
     },
@@ -484,7 +536,13 @@ try:
     )
     known_placement_legs = set(raw_env.placement_sequence_legs)
     unknown_leg_models = sorted(
-        (set(leg_model_paths) | set(leg_base_model_paths) | zero_action_legs)
+        (
+            set(leg_model_paths)
+            | set(leg_base_model_paths)
+            | set(transfer_model_paths)
+            | set(post_transfer_model_paths)
+            | zero_action_legs
+        )
         - known_placement_legs
     )
     if unknown_leg_models:
@@ -593,14 +651,141 @@ try:
             "residual_scale": leg_residual_scales[leg],
             "observation_compatibility": observation_compatibility,
         }
+    transfer_models: dict[str, PPO] = {}
+    transfer_model_verification: dict[str, dict[str, object]] = {}
+    for leg, path in transfer_model_paths.items():
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        manifest_path = Path(str(path) + ".contract.json")
+        if not manifest_path.is_file():
+            raise FileNotFoundError(manifest_path)
+        with manifest_path.open("r", encoding="utf-8") as stream:
+            manifest = json.load(stream)
+        model_sha256 = _sha256_file(path)
+        if str(manifest.get("model_sha256")) != model_sha256:
+            raise RuntimeError(
+                f"Transfer model hash mismatch for {leg}: {path}"
+            )
+        transfer_model = PPO.load(str(path), device=args.device)
+        support_mask = placement_policy_action_mask(
+            raw_env.dof_names,
+            target_leg=leg,
+            mode="support_only",
+        )
+        expected_action_size = int(np.count_nonzero(support_mask))
+        if tuple(transfer_model.action_space.shape) != (expected_action_size,):
+            raise RuntimeError(
+                f"Transfer action space does not match support joints for {leg}"
+            )
+        observation_compatibility = policy_observation_prefix_compatibility(
+            transfer_model,
+            manifest,
+            raw_env.contract,
+        )
+        transfer_models[leg] = transfer_model
+        transfer_model_verification[leg] = {
+            "status": "PASS",
+            "model": str(path),
+            "model_sha256": model_sha256,
+            "manifest": str(manifest_path),
+            "source_task_id": manifest.get("task_id"),
+            "observation_shape": list(transfer_model.observation_space.shape),
+            "action_shape": list(transfer_model.action_space.shape),
+            "residual_mask": "support_only",
+            "policy_post_hold_seconds": (
+                transfer_policy_post_hold_seconds
+            ),
+            "observation_compatibility": observation_compatibility,
+        }
+
+    post_transfer_models: dict[str, PPO] = {}
+    post_transfer_model_verification: dict[str, dict[str, object]] = {}
+    for leg, path in post_transfer_model_paths.items():
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        manifest_path = Path(str(path) + ".contract.json")
+        if not manifest_path.is_file():
+            raise FileNotFoundError(manifest_path)
+        with manifest_path.open("r", encoding="utf-8") as stream:
+            manifest = json.load(stream)
+        model_sha256 = _sha256_file(path)
+        if str(manifest.get("model_sha256")) != model_sha256:
+            raise RuntimeError(
+                f"Post-transfer model hash mismatch for {leg}: {path}"
+            )
+        support_model = PPO.load(str(path), device=args.device)
+        support_mask = placement_policy_action_mask(
+            raw_env.dof_names,
+            target_leg=leg,
+            mode="support_only",
+        )
+        expected_action_size = int(np.count_nonzero(support_mask))
+        if tuple(support_model.action_space.shape) != (expected_action_size,):
+            raise RuntimeError(
+                f"Post-transfer action space does not match supports for {leg}"
+            )
+        observation_compatibility = policy_observation_prefix_compatibility(
+            support_model,
+            manifest,
+            raw_env.contract,
+        )
+        post_transfer_models[leg] = support_model
+        post_transfer_model_verification[leg] = {
+            "status": "PASS",
+            "model": str(path),
+            "model_sha256": model_sha256,
+            "manifest": str(manifest_path),
+            "source_task_id": manifest.get("task_id"),
+            "observation_shape": list(support_model.observation_space.shape),
+            "action_shape": list(support_model.action_space.shape),
+            "residual_mask": "support_only",
+            "policy_post_hold_seconds": transfer_policy_post_hold_seconds,
+            "observation_compatibility": observation_compatibility,
+        }
+
+    def transfer_support_action(
+        support_models: dict[str, PPO],
+        leg: str,
+        policy_observation: np.ndarray,
+    ) -> np.ndarray:
+        transfer_model = support_models[leg]
+        compact_action, _ = predict_with_observation_prefix(
+            transfer_model,
+            policy_observation,
+            deterministic=True,
+        )
+        return expand_compact_masked_action(
+            compact_action,
+            placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=leg,
+                mode="support_only",
+            ),
+        )
+
     observation, _ = raw_env.reset(seed=args.seed)
     episode_metrics: list[dict[str, object]] = []
     maximum_steps = args.episodes * raw_env.max_episode_steps * 2
+    transfer_hold_leg: str | None = None
+    transfer_hold_steps_remaining = 0
     for _ in range(maximum_steps):
+        active_leg = raw_env.placement_swing_leg
+        transfer_hold_applied = bool(
+            not raw_env.placement_transfer_active
+            and transfer_hold_leg == active_leg
+            and transfer_hold_steps_remaining > 0
+        )
         if raw_env.placement_transfer_active:
-            action = np.zeros(raw_env.action_space.shape, dtype=np.float32)
+            transfer_model = transfer_models.get(active_leg)
+            if transfer_model is None:
+                action = np.zeros(raw_env.action_space.shape, dtype=np.float32)
+            else:
+                action = transfer_support_action(
+                    transfer_models,
+                    active_leg,
+                    observation,
+                )
         else:
-            active_leg = raw_env.placement_swing_leg
             if active_leg in zero_action_legs:
                 action = np.zeros(
                     raw_env.action_space.shape,
@@ -671,12 +856,40 @@ try:
                     residual_mask,
                     dtype=np.float32,
                 )
+            if transfer_hold_applied:
+                action = overlay_masked_action(
+                    action,
+                    transfer_support_action(
+                        post_transfer_models,
+                        active_leg,
+                        observation,
+                    ),
+                    placement_policy_action_mask(
+                        raw_env.dof_names,
+                        target_leg=active_leg,
+                        mode="support_only",
+                    ),
+                )
         observation, _, terminated, truncated, info = raw_env.step(action)
+        transfer_event = info.get("placement_transfer_completed_event")
+        if (
+            transfer_event
+            and raw_env.placement_swing_leg in post_transfer_models
+            and transfer_policy_post_hold_steps > 0
+        ):
+            transfer_hold_leg = raw_env.placement_swing_leg
+            transfer_hold_steps_remaining = transfer_policy_post_hold_steps
+        elif transfer_hold_applied:
+            transfer_hold_steps_remaining -= 1
+            if transfer_hold_steps_remaining <= 0:
+                transfer_hold_leg = None
         if terminated or truncated:
             episode_metrics.append(dict(info["episode_metrics"]))
             if len(episode_metrics) >= args.episodes:
                 break
             observation, _ = raw_env.reset()
+            transfer_hold_leg = None
+            transfer_hold_steps_remaining = 0
     if len(episode_metrics) != args.episodes:
         raise RuntimeError(
             f"Expected {args.episodes} completed episodes, "
@@ -697,13 +910,21 @@ try:
             "ppo_algorithm_verification": algorithm_verification,
             "leg_model_verification": leg_model_verification,
             "leg_base_model_verification": leg_base_model_verification,
+            "transfer_model_verification": transfer_model_verification,
+            "post_transfer_model_verification": (
+                post_transfer_model_verification
+            ),
             "policy_composition": (
                 "per_leg_frozen_base_plus_bounded_residual"
                 if leg_base_models
                 else (
-                    "per_leg_models_with_zero_residual_inter_leg_transfer"
-                    if leg_models
-                    else "single_model"
+                    "per_leg_models_with_compact_support_transfer_policy"
+                    if transfer_models or post_transfer_models
+                    else (
+                        "per_leg_models_with_zero_residual_inter_leg_transfer"
+                        if leg_models
+                        else "single_model"
+                    )
                 )
             ),
             "episodes": episode_metrics,

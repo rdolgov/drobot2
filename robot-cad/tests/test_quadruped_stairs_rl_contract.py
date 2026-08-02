@@ -45,6 +45,7 @@ from _stair_rl_contract import (  # noqa: E402
     inter_leg_transfer_state,
     joint_effort_telemetry_sample,
     next_foot_target_index,
+    overlay_masked_action,
     pack_placement_reference_observation,
     pack_stair_policy_observation,
     pack_support_regulation_observation,
@@ -56,6 +57,7 @@ from _stair_rl_contract import (  # noqa: E402
     placement_policy_action_mask,
     placement_reference_state,
     placement_success_mode,
+    placement_transfer_ready,
     progress_gate_failures,
     stabilized_support_reference_base_delta,
     stair_failure_reasons,
@@ -254,6 +256,14 @@ def v34_config() -> dict:
 def v35_config() -> dict:
     with (
         STAIRS_DIR / "quadruped_stairs_v35_full_first_tread.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
+
+
+@pytest.fixture
+def v36_config() -> dict:
+    with (
+        STAIRS_DIR / "quadruped_stairs_v36_transfer_support_residual.yaml"
     ).open("r", encoding="utf-8") as stream:
         return yaml.safe_load(stream)
 
@@ -1504,6 +1514,48 @@ def test_v35_preserves_rear_unload_pose_for_190mm_clearance(
     ] == pytest.approx(0.050)
 
 
+def test_v36_exposes_only_bounded_support_residual_during_transfer(
+    v35_config: dict,
+    v36_config: dict,
+) -> None:
+    baseline = v35_config["task"]
+    task = v36_config["task"]
+    transfer = task["placement_reference"]["inter_leg_transfer"]
+    support_scale = task["placement_residual_action_scale_rad"]["support"]
+
+    assert task["id"] == "Drobot-Quadruped-Stairs-v36-Transfer-Support-Residual"
+    assert task["staircase"] == baseline["staircase"]
+    assert task["robot_hardware_profile"] == baseline["robot_hardware_profile"]
+    assert transfer["residual_action_scale"] == pytest.approx(0.15)
+    assert transfer["policy_post_hold_seconds"] == pytest.approx(2.0)
+    assert transfer["phase_snapshot_restore_zero_velocities"] is False
+    assert transfer["phase_snapshot_restore_settle_control_steps"] == 0
+    assert transfer["com_regulation"]["pitch_attitude_feedback"][
+        "front_only_by_swing_leg"
+    ] == ["rear_right", "rear_left"]
+    assert 0.15 * support_scale["hip_abduction"] == pytest.approx(0.0375)
+    assert 0.15 * support_scale["hip_flexion"] == pytest.approx(0.033)
+    assert 0.15 * support_scale["knee"] == pytest.approx(0.045)
+    assert transfer["override_by_next_swing_leg"]["rear_right"][
+        "swing_unload_lift_m"
+    ] == pytest.approx(0.120)
+    assert v36_config["ppo"]["learning_rate"] == pytest.approx(1e-5)
+    assert v36_config["ppo"]["initial_log_std"] == pytest.approx(-4.0)
+    assert v36_config["ppo"]["initial_action_bias"] == pytest.approx(
+        [
+            -0.011061003,
+            0.035005786,
+            0.036190730,
+            0.120000000,
+            -0.009826610,
+            0.003399614,
+            -0.055805374,
+            0.017830297,
+            -0.001008772,
+        ]
+    )
+
+
 def test_v9_front_pair_uses_dynamic_swing_support_action_contract(
     v9_config: dict,
 ) -> None:
@@ -2446,6 +2498,172 @@ def test_phase_training_replays_verified_prefix_before_exposing_target() -> None
         compact.step(np.asarray((-0.75, 0.0), dtype=np.float32))
 
 
+def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> None:
+    gym = pytest.importorskip("gymnasium")
+    from _placement_phase_training import PlacementPhaseTrainingEnv
+
+    class FakeTransferEnv(gym.Env):
+        def __init__(self) -> None:
+            self.observation_space = gym.spaces.Box(
+                -1.0,
+                1.0,
+                shape=(3,),
+                dtype=np.float32,
+            )
+            self.action_space = gym.spaces.Box(
+                -1.0,
+                1.0,
+                shape=(2,),
+                dtype=np.float32,
+            )
+            self.placement_sequence_legs = ("front_left", "front_right")
+            self.control_hz = 10
+            self.reward_config = {"success": 100.0}
+            self.actions: list[np.ndarray] = []
+            self.snapshot_restores = 0
+
+        def reset(self, *, seed=None, options=None):
+            super().reset(seed=seed)
+            self.completed_placement_legs: list[str] = []
+            self.placement_swing_leg = "front_left"
+            self.placement_transfer_active = False
+            self.actions.clear()
+            return np.zeros(3, dtype=np.float32), {}
+
+        def capture_placement_phase_snapshot(self):
+            return {"transfer": self.placement_transfer_active}
+
+        def restore_placement_phase_snapshot(
+            self,
+            snapshot,
+            *,
+            seed=None,
+            options=None,
+        ):
+            assert snapshot in ({"transfer": True}, {"transfer": False})
+            self.completed_placement_legs = ["front_left"]
+            self.placement_swing_leg = "front_right"
+            self.placement_transfer_active = bool(snapshot["transfer"])
+            self.actions.clear()
+            self.snapshot_restores += 1
+            return np.full(3, 9.0, dtype=np.float32), {}
+
+        def step(self, action):
+            self.actions.append(np.asarray(action, dtype=np.float32).copy())
+            transfer_event = None
+            if not self.completed_placement_legs:
+                self.completed_placement_legs = ["front_left"]
+                self.placement_swing_leg = "front_right"
+                self.placement_transfer_active = True
+            elif self.placement_transfer_active:
+                self.placement_transfer_active = False
+                transfer_event = "front_left->front_right"
+            return (
+                np.full(3, len(self.actions), dtype=np.float32),
+                2.0,
+                False,
+                False,
+                {
+                    "placement_transfer_completed_event": transfer_event,
+                    "base_clearance_m": 0.31,
+                    "placement_support_margin_m": 0.012,
+                    "placement_support_contact_fraction": 1.0,
+                    "maximum_support_slip_m": 0.004,
+                    "placement_upright_cosine": 0.985,
+                    "placement_transfer_base_target_error_m": 0.009,
+                    "placement_transfer_body_rate_rad_s": 0.08,
+                    "placement_transfer_swing_total_load_n": 0.2,
+                },
+            )
+
+    class FixedPolicy:
+        def predict(self, observation, *, deterministic):
+            assert deterministic is True
+            return np.full(2, 0.25, dtype=np.float32), None
+
+    raw = FakeTransferEnv()
+    wrapped = PlacementPhaseTrainingEnv(
+        raw,
+        target_leg="front_right",
+        precursor_policies={"front_left": FixedPolicy()},
+        target_residual_mask=np.asarray((1.0, 0.0), dtype=np.float32),
+        compact_residual_action=True,
+        train_transfer=True,
+    )
+    observation, info = wrapped.reset(seed=11)
+    np.testing.assert_allclose(observation, (1.0, 1.0, 1.0))
+    assert info["phase_training_target_mode"] == "inter_leg_transfer"
+    np.testing.assert_allclose(raw.actions[0], (0.25, 0.25))
+
+    _, reward, terminated, truncated, result = wrapped.step(
+        np.asarray((-0.5,), dtype=np.float32)
+    )
+    np.testing.assert_allclose(raw.actions[1], (-0.5, 0.0))
+    assert reward == pytest.approx(102.0)
+    assert terminated is True
+    assert truncated is False
+    assert result["phase_training_transfer_completed"] is True
+    stats = wrapped.training_stats()
+    assert stats["target_mode"] == "inter_leg_transfer"
+    assert stats["completed_target_transfers"] == 1
+    assert stats["maximum_target_transfer_balance_error_m"] == pytest.approx(
+        0.009
+    )
+    assert stats["minimum_target_transfer_swing_load_n"] == pytest.approx(0.2)
+
+    observation, info = wrapped.reset(seed=12)
+    np.testing.assert_allclose(observation, (9.0, 9.0, 9.0))
+    assert info["phase_training_snapshot_restored"] is True
+    assert raw.snapshot_restores == 1
+
+    hold_raw = FakeTransferEnv()
+    hold_wrapped = PlacementPhaseTrainingEnv(
+        hold_raw,
+        target_leg="front_right",
+        precursor_policies={"front_left": FixedPolicy()},
+        target_residual_mask=np.asarray((1.0, 0.0), dtype=np.float32),
+        compact_residual_action=True,
+        train_transfer=True,
+        transfer_post_hold_seconds=0.2,
+        train_post_transfer_hold_only=True,
+    )
+    hold_wrapped.reset(seed=13)
+    assert hold_wrapped.phase_snapshot_mode == "inter_leg_transfer"
+    _, reward, terminated, _, result = hold_wrapped.step(
+        np.asarray((-0.4,), dtype=np.float32)
+    )
+    assert result["phase_training_transfer_completed"] is True
+    assert result["phase_training_transfer_post_hold_completed"] is False
+    assert result["phase_training_transfer_post_hold_remaining_steps"] == 2
+    np.testing.assert_allclose(hold_raw.actions[1], (0.0, 0.0))
+    assert reward == pytest.approx(2.0)
+    assert terminated is False
+    _, _, terminated, _, result = hold_wrapped.step(
+        np.asarray((-0.3,), dtype=np.float32)
+    )
+    assert result["phase_training_transfer_post_hold_remaining_steps"] == 1
+    assert terminated is False
+    _, reward, terminated, _, result = hold_wrapped.step(
+        np.asarray((-0.2,), dtype=np.float32)
+    )
+    assert result["phase_training_transfer_post_hold_completed"] is True
+    assert result["phase_training_transfer_post_hold_remaining_steps"] == 0
+    assert reward == pytest.approx(102.0)
+    assert terminated is True
+    hold_stats = hold_wrapped.training_stats()
+    assert hold_stats["target_mode"] == "post_transfer_hold"
+    assert hold_stats["train_post_transfer_hold_only"] is True
+    assert hold_stats["transfer_post_hold_steps"] == 2
+    assert hold_stats["completed_target_transfers"] == 1
+    assert hold_stats["completed_target_transfer_holds"] == 1
+    assert hold_stats["phase_snapshot_mode"] == "post_transfer_hold"
+
+    observation, info = hold_wrapped.reset(seed=14)
+    np.testing.assert_allclose(observation, (9.0, 9.0, 9.0))
+    assert info["phase_training_snapshot_restored"] is True
+    assert hold_wrapped.transfer_post_hold_steps_remaining == 2
+
+
 def test_phase_training_ready_requires_every_earlier_leg() -> None:
     class RawState:
         placement_sequence_legs = ("front_left", "front_right")
@@ -2477,6 +2695,30 @@ def test_phase_training_ready_requires_every_earlier_leg() -> None:
             active_leg=state.placement_swing_leg,
             transfer_active=state.placement_transfer_active,
             target_leg="rear_left",
+        )
+
+
+def test_transfer_training_ready_requires_exact_prefix_and_active_transfer() -> None:
+    options = {
+        "sequence_legs": ("front_right", "front_left", "rear_right"),
+        "completed_legs": ("front_right", "front_left"),
+        "active_leg": "rear_right",
+        "transfer_active": True,
+        "target_leg": "rear_right",
+    }
+    assert placement_transfer_ready(**options) is True
+    assert placement_transfer_ready(
+        **{**options, "transfer_active": False}
+    ) is False
+    assert placement_transfer_ready(
+        **{**options, "completed_legs": ("front_left", "front_right")}
+    ) is False
+    assert placement_transfer_ready(
+        **{**options, "target_leg": "front_right"}
+    ) is False
+    with pytest.raises(ValueError, match="Unknown placement transfer target"):
+        placement_transfer_ready(
+            **{**options, "target_leg": "rear_left"}
         )
 
 
@@ -2520,6 +2762,17 @@ def test_compact_action_expands_onto_active_joint_mask() -> None:
         expand_compact_masked_action((0.25,), (1.0, 0.0, 1.0))
     with pytest.raises(ValueError, match="binary"):
         expand_compact_masked_action((0.25,), (0.5, 0.0))
+
+
+def test_masked_overlay_keeps_swing_action_and_replaces_support_action() -> None:
+    composed = overlay_masked_action(
+        (0.8, -0.6, 0.4, -0.2),
+        (-0.9, 0.7, -0.5, 0.3),
+        (0.0, 1.0, 0.0, 1.0),
+    )
+    np.testing.assert_allclose(composed, (0.8, 0.7, 0.4, 0.3))
+    with pytest.raises(ValueError, match="binary"):
+        overlay_masked_action((0.0,), (0.0,), (0.5,))
 
 
 def test_manifest_binds_all_composed_world_dependencies(

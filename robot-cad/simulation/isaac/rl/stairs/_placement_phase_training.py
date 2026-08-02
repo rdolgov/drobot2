@@ -11,6 +11,7 @@ from _policy_transfer import predict_with_observation_prefix
 from _stair_rl_contract import (
     compose_bounded_residual_action,
     placement_phase_ready,
+    placement_transfer_ready,
 )
 
 
@@ -26,12 +27,14 @@ class DeterministicPolicy(Protocol):
 
 
 class PlacementPhaseTrainingEnv(gym.Wrapper):
-    """Expose only one placement phase while deterministic policies replay its prefix.
+    """Expose one placement or transfer phase after deterministic prefix replay.
 
     The underlying episode remains physically continuous. ``reset`` advances the
     simulator through every earlier leg and inter-leg transfer, then returns the
-    first observation controlled by the trainable target-leg PPO. Prefix actions
-    and rewards are intentionally invisible to PPO.
+    first observation controlled by the trainable target-leg PPO. With
+    ``train_transfer`` enabled, PPO starts at the inter-leg transfer into the
+    target leg and the wrapper ends its episode when that transfer is accepted.
+    Prefix actions and rewards are intentionally invisible to PPO.
     """
 
     def __init__(
@@ -45,6 +48,9 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         target_residual_scale: float = 0.25,
         target_residual_mask: np.ndarray | None = None,
         compact_residual_action: bool = False,
+        train_transfer: bool = False,
+        transfer_post_hold_seconds: float = 0.0,
+        train_post_transfer_hold_only: bool = False,
         maximum_reset_attempts: int = 8,
         maximum_precursor_steps: int = 1800,
         cache_phase_snapshot: bool = True,
@@ -58,6 +64,46 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         self.raw_env = env.unwrapped
         self.raw_action_space = env.action_space
         self.target_leg = str(target_leg)
+        self.train_transfer = bool(train_transfer)
+        self.train_post_transfer_hold_only = bool(
+            train_post_transfer_hold_only
+        )
+        if self.train_post_transfer_hold_only and not self.train_transfer:
+            raise ValueError(
+                "train_post_transfer_hold_only requires train_transfer"
+            )
+        self.transfer_post_hold_seconds = float(transfer_post_hold_seconds)
+        if self.transfer_post_hold_seconds < 0.0:
+            raise ValueError("transfer_post_hold_seconds cannot be negative")
+        if self.transfer_post_hold_seconds > 0.0 and not self.train_transfer:
+            raise ValueError(
+                "transfer_post_hold_seconds requires train_transfer"
+            )
+        if (
+            self.train_post_transfer_hold_only
+            and self.transfer_post_hold_seconds <= 0.0
+        ):
+            raise ValueError(
+                "train_post_transfer_hold_only requires a positive hold"
+            )
+        self.transfer_post_hold_steps = int(
+            round(
+                self.transfer_post_hold_seconds
+                * float(getattr(self.raw_env, "control_hz", 0.0))
+            )
+        )
+        if self.transfer_post_hold_seconds > 0.0 and (
+            self.transfer_post_hold_steps < 1
+        ):
+            raise ValueError(
+                "transfer_post_hold_seconds is below one control step"
+            )
+        self.transfer_post_hold_steps_remaining = 0
+        self.target_mode = (
+            "post_transfer_hold"
+            if self.train_post_transfer_hold_only
+            else ("inter_leg_transfer" if self.train_transfer else "placement")
+        )
         sequence = tuple(self.raw_env.placement_sequence_legs)
         if self.target_leg not in sequence:
             raise ValueError(
@@ -126,6 +172,9 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         self.maximum_precursor_steps = int(maximum_precursor_steps)
         self.cache_phase_snapshot = bool(cache_phase_snapshot)
         self.phase_snapshot: object | None = None
+        self.phase_snapshot_mode = (
+            "inter_leg_transfer" if self.train_transfer else self.target_mode
+        )
         self.reset_calls = 0
         self.reset_attempts = 0
         self.failed_precursor_attempts = 0
@@ -155,8 +204,17 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         self.maximum_target_swing_actual_delta_rad: np.ndarray | None = None
         self.maximum_target_residual_action_abs = 0.0
         self.maximum_target_applied_action_abs = 0.0
+        self.completed_target_transfers = 0
+        self.completed_target_transfer_holds = 0
+        self.maximum_target_transfer_balance_error_m = 0.0
+        self.maximum_target_transfer_body_rate_rad_s = 0.0
+        self.minimum_target_transfer_swing_load_n = float("inf")
 
-    def _capture_phase_snapshot(self) -> None:
+    def _capture_phase_snapshot(
+        self,
+        *,
+        post_transfer_hold: bool = False,
+    ) -> None:
         if not self.cache_phase_snapshot:
             return
         capture = getattr(
@@ -166,6 +224,12 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         )
         if callable(capture):
             self.phase_snapshot = capture()
+            if post_transfer_hold:
+                self.phase_snapshot_mode = "post_transfer_hold"
+            elif self.train_transfer:
+                self.phase_snapshot_mode = "inter_leg_transfer"
+            else:
+                self.phase_snapshot_mode = self.target_mode
 
     def _restore_phase_snapshot(
         self,
@@ -193,6 +257,10 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             self.failed_cached_phase_restores += 1
             self.phase_snapshot = None
             return None
+        if self.phase_snapshot_mode == "post_transfer_hold":
+            self.transfer_post_hold_steps_remaining = (
+                self.transfer_post_hold_steps
+            )
         if not self._target_phase_ready():
             self.failed_cached_phase_restores += 1
             self.phase_snapshot = None
@@ -212,7 +280,10 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         )
 
     def _target_phase_ready(self) -> bool:
-        return placement_phase_ready(
+        readiness = placement_phase_ready
+        if self.train_transfer and self.transfer_post_hold_steps_remaining <= 0:
+            readiness = placement_transfer_ready
+        return readiness(
             sequence_legs=self.raw_env.placement_sequence_legs,
             completed_legs=self.raw_env.completed_placement_legs,
             active_leg=self.raw_env.placement_swing_leg,
@@ -253,6 +324,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             **dict(info),
             "phase_training_ready": True,
             "phase_training_target_leg": self.target_leg,
+            "phase_training_target_mode": self.target_mode,
             "phase_training_reset_attempt": int(attempt),
             "phase_training_precursor_steps": int(precursor_steps),
             "phase_training_snapshot_restored": bool(snapshot_restored),
@@ -265,6 +337,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         options: dict[str, Any] | None = None,
     ) -> tuple[np.ndarray, dict[str, Any]]:
         self.reset_calls += 1
+        self.transfer_post_hold_steps_remaining = 0
         restored = self._restore_phase_snapshot(seed=seed, options=options)
         if restored is not None:
             return restored
@@ -322,7 +395,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             )
 
         raise RuntimeError(
-            "Could not reach placement training phase "
+            f"Could not reach {self.target_mode} training phase "
             f"{self.target_leg!r} after {self.maximum_reset_attempts} attempts; "
             f"last failures={self.last_precursor_failure_reasons}"
         )
@@ -333,7 +406,8 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
     ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         if not self._target_phase_ready():
             raise RuntimeError(
-                f"PPO action requested outside target phase {self.target_leg!r}"
+                "PPO action requested outside target "
+                f"{self.target_mode} {self.target_leg!r}"
             )
         policy_action = np.asarray(action, dtype=np.float32)
         if policy_action.shape != self.action_space.shape:
@@ -373,11 +447,58 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 self.raw_action_space.low,
                 self.raw_action_space.high,
             ).astype(np.float32)
+        if (
+            self.train_post_transfer_hold_only
+            and self.raw_env.placement_transfer_active
+        ):
+            applied_action = np.zeros(
+                self.raw_action_space.shape,
+                dtype=np.float32,
+            )
         observation, reward, terminated, truncated, info = self.env.step(
             applied_action
         )
         self.latest_observation = np.asarray(observation, dtype=np.float32).copy()
         result_info = dict(info)
+        transfer_completed = bool(
+            self.train_transfer
+            and result_info.get("placement_transfer_completed_event")
+            and not self.raw_env.placement_transfer_active
+            and self.raw_env.placement_swing_leg == self.target_leg
+        )
+        transfer_hold_completed = False
+        if transfer_completed:
+            self.completed_target_transfers += 1
+            self.transfer_post_hold_steps_remaining = (
+                self.transfer_post_hold_steps
+            )
+            if self.transfer_post_hold_steps > 0:
+                self._capture_phase_snapshot(post_transfer_hold=True)
+            terminated = bool(self.transfer_post_hold_steps == 0)
+        elif self.train_transfer and self.transfer_post_hold_steps_remaining > 0:
+            self.transfer_post_hold_steps_remaining -= 1
+            transfer_hold_completed = bool(
+                self.transfer_post_hold_steps_remaining == 0
+                and not terminated
+                and not truncated
+            )
+            if transfer_hold_completed:
+                self.completed_target_transfer_holds += 1
+                terminated = True
+        if transfer_completed and self.transfer_post_hold_steps == 0:
+            transfer_hold_completed = True
+            self.completed_target_transfer_holds += 1
+        if transfer_hold_completed:
+            reward = float(reward) + float(
+                getattr(self.raw_env, "reward_config", {}).get("success", 0.0)
+            )
+        result_info["phase_training_transfer_completed"] = transfer_completed
+        result_info["phase_training_transfer_post_hold_completed"] = (
+            transfer_hold_completed
+        )
+        result_info["phase_training_transfer_post_hold_remaining_steps"] = (
+            self.transfer_post_hold_steps_remaining
+        )
         self.target_steps += 1
         lift_by_leg = dict(result_info.get("maximum_foot_lift_m_by_leg", {}))
         self.maximum_target_swing_lift_m = max(
@@ -417,6 +538,27 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             self.maximum_target_desired_lift_m,
             float(result_info.get("placement_desired_lift_m", 0.0)),
         )
+        self.maximum_target_transfer_balance_error_m = max(
+            self.maximum_target_transfer_balance_error_m,
+            float(
+                result_info.get(
+                    "placement_transfer_base_target_error_m",
+                    0.0,
+                )
+            ),
+        )
+        self.maximum_target_transfer_body_rate_rad_s = max(
+            self.maximum_target_transfer_body_rate_rad_s,
+            float(result_info.get("placement_transfer_body_rate_rad_s", 0.0)),
+        )
+        transfer_swing_load = result_info.get(
+            "placement_transfer_swing_total_load_n"
+        )
+        if transfer_swing_load is not None:
+            self.minimum_target_transfer_swing_load_n = min(
+                self.minimum_target_transfer_swing_load_n,
+                float(transfer_swing_load),
+            )
         swing_reference_value = result_info.get(
             "placement_swing_reference_joint_positions_rad"
         )
@@ -505,6 +647,10 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
 
         return {
             "target_leg": self.target_leg,
+            "target_mode": self.target_mode,
+            "train_post_transfer_hold_only": (
+                self.train_post_transfer_hold_only
+            ),
             "required_precursor_legs": list(self.required_precursor_legs),
             "target_action_mode": (
                 "frozen_base_plus_bounded_ppo_residual"
@@ -532,6 +678,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             "maximum_precursor_steps": self.maximum_precursor_steps,
             "phase_snapshot_cache_enabled": self.cache_phase_snapshot,
             "phase_snapshot_cached": self.phase_snapshot is not None,
+            "phase_snapshot_mode": self.phase_snapshot_mode,
             "cached_phase_restores": self.cached_phase_restores,
             "failed_cached_phase_restores": (
                 self.failed_cached_phase_restores
@@ -601,5 +748,22 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             ),
             "maximum_target_applied_action_abs": (
                 self.maximum_target_applied_action_abs
+            ),
+            "completed_target_transfers": self.completed_target_transfers,
+            "transfer_post_hold_seconds": self.transfer_post_hold_seconds,
+            "transfer_post_hold_steps": self.transfer_post_hold_steps,
+            "completed_target_transfer_holds": (
+                self.completed_target_transfer_holds
+            ),
+            "maximum_target_transfer_balance_error_m": (
+                self.maximum_target_transfer_balance_error_m
+            ),
+            "maximum_target_transfer_body_rate_rad_s": (
+                self.maximum_target_transfer_body_rate_rad_s
+            ),
+            "minimum_target_transfer_swing_load_n": (
+                None
+                if not np.isfinite(self.minimum_target_transfer_swing_load_n)
+                else self.minimum_target_transfer_swing_load_n
             ),
         }
