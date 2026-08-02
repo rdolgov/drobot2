@@ -36,6 +36,7 @@ from _run_support import (  # noqa: E402
 from _stair_rl_contract import (  # noqa: E402
     compose_bounded_residual_action,
     config_for_height_stage,
+    expand_compact_masked_action,
     placement_policy_action_mask,
 )
 
@@ -147,6 +148,13 @@ parser.add_argument(
     default=[],
     metavar="LEG",
     help="Apply a mapped policy to the swing leg and support hip abduction.",
+)
+parser.add_argument(
+    "--leg-compact-action",
+    action="append",
+    default=[],
+    metavar="LEG",
+    help="Expand a mapped policy's compact outputs onto its residual mask.",
 )
 parser.add_argument(
     "--zero-action-leg",
@@ -263,6 +271,9 @@ leg_residual_swing_support_abduction = set(
 zero_action_legs = set(args.zero_action_leg)
 if len(zero_action_legs) != len(args.zero_action_leg):
     parser.error("duplicate --zero-action-leg leg")
+leg_compact_actions = set(args.leg_compact_action)
+if len(leg_compact_actions) != len(args.leg_compact_action):
+    parser.error("duplicate --leg-compact-action leg")
 if len(leg_residual_support_abduction_only) != len(
     args.leg_residual_support_abduction_only
 ):
@@ -287,12 +298,16 @@ if not leg_residual_support_abduction_only.issubset(leg_model_paths):
     parser.error("support-abduction action masks require --leg-model")
 if not leg_residual_swing_support_abduction.issubset(leg_model_paths):
     parser.error("swing/support-abduction action masks require --leg-model")
+if not leg_compact_actions.issubset(leg_model_paths):
+    parser.error("compact action expansion requires --leg-model")
 mask_sets = (
     leg_residual_support_only,
     leg_residual_swing_only,
     leg_residual_support_abduction_only,
     leg_residual_swing_support_abduction,
 )
+if not leg_compact_actions.issubset(set().union(*mask_sets)):
+    parser.error("compact action expansion requires a residual joint mask")
 if any(left & right for index, left in enumerate(mask_sets) for right in mask_sets[index + 1 :]):
     parser.error("leg residual joint masks are mutually exclusive")
 report_path = (
@@ -407,6 +422,7 @@ report: dict[str, object] = {
         leg_residual_swing_support_abduction
     ),
     "zero_action_legs": sorted(zero_action_legs),
+    "leg_compact_actions": sorted(leg_compact_actions),
     "world": str(world_path),
     "episodes_requested": args.episodes,
     "seed": args.seed,
@@ -489,7 +505,26 @@ try:
                 f"Per-leg model hash mismatch for {leg}: {path}"
             )
         leg_model = PPO.load(str(path), device=args.device)
-        if tuple(leg_model.action_space.shape) != tuple(raw_env.action_space.shape):
+        if leg in leg_residual_swing_support_abduction:
+            compact_mode = "swing_plus_support_abduction"
+        elif leg in leg_residual_swing_only:
+            compact_mode = "swing_only"
+        elif leg in leg_residual_support_abduction_only:
+            compact_mode = "support_abduction_only"
+        else:
+            compact_mode = "support_only"
+        expected_action_size = raw_env.action_space.shape[0]
+        if leg in leg_compact_actions:
+            expected_action_size = int(
+                np.count_nonzero(
+                    placement_policy_action_mask(
+                        raw_env.dof_names,
+                        target_leg=leg,
+                        mode=compact_mode,
+                    )
+                )
+            )
+        if tuple(leg_model.action_space.shape) != (expected_action_size,):
             raise RuntimeError(
                 f"Per-leg action space does not match the sequence for {leg}"
             )
@@ -589,6 +624,12 @@ try:
                     target_leg=active_leg,
                     mode="support_only",
                 )
+            if active_leg in leg_compact_actions:
+                if residual_mask is None:
+                    raise RuntimeError(
+                        f"Compact action for {active_leg} has no residual mask"
+                    )
+                action = expand_compact_masked_action(action, residual_mask)
             base_model = leg_base_models.get(active_leg)
             if base_model is not None:
                 base_action, _ = predict_with_observation_prefix(

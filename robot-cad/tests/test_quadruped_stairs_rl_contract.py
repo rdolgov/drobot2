@@ -2177,6 +2177,26 @@ def test_phase_training_replays_verified_prefix_before_exposing_target() -> None
         "target_residual_active_action_indices"
     ] == [0]
 
+    compact_raw = FakePlacementEnv()
+    compact = PlacementPhaseTrainingEnv(
+        compact_raw,
+        target_leg="front_right",
+        precursor_policies={"front_left": FixedPolicy()},
+        target_residual_mask=np.asarray((1.0, 0.0), dtype=np.float32),
+        compact_residual_action=True,
+    )
+    assert compact.action_space.shape == (1,)
+    assert compact.raw_action_space.shape == (2,)
+    compact.reset(seed=10)
+    compact.step(np.asarray((-0.75,), dtype=np.float32))
+    np.testing.assert_allclose(compact_raw.actions[2], (-0.75, 0.0))
+    compact_stats = compact.training_stats()
+    assert compact_stats["compact_residual_action"] is True
+    assert compact_stats["policy_action_size"] == 1
+    assert compact_stats["raw_action_size"] == 2
+    with pytest.raises(ValueError, match="action shape"):
+        compact.step(np.asarray((-0.75, 0.0), dtype=np.float32))
+
 
 def test_phase_training_ready_requires_every_earlier_leg() -> None:
     class RawState:
@@ -2238,6 +2258,20 @@ def test_bounded_residual_action_preserves_base_and_clips_correction() -> None:
             residual_scale=0.25,
             residual_mask=(1.0, 0.0),
         )
+
+
+def test_compact_action_expands_onto_active_joint_mask() -> None:
+    from _stair_rl_contract import expand_compact_masked_action
+
+    expanded = expand_compact_masked_action(
+        (0.25, -0.50, 0.75),
+        (1.0, 0.0, 1.0, 0.0, 0.0, 1.0),
+    )
+    np.testing.assert_allclose(expanded, (0.25, 0.0, -0.50, 0.0, 0.0, 0.75))
+    with pytest.raises(ValueError, match="size"):
+        expand_compact_masked_action((0.25,), (1.0, 0.0, 1.0))
+    with pytest.raises(ValueError, match="binary"):
+        expand_compact_masked_action((0.25,), (0.5, 0.0))
 
 
 def test_manifest_binds_all_composed_world_dependencies(

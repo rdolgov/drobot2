@@ -44,6 +44,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         target_base_mask: np.ndarray | None = None,
         target_residual_scale: float = 0.25,
         target_residual_mask: np.ndarray | None = None,
+        compact_residual_action: bool = False,
         maximum_reset_attempts: int = 8,
         maximum_precursor_steps: int = 1800,
         cache_phase_snapshot: bool = True,
@@ -55,6 +56,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             raise ValueError("maximum_precursor_steps must be positive")
 
         self.raw_env = env.unwrapped
+        self.raw_action_space = env.action_space
         self.target_leg = str(target_leg)
         sequence = tuple(self.raw_env.placement_sequence_legs)
         if self.target_leg not in sequence:
@@ -77,7 +79,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         )
         if self.target_base_mask is not None and (
             self.target_base_policy is None
-            or self.target_base_mask.shape != self.action_space.shape
+            or self.target_base_mask.shape != self.raw_action_space.shape
             or np.any(self.target_base_mask < 0.0)
             or np.any(self.target_base_mask > 1.0)
         ):
@@ -96,11 +98,29 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             else np.asarray(target_residual_mask, dtype=np.float32).copy()
         )
         if self.target_residual_mask is not None and (
-            self.target_residual_mask.shape != self.action_space.shape
+            self.target_residual_mask.shape != self.raw_action_space.shape
             or np.any(self.target_residual_mask < 0.0)
             or np.any(self.target_residual_mask > 1.0)
         ):
             raise ValueError("target_residual_mask must match the action space")
+        self.compact_residual_action = bool(compact_residual_action)
+        if self.compact_residual_action and self.target_residual_mask is None:
+            raise ValueError(
+                "compact_residual_action requires target_residual_mask"
+            )
+        self.compact_action_indices = (
+            np.flatnonzero(self.target_residual_mask).astype(np.int64)
+            if self.compact_residual_action
+            else np.arange(self.raw_action_space.shape[0], dtype=np.int64)
+        )
+        if self.compact_residual_action and not self.compact_action_indices.size:
+            raise ValueError("compact_residual_action requires an active joint")
+        if self.compact_residual_action:
+            self.action_space = gym.spaces.Box(
+                low=np.asarray(self.raw_action_space.low)[self.compact_action_indices],
+                high=np.asarray(self.raw_action_space.high)[self.compact_action_indices],
+                dtype=np.float32,
+            )
 
         self.maximum_reset_attempts = int(maximum_reset_attempts)
         self.maximum_precursor_steps = int(maximum_precursor_steps)
@@ -202,7 +222,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
 
     def _predict_precursor_action(self, observation: np.ndarray) -> np.ndarray:
         if self.raw_env.placement_transfer_active:
-            return np.zeros(self.action_space.shape, dtype=np.float32)
+            return np.zeros(self.raw_action_space.shape, dtype=np.float32)
         active_leg = str(self.raw_env.placement_swing_leg)
         if active_leg == self.target_leg:
             raise RuntimeError(
@@ -315,7 +335,19 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             raise RuntimeError(
                 f"PPO action requested outside target phase {self.target_leg!r}"
             )
-        residual_action = np.asarray(action, dtype=np.float32)
+        policy_action = np.asarray(action, dtype=np.float32)
+        if policy_action.shape != self.action_space.shape:
+            raise ValueError(
+                "phase PPO action shape differs from the exposed action space: "
+                f"{policy_action.shape} != {self.action_space.shape}"
+            )
+        residual_action = policy_action
+        if self.compact_residual_action:
+            residual_action = np.zeros(
+                self.raw_action_space.shape,
+                dtype=np.float32,
+            )
+            residual_action[self.compact_action_indices] = policy_action
         applied_action = residual_action
         base_action: np.ndarray | None = None
         if self.target_base_policy is not None:
@@ -338,8 +370,8 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         elif self.target_residual_mask is not None:
             applied_action = np.clip(
                 residual_action * self.target_residual_mask,
-                self.action_space.low,
-                self.action_space.high,
+                self.raw_action_space.low,
+                self.raw_action_space.high,
             ).astype(np.float32)
         observation, reward, terminated, truncated, info = self.env.step(
             applied_action
@@ -453,7 +485,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             else None
         )
         result_info["phase_training_residual_action_max_abs"] = float(
-            np.max(np.abs(residual_action))
+            np.max(np.abs(policy_action))
         )
         result_info["phase_training_applied_action_max_abs"] = float(
             np.max(np.abs(applied_action))
@@ -493,6 +525,9 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 if self.target_residual_mask is not None
                 else None
             ),
+            "compact_residual_action": self.compact_residual_action,
+            "policy_action_size": int(self.action_space.shape[0]),
+            "raw_action_size": int(self.raw_action_space.shape[0]),
             "maximum_reset_attempts": self.maximum_reset_attempts,
             "maximum_precursor_steps": self.maximum_precursor_steps,
             "phase_snapshot_cache_enabled": self.cache_phase_snapshot,

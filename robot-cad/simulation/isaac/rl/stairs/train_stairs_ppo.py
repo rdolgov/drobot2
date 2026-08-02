@@ -202,6 +202,14 @@ parser.add_argument(
         "the support legs."
     ),
 )
+parser.add_argument(
+    "--phase-compact-residual-action",
+    action="store_true",
+    help=(
+        "Expose only the active residual-mask joints to PPO, then expand the "
+        "compact action into the robot's 12-joint command."
+    ),
+)
 parser.add_argument("--phase-reset-attempts", type=int, default=8)
 parser.add_argument("--phase-precursor-max-steps", type=int, default=1800)
 parser.add_argument(
@@ -280,6 +288,10 @@ if sum(phase_mask_flags) > 1:
     parser.error("phase residual joint masks are mutually exclusive")
 if any(phase_mask_flags) and not args.phase_train_leg:
     parser.error("phase residual joint masks require --phase-train-leg")
+if args.phase_compact_residual_action and not args.phase_residual_swing_only:
+    parser.error(
+        "--phase-compact-residual-action requires --phase-residual-swing-only"
+    )
 config_path = _resolve_project_path(args.config)
 with config_path.open("r", encoding="utf-8") as stream:
     config = yaml.safe_load(stream)
@@ -402,7 +414,12 @@ algorithm_contract = expected_ppo_algorithm_contract(
     batch_size=batch_size,
     epochs=epochs,
     observation_size=policy_observation_size,
-    action_size=12,
+    action_size=(
+        3
+        if args.phase_compact_residual_action
+        and args.phase_residual_swing_only
+        else 12
+    ),
 )
 
 from isaacsim import SimulationApp  # noqa: E402
@@ -816,6 +833,7 @@ report: dict[str, object] = {
     "phase_residual_swing_support_abduction": (
         args.phase_residual_swing_support_abduction
     ),
+    "phase_compact_residual_action": args.phase_compact_residual_action,
     "phase_snapshot_cache_enabled": not args.phase_disable_snapshot_cache,
     "terrain_perception_mode": terrain_perception_mode,
     "terrain_perception": terrain_perception_config,
@@ -963,6 +981,7 @@ try:
             target_base_mask=target_base_mask,
             target_residual_scale=args.phase_residual_scale,
             target_residual_mask=target_residual_mask,
+            compact_residual_action=args.phase_compact_residual_action,
             maximum_reset_attempts=args.phase_reset_attempts,
             maximum_precursor_steps=args.phase_precursor_max_steps,
             cache_phase_snapshot=not args.phase_disable_snapshot_cache,

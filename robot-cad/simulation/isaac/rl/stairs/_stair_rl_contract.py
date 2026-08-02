@@ -846,6 +846,31 @@ def compose_bounded_residual_action(
     return np.clip(base + scale * mask * residual, -1.0, 1.0).astype(np.float32)
 
 
+def expand_compact_masked_action(
+    compact_action: Sequence[float],
+    action_mask: Sequence[float],
+) -> np.ndarray:
+    """Expand a policy action onto the active entries of a full joint mask."""
+
+    compact = np.asarray(compact_action, dtype=np.float32)
+    mask = np.asarray(action_mask, dtype=np.float32)
+    if compact.ndim != 1 or mask.ndim != 1:
+        raise ValueError("compact action and action_mask must be vectors")
+    if not np.all(np.isfinite(compact)) or not np.all(np.isfinite(mask)):
+        raise ValueError("compact action and action_mask must be finite")
+    if np.any((mask != 0.0) & (mask != 1.0)):
+        raise ValueError("action_mask must be binary")
+    active_indices = np.flatnonzero(mask)
+    if compact.shape != active_indices.shape:
+        raise ValueError(
+            "compact action size must match the active action_mask entries: "
+            f"{compact.shape} != {active_indices.shape}"
+        )
+    expanded = np.zeros(mask.shape, dtype=np.float32)
+    expanded[active_indices] = compact
+    return expanded
+
+
 def placement_policy_action_mask(
     dof_names: Sequence[str],
     *,
