@@ -311,10 +311,10 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/stairs/search_rear_right_landing.py` | Restores one verified rear-right handoff snapshot and searches geometry, per-front-foot support reach, swing actions, pitch feedback, touchdown, and staged body-shift variants without relaxing the 190 mm/margin/effort gates | V39-V44 configs and verified composed policies | ranked local JSON reports and optional success-gated phase video/thumbnail |
 | `simulation/isaac/rl/stairs/search_rear_left_transfer_support_actions.py` | Restores the exact V45 rear-left transfer boundary, audits constant support-hip authority or deterministically evaluates a 12-action PPO, and optionally records an external-camera failure clip | V45 config, phase snapshot, and optional PPO model | ranked JSON authority/evaluation report and optional MP4/PNG |
 | `simulation/isaac/rl/stairs/search_rear_left_transfer_com.py` | Replays the accepted V44 three-foot prefix and searches the next rear-left transfer COM deltas from one cached boundary state | V45 config and verified V10/V17/V35/V44 policies | ranked local JSON report |
-| `simulation/isaac/rl/stairs/search_rear_right_post_landing_sidestep.py` | Restores the exact accepted landing, re-lifts rear-right from the tread, searches bounded outward/forward replacements, and saves an accepted next-phase snapshot | V46 config and exact V45 landing snapshot | ranked sidestep report and rear-left transfer snapshot |
-| `simulation/isaac/rl/stairs/search_rear_left_progressive_preload.py` | Restores the exact V46 boundary, searches small four-foot COM/load-sharing increments, re-anchors accepted measured states, and refuses rear-left unload until positive support margin is reached | V46 config and exact rear-left transfer snapshot | ranked V47 preload reports and progress snapshots |
-| `simulation/isaac/rl/stairs/PROGRESSIVE_PRELOAD_SEARCH.md` | Records the V47 controller contract, exact commands, strict and experimental results, force/slip evidence, and the reason another PPO run is gated | V46 snapshot and V47 search reports | reproducible preload diagnosis |
-| `simulation/isaac/rl/stairs/REAR_RIGHT_LANDING_SEARCH.md` | Records V39-V46 inputs, exact small-run commands, measured rejects, accepted V44 landing/V46 sidestep evidence, transfer failures, assumptions, and next gate | training/evaluation/search reports | reproducible landing and transfer diagnosis |
+| `simulation/isaac/rl/stairs/search_rear_right_post_landing_sidestep.py` | Restores the exact accepted landing, re-lifts rear-right from the tread, searches bounded outward/forward replacements, and can require a separate final force-backed load before saving the next-phase snapshot | V46 config and exact V45 landing snapshot | ranked sidestep or force-backed-foothold report and rear-left transfer snapshot |
+| `simulation/isaac/rl/stairs/search_rear_left_progressive_preload.py` | Restores an exact rear-left-transfer boundary, searches small four-foot COM/load/attitude increments, measures actual composite-COM progress so slip cannot masquerade as transfer, and supports bounded traction sensitivity | V46/V48 config and exact transfer snapshot | ranked V47-V49 preload reports and progress snapshots |
+| `simulation/isaac/rl/stairs/PROGRESSIVE_PRELOAD_SEARCH.md` | Records the V47-V49 controller contract, exact commands, force-backed foothold, attitude and traction sensitivities, slip-proof progress gate, and the reason another PPO run is gated | exact V46/V48 snapshots and search reports | reproducible preload diagnosis |
+| `simulation/isaac/rl/stairs/REAR_RIGHT_LANDING_SEARCH.md` | Records V39-V48 inputs, exact small-run commands, measured rejects, accepted V44 landing/V46 sidestep/V48 force-backed settle evidence, transfer failures, assumptions, and next gate | training/evaluation/search reports | reproducible landing and transfer diagnosis |
 | `simulation/isaac/rl/stairs/validate_vl53l5cx_stairs.py` | Verifies live 64-ray PhysX hits, 15 Hz cadence, latency, held observations, and writes an 8 x 8 review heatmap | v7 config and stair world | sensor validation JSON and PNG |
 | `simulation/isaac/rl/stairs/distill_successful_stairs.py` | Collects physically successful stochastic rollouts and behavior-clones their residual actions into the actor mean | v5 world, model, manifest | distilled model, rebound manifest, and collection report |
 | `simulation/isaac/rl/stairs/evaluate_stairs_ppo.py` | Runs deterministic stair episodes at a pinned curriculum level, verifies model hashes, and can compose a full base, compact frozen swing residual, and mapped support residual per leg | stair YAML/world, primary/per-leg models, manifests | evaluation JSON and optional PNG |
@@ -894,6 +894,22 @@ widens the support polygon before rear-left unloading. The policy remains
 camera-blind: the external camera only records review video, while inference
 uses IMU/proprioception, joint, contact/load, COM/support, phase, previous
 action, and known fixed-stair geometry.
+
+V46-V49 then tested that prerequisite without changing the hardware-informed
+contract. The original V46 outward replacement moved rear-right `9.215 mm` but
+retained only `2.301 N`. V48 instead found a `33.739 N` force-backed settle at
+`11.457 deg`, although the foot moved `5.203 mm` inward and the future
+rear-left support margin remained `-94.730 mm`. A nominal `5 mm` forward /
+`5 mm` lateral preload from that stronger contact appeared to gain about
+`14 mm` margin, but actual composite-COM progress was below `0.4 mm`, rear-
+right load fell to `0 N`, and the feet slipped about `15 mm`. The V49 search
+now requires measured COM progress and reports continuous rear-right load.
+Even a deliberately high `1.8/1.5` static/dynamic friction sensitivity with
+`max` combine produced only `0.312 mm` useful COM progress and lost the same
+contact. The next intervention is therefore calibrated wide/compliant rubber
+foot geometry plus active normal-force retention, not RGB/depth vision or a
+larger PPO budget. Exact commands and hashes are in
+[`simulation/isaac/rl/stairs/PROGRESSIVE_PRELOAD_SEARCH.md`](rl/stairs/PROGRESSIVE_PRELOAD_SEARCH.md).
 
 The accepted model, exact config, fresh evaluation, search evidence, recording
 report, and limitations are packaged under

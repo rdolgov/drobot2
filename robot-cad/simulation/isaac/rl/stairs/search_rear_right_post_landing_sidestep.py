@@ -96,6 +96,20 @@ parser.add_argument(
     help="Optional comma-separated tread-depth corrections.",
 )
 parser.add_argument(
+    "--minimum-physical-outward-displacement-m",
+    type=float,
+    default=None,
+    help=(
+        "Optional acceptance override; a small negative value permits a "
+        "force-backed inward settle instead of requiring a sidestep."
+    ),
+)
+parser.add_argument(
+    "--minimum-rear-right-tread-load-n",
+    type=float,
+    default=None,
+)
+parser.add_argument(
     "--report",
     default=(
         "simulation/isaac/output/rl/"
@@ -121,6 +135,14 @@ with config_path.open("r", encoding="utf-8") as stream:
 task_config = dict(config["task"])
 reposition_config = dict(task_config["placement_reference"]["post_landing_reposition"])
 acceptance = dict(reposition_config["acceptance"])
+if args.minimum_physical_outward_displacement_m is not None:
+    acceptance["minimum_physical_outward_displacement_m"] = (
+        args.minimum_physical_outward_displacement_m
+    )
+if args.minimum_rear_right_tread_load_n is not None:
+    acceptance["minimum_rear_right_tread_load_n"] = (
+        args.minimum_rear_right_tread_load_n
+    )
 outward_offsets_m = (
     comma_floats(args.outward_offsets_m)
     if args.outward_offsets_m
@@ -142,6 +164,14 @@ if any(value <= 0.0 or value > 0.10 for value in relative_apex_lifts_m):
     parser.error("relative apex lifts must be within (0, 0.10] m")
 if any(value < 0.0 or value > 0.05 for value in forward_offsets_m):
     parser.error("forward offsets must be within [0, 0.05] m")
+if not -0.05 <= float(
+    acceptance["minimum_physical_outward_displacement_m"]
+) <= 0.15:
+    parser.error(
+        "minimum physical outward displacement must be within [-0.05, 0.15] m"
+    )
+if not 1.0 <= float(acceptance["minimum_rear_right_tread_load_n"]) <= 50.0:
+    parser.error("minimum rear-right tread load must be within [1, 50] N")
 
 with phase_snapshot_path.open("r", encoding="utf-8") as stream:
     snapshot_wrapper = json.load(stream)
@@ -157,6 +187,14 @@ actual_contract = {
     "stair_tread_depth_m": float(task_config["staircase"]["tread_depth_m"]),
     "effort_cap_nm": float(task_config["robot_hardware_profile"]["effort_cap_nm"]),
 }
+force_backed_settle = (
+    args.minimum_physical_outward_displacement_m is not None
+    or args.minimum_rear_right_tread_load_n is not None
+)
+if force_backed_settle:
+    task_config["id"] = (
+        "Drobot-Quadruped-Stairs-v48-Force-Backed-Rear-Right-Foothold"
+    )
 for key, expected in expected_contract.items():
     if not math.isclose(actual_contract[key], expected, rel_tol=0.0, abs_tol=1e-9):
         parser.error(f"{key} changed: {actual_contract[key]} != {expected}")
@@ -188,6 +226,11 @@ report: dict[str, object] = {
     "status": "FAIL",
     "task_id": task_config["id"],
     "source_task_id": snapshot_wrapper.get("source_task_id"),
+    "scope": (
+        "Exact-snapshot force-backed rear-right foothold settle"
+        if force_backed_settle
+        else "Exact-snapshot rear-right post-landing sidestep"
+    ),
     "config": str(config_path),
     "world": str(world_path),
     "phase_snapshot": str(phase_snapshot_path),
@@ -250,12 +293,14 @@ try:
     raw_env.inter_leg_transfer_config.setdefault(
         "post_clearance_swing_base_delta_end_scale_by_leg", {}
     )["rear_right"] = {"forward": 1.0, "lateral": 1.0, "vertical": 1.0}
-    # Make the state-machine completion threshold match the acceptance load.
-    # This prevents capturing a nominally completed landing during the low
-    # side of a 1-5 N contact oscillation.
+    # Keep snapshot restore compatible with the source boundary while still
+    # rejecting the low side of a 1-5 N contact oscillation.  A stronger final
+    # foothold requirement remains an independent acceptance gate below; using
+    # it as the global contact threshold would also require every source
+    # support foot to carry that load before the candidate can even start.
     raw_env.placement_reference_config["contact_on_threshold_n"] = max(
         float(raw_env.placement_reference_config["contact_on_threshold_n"]),
-        float(acceptance["minimum_rear_right_tread_load_n"]),
+        min(float(acceptance["minimum_rear_right_tread_load_n"]), 2.0),
     )
 
     candidates: list[dict[str, object]] = []

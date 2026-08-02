@@ -1456,6 +1456,7 @@ def support_pitch_vertical_corrections(
     projected_gravity_x: float,
     proportional_gain_m: float,
     maximum_correction_m: float,
+    target_projected_gravity_x: float = 0.0,
 ) -> dict[str, float]:
     """Level sagittal attitude by differentially extending stance legs.
 
@@ -1465,11 +1466,16 @@ def support_pitch_vertical_corrections(
     """
 
     gravity_x = float(projected_gravity_x)
+    target_x = float(target_projected_gravity_x)
     gain = float(proportional_gain_m)
     maximum = float(maximum_correction_m)
     legs = tuple(str(leg) for leg in support_legs)
     if not np.isfinite(gravity_x):
         raise ValueError("projected_gravity_x must be finite")
+    if not np.isfinite(target_x) or abs(target_x) > 1.0:
+        raise ValueError(
+            "target_projected_gravity_x must be finite and within [-1, 1]"
+        )
     if not np.isfinite(gain) or gain <= 0.0:
         raise ValueError("proportional_gain_m must be finite and positive")
     if not np.isfinite(maximum) or maximum <= 0.0:
@@ -1477,9 +1483,55 @@ def support_pitch_vertical_corrections(
     if not legs or any(leg not in STAIR_FOOT_NAMES for leg in legs):
         raise ValueError("support_legs must contain known robot legs")
 
-    correction = float(np.clip(gain * gravity_x, -maximum, maximum))
+    correction = float(
+        np.clip(gain * (gravity_x - target_x), -maximum, maximum)
+    )
     return {
         leg: correction if leg.startswith("front_") else -correction
+        for leg in legs
+    }
+
+
+def support_roll_vertical_corrections(
+    *,
+    support_legs: Sequence[str],
+    projected_gravity_y: float,
+    target_projected_gravity_y: float,
+    proportional_gain_m: float,
+    maximum_correction_m: float,
+) -> dict[str, float]:
+    """Hold frontal attitude by differentially extending left/right legs.
+
+    Positive projected gravity Y corresponds to the left side of this robot
+    sitting lower.  Extending the left stance legs and shortening the right
+    stance legs creates the restoring roll moment.  A nonzero target lets a
+    mixed-height transfer preserve its measured stable entry attitude instead
+    of introducing a load-changing level-command discontinuity.
+    """
+
+    gravity_y = float(projected_gravity_y)
+    target_y = float(target_projected_gravity_y)
+    gain = float(proportional_gain_m)
+    maximum = float(maximum_correction_m)
+    legs = tuple(str(leg) for leg in support_legs)
+    if not np.isfinite(gravity_y):
+        raise ValueError("projected_gravity_y must be finite")
+    if not np.isfinite(target_y) or abs(target_y) > 1.0:
+        raise ValueError(
+            "target_projected_gravity_y must be finite and within [-1, 1]"
+        )
+    if not np.isfinite(gain) or gain <= 0.0:
+        raise ValueError("proportional_gain_m must be finite and positive")
+    if not np.isfinite(maximum) or maximum <= 0.0:
+        raise ValueError("maximum_correction_m must be finite and positive")
+    if not legs or any(leg not in STAIR_FOOT_NAMES for leg in legs):
+        raise ValueError("support_legs must contain known robot legs")
+
+    correction = float(
+        np.clip(gain * (gravity_y - target_y), -maximum, maximum)
+    )
+    return {
+        leg: correction if leg.endswith("_left") else -correction
         for leg in legs
     }
 

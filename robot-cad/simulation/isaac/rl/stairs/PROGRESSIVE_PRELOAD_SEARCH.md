@@ -116,3 +116,75 @@ blocker. The next experiment should improve the force-backed rear-right
 foothold and mixed-height stance—more normal load, deeper tread placement,
 and measured foot friction/compliance—then repeat this exact preload gate.
 Vision can follow after the known-geometry controller is physically stable.
+
+## V48 force-backed foothold and attitude search
+
+V48 first searched for a materially loaded rear-right contact instead of
+optimizing outward displacement. The accepted deterministic command was:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\search_rear_right_post_landing_sidestep.py `
+  --seed 964 --outward-offsets-m 0.005 --forward-offsets-m 0.015 `
+  --relative-apex-lifts-m 0.060 `
+  --minimum-physical-outward-displacement-m=-0.006 `
+  --minimum-rear-right-tread-load-n 15.0 `
+  --report simulation/isaac/output/rl/rear-right-force-backed-foothold-v48-seed964.json `
+  --save-transfer-snapshot simulation/isaac/output/rl/rear-left-transfer-snapshot-v48-force-backed-seed964.json
+```
+
+This is a force-backed inward settle, not a successful sidestep. The physical
+rear-right foot moved `5.203 mm` inward, but held `33.739 N` tread load with
+`12.048 mm` maximum slip, `11.457 deg` maximum tilt, and `65.390 mm` minimum
+replacement support margin. The future rear-left three-foot support margin was
+still negative at `-94.730 mm`. Report SHA-256:
+`610724d4a3a2e42865f64a662fcf28b172275049e06fb1c0a901241830b0f5f5`.
+Saved snapshot SHA-256:
+`c24b78fb494615c1395ebe0a2cbede0bde174455cc40f8180424825883391deb`.
+
+The first nominal `5 mm` forward / `5 mm` lateral preload from this stronger
+boundary appeared to improve support margin by `14.125 mm`, but the composite
+COM actually moved only `[0.722, 0.175] mm`, rear-right load fell to `0 N`,
+maximum foot slip reached `15.269 mm`, and body tilt reached `13.518 deg`.
+V48 roll/pitch attitude searches did not recover the lost normal force. The
+best gentle roll-hold point remained at `13.59 deg`; aggressive leveling
+increased pitch and slip.
+
+## V49 traction sensitivity and slip-proof progress gate
+
+The search now reports measured composite-COM progress along the requested
+increment and requires at least `50%` progress before a state may settle. This
+prevents moving support feet from being mis-ranked as successful COM transfer.
+It also records explicit acceptance-gate failures and the minimum rear-right
+load over the whole rollout.
+
+The high-traction sensitivity run is:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\search_rear_left_progressive_preload.py `
+  --phase-snapshot simulation/isaac/output/rl/rear-left-transfer-snapshot-v48-force-backed-seed964.json `
+  --seed 970 --maximum-stages 1 --target-deltas-m 0.005:-0.005 `
+  --durations-seconds 5.0 --pitch-feedback-modes off `
+  --pitch-feedback-gains-m 0.080 --roll-feedback-gains-m 0.0 `
+  --load-sharing-gains-m 0.0001 --load-sharing-maximum-correction-m 0.0001 `
+  --minimum-final-rear-right-load-n 5.0 --maximum-body-tilt-deg 12.0 `
+  --maximum-all-foot-slip-m 0.022 --minimum-balance-progress-fraction 0.50 `
+  --static-friction 1.8 --dynamic-friction 1.5 --friction-combine-mode max `
+  --report simulation/isaac/output/rl/rear-left-traction-sensitivity-v49-seed970.json
+```
+
+Compared with the conservative rubber-pad model (`1.2` static, `1.0` dynamic,
+average combine), the higher-traction model did not improve the mechanism. It
+produced only `0.312 mm` useful COM progress (`4.41%` of the command), rear-right
+load still fell to `0 N`, maximum slip was `15.489 mm`, and tilt reached
+`13.547 deg`. The apparent support-margin gain was `14.318 mm`, confirming it
+was dominated by contact geometry/slip rather than commanded COM motion.
+Report SHA-256:
+`48415d4fcda247da5c6a3607ecf35806d6b180f35d45a4568a659d3880f1056c`.
+
+Therefore the next physical/simulation change should be a wider compliant
+rubber foot pad with calibrated collision/contact geometry and explicit
+normal-force retention. Increasing the friction coefficient alone is not
+enough. RGB/depth vision remains deferred because the failure occurs on exact,
+known `180 x 250 mm` geometry with complete proprioceptive/contact state.

@@ -319,3 +319,20 @@ Therefore the first increment is a short-horizon diagnostic, not a stable
 transfer or training boundary. No additional transfer PPO was trained because
 the analytic safety prerequisite did not pass. See
 `PROGRESSIVE_PRELOAD_SEARCH.md` for exact commands and hashes.
+
+## V48 force-backed rear-right settle
+
+The V46 outward candidate preserved geometry but ended at only `2.301 N` rear-
+right load. V48 therefore reuses the exact landing snapshot and searches for a
+deeper force-backed settle, while reporting physical displacement honestly.
+Seed 964 accepted a `5 mm` nominal outward, `15 mm` forward, and `60 mm`
+relative-apex command under a relaxed `-6 mm` displacement floor and a strict
+`15 N` final-load floor.
+
+The foot physically settled `5.203 mm` inward, so this result is not called a
+sidestep. It completed in `418` steps with `33.739 N` final rear-right tread
+load, `12.048 mm` maximum support slip, `11.457 deg` maximum tilt, all stance
+contacts retained, and `65.390 mm` minimum replacement support margin. The
+cached next-transfer margin remains negative at `-94.730 mm`, so rear-left PPO
+is still gated. Exact command, hashes, preload response, and the higher-
+traction V49 sensitivity are recorded in `PROGRESSIVE_PRELOAD_SEARCH.md`.

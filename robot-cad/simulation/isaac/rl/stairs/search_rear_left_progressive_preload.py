@@ -1,10 +1,11 @@
 """Search staged four-foot COM preload before rear-left stair-foot unload.
 
 V46 tipped while commanding the complete rear-right-to-rear-left transfer
-from one stale reference origin.  This V47 experiment restores the exact V46
-physical boundary, searches small analytic COM increments with all four feet
-loaded, and re-anchors every accepted increment at the measured articulation
-and composite COM.  No camera pixels or learned actions enter this search.
+from one stale reference origin. V47-V49 restore exact force-backed physical
+boundaries, search small analytic COM increments with all four feet loaded,
+and test attitude, load-sharing, and traction sensitivity without changing the
+measured actuator or stair contract. No camera pixels or learned actions enter
+this search.
 """
 
 from __future__ import annotations
@@ -108,6 +109,40 @@ parser.add_argument(
     default="off",
     help="Comma-separated transfer pitch modes: off, front_only, or all.",
 )
+parser.add_argument(
+    "--pitch-target-projected-gravity-x",
+    type=float,
+    default=0.0,
+)
+parser.add_argument("--pitch-feedback-gains-m", default="0.080")
+parser.add_argument(
+    "--pitch-feedback-maximum-correction-m",
+    type=float,
+    default=0.025,
+)
+parser.add_argument(
+    "--pitch-include-next-swing-leg-before-unload",
+    action="store_true",
+)
+parser.add_argument(
+    "--roll-feedback-gains-m",
+    default="0.0",
+    help=(
+        "Comma-separated frontal-attitude gains; zero keeps V47 roll "
+        "feedback disabled."
+    ),
+)
+parser.add_argument(
+    "--roll-feedback-maximum-correction-m",
+    type=float,
+    default=0.025,
+)
+parser.add_argument(
+    "--roll-target-projected-gravity-y",
+    type=float,
+    default=0.1009,
+    help="Entry-attitude gravity-Y target for mixed-height roll hold.",
+)
 parser.add_argument("--load-sharing-gains-m", default="0.060")
 parser.add_argument("--load-sharing-maximum-correction-m", type=float, default=0.020)
 parser.add_argument("--load-sharing-smoothing-factor", type=float, default=0.50)
@@ -120,7 +155,28 @@ parser.add_argument("--maximum-base-speed-m-s", type=float, default=0.030)
 parser.add_argument("--maximum-body-rate-rad-s", type=float, default=0.250)
 parser.add_argument("--maximum-body-tilt-deg", type=float, default=12.0)
 parser.add_argument("--minimum-all-foot-load-n", type=float, default=1.0)
+parser.add_argument(
+    "--minimum-final-rear-right-load-n",
+    type=float,
+    default=1.0,
+)
 parser.add_argument("--maximum-all-foot-slip-m", type=float, default=0.022)
+parser.add_argument(
+    "--minimum-balance-progress-fraction",
+    type=float,
+    default=0.50,
+    help=(
+        "Minimum measured composite-COM progress along each requested XY "
+        "increment. This prevents support-foot slip from masquerading as "
+        "useful transfer progress."
+    ),
+)
+parser.add_argument("--static-friction", type=float)
+parser.add_argument("--dynamic-friction", type=float)
+parser.add_argument(
+    "--friction-combine-mode",
+    choices=("average", "min", "multiply", "max"),
+)
 parser.add_argument(
     "--report",
     default=(
@@ -140,6 +196,8 @@ args, _ = parser.parse_known_args()
 deltas = target_deltas(args.target_deltas_m)
 durations = comma_floats(args.durations_seconds)
 load_sharing_gains = comma_floats(args.load_sharing_gains_m)
+roll_feedback_gains = comma_floats(args.roll_feedback_gains_m)
+pitch_feedback_gains = comma_floats(args.pitch_feedback_gains_m)
 pitch_modes = tuple(
     item.strip().lower()
     for item in args.pitch_feedback_modes.split(",")
@@ -149,8 +207,26 @@ if not pitch_modes or any(
     value not in {"off", "front_only", "all"} for value in pitch_modes
 ):
     parser.error("pitch feedback modes must be off, front_only, or all")
+if (
+    not math.isfinite(args.pitch_target_projected_gravity_x)
+    or abs(args.pitch_target_projected_gravity_x) > 1.0
+):
+    parser.error("pitch target projected gravity X must be within [-1, 1]")
+if any(value <= 0.0 or value > 1.00 for value in pitch_feedback_gains):
+    parser.error("pitch-feedback gains must be within (0, 1.00]")
+if not 0.0 < args.pitch_feedback_maximum_correction_m <= 0.08:
+    parser.error("pitch-feedback maximum correction must be within (0, 0.08]")
 if any(value <= 0.0 or value > 0.20 for value in load_sharing_gains):
     parser.error("load-sharing gains must be within (0, 0.20]")
+if any(value < 0.0 or value > 0.50 for value in roll_feedback_gains):
+    parser.error("roll-feedback gains must be within [0, 0.50]")
+if not 0.0 < args.roll_feedback_maximum_correction_m <= 0.08:
+    parser.error("roll-feedback maximum correction must be within (0, 0.08]")
+if (
+    not math.isfinite(args.roll_target_projected_gravity_y)
+    or abs(args.roll_target_projected_gravity_y) > 1.0
+):
+    parser.error("roll target projected gravity Y must be within [-1, 1]")
 if not 0.0 < args.load_sharing_maximum_correction_m <= 0.05:
     parser.error("load-sharing maximum correction must be within (0, 0.05]")
 if not 0.0 < args.load_sharing_smoothing_factor <= 1.0:
@@ -165,6 +241,14 @@ if args.minimum_stage_margin_progress_m < 0.0:
     parser.error("--minimum-stage-margin-progress-m cannot be negative")
 if args.target_support_margin_m <= 0.0:
     parser.error("--target-support-margin-m must be positive")
+if not 0.0 <= args.minimum_final_rear_right_load_n <= 100.0:
+    parser.error("--minimum-final-rear-right-load-n must be within [0, 100]")
+if not 0.0 <= args.minimum_balance_progress_fraction <= 1.0:
+    parser.error("--minimum-balance-progress-fraction must be within [0, 1]")
+if args.static_friction is not None and not 0.0 < args.static_friction <= 3.0:
+    parser.error("--static-friction must be within (0, 3]")
+if args.dynamic_friction is not None and not 0.0 < args.dynamic_friction <= 3.0:
+    parser.error("--dynamic-friction must be within (0, 3]")
 
 config_path = project_path(args.config)
 snapshot_path = project_path(args.phase_snapshot)
@@ -174,7 +258,30 @@ with config_path.open("r", encoding="utf-8") as stream:
     config = yaml.safe_load(stream)
 task_config = deepcopy(config["task"])
 source_task_id = str(task_config["id"])
-task_config["id"] = "Drobot-Quadruped-Stairs-v47-Progressive-Rear-Left-Preload"
+material_config = task_config["foot_contact_material"]
+if args.static_friction is not None:
+    material_config["static_friction"] = args.static_friction
+if args.dynamic_friction is not None:
+    material_config["dynamic_friction"] = args.dynamic_friction
+if args.friction_combine_mode is not None:
+    material_config["friction_combine_mode"] = args.friction_combine_mode
+roll_feedback_requested = any(value > 0.0 for value in roll_feedback_gains)
+traction_sensitivity_requested = any(
+    value is not None
+    for value in (
+        args.static_friction,
+        args.dynamic_friction,
+        args.friction_combine_mode,
+    )
+)
+if traction_sensitivity_requested:
+    task_config["id"] = (
+        "Drobot-Quadruped-Stairs-v49-Traction-Sensitivity-Rear-Left-Preload"
+    )
+elif roll_feedback_requested:
+    task_config["id"] = "Drobot-Quadruped-Stairs-v48-Roll-Hold-Rear-Left-Preload"
+else:
+    task_config["id"] = "Drobot-Quadruped-Stairs-v47-Progressive-Rear-Left-Preload"
 preload_load_config = task_config["placement_reference"]["inter_leg_transfer"][
     "com_regulation"
 ].setdefault("four_foot_preload_load_sharing", {})
@@ -186,6 +293,56 @@ preload_load_config.update(
         "maximum_correction_m": args.load_sharing_maximum_correction_m,
         "smoothing_factor": args.load_sharing_smoothing_factor,
         "minimum_total_load_n": 1.0,
+    }
+)
+pitch_feedback_config = task_config["placement_reference"][
+    "inter_leg_transfer"
+]["com_regulation"].setdefault("pitch_attitude_feedback", {})
+pitch_feedback_config.update(
+    {
+        "target_projected_gravity_x": (
+            args.pitch_target_projected_gravity_x
+        ),
+        "include_next_swing_leg_before_unload": (
+            args.pitch_include_next_swing_leg_before_unload
+        ),
+        "inter_leg_transfer_proportional_gain_m_by_swing_leg": {
+            **dict(
+                pitch_feedback_config.get(
+                    "inter_leg_transfer_proportional_gain_m_by_swing_leg",
+                    {},
+                )
+            ),
+            "rear_left": pitch_feedback_gains[0],
+        },
+        "inter_leg_transfer_maximum_correction_m_by_swing_leg": {
+            **dict(
+                pitch_feedback_config.get(
+                    "inter_leg_transfer_maximum_correction_m_by_swing_leg",
+                    {},
+                )
+            ),
+            "rear_left": args.pitch_feedback_maximum_correction_m,
+        },
+    }
+)
+roll_feedback_config = task_config["placement_reference"]["inter_leg_transfer"][
+    "com_regulation"
+].setdefault("roll_attitude_feedback", {})
+roll_feedback_config.update(
+    {
+        "enabled": roll_feedback_requested,
+        "apply_during_inter_leg_transfer": True,
+        "inter_leg_transfer_legs": ["rear_left"],
+        "include_next_swing_leg_before_unload": True,
+        "proportional_gain_m": next(
+            (value for value in roll_feedback_gains if value > 0.0),
+            0.12,
+        ),
+        "maximum_correction_m": args.roll_feedback_maximum_correction_m,
+        "target_projected_gravity_y": (
+            args.roll_target_projected_gravity_y
+        ),
     }
 )
 with snapshot_path.open("r", encoding="utf-8") as stream:
@@ -242,7 +399,15 @@ report: dict[str, object] = {
     "strict_pass": False,
     "task_id": task_config["id"],
     "source_task_id": source_task_id,
-    "scope": "Exact-V46-snapshot progressive four-foot rear-left COM preload",
+    "scope": (
+        "Exact force-backed snapshot higher-traction rear-left COM preload"
+        if traction_sensitivity_requested
+        else (
+            "Exact force-backed snapshot roll-held four-foot rear-left COM preload"
+            if roll_feedback_requested
+            else "Exact force-backed snapshot progressive rear-left COM preload"
+        )
+    ),
     "config": str(config_path),
     "phase_snapshot": str(snapshot_path),
     "seed": args.seed,
@@ -252,12 +417,42 @@ report: dict[str, object] = {
     "candidate_target_deltas_m": [list(value) for value in deltas],
     "candidate_durations_seconds": list(durations),
     "candidate_pitch_feedback_modes": list(pitch_modes),
+    "candidate_pitch_feedback_gains_m": list(pitch_feedback_gains),
+    "pitch_feedback_maximum_correction_m": (
+        args.pitch_feedback_maximum_correction_m
+    ),
+    "pitch_target_projected_gravity_x": (
+        args.pitch_target_projected_gravity_x
+    ),
+    "pitch_include_next_swing_leg_before_unload": (
+        args.pitch_include_next_swing_leg_before_unload
+    ),
+    "candidate_roll_feedback_gains_m": list(roll_feedback_gains),
+    "roll_feedback_maximum_correction_m": (
+        args.roll_feedback_maximum_correction_m
+    ),
+    "roll_target_projected_gravity_y": (
+        args.roll_target_projected_gravity_y
+    ),
     "candidate_load_sharing_gains_m": list(load_sharing_gains),
     "load_sharing_maximum_correction_m": (
         args.load_sharing_maximum_correction_m
     ),
     "load_sharing_smoothing_factor": args.load_sharing_smoothing_factor,
     "maximum_stages": args.maximum_stages,
+    "minimum_final_rear_right_load_n": (
+        args.minimum_final_rear_right_load_n
+    ),
+    "minimum_balance_progress_fraction": (
+        args.minimum_balance_progress_fraction
+    ),
+    "foot_contact_material": {
+        "static_friction": float(material_config["static_friction"]),
+        "dynamic_friction": float(material_config["dynamic_friction"]),
+        "friction_combine_mode": str(
+            material_config["friction_combine_mode"]
+        ),
+    },
 }
 raw_env: QuadrupedStairsEnv | None = None
 exit_code = 1
@@ -302,14 +497,42 @@ try:
     for stage_index in range(args.maximum_stages):
         stage_candidates: list[dict[str, object]] = []
         captured_by_id: dict[str, dict[str, object]] = {}
-        for pitch_mode, load_sharing_gain_m, duration_seconds, delta_xy in product(
-            pitch_modes, load_sharing_gains, durations, deltas
+        for (
+            pitch_mode,
+            pitch_feedback_gain_m,
+            roll_feedback_gain_m,
+            load_sharing_gain_m,
+            duration_seconds,
+            delta_xy,
+        ) in product(
+            pitch_modes,
+            pitch_feedback_gains,
+            roll_feedback_gains,
+            load_sharing_gains,
+            durations,
+            deltas,
         ):
             raw_env.pitch_feedback_config["enabled"] = pitch_mode != "off"
             raw_env.pitch_feedback_enabled = pitch_mode != "off"
             raw_env.pitch_feedback_config.setdefault(
                 "inter_leg_transfer_front_only_by_swing_leg", {}
             )["rear_left"] = pitch_mode == "front_only"
+            raw_env.pitch_feedback_config.setdefault(
+                "inter_leg_transfer_proportional_gain_m_by_swing_leg",
+                {},
+            )["rear_left"] = pitch_feedback_gain_m
+            raw_env.pitch_feedback_config.setdefault(
+                "inter_leg_transfer_maximum_correction_m_by_swing_leg",
+                {},
+            )["rear_left"] = args.pitch_feedback_maximum_correction_m
+            raw_env.roll_feedback_enabled = roll_feedback_gain_m > 0.0
+            raw_env.roll_feedback_config["enabled"] = (
+                roll_feedback_gain_m > 0.0
+            )
+            if roll_feedback_gain_m > 0.0:
+                raw_env.roll_feedback_config["proportional_gain_m"] = (
+                    roll_feedback_gain_m
+                )
             raw_env.four_foot_preload_load_sharing_config[
                 "proportional_gain_m"
             ] = load_sharing_gain_m
@@ -320,6 +543,8 @@ try:
             )
             candidate_id = (
                 f"stage{stage_index + 1}-pitch{pitch_mode}-"
+                f"pitchgain{pitch_feedback_gain_m:.3f}-"
+                f"rollgain{roll_feedback_gain_m:.3f}-"
                 f"loadgain{load_sharing_gain_m:.3f}-"
                 f"duration{duration_seconds:.1f}-"
                 f"forward{delta_xy[0]:+.3f}-lateral{delta_xy[1]:+.3f}"
@@ -351,6 +576,18 @@ try:
                 ),
                 dtype=np.float64,
             )
+            requested_balance_delta_xy_m = np.asarray(
+                delta_xy,
+                dtype=np.float64,
+            )
+            requested_balance_progress_m = float(
+                np.linalg.norm(requested_balance_delta_xy_m)
+            )
+            requested_balance_direction_xy = (
+                requested_balance_delta_xy_m / requested_balance_progress_m
+                if requested_balance_progress_m > 1e-9
+                else np.zeros(2, dtype=np.float64)
+            )
             initial_foot_tips = raw_env._sample_foot_tips().copy()  # noqa: SLF001
             maximum_steps = int(
                 math.ceil(
@@ -363,6 +600,8 @@ try:
             terminated = False
             truncated = False
             maximum_tilt_deg = 0.0
+            maximum_abs_roll_deg = 0.0
+            maximum_abs_pitch_deg = 0.0
             maximum_all_foot_slip_m = 0.0
             initial_total_loads = (
                 raw_env.latest_ground_normal_loads_n
@@ -373,12 +612,19 @@ try:
                 for leg in raw_env.completed_placement_legs
             ]
             minimum_all_foot_load_n = float(np.min(initial_total_loads))
+            minimum_rear_right_load_n = float(
+                initial_total_loads[LEGS.index("rear_right")]
+            )
             minimum_completed_tread_load_n = float(
                 np.min(raw_env.latest_step_normal_loads_n[completed_indices, 0])
             )
             final_margin_m = initial_margin_m
             final_target_error_m = math.inf
             final_balance_m = initial_balance_m.copy()
+            measured_balance_progress_m = 0.0
+            measured_balance_progress_fraction = (
+                1.0 if requested_balance_progress_m <= 1e-9 else 0.0
+            )
             last_info = dict(reset_info)
             for step_index in range(1, maximum_steps + 1):
                 steps = step_index
@@ -397,6 +643,21 @@ try:
                     ),
                     dtype=np.float64,
                 )
+                measured_balance_delta_xy_m = (
+                    final_balance_m[:2] - initial_balance_m[:2]
+                )
+                measured_balance_progress_m = float(
+                    np.dot(
+                        measured_balance_delta_xy_m,
+                        requested_balance_direction_xy,
+                    )
+                )
+                measured_balance_progress_fraction = (
+                    1.0
+                    if requested_balance_progress_m <= 1e-9
+                    else measured_balance_progress_m
+                    / requested_balance_progress_m
+                )
                 tilt_deg = math.degrees(
                     math.acos(
                         float(
@@ -409,6 +670,27 @@ try:
                     )
                 )
                 maximum_tilt_deg = max(maximum_tilt_deg, tilt_deg)
+                gravity = np.asarray(
+                    raw_env.latest_projected_gravity_xyz,
+                    dtype=np.float64,
+                )
+                roll_deg = math.degrees(
+                    math.atan2(-float(gravity[1]), -float(gravity[2]))
+                )
+                pitch_deg = math.degrees(
+                    math.atan2(
+                        float(gravity[0]),
+                        float(np.linalg.norm(gravity[1:])),
+                    )
+                )
+                maximum_abs_roll_deg = max(
+                    maximum_abs_roll_deg,
+                    abs(roll_deg),
+                )
+                maximum_abs_pitch_deg = max(
+                    maximum_abs_pitch_deg,
+                    abs(pitch_deg),
+                )
                 foot_tips = raw_env._sample_foot_tips()  # noqa: SLF001
                 maximum_all_foot_slip_m = max(
                     maximum_all_foot_slip_m,
@@ -429,6 +711,10 @@ try:
                     minimum_all_foot_load_n,
                     float(np.min(total_loads)),
                 )
+                minimum_rear_right_load_n = min(
+                    minimum_rear_right_load_n,
+                    float(total_loads[LEGS.index("rear_right")]),
+                )
                 completed_indices = [
                     LEGS.index(leg)
                     for leg in raw_env.completed_placement_legs
@@ -444,6 +730,8 @@ try:
                     float(info.get("placement_transfer_fraction", 0.0))
                     >= 1.0 - 1e-6
                     and final_target_error_m <= args.maximum_target_error_m
+                    and measured_balance_progress_fraction
+                    >= args.minimum_balance_progress_fraction
                     and float(
                         info.get("placement_transfer_base_speed_m_s", math.inf)
                     )
@@ -455,6 +743,8 @@ try:
                     and tilt_deg <= args.maximum_body_tilt_deg
                     and float(np.min(total_loads)) >= args.minimum_all_foot_load_n
                     and completed_tread_load >= args.minimum_all_foot_load_n
+                    and float(total_loads[LEGS.index("rear_right")])
+                    >= args.minimum_final_rear_right_load_n
                     and maximum_all_foot_slip_m <= args.maximum_all_foot_slip_m
                     and raw_env.placement_transfer_unload_start_step is None
                 )
@@ -485,6 +775,21 @@ try:
                 completed_indices, 0
             ]
             settled = candidate_id in captured_by_id
+            acceptance_gate_failures: list[str] = []
+            if measured_balance_progress_fraction < (
+                args.minimum_balance_progress_fraction
+            ):
+                acceptance_gate_failures.append("insufficient_balance_progress")
+            if minimum_rear_right_load_n < args.minimum_final_rear_right_load_n:
+                acceptance_gate_failures.append("rear_right_contact_lost")
+            if maximum_all_foot_slip_m > args.maximum_all_foot_slip_m:
+                acceptance_gate_failures.append("support_slip_high")
+            if maximum_tilt_deg > args.maximum_body_tilt_deg:
+                acceptance_gate_failures.append("body_tilt_high")
+            if final_target_error_m > args.maximum_target_error_m:
+                acceptance_gate_failures.append("target_error_high")
+            if not settled:
+                acceptance_gate_failures.append("settle_hold_incomplete")
             accepted = bool(
                 settled
                 and not terminated
@@ -500,6 +805,8 @@ try:
                 "stage": stage_index + 1,
                 "duration_seconds": duration_seconds,
                 "pitch_feedback_mode": pitch_mode,
+                "pitch_feedback_gain_m": pitch_feedback_gain_m,
+                "roll_feedback_gain_m": roll_feedback_gain_m,
                 "load_sharing_gain_m": load_sharing_gain_m,
                 "target_delta_xy_m": list(delta_xy),
                 "steps": steps,
@@ -508,6 +815,7 @@ try:
                 "terminated": bool(terminated),
                 "truncated": bool(truncated),
                 "failure_reasons": list(last_info.get("failure_reasons", ())),
+                "acceptance_gate_failures": acceptance_gate_failures,
                 "initial_support_margin_m": initial_margin_m,
                 "final_support_margin_m": final_margin_m,
                 "support_margin_progress_m": margin_progress_m,
@@ -516,10 +824,20 @@ try:
                 "measured_balance_delta_xy_m": (
                     final_balance_m[:2] - initial_balance_m[:2]
                 ).tolist(),
+                "measured_balance_progress_m": measured_balance_progress_m,
+                "measured_balance_progress_fraction": (
+                    measured_balance_progress_fraction
+                ),
                 "final_target_error_m": final_target_error_m,
                 "maximum_body_tilt_deg": maximum_tilt_deg,
+                "maximum_abs_roll_deg": maximum_abs_roll_deg,
+                "maximum_abs_pitch_deg": maximum_abs_pitch_deg,
+                "final_projected_gravity_xyz": (
+                    raw_env.latest_projected_gravity_xyz.tolist()
+                ),
                 "maximum_all_foot_slip_m": maximum_all_foot_slip_m,
                 "minimum_all_foot_load_n": minimum_all_foot_load_n,
+                "minimum_rear_right_load_n": minimum_rear_right_load_n,
                 "minimum_completed_tread_load_n": minimum_completed_tread_load_n,
                 "final_all_foot_loads_n": final_total_loads.tolist(),
                 "final_completed_tread_loads_n": (
@@ -549,6 +867,8 @@ try:
                         "progress_mm": round(1000.0 * margin_progress_m, 2),
                         "target_error_mm": round(1000.0 * final_target_error_m, 2),
                         "tilt_deg": round(maximum_tilt_deg, 2),
+                        "roll_deg": round(maximum_abs_roll_deg, 2),
+                        "pitch_deg": round(maximum_abs_pitch_deg, 2),
                         "failures": result["failure_reasons"],
                     },
                     sort_keys=True,

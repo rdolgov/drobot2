@@ -56,6 +56,7 @@ from _stair_rl_contract import (
     support_load_share_vertical_corrections,
     support_margin_constrained_target_xy,
     support_pitch_vertical_corrections,
+    support_roll_vertical_corrections,
     touchdown_load_lift_correction_m,
     validate_staircase_config,
 )
@@ -765,15 +766,62 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             pitch_maximum_m = float(
                 self.pitch_feedback_config.get("maximum_correction_m", 0.035)
             )
-            if not 0.0 < pitch_gain_m <= 0.50:
+            pitch_target_x = float(
+                self.pitch_feedback_config.get(
+                    "target_projected_gravity_x",
+                    0.0,
+                )
+            )
+            if not 0.0 < pitch_gain_m <= 1.00:
                 raise ValueError(
                     "com_regulation.pitch_attitude_feedback."
-                    "proportional_gain_m must be within (0, 0.50]"
+                    "proportional_gain_m must be within (0, 1.00]"
                 )
             if not 0.0 < pitch_maximum_m <= 0.08:
                 raise ValueError(
                     "com_regulation.pitch_attitude_feedback."
                     "maximum_correction_m must be within (0, 0.08]"
+                )
+            if not math.isfinite(pitch_target_x) or abs(pitch_target_x) > 1.0:
+                raise ValueError(
+                    "com_regulation.pitch_attitude_feedback."
+                    "target_projected_gravity_x must be finite and within "
+                    "[-1, 1]"
+                )
+        self.roll_feedback_config = dict(
+            self.com_regulation_config.get("roll_attitude_feedback", {})
+        )
+        self.roll_feedback_enabled = bool(
+            self.roll_feedback_config.get("enabled", False)
+        )
+        if self.roll_feedback_enabled:
+            roll_gain_m = float(
+                self.roll_feedback_config.get("proportional_gain_m", 0.12)
+            )
+            roll_maximum_m = float(
+                self.roll_feedback_config.get("maximum_correction_m", 0.035)
+            )
+            roll_target_y = float(
+                self.roll_feedback_config.get(
+                    "target_projected_gravity_y",
+                    0.0,
+                )
+            )
+            if not 0.0 < roll_gain_m <= 0.50:
+                raise ValueError(
+                    "com_regulation.roll_attitude_feedback."
+                    "proportional_gain_m must be within (0, 0.50]"
+                )
+            if not 0.0 < roll_maximum_m <= 0.08:
+                raise ValueError(
+                    "com_regulation.roll_attitude_feedback."
+                    "maximum_correction_m must be within (0, 0.08]"
+                )
+            if not math.isfinite(roll_target_y) or abs(roll_target_y) > 1.0:
+                raise ValueError(
+                    "com_regulation.roll_attitude_feedback."
+                    "target_projected_gravity_y must be finite and within "
+                    "[-1, 1]"
                 )
         balance_point = str(
             self.com_regulation_config.get("balance_point", "composite_com")
@@ -1791,10 +1839,22 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     {},
                 )
             )
+            include_next_swing = bool(
+                self.pitch_feedback_config.get(
+                    "include_next_swing_leg_before_unload",
+                    False,
+                )
+            ) and self.placement_transfer_unload_start_step is None
+            pitch_legs = (
+                LEGS
+                if include_next_swing
+                else tuple(
+                    LEGS[index]
+                    for index in self.placement_support_leg_indices
+                )
+            )
             pitch_corrections = support_pitch_vertical_corrections(
-                support_legs=(
-                    LEGS[index] for index in self.placement_support_leg_indices
-                ),
+                support_legs=pitch_legs,
                 projected_gravity_x=float(
                     self.latest_projected_gravity_xyz[0]
                 ),
@@ -1820,6 +1880,12 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                                 0.035,
                             ),
                         ),
+                    )
+                ),
+                target_projected_gravity_x=float(
+                    self.pitch_feedback_config.get(
+                        "target_projected_gravity_x",
+                        0.0,
                     )
                 ),
             )
@@ -1848,6 +1914,69 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 # The same feedback was active at the end of the preceding
                 # placement phase. Keep it continuous across the phase
                 # boundary instead of dropping it to zero and ramping again.
+                adjusted[leg]["vertical_m"] += correction_m
+        if (
+            self.roll_feedback_enabled
+            and bool(
+                self.roll_feedback_config.get(
+                    "apply_during_inter_leg_transfer",
+                    False,
+                )
+            )
+            and self.placement_swing_leg
+            in tuple(
+                self.roll_feedback_config.get(
+                    "inter_leg_transfer_legs",
+                    LEGS,
+                )
+            )
+            and transfer_fraction > 0.0
+        ):
+            include_next_swing = bool(
+                self.roll_feedback_config.get(
+                    "include_next_swing_leg_before_unload",
+                    False,
+                )
+            ) and self.placement_transfer_unload_start_step is None
+            roll_legs = (
+                LEGS
+                if include_next_swing
+                else tuple(
+                    LEGS[index]
+                    for index in self.placement_support_leg_indices
+                )
+            )
+            roll_corrections = support_roll_vertical_corrections(
+                support_legs=roll_legs,
+                projected_gravity_y=float(
+                    self.latest_projected_gravity_xyz[1]
+                ),
+                target_projected_gravity_y=float(
+                    self.roll_feedback_config.get(
+                        "target_projected_gravity_y",
+                        0.0,
+                    )
+                ),
+                proportional_gain_m=float(
+                    self.roll_feedback_config.get(
+                        "inter_leg_transfer_proportional_gain_m",
+                        self.roll_feedback_config.get(
+                            "proportional_gain_m",
+                            0.12,
+                        ),
+                    )
+                ),
+                maximum_correction_m=float(
+                    self.roll_feedback_config.get(
+                        "inter_leg_transfer_maximum_correction_m",
+                        self.roll_feedback_config.get(
+                            "maximum_correction_m",
+                            0.035,
+                        ),
+                    )
+                ),
+            )
+            for leg, correction_m in roll_corrections.items():
                 adjusted[leg]["vertical_m"] += correction_m
         preload_load_config = self.four_foot_preload_load_sharing_config
         if (

@@ -76,6 +76,7 @@ from _stair_rl_contract import (  # noqa: E402
     support_load_share_vertical_corrections,
     support_margin_constrained_target_xy,
     support_pitch_vertical_corrections,
+    support_roll_vertical_corrections,
     support_triangle_incenter_xy,
     touchdown_load_lift_correction_m,
 )
@@ -2395,12 +2396,64 @@ def test_support_pitch_feedback_levels_nose_down_attitude() -> None:
     )
     assert saturated["front_right"] == pytest.approx(0.035)
     assert saturated["rear_left"] == pytest.approx(-0.035)
+    held_entry = support_pitch_vertical_corrections(
+        support_legs=("front_left", "rear_right"),
+        projected_gravity_x=-0.218,
+        target_projected_gravity_x=-0.168,
+        proportional_gain_m=0.120,
+        maximum_correction_m=0.035,
+    )
+    assert held_entry == {
+        "front_left": pytest.approx(-0.006),
+        "rear_right": pytest.approx(0.006),
+    }
     with pytest.raises(ValueError, match="known robot legs"):
         support_pitch_vertical_corrections(
             support_legs=("middle_left",),
             projected_gravity_x=0.0,
             proportional_gain_m=0.120,
             maximum_correction_m=0.035,
+        )
+
+
+def test_support_roll_feedback_holds_mixed_height_entry_attitude() -> None:
+    corrections = support_roll_vertical_corrections(
+        support_legs=(
+            "front_left",
+            "rear_left",
+            "front_right",
+            "rear_right",
+        ),
+        projected_gravity_y=0.160,
+        target_projected_gravity_y=0.100,
+        proportional_gain_m=0.200,
+        maximum_correction_m=0.025,
+    )
+    assert corrections == {
+        "front_left": pytest.approx(0.012),
+        "rear_left": pytest.approx(0.012),
+        "front_right": pytest.approx(-0.012),
+        "rear_right": pytest.approx(-0.012),
+    }
+
+    saturated = support_roll_vertical_corrections(
+        support_legs=("front_left", "rear_right"),
+        projected_gravity_y=-0.30,
+        target_projected_gravity_y=0.10,
+        proportional_gain_m=0.20,
+        maximum_correction_m=0.025,
+    )
+    assert saturated == {
+        "front_left": pytest.approx(-0.025),
+        "rear_right": pytest.approx(0.025),
+    }
+    with pytest.raises(ValueError, match="target_projected_gravity_y"):
+        support_roll_vertical_corrections(
+            support_legs=("front_left",),
+            projected_gravity_y=0.0,
+            target_projected_gravity_y=1.1,
+            proportional_gain_m=0.20,
+            maximum_correction_m=0.025,
         )
 
 
