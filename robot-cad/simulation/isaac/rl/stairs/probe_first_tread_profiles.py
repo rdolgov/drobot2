@@ -155,6 +155,12 @@ try:
                     "foot_tip_positions_m",
                     "support_margin_m",
                     "maximum_support_slip_m",
+                    "touchdown_load_lift_correction_m",
+                    "maximum_touchdown_load_lift_correction_m",
+                    "touchdown_support_triggered",
+                    "touchdown_support_trigger_step",
+                    "touchdown_support_release_fraction",
+                    "maximum_touchdown_support_release_fraction",
                     "failure_reasons",
                 )
             },

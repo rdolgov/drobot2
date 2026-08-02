@@ -61,6 +61,7 @@ from _stair_rl_contract import (
     support_pitch_vertical_corrections,
     support_roll_vertical_corrections,
     touchdown_load_lift_correction_m,
+    touchdown_support_release_state,
     validate_staircase_config,
     validated_foot_contact_patch_config,
 )
@@ -876,6 +877,111 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 raise ValueError(
                     f"touchdown_load_regulation.{name} must be within (0, 1]"
                 )
+        self.touchdown_support_regulation_config = dict(
+            self.placement_reference_config.get(
+                "touchdown_support_regulation",
+                {},
+            )
+        )
+        self.touchdown_support_regulation_enabled = bool(
+            self.touchdown_support_regulation_config.get("enabled", False)
+        )
+        touchdown_support_legs = tuple(
+            str(value)
+            for value in self.touchdown_support_regulation_config.get(
+                "legs",
+                (),
+            )
+        )
+        if any(leg not in LEGS for leg in touchdown_support_legs):
+            raise ValueError(
+                "touchdown_support_regulation.legs contains an unknown leg"
+            )
+        self.touchdown_support_regulation_legs = touchdown_support_legs
+        touchdown_support_phases = tuple(
+            str(value)
+            for value in self.touchdown_support_regulation_config.get(
+                "phases",
+                ("lower", "hold"),
+            )
+        )
+        if any(
+            phase not in {"weight_shift", "lift", "advance", "lower", "hold"}
+            for phase in touchdown_support_phases
+        ):
+            raise ValueError(
+                "touchdown_support_regulation.phases contains an unknown phase"
+            )
+        self.touchdown_support_regulation_phases = touchdown_support_phases
+        precontact_release_phase = str(
+            self.touchdown_support_regulation_config.get(
+                "precontact_forward_release_phase",
+                "lower",
+            )
+        )
+        if precontact_release_phase not in {"advance", "lower"}:
+            raise ValueError(
+                "touchdown_support_regulation.precontact_forward_release_phase "
+                "must be advance or lower"
+            )
+        self.touchdown_support_precontact_release_phase = precontact_release_phase
+        touchdown_threshold_n = float(
+            self.touchdown_support_regulation_config.get(
+                "contact_threshold_n",
+                1.0,
+            )
+        )
+        touchdown_release_duration_s = float(
+            self.touchdown_support_regulation_config.get(
+                "release_duration_seconds",
+                1.0,
+            )
+        )
+        if not 0.0 < touchdown_threshold_n <= 100.0:
+            raise ValueError(
+                "touchdown_support_regulation.contact_threshold_n must be "
+                "within (0, 100]"
+            )
+        if not 0.0 < touchdown_release_duration_s <= 5.0:
+            raise ValueError(
+                "touchdown_support_regulation.release_duration_seconds must "
+                "be within (0, 5]"
+            )
+        for field in (
+            "forward_release_fraction",
+            "lateral_release_fraction",
+            "precontact_forward_release_fraction",
+        ):
+            value = float(
+                self.touchdown_support_regulation_config.get(field, 1.0)
+            )
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(
+                    f"touchdown_support_regulation.{field} must be within [0, 1]"
+                )
+        self.touchdown_support_preload_extension_m_by_leg = {
+            str(leg): float(extension_m)
+            for leg, extension_m in dict(
+                self.touchdown_support_regulation_config.get(
+                    "preload_extension_m_by_leg",
+                    {},
+                )
+            ).items()
+        }
+        if any(
+            leg not in LEGS
+            or leg in self.touchdown_support_regulation_legs
+            or not np.isfinite(extension_m)
+            or extension_m < 0.0
+            or extension_m > 0.030
+            for leg, extension_m in (
+                self.touchdown_support_preload_extension_m_by_leg.items()
+            )
+        ):
+            raise ValueError(
+                "touchdown_support_regulation.preload_extension_m_by_leg must "
+                "select stance legs with values within [0, 0.030] m"
+            )
         self.com_regulation_enabled = bool(
             self.com_regulation_config.get("enabled", False)
         )
@@ -1191,6 +1297,20 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             dtype=np.float32,
         )
         self.minimum_support_contact_fraction = 1.0
+        self.minimum_support_normal_load_n_by_leg = np.full(
+            len(LEGS),
+            np.inf,
+            dtype=np.float64,
+        )
+        self.minimum_post_touchdown_support_normal_load_n_by_leg = np.full(
+            len(LEGS),
+            np.inf,
+            dtype=np.float64,
+        )
+        self.support_normal_loads_at_maximum_tread_load_n_by_leg = np.zeros(
+            len(LEGS),
+            dtype=np.float64,
+        )
         self.minimum_placement_support_margin_m = float("inf")
         self.latest_support_margin_regulation_active = False
         self.latest_support_margin_requested_target_xy_m = np.zeros(
@@ -1205,6 +1325,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.maximum_support_margin_target_clip_m = 0.0
         self.latest_touchdown_load_lift_correction_m = 0.0
         self.maximum_touchdown_load_lift_correction_m = 0.0
+        self.touchdown_support_trigger_step: int | None = None
+        self.latest_touchdown_support_release_fraction = 0.0
+        self.maximum_touchdown_support_release_fraction = 0.0
         self.latest_placement_pitch_rear_correction_scale = 1.0
         self.maximum_swing_tread_normal_load_n = 0.0
         self.maximum_tread_normal_load_n_by_leg = np.zeros(
@@ -2890,7 +3013,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         ):
             measured_tread_load_n = float(
                 np.sum(
-                    self.latest_step_normal_loads_n[
+                    self.latest_step_top_normal_loads_n[
                         self.placement_swing_leg_index,
                         :,
                     ]
@@ -2948,6 +3071,62 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         )
         return self._targets_from_reference_parameters(adjusted)
 
+    def _touchdown_support_release_fraction(
+        self,
+        placement_state: Mapping[str, object],
+    ) -> float:
+        if (
+            not self.touchdown_support_regulation_enabled
+            or self.placement_swing_leg
+            not in self.touchdown_support_regulation_legs
+            or str(placement_state["phase"])
+            not in self.touchdown_support_regulation_phases
+        ):
+            self.latest_touchdown_support_release_fraction = 0.0
+            return 0.0
+        measured_tread_load_n = float(
+            np.sum(
+                self.latest_step_top_normal_loads_n[
+                    self.placement_swing_leg_index,
+                    :,
+                ]
+            )
+        )
+        duration_steps = max(
+            1,
+            int(
+                round(
+                    float(
+                        self.touchdown_support_regulation_config.get(
+                            "release_duration_seconds",
+                            1.0,
+                        )
+                    )
+                    * self.control_hz
+                )
+            ),
+        )
+        self.touchdown_support_trigger_step, release_fraction = (
+            touchdown_support_release_state(
+                measured_tread_load_n=measured_tread_load_n,
+                contact_threshold_n=float(
+                    self.touchdown_support_regulation_config.get(
+                        "contact_threshold_n",
+                        1.0,
+                    )
+                ),
+                current_step=self.episode_step,
+                trigger_step=self.touchdown_support_trigger_step,
+                release_duration_steps=duration_steps,
+            )
+        )
+        self.latest_touchdown_support_release_fraction = release_fraction
+        self.maximum_touchdown_support_release_fraction = max(
+            self.maximum_touchdown_support_release_fraction,
+            release_fraction,
+        )
+        return release_fraction
+
     def _placement_reference_targets(
         self,
         placement_state: Mapping[str, object],
@@ -2968,6 +3147,41 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         if shift_scale < 0.0 or shift_scale > 1.0:
             raise ValueError("placement weight-shift scale must be within [0, 1]")
         shift_fraction = float(placement_state["shift_fraction"])
+        touchdown_release_fraction = (
+            self._touchdown_support_release_fraction(placement_state)
+        )
+        precontact_release_progress = float(
+            placement_state[
+                "advance_fraction"
+                if self.touchdown_support_precontact_release_phase == "advance"
+                else "lower_fraction"
+            ]
+        )
+        commanded_forward_release_fraction = max(
+            touchdown_release_fraction
+            * float(
+                self.touchdown_support_regulation_config.get(
+                    "forward_release_fraction",
+                    1.0,
+                )
+            ),
+            precontact_release_progress
+            * float(
+                self.touchdown_support_regulation_config.get(
+                    "precontact_forward_release_fraction",
+                    0.0,
+                )
+            ),
+        )
+        commanded_lateral_release_fraction = (
+            touchdown_release_fraction
+            * float(
+                self.touchdown_support_regulation_config.get(
+                    "lateral_release_fraction",
+                    1.0,
+                )
+            )
+        )
         swing_front_sign = (
             1.0 if self.placement_swing_leg.startswith("front_") else -1.0
         )
@@ -2979,17 +3193,29 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             * float(weight_shift["forward_m"])
             * shift_scale
             * shift_fraction
+            * (1.0 - commanded_forward_release_fraction)
         )
         body_shift_lateral_m = (
             -swing_side_sign
             * float(weight_shift["lateral_m"])
             * shift_scale
             * shift_fraction
+            * (1.0 - commanded_lateral_release_fraction)
         )
         down_by_leg = {leg: nominal_down for leg in LEGS}
         down_by_leg[self.placement_swing_leg] = nominal_down - float(
             placement_state["desired_lift_m"]
         )
+        touchdown_preload_fraction = float(placement_state["lower_fraction"])
+        if (
+            self.touchdown_support_regulation_enabled
+            and self.placement_swing_leg
+            in self.touchdown_support_regulation_legs
+        ):
+            for leg, extension_m in (
+                self.touchdown_support_preload_extension_m_by_leg.items()
+            ):
+                down_by_leg[leg] += extension_m * touchdown_preload_fraction
         forward_by_leg = {
             leg: (
                 fore_aft if leg.startswith("front_") else -fore_aft
@@ -3588,6 +3814,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.maximum_support_slip_m = 0.0
         self.maximum_support_slip_m_by_leg.fill(0.0)
         self.minimum_support_contact_fraction = 1.0
+        self.minimum_support_normal_load_n_by_leg.fill(np.inf)
+        self.minimum_post_touchdown_support_normal_load_n_by_leg.fill(np.inf)
+        self.support_normal_loads_at_maximum_tread_load_n_by_leg.fill(0.0)
         self.minimum_placement_support_margin_m = float("inf")
         self.latest_support_margin_regulation_active = False
         self.latest_support_margin_requested_target_xy_m.fill(0.0)
@@ -3596,6 +3825,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.maximum_support_margin_target_clip_m = 0.0
         self.latest_touchdown_load_lift_correction_m = 0.0
         self.maximum_touchdown_load_lift_correction_m = 0.0
+        self.touchdown_support_trigger_step = None
+        self.latest_touchdown_support_release_fraction = 0.0
+        self.maximum_touchdown_support_release_fraction = 0.0
         self.latest_placement_pitch_rear_correction_scale = 1.0
         self.maximum_swing_tread_normal_load_n = 0.0
         self.maximum_tread_normal_load_n_by_leg.fill(0.0)
@@ -4084,9 +4316,15 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.maximum_support_margin_target_clip_m = 0.0
         self.latest_touchdown_load_lift_correction_m = 0.0
         self.maximum_touchdown_load_lift_correction_m = 0.0
+        self.touchdown_support_trigger_step = None
+        self.latest_touchdown_support_release_fraction = 0.0
+        self.maximum_touchdown_support_release_fraction = 0.0
         self.maximum_support_slip_m = 0.0
         self.maximum_support_slip_m_by_leg.fill(0.0)
         self.minimum_support_contact_fraction = 1.0
+        self.minimum_support_normal_load_n_by_leg.fill(np.inf)
+        self.minimum_post_touchdown_support_normal_load_n_by_leg.fill(np.inf)
+        self.support_normal_loads_at_maximum_tread_load_n_by_leg.fill(0.0)
         self.minimum_placement_support_margin_m = float("inf")
         self.latest_placement_pitch_rear_correction_scale = 1.0
         self.maximum_swing_tread_normal_load_n = 0.0
@@ -4482,6 +4720,24 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             placement_support_contact_fraction = float(
                 np.mean(support_loads >= contact_threshold)
             )
+            for support_index, support_load_n in zip(
+                support_indices,
+                support_loads,
+                strict=True,
+            ):
+                self.minimum_support_normal_load_n_by_leg[support_index] = min(
+                    self.minimum_support_normal_load_n_by_leg[support_index],
+                    float(support_load_n),
+                )
+                if self.touchdown_support_trigger_step is not None:
+                    self.minimum_post_touchdown_support_normal_load_n_by_leg[
+                        support_index
+                    ] = min(
+                        self.minimum_post_touchdown_support_normal_load_n_by_leg[
+                            support_index
+                        ],
+                        float(support_load_n),
+                    )
             balance_position = (
                 self.latest_placement_com_position_m
                 if self.com_regulation_enabled
@@ -4566,6 +4822,21 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             placement_swing_tread_load = float(
                 step_top_loads[self.placement_swing_leg_index, 0]
             )
+            if (
+                placement_swing_tread_load
+                > self.maximum_swing_tread_normal_load_n
+            ):
+                self.support_normal_loads_at_maximum_tread_load_n_by_leg.fill(
+                    0.0
+                )
+                for support_index, support_load_n in zip(
+                    support_indices,
+                    support_loads,
+                    strict=True,
+                ):
+                    self.support_normal_loads_at_maximum_tread_load_n_by_leg[
+                        support_index
+                    ] = float(support_load_n)
             self.maximum_swing_tread_normal_load_n = max(
                 self.maximum_swing_tread_normal_load_n,
                 placement_swing_tread_load,
@@ -5442,6 +5713,16 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             "maximum_touchdown_load_lift_correction_m": (
                 self.maximum_touchdown_load_lift_correction_m
             ),
+            "touchdown_support_triggered": (
+                self.touchdown_support_trigger_step is not None
+            ),
+            "touchdown_support_trigger_step": self.touchdown_support_trigger_step,
+            "touchdown_support_release_fraction": (
+                self.latest_touchdown_support_release_fraction
+            ),
+            "maximum_touchdown_support_release_fraction": (
+                self.maximum_touchdown_support_release_fraction
+            ),
             "placement_pitch_rear_correction_scale": (
                 self.latest_placement_pitch_rear_correction_scale
             ),
@@ -5756,6 +6037,51 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 ),
                 "minimum_support_contact_fraction": (
                     self.minimum_support_contact_fraction
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "minimum_support_normal_load_n_by_leg": (
+                    {
+                        leg: (
+                            float(self.minimum_support_normal_load_n_by_leg[index])
+                            if np.isfinite(
+                                self.minimum_support_normal_load_n_by_leg[index]
+                            )
+                            else None
+                        )
+                        for index, leg in enumerate(LEGS)
+                    }
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "minimum_post_touchdown_support_normal_load_n_by_leg": (
+                    {
+                        leg: (
+                            float(
+                                self.minimum_post_touchdown_support_normal_load_n_by_leg[
+                                    index
+                                ]
+                            )
+                            if np.isfinite(
+                                self.minimum_post_touchdown_support_normal_load_n_by_leg[
+                                    index
+                                ]
+                            )
+                            else None
+                        )
+                        for index, leg in enumerate(LEGS)
+                    }
+                    if self.placement_reference_enabled
+                    else None
+                ),
+                "support_normal_loads_at_maximum_tread_load_n_by_leg": (
+                    dict(
+                        zip(
+                            LEGS,
+                            self.support_normal_loads_at_maximum_tread_load_n_by_leg.tolist(),
+                            strict=True,
+                        )
+                    )
                     if self.placement_reference_enabled
                     else None
                 ),

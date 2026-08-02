@@ -66,6 +66,16 @@ FIRST_TREAD_EXPERIMENT_PROFILES = (
     "forward-preposition-touchdown",
     "forward-preposition-load",
     "forward-preposition-load-slow",
+    "forward-preposition-load-catch-half",
+    "forward-preposition-load-catch-forward",
+    "forward-preposition-load-catch-forward-only",
+    "forward-preposition-load-catch-front-left-preload",
+    "forward-preposition-load-precontact-forward",
+    "forward-preposition-load-advance-forward",
+    "forward-preposition-load-advance-forward-deep",
+    "forward-preposition-load-advance-forward-floor",
+    "forward-preposition-load-catch-forward-fast",
+    "forward-preposition-load-catch-centered",
     "fully-folded-forward",
     "low-crouch-forward",
     "angled-hip",
@@ -126,6 +136,16 @@ def config_for_first_tread_experiment(
         "forward-preposition-touchdown",
         "forward-preposition-load",
         "forward-preposition-load-slow",
+        "forward-preposition-load-catch-half",
+        "forward-preposition-load-catch-forward",
+        "forward-preposition-load-catch-forward-only",
+        "forward-preposition-load-catch-front-left-preload",
+        "forward-preposition-load-precontact-forward",
+        "forward-preposition-load-advance-forward",
+        "forward-preposition-load-advance-forward-deep",
+        "forward-preposition-load-advance-forward-floor",
+        "forward-preposition-load-catch-forward-fast",
+        "forward-preposition-load-catch-centered",
     }:
         # Move the hips 30 mm closer to the riser while subtracting the same
         # distance from every leg-relative reach target. The intended world
@@ -147,6 +167,16 @@ def config_for_first_tread_experiment(
             elif selected in {
                 "forward-preposition-load",
                 "forward-preposition-load-slow",
+                "forward-preposition-load-catch-half",
+                "forward-preposition-load-catch-forward",
+                "forward-preposition-load-catch-forward-only",
+                "forward-preposition-load-catch-front-left-preload",
+                "forward-preposition-load-precontact-forward",
+                "forward-preposition-load-advance-forward",
+                "forward-preposition-load-advance-forward-deep",
+                "forward-preposition-load-advance-forward-floor",
+                "forward-preposition-load-catch-forward-fast",
+                "forward-preposition-load-catch-centered",
             }:
                 # V60's 130 mm landing command left the 12.5 mm-radius fork
                 # proxy roughly 2.7 mm above the tread. The deeper target is
@@ -158,6 +188,123 @@ def config_for_first_tread_experiment(
             timing = dict(placement["timing"])
             timing["lower_duration_seconds"] = 3.0
             placement["timing"] = timing
+        elif selected.startswith("forward-preposition-load-catch-") or selected in {
+            "forward-preposition-load-precontact-forward",
+            "forward-preposition-load-advance-forward",
+            "forward-preposition-load-advance-forward-deep",
+            "forward-preposition-load-advance-forward-floor",
+        }:
+            catch_parameters = {
+                "forward-preposition-load-catch-half": (0.50, 0.50, 1.50, 1.0),
+                "forward-preposition-load-catch-forward": (1.00, 0.50, 1.00, 1.0),
+                "forward-preposition-load-catch-forward-only": (
+                    1.00,
+                    0.00,
+                    1.00,
+                    1.0,
+                ),
+                "forward-preposition-load-catch-front-left-preload": (
+                    1.00,
+                    0.00,
+                    0.75,
+                    1.0,
+                ),
+                "forward-preposition-load-precontact-forward": (
+                    1.00,
+                    0.00,
+                    0.75,
+                    1.0,
+                ),
+                "forward-preposition-load-advance-forward": (
+                    1.00,
+                    0.00,
+                    0.75,
+                    1.0,
+                ),
+                "forward-preposition-load-advance-forward-deep": (
+                    1.00,
+                    0.00,
+                    0.75,
+                    1.0,
+                ),
+                "forward-preposition-load-advance-forward-floor": (
+                    1.00,
+                    0.00,
+                    0.75,
+                    1.0,
+                ),
+                "forward-preposition-load-catch-forward-fast": (
+                    1.00,
+                    0.50,
+                    0.35,
+                    0.5,
+                ),
+                "forward-preposition-load-catch-centered": (
+                    1.00,
+                    1.00,
+                    1.00,
+                    1.0,
+                ),
+            }
+            (
+                forward_release,
+                lateral_release,
+                duration_seconds,
+                contact_threshold_n,
+            ) = (
+                catch_parameters[selected]
+            )
+            # The three-foot unloading bias is useful until the sole reaches
+            # the tread, but V61 kept that bias throughout touchdown. Latch on
+            # geometry-qualified top load and smoothly return the commanded
+            # body shift toward the new four-foot support polygon.
+            placement["touchdown_support_regulation"] = {
+                "enabled": True,
+                "legs": ["front_right"],
+                "phases": ["lower", "hold"],
+                "contact_threshold_n": contact_threshold_n,
+                "release_duration_seconds": duration_seconds,
+                "forward_release_fraction": forward_release,
+                "lateral_release_fraction": lateral_release,
+            }
+            if selected == "forward-preposition-load-catch-front-left-preload":
+                placement["touchdown_support_regulation"][
+                    "preload_extension_m_by_leg"
+                ] = {"front_left": 0.008}
+            elif selected == "forward-preposition-load-precontact-forward":
+                placement["touchdown_support_regulation"][
+                    "precontact_forward_release_fraction"
+                ] = 1.0
+            elif selected in {
+                "forward-preposition-load-advance-forward",
+                "forward-preposition-load-advance-forward-deep",
+                "forward-preposition-load-advance-forward-floor",
+            }:
+                placement["touchdown_support_regulation"].update(
+                    {
+                        "precontact_forward_release_fraction": 1.0,
+                        "precontact_forward_release_phase": "advance",
+                    }
+                )
+                if selected == "forward-preposition-load-advance-forward-deep":
+                    for level in placement_curriculum["levels"]:
+                        level["landing_lift_m"] = 0.085
+                elif selected == "forward-preposition-load-advance-forward-floor":
+                    for level in placement_curriculum["levels"]:
+                        level["landing_lift_m"] = 0.055
+            # Cap only geometry-qualified tread-top load. This protects the
+            # contact transient without letting shin/riser force steer the
+            # controller or satisfy placement success.
+            placement["touchdown_load_regulation"] = {
+                "enabled": True,
+                "legs": ["front_right"],
+                "phases": ["lower", "hold"],
+                "target_tread_load_n": 10.0,
+                "proportional_gain_m_per_n": 0.0005,
+                "maximum_lift_correction_m": 0.020,
+                "attack_smoothing_factor": 0.50,
+                "release_smoothing_factor": 0.05,
+            }
     elif selected == "fully-folded-forward":
         # 160.370 mm down with 25 mm fore/aft puts the knee at 119 degrees,
         # one degree inside the measured 120-degree hardware limit.
@@ -985,6 +1132,44 @@ def touchdown_load_lift_correction_m(
             "maximum_lift_correction_m must be finite and positive"
         )
     return float(np.clip((measured - target) * gain, 0.0, maximum))
+
+
+def touchdown_support_release_state(
+    *,
+    measured_tread_load_n: float,
+    contact_threshold_n: float,
+    current_step: int,
+    trigger_step: int | None,
+    release_duration_steps: int,
+) -> tuple[int | None, float]:
+    """Latch qualified touchdown and return its smooth support-release phase."""
+
+    measured = float(measured_tread_load_n)
+    threshold = float(contact_threshold_n)
+    step = int(current_step)
+    duration = int(release_duration_steps)
+    if not np.isfinite(measured) or measured < 0.0:
+        raise ValueError("measured_tread_load_n must be finite and nonnegative")
+    if not np.isfinite(threshold) or threshold <= 0.0:
+        raise ValueError("contact_threshold_n must be finite and positive")
+    if step < 0:
+        raise ValueError("current_step cannot be negative")
+    if duration <= 0:
+        raise ValueError("release_duration_steps must be positive")
+    latched_step = None if trigger_step is None else int(trigger_step)
+    if latched_step is not None and (latched_step < 0 or latched_step > step):
+        raise ValueError("trigger_step must be within [0, current_step]")
+    if latched_step is None and measured >= threshold:
+        latched_step = step
+    if latched_step is None:
+        return None, 0.0
+    linear_fraction = float(
+        np.clip((step - latched_step + 1) / duration, 0.0, 1.0)
+    )
+    smooth_fraction = linear_fraction * linear_fraction * (
+        3.0 - 2.0 * linear_fraction
+    )
+    return latched_step, float(smooth_fraction)
 
 
 def balance_target_error_xy(

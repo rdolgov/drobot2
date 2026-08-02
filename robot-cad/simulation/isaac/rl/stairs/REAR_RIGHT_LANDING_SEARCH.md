@@ -517,3 +517,93 @@ The three-episode evaluation report SHA-256 is
 RGB remains recording-only. The next run should train a short, contact-triggered
 support/COM residual that acts only around touchdown; neither additional vision
 nor higher friction addresses the observed first-load instability yet.
+
+## V63-V75 contact-triggered support release and first strict foothold
+
+V63-V73 tested the touchdown transient directly. Releasing only half of the
+forward stance bias still tipped at `12.268 N`; releasing the full forward bias
+could remain upright, but seed sensitivity exposed a front-left support-foot
+unload. Centered, forward-only, faster-release, and front-left-preload variants
+did not remove that failure. The decisive change starts forward support release
+during the `advance` phase, before contact, while leaving lateral support bias
+in place. This keeps the three stance feet loaded as the swing foot descends.
+
+The zero-residual V74 acceptance probe used:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\probe_first_tread_profiles.py `
+  --profile forward-preposition-load-advance-forward-floor `
+  --placement-level quarter-tread-load --seed 1018 `
+  --report simulation\isaac\output\rl\first-tread-profile-v74-advance-forward-floor-seed1018.json
+```
+
+It completed the first strict, geometry-qualified front-right foothold in
+`741` control steps (`12.35 s`): `207.154 mm` maximum lift, `11.472 N` maximum
+true tread-top load, `19.919 mm` maximum support slip, `8.677 deg` maximum
+tilt, and no failure reason. Minimum post-touchdown loads were `10.315 N`
+front-left, `32.921 N` rear-left, and `32.352 N` rear-right. The report SHA-256
+is `e9582511ba9c871ac48c239d166aa602c896f42f38c05e09b261e24040fefaab`.
+
+A deliberately small all-joint residual PPO was then trained from the same
+reference:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v10_front_right_single_tread_placement.yaml `
+  --first-tread-profile forward-preposition-load-advance-forward-floor `
+  --output-dir simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025 `
+  --total-timesteps 2048 --curriculum-total-timesteps 2048 `
+  --fixed-placement-level quarter-tread-load --seed 1025 --device cpu `
+  --ppo-learning-rate 0.000001 --ppo-initial-log-std -5.5 `
+  --ppo-entropy-coefficient 0.0
+```
+
+Training completed `2,048` steps in `60.550 s`. Fresh evaluation used:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\evaluate_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v10_front_right_single_tread_placement.yaml `
+  --first-tread-profile forward-preposition-load-advance-forward-floor `
+  --model simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025\drobot_stairs_ppo_final.zip `
+  --episodes 5 --seed 1026 --device cpu --active-steps 1 `
+  --placement-level quarter-tread-load `
+  --report simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-eval-5ep-seed1026.json
+```
+
+Four of five deterministic fresh episodes completed the required foothold.
+Those four lifted `209.003-211.115 mm`, carried `12.608-16.531 N` qualified
+tread load, and stayed below `10.047 deg` tilt. One episode tipped before true
+contact. Successful episodes showed `28.178-33.478 mm` maximum whole-episode
+support-foot motion, above the `25 mm` measurable-slip diagnostic, so V75 is a
+useful first-foot policy but not yet the robust boundary for adding another
+leg. The V74 zero-residual controller remains the cleaner strict boundary. The
+five-episode report SHA-256 is
+`0bb46699886e05e06ba2cbead862fc162aca199e3bdaa172abadde293597f351`.
+
+The accepted seed-1026 policy replay was recorded with:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\record_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v10_front_right_single_tread_placement.yaml `
+  --first-tread-profile forward-preposition-load-advance-forward-floor `
+  --model simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025\drobot_stairs_ppo_final.zip `
+  --seed 1026 --device cpu --active-steps 1 `
+  --placement-level quarter-tread-load `
+  --search-placement-success-episodes 5 --camera-view external `
+  --fps 30 --width 960 --height 540 `
+  --video reviews\ppo-stairs-v75-first-strict-foothold-eval-seed1026.mp4 `
+  --thumbnail reviews\ppo-stairs-v75-first-strict-foothold-eval-seed1026.png `
+  --report simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-record-seed1026.json
+```
+
+The 337-frame H.264 MP4 is `14,783,668` bytes with SHA-256
+`87e4578c2198abaf74151cd736e9ebd08f465989ef4e4ee5340af02c23b6c06f`.
+The recording reaches `211.115 mm` lift and `12.728 N` tread load without a
+failure. It uses an external camera only for evidence; the policy remains
+camera-blind and consumes IMU, joint/proprioceptive, contact/load, prior-action,
+and known analytic stair-geometry values. The stair stays exactly `180 mm`
+rise by `250 mm` tread and the applied joint effort stays capped at
+`0.8825985 N m`. This is one-foot placement, not a completed stair climb. The
+next bounded task should restore the cleaner V74 boundary and train front-left
+placement while explicitly penalizing any loss of front-right tread load.

@@ -84,6 +84,7 @@ from _stair_rl_contract import (  # noqa: E402
     support_roll_vertical_corrections,
     support_triangle_incenter_xy,
     touchdown_load_lift_correction_m,
+    touchdown_support_release_state,
     validated_foot_contact_patch_config,
 )
 
@@ -157,6 +158,16 @@ def test_first_tread_profiles_include_folded_crouch_and_sideways_hip(
         "forward-preposition-touchdown",
         "forward-preposition-load",
         "forward-preposition-load-slow",
+        "forward-preposition-load-catch-half",
+        "forward-preposition-load-catch-forward",
+        "forward-preposition-load-catch-forward-only",
+        "forward-preposition-load-catch-front-left-preload",
+        "forward-preposition-load-precontact-forward",
+        "forward-preposition-load-advance-forward",
+        "forward-preposition-load-advance-forward-deep",
+        "forward-preposition-load-advance-forward-floor",
+        "forward-preposition-load-catch-forward-fast",
+        "forward-preposition-load-catch-centered",
         "fully-folded-forward",
         "low-crouch-forward",
         "angled-hip",
@@ -237,6 +248,34 @@ def test_first_tread_profiles_include_folded_crouch_and_sideways_hip(
     assert slow_load["placement_curriculum"]["levels"][1][
         "accept_early_tread_contact_after_clearance"
     ] is True
+
+    catch = config_for_first_tread_experiment(
+        config["task"],
+        "forward-preposition-load-catch-forward",
+    )
+    support_regulation = catch["placement_reference"][
+        "touchdown_support_regulation"
+    ]
+    assert support_regulation == {
+        "enabled": True,
+        "legs": ["front_right"],
+        "phases": ["lower", "hold"],
+        "contact_threshold_n": pytest.approx(1.0),
+        "release_duration_seconds": pytest.approx(1.0),
+        "forward_release_fraction": pytest.approx(1.0),
+        "lateral_release_fraction": pytest.approx(0.5),
+    }
+    assert catch["placement_reference"]["touchdown_load_regulation"][
+        "target_tread_load_n"
+    ] == pytest.approx(10.0)
+
+    advance_catch = config_for_first_tread_experiment(
+        config["task"],
+        "forward-preposition-load-advance-forward",
+    )
+    assert advance_catch["placement_reference"][
+        "touchdown_support_regulation"
+    ]["precontact_forward_release_phase"] == "advance"
 
 
 def test_foot_contact_patch_contract_preserves_fork_tip_reach() -> None:
@@ -2588,6 +2627,46 @@ def test_touchdown_load_feedback_retracts_only_above_target() -> None:
             proportional_gain_m_per_n=0.0005,
             maximum_lift_correction_m=0.035,
         )
+
+
+def test_touchdown_support_release_latches_qualified_contact_and_ramps() -> None:
+    arguments = {
+        "contact_threshold_n": 1.0,
+        "release_duration_steps": 60,
+    }
+    trigger, fraction = touchdown_support_release_state(
+        measured_tread_load_n=0.9,
+        current_step=100,
+        trigger_step=None,
+        **arguments,
+    )
+    assert trigger is None
+    assert fraction == pytest.approx(0.0)
+
+    trigger, fraction = touchdown_support_release_state(
+        measured_tread_load_n=1.1,
+        current_step=101,
+        trigger_step=trigger,
+        **arguments,
+    )
+    assert trigger == 101
+    assert 0.0 < fraction < 0.01
+
+    _, midpoint = touchdown_support_release_state(
+        measured_tread_load_n=0.0,
+        current_step=130,
+        trigger_step=trigger,
+        **arguments,
+    )
+    assert midpoint == pytest.approx(0.5)
+
+    _, complete = touchdown_support_release_state(
+        measured_tread_load_n=0.0,
+        current_step=160,
+        trigger_step=trigger,
+        **arguments,
+    )
+    assert complete == pytest.approx(1.0)
 
 
 def test_joint_effort_telemetry_reports_tracking_and_cap_utilization() -> None:
