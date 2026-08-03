@@ -794,7 +794,9 @@ class DrobotPureStairsEnv(DirectRLEnv):
                 elif joint_name.startswith("rear_") and joint_name.endswith("knee"):
                     joint_pos[:, joint_index] = -reset_knee
             self._reset_fold_fraction[env_ids] = reset_fraction
-        joint_pos += 0.01 * (2.0 * torch.rand_like(joint_pos) - 1.0)
+        joint_pos += self.cfg.reset_joint_position_noise_rad * (
+            2.0 * torch.rand_like(joint_pos) - 1.0
+        )
         joint_vel = torch.zeros_like(self._robot.data.default_joint_vel.torch[env_ids])
         root_pose = self._robot.data.default_root_pose.torch[env_ids].clone()
         root_pose[:, :3] += self._terrain.env_origins[env_ids]
@@ -810,7 +812,9 @@ class DrobotPureStairsEnv(DirectRLEnv):
         root_pose[:, 0] += self.cfg.reset_forward_jitter_m * (
             2.0 * torch.rand(len(env_ids), device=self.device) - 1.0
         )
-        root_pose[:, 1] += 0.01 * (2.0 * torch.rand(len(env_ids), device=self.device) - 1.0)
+        root_pose[:, 1] += self.cfg.reset_lateral_jitter_m * (
+            2.0 * torch.rand(len(env_ids), device=self.device) - 1.0
+        )
         root_vel = torch.zeros_like(self._robot.data.default_root_vel.torch[env_ids])
 
         self._robot.write_root_pose_to_sim_index(root_pose=root_pose, env_ids=env_ids)

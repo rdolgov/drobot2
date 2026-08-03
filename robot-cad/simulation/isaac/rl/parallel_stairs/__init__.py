@@ -200,6 +200,26 @@ _register_variant(
     "DrobotPureStairsYaw90FoldBridgeFootLift5Wide512HipPPORunnerCfg",
 )
 _register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-TwoMode-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5CoupledHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5TwoModeHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-GRU-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5CoupledHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5GruHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-SuccessDominant-GRU-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5SuccessDominantHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5GruHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-SensorAsym-GRU-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5SensorAsymHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5GruHipPPORunnerCfg",
+)
+_register_variant(
     "Drobot-Pure-Stairs-Yaw90-FoldTail75-Foot-Lift5-Wide512-Hip-Direct",
     "DrobotPureStairsYaw90FoldTail75FootLift5HipEnvCfg",
     "DrobotPureStairsYaw90FoldTail75FootLift5Wide512HipPPORunnerCfg",

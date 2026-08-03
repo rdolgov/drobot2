@@ -181,6 +181,8 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     reset_yaw_deg = 0.0
     reset_forward_offset_m = 0.0
     reset_forward_jitter_m = 0.02
+    reset_lateral_jitter_m = 0.01
+    reset_joint_position_noise_rad = 0.01
     reset_fold_fraction_min = None
     reset_fold_fraction_max = None
     reset_alpha_power = 1.0
@@ -681,6 +683,39 @@ class DrobotPureStairsYaw90FullFoldFootLift5CoupledHipEnvCfg(
 
     foot_unload_reward_scale = 0.75
     unloaded_lift_reward_scale = 4.0
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift5SuccessDominantHipEnvCfg(
+    DrobotPureStairsYaw90FullFoldFootLift5CoupledHipEnvCfg
+):
+    """Make a held symmetric lift decisively better than waiting in stance.
+
+    The predecessor paid 0.25 for every supported foot on every step. Four
+    stationary supports therefore competed with the delayed terminal lift
+    bonus after discounting. This controlled variant removes only that
+    stationary income; fall, upright, effort, action-rate, force-backed unload,
+    same-foot lift, and terminal success terms remain unchanged.
+    """
+
+    support_reward_scale = 0.0
+    success_completion_reward_scale = 400.0
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift5SensorAsymHipEnvCfg(
+    DrobotPureStairsYaw90FullFoldFootLift5SuccessDominantHipEnvCfg
+):
+    """Expose realistic leg-to-leg reset differences through deployable sensors.
+
+    Independent joint offsets are symmetric across all legs and do not identify
+    or prescribe a swing foot. They give the deterministic actor measured joint
+    and load differences from which it can learn which physical foot is easiest
+    to unload, matching the unavoidable calibration/load asymmetry on hardware.
+    """
+
+    reset_joint_position_noise_rad = 0.04
+    reset_lateral_jitter_m = 0.02
 
 
 @configclass

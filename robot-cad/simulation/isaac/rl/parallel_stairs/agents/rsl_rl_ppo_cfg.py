@@ -5,7 +5,20 @@ from isaaclab_rl.rsl_rl import (
     RslRlMLPModelCfg,
     RslRlOnPolicyRunnerCfg,
     RslRlPpoAlgorithmCfg,
+    RslRlRNNModelCfg,
 )
+
+
+@configclass
+class DrobotTwoModeGaussianDistributionCfg(RslRlMLPModelCfg.DistributionCfg):
+    """Two whole-action modes with deterministic most-probable-mode output."""
+
+    class_name: str = (
+        "parallel_stairs.two_mode_gaussian:TwoModeGaussianDistribution"
+    )
+    init_std: float = 0.20
+    num_modes: int = 2
+    std_range: tuple[float, float] = (1.0e-4, 2.0)
 
 
 @configclass
@@ -379,6 +392,59 @@ class DrobotPureStairsYaw90FoldTail75FootLift5Wide512HipPPORunnerCfg(
     experiment_name = (
         "drobot_pure_stairs_yaw90_fold_tail75_foot_lift5_wide512_hip_180x250_direct"
     )
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift5TwoModeHipPPORunnerCfg(
+    DrobotPureStairsYaw90FoldBridgeFootLift5Wide512HipPPORunnerCfg
+):
+    """Preserve separate learned lift modes instead of averaging their actions."""
+
+    experiment_name = (
+        "drobot_pure_stairs_yaw90_fullfold_foot_lift5_twomode_hip_180x250_direct"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.actor.distribution_cfg = DrobotTwoModeGaussianDistributionCfg()
+        self.algorithm.entropy_coef = 0.001
+        self.algorithm.learning_rate = 5.0e-5
+        self.algorithm.desired_kl = 0.005
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift5GruHipPPORunnerCfg(
+    DrobotPureStairsPPORunnerCfg
+):
+    """Use sensor history to coordinate an internally chosen multi-step unload."""
+
+    experiment_name = "drobot_pure_stairs_yaw90_fullfold_foot_lift5_gru_hip_180x250_direct"
+    num_steps_per_env = 64
+    save_interval = 1
+    actor = RslRlRNNModelCfg(
+        hidden_dims=[256, 256],
+        activation="elu",
+        obs_normalization=True,
+        distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(init_std=0.40),
+        rnn_type="gru",
+        rnn_hidden_dim=128,
+        rnn_num_layers=1,
+    )
+    critic = RslRlRNNModelCfg(
+        hidden_dims=[256, 256],
+        activation="elu",
+        obs_normalization=True,
+        rnn_type="gru",
+        rnn_hidden_dim=128,
+        rnn_num_layers=1,
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.entropy_coef = 0.003
+        self.algorithm.learning_rate = 2.0e-4
+        self.algorithm.desired_kl = 0.01
+        self.algorithm.num_mini_batches = 8
 
 
 @configclass

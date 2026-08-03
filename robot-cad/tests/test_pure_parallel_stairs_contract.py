@@ -536,6 +536,61 @@ def test_bounded_parallel_evaluator_disables_only_rgb_capture() -> None:
     assert "no video file is produced" in source.lower()
 
 
+def test_two_mode_policy_preserves_pure_sensor_contract_and_commits_deterministically() -> None:
+    distribution = _source("two_mode_gaussian.py")
+    transplant = _source("transplant_two_mode_checkpoint.py")
+    env_cfg = _source("pure_stairs_env_cfg.py")
+    runner = _source("agents/rsl_rl_ppo_cfg.py")
+    registration = _source("__init__.py")
+
+    assert "self.num_modes + self.num_modes * self.output_dim" in distribution
+    assert "torch.multinomial" in distribution
+    assert "logsumexp" in distribution
+    assert "logits.argmax" in distribution
+    assert "means.gather" in distribution
+    assert "selected leg" not in distribution.lower()
+    assert "source_weight + direction" in transplant
+    assert "source_weight - direction" in transplant
+    assert "mode_average_max_weight_error" in transplant
+    assert "DrobotTwoModeGaussianDistributionCfg" in runner
+    assert "DrobotPureStairsYaw90FullFoldFootLift5TwoModeHipPPORunnerCfg" in runner
+    assert "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-TwoMode-Hip-Direct" in registration
+
+    forced_mode = _source("force_two_mode_checkpoint.py")
+    assert 'actor["mlp.4.weight"][:2].zero_()' in forced_mode
+    assert 'actor["mlp.4.bias"][:2].fill_(-20.0)' in forced_mode
+    assert 'actor["mlp.4.bias"][args.mode] = 20.0' in forced_mode
+    assert '"training_checkpoint": False' in forced_mode
+
+    assert "DrobotPureStairsYaw90FullFoldFootLift5GruHipPPORunnerCfg" in runner
+    assert "RslRlRNNModelCfg" in runner
+    assert 'rnn_type="gru"' in runner
+    assert "rnn_hidden_dim=128" in runner
+    assert "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-GRU-Hip-Direct" in registration
+
+    success_dominant = _class_assignments(
+        env_cfg,
+        "DrobotPureStairsYaw90FullFoldFootLift5SuccessDominantHipEnvCfg",
+    )
+    assert success_dominant["support_reward_scale"] == 0.0
+    assert success_dominant["success_completion_reward_scale"] == 400.0
+    assert (
+        "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-SuccessDominant-GRU-Hip-Direct"
+        in registration
+    )
+
+    sensor_asym = _class_assignments(
+        env_cfg,
+        "DrobotPureStairsYaw90FullFoldFootLift5SensorAsymHipEnvCfg",
+    )
+    assert sensor_asym["reset_joint_position_noise_rad"] == 0.04
+    assert sensor_asym["reset_lateral_jitter_m"] == 0.02
+    assert (
+        "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-SensorAsym-GRU-Hip-Direct"
+        in registration
+    )
+
+
 def test_low25_consolidation_uses_long_low_entropy_batches() -> None:
     runner_source = (
         ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"

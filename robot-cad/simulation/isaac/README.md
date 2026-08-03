@@ -329,6 +329,9 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/parallel_stairs/train_pure_parallel_stairs.py` | Registers and launches 128-way RSL-RL PPO training without gait phases, IK, or scripted leg order | task and agent config | checkpoints, parameters, and TensorBoard events |
 | `simulation/isaac/rl/parallel_stairs/evaluate_pure_parallel_stairs.py` | Runs a bounded many-environment deterministic comparison without RGB frame capture | task, agent config, checkpoint, and step count | exact episode totals |
 | `simulation/isaac/rl/parallel_stairs/widen_rsl_rl_checkpoint.py` | Duplicates hidden units and divides downstream weights to widen both PPO MLPs without changing their outputs | 256-by-256 RSL-RL checkpoint | verified 512-by-512 checkpoint with reset optimizer moments |
+| `simulation/isaac/rl/parallel_stairs/two_mode_gaussian.py` | Implements an exact two-component whole-action Gaussian PPO distribution whose deterministic action selects a learned component rather than averaging modes | unchanged 70-value actor observation | sampled actions, exact mixture log probability, and committed deterministic action |
+| `simulation/isaac/rl/parallel_stairs/transplant_two_mode_checkpoint.py` | Converts a widened single-Gaussian checkpoint into two antisymmetrically separated modes while preserving its average action | 512-by-512 RSL-RL checkpoint | verified two-mode training initializer |
+| `simulation/isaac/rl/parallel_stairs/force_two_mode_checkpoint.py` | Forces either learned mixture component for diagnostic deterministic evaluation | trained two-mode checkpoint | evaluation-only component checkpoint |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-Stand-Rise10-Hip-Direct` | Tests a symmetric four-support, 10 mm body-rise precursor from lower hardware-representable resets | IMU, depth, joints, previous action, and foot loads | strict body-rise checkpoint telemetry |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-ThreeSupport-Rise10-Hip-Direct` | Relaxes the same pure-PPO body-rise precursor to any three verified supports | same 70 deployable actor inputs | three-support rise telemetry |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-Upright-Rise10-Hip-Direct` | Uses the literal non-failing upright + held 10 mm body-rise outcome without a contact-pattern gate | same 70 deployable actor inputs | ungated extension checkpoint telemetry |
@@ -344,6 +347,10 @@ an underscore are imported helpers and are not launched directly.
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Wide512-Hip-Direct` | Evaluates the widened actor from the exact fully folded sideways reset | same 512-by-512 actor and strict force-backed 50 mm gate | deterministic capacity promotion evidence |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Coupled-Wide512-Hip-Direct` | Couples lift and relative-force unload reward on the same unnamed foot from the exact folded reset | symmetric physical outcomes; no selected leg, phase, or reference action | mode-consolidation PPO checkpoints |
 | `Drobot-Pure-Stairs-Yaw90-FoldTail75-Foot-Lift5-Wide512-Hip-Direct` | Restricts resets to 75%-to-fully-folded and biases samples toward the endpoint | same symmetric pure-RL reward and 512-by-512 actor | endpoint-focused curriculum checkpoints |
+| `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-TwoMode-Hip-Direct` | Learns two whole-action Gaussian modes so valid unnamed-foot strategies need not be averaged into one action | same 70 deployable inputs; no selected leg, phase, or reference motion | multimodal PPO checkpoints and forced-component diagnostics |
+| `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-GRU-Hip-Direct` | Adds a 128-state GRU so the sensor-only actor can coordinate a persistent multi-step unload | same 70 deployable inputs and symmetric physical reward | recurrent PPO checkpoints |
+| `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-SuccessDominant-GRU-Hip-Direct` | Removes the per-step four-foot support income that made waiting competitive with terminal success and doubles the held-lift payoff | same recurrent sensor-only actor | controlled reward-economics evidence |
+| `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-SensorAsym-GRU-Hip-Direct` | Adds bounded symmetric joint and lateral reset differences visible through existing joint/load/IMU sensors | no leg identifier or non-deployable observation | sensor-conditioned mode-selection evidence |
 | `Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift10-Hip-Direct` | Applies the same fold-distribution bridge and symmetric unload signal at the 100 mm gate | same 70 deployable actor inputs; no selected leg or reference motion | 10 cm transfer candidates for exact full-fold evaluation |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift14-Hip-Direct` | Defines the 140 mm intermediate force-backed lift stage without prescribing a swing leg | same 70 deployable actor inputs | next-stage PPO checkpoints |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift19-Hip-Direct` | Defines the required 190 mm force-backed lift from the fully folded sideways stance | same 70 deployable actor inputs | final lift-stage PPO checkpoints |
@@ -357,6 +364,12 @@ Gaussian standard deviation. The training-only critic has `84,225`, for
 `171,289` trainable parameters in total. The roughly `2.1 MB` RSL-RL
 checkpoint also contains both normalizers and optimizer state, so checkpoint
 size is not the actor's deployed memory footprint.
+
+The recurrent comparison uses `GRU(70, 128) -> 256 -> 256 -> 12`. Its saved
+actor state has `178,923` values and the training-only critic has `176,084`,
+for `355,007` model-state values total. This is still smaller than the
+`512 x 512` feed-forward comparison actor, so the recurrent result is not a
+large-model capacity test.
 
 The 2026-08-03 folded-sideways bridge round added a symmetric relative-force
 unload reward and sampled the full `0.46` to `0.30 m` reset range without a
@@ -391,6 +404,30 @@ promoted to 100 mm, and the next experiment should address the multimodal
 policy distribution without adding a selected leg, gait phase, reference
 action, or non-deployable observation. The third-person diagnostic is archived
 as `reviews/ppo-stairs-fold-tail75-wide512-model813-seed1238.mp4`.
+
+The next pure-PPO round tested that hypothesis with `2,048,000` additional
+parallel transitions. A two-component whole-action Gaussian produced
+`79/4,040` strict stochastic successes (`1.96%`) over `819,200` transitions,
+but learned-selector checkpoints and both individually forced components were
+all deterministic zero-success. A 128-state GRU then produced `31/1,936`
+(`1.60%`) over `409,600` transitions; models 24, 44, and 49 were also
+deterministic zero-success. This rejects per-control-step mixture selection and
+sensor history alone as solutions to the policy-mean collapse.
+
+Reward auditing found that the old exact-fold task paid `0.25` per supported
+foot on every control step, making a full stationary episode competitive with
+the delayed `+200` success under discounting. A controlled continuation removed
+that stationary support income and raised terminal success to `+400`. It
+produced `27/1,863` (`1.45%`) over `409,600` transitions, while four screened
+checkpoints remained deterministic zero-success. A final continuation increased
+independent symmetric reset joint offsets from `0.01` to `0.04 rad` so the same
+joint/load/IMU sensors could expose real-hardware-like asymmetry without a leg
+identifier. It produced `34/2,324` (`1.46%`) over `409,600` transitions; models
+103, 122, 137, and 147 again scored zero deterministic successes. No checkpoint
+is promoted to 100 mm. The honest post-training third-person attempts are
+archived as
+`reviews/ppo-stairs-success-dominant-gru-model98-seed1263.mp4` and
+`reviews/ppo-stairs-sensor-asym-gru-model147-seed1270.mp4`.
 
 | `simulation/isaac/models/ppo-walk-v1-2m/` | Tracks the frozen flat-walking dependency used by v5 residual control | validated flat PPO ZIP | release dependency |
 | `simulation/isaac/models/ppo-stairs-pure-parallel-v1-lifthold-seed1059/agent.yaml` | Captures the exact RSL-RL PPO configuration for the packaged lift-hold checkpoint | saved training parameters | no generated data |
