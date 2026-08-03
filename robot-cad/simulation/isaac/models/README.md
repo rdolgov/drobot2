@@ -13,6 +13,7 @@ ignored under `simulation/isaac/output/`.
 | `ppo-stairs-v13-front-right-190mm-lift-small/` | Direct front-right lift PPO residual, manifest, training/evaluation/recording reports; 3/3 strict 190 mm lift-hold successes | `b53a8d3d0087f816403461f328c758657d85ab6b19a08d79e951a8f4b85a9494` |
 | `ppo-foot-lift-v3-rear-right-190mm-small/` | Fresh 512-step rear-right unsupported-balance PPO, manifest, 5/5 strict evaluation, and recording report | `376d1e02e09ea9d5d25eacdc38bf46432c8ed9bf6b3efc65cccdbec6214e636b` |
 | `ppo-foot-lift-v3-rear-right-190mm-seed941-small/` | Independent fresh 512-step rear-right no-fall rerun, manifest, 5/5 strict evaluation, and recording report | `7f3ccb0a159140de47eb99d8ad71c0eeabf3692a6dd712e36c44206c4e9d279c` |
+| `ppo-foot-lift-pure-19cm-consolidate-seed1100/` | Pure-PPO 128-environment supported-lift continuation, repeated intermittent strict success, resolved configs, and deterministic review metadata | `1b5aa01b1c36c7c3a283a9149c35b88b3db0f81eaf34fbcc71f8c9b3b94c7162` |
 | `ppo-stairs-v45-rear-left-dynamic-transfer-4096/` | Exact-snapshot 4,096-step rear-left dynamic-transfer diagnostic, deterministic failed replay, and controller-authority evidence; objective failed | `c97cb2d5c4f1f7cb1cf70c011026b36033c4e71317c82e416f6d4529a48ab5c0` |
 | `ppo-stairs-v46-rear-right-sidestep-transfer-4096/` | Accepted post-landing rear-right sidestep snapshot plus rejected 4,096-step rear-left transfer PPO and deterministic failure recording | `9b8cf6dec9f2da8f43dab9fb65f72b4a32999340d43356cf748c3a8498164977` |
 

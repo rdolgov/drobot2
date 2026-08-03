@@ -82,6 +82,21 @@ class DrobotPureStairsFirstStepLandingHipPPORunnerCfg(DrobotPureStairsHipPPORunn
 
 
 @configclass
+class DrobotPureStairsFirstStepLandingLongHipPPORunnerCfg(
+    DrobotPureStairsFirstStepLandingHipPPORunnerCfg
+):
+    """Longer on-policy batches retain complete rare landing sequences."""
+
+    experiment_name = "drobot_pure_stairs_first_step_landing_long_hip_180x250_direct"
+    num_steps_per_env = 64
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.num_learning_epochs = 10
+        self.algorithm.num_mini_batches = 8
+
+
+@configclass
 class DrobotPureStairsFirstStepClose1HipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
     experiment_name = "drobot_pure_stairs_first_step_close1_hip_180x250_direct"
     save_interval = 1

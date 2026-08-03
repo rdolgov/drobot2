@@ -219,3 +219,17 @@ def test_foot_lift_curriculum_is_symmetric_and_supported() -> None:
     lift_14 = _class_assignments(cfg_source, "DrobotPureStairsFootLift14HipEnvCfg")
     assert lift_10["foot_lift_height_m"] == 0.10
     assert lift_14["foot_lift_height_m"] == 0.14
+
+
+def test_long_landing_runner_retains_complete_rare_sequences() -> None:
+    runner_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
+    ).read_text(encoding="utf-8")
+    registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
+        encoding="utf-8"
+    )
+    assert "class DrobotPureStairsFirstStepLandingLongHipPPORunnerCfg" in runner_source
+    assert "num_steps_per_env = 64" in runner_source
+    assert "self.algorithm.num_learning_epochs = 10" in runner_source
+    assert "self.algorithm.num_mini_batches = 8" in runner_source
+    assert "Drobot-Pure-Stairs-First-Step-Landing-Long-Hip-Direct" in registration

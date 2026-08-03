@@ -101,6 +101,17 @@ The DirectRLEnv audit also confirmed that dones are computed before rewards;
 the completion bonus now uses the environment's authoritative success flag on
 the terminal transition instead of predicting the next hold count.
 
+A sixth round tested whether longer 64-step on-policy batches would retain a
+complete rare landing sequence. Starting from the earlier landing checkpoint,
+128 environments processed 491,520 transitions. Fork-tip clearance reached
+0.3347 m and base-height gain reached 0.0169 m, but the run produced no tread
+contact, so rollout length by itself did not solve placement. Compute then
+returned to the simpler 190 mm supported-lift task for 138,240 transitions.
+That continuation produced repeated strict success batches, peaking at 50%,
+0.2400 m clearance, and 0.1333 s supported hold. Success is still intermittent,
+and the new deterministic six-second review still collapses and resets; it is
+not a foot-lift pass or a stair-climb pass.
+
 ## Editable sources
 
 - `simulation/isaac/rl/parallel_stairs/pure_stairs_env.py`: vectorized
