@@ -148,6 +148,7 @@ parser.add_argument(
         "support_abduction_only",
         "swing_plus_support_abduction",
         "swing_plus_support_hips",
+        "swing_plus_support_all",
     ),
     default=None,
     help=(
@@ -160,7 +161,7 @@ parser.add_argument(
     action="store_true",
     help=(
         "With compact stair action expansion, freeze the inherited actor and "
-        "six mapped outputs so PPO trains only newly appended action rows."
+        "mapped outputs so PPO trains only newly appended action rows."
     ),
 )
 parser.add_argument(
@@ -327,6 +328,14 @@ parser.add_argument(
     help=(
         "Apply PPO to all three swing-leg joints plus hip abduction and hip "
         "flexion on every support leg."
+    ),
+)
+parser.add_argument(
+    "--phase-residual-swing-support-all",
+    action="store_true",
+    help=(
+        "Apply PPO to all three swing-leg joints and all joints on every "
+        "support leg, including support knees."
     ),
 )
 parser.add_argument(
@@ -591,6 +600,7 @@ phase_mask_flags = (
     args.phase_residual_support_abduction_only,
     args.phase_residual_swing_support_abduction,
     args.phase_residual_swing_support_hips,
+    args.phase_residual_swing_support_all,
 )
 if sum(phase_mask_flags) > 1:
     parser.error("phase residual joint masks are mutually exclusive")
@@ -611,7 +621,9 @@ if (
 
 phase_policy_action_size = 12
 if args.phase_compact_residual_action:
-    if args.phase_residual_swing_support_hips:
+    if args.phase_residual_swing_support_all:
+        phase_policy_action_size = 12
+    elif args.phase_residual_swing_support_hips:
         phase_policy_action_size = 9
     elif args.phase_residual_swing_support_abduction:
         phase_policy_action_size = 6
@@ -1354,6 +1366,9 @@ report: dict[str, object] = {
     "phase_residual_swing_support_hips": (
         args.phase_residual_swing_support_hips
     ),
+    "phase_residual_swing_support_all": (
+        args.phase_residual_swing_support_all
+    ),
     "initialize_stairs_source_action_mode": (
         args.initialize_stairs_source_action_mode
     ),
@@ -1497,7 +1512,13 @@ try:
                 target_leg=str(args.phase_train_leg),
                 mode="swing_only",
             )
-        if args.phase_residual_swing_support_hips:
+        if args.phase_residual_swing_support_all:
+            target_residual_mask = placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=str(args.phase_train_leg),
+                mode="swing_plus_support_all",
+            )
+        elif args.phase_residual_swing_support_hips:
             target_residual_mask = placement_policy_action_mask(
                 raw_env.dof_names,
                 target_leg=str(args.phase_train_leg),

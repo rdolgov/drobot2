@@ -976,3 +976,118 @@ knee extension and train an explicit pre-unload or vertical-COM phase while
 keeping the inherited V84 actor frozen. Better traction and camera vision stay
 lower priority: the policy already measures swing-foot load and body attitude,
 and the failure occurs in coordinated load sharing before terrain perception.
+
+## V89-V90 frozen support-knee and sustained-unload isolation
+
+V88 showed that support-hip flexion alone did not cross the `5.145 N` load
+floor. V89 expands the compact action from nine to twelve outputs so that the
+three new rows command the support knees. Exact transfer maps V88 raw rows
+`0-8` to target rows `0-8`, initializes support-knee rows `9-11` neutrally, and
+freezes every inherited actor parameter and row. The value network and only the
+three new support-knee rows train. Evaluation and recording accept the same
+explicit `swing_plus_support_all` mapping, avoiding an ambiguous 12-output
+interpretation.
+
+The transfer environment now reports signed vertical balance-target error.
+Training first added potential-difference shaping for reducing its magnitude.
+After the small V89 control showed that transient unloading still canceled on
+reload, V90 added persistent per-step costs of `2` reward per newton of active
+swing load and `500` reward per meter of absolute vertical balance error. This
+makes sustained unloading without collapse the objective, rather than rewarding
+only momentary progress.
+
+Validation used:
+
+```powershell
+& .\.venv\Scripts\python.exe -m ruff check `
+  simulation/isaac/rl/stairs/_stair_rl_contract.py `
+  simulation/isaac/rl/stairs/_quadruped_stairs_env.py `
+  simulation/isaac/rl/stairs/_placement_phase_training.py `
+  simulation/isaac/rl/stairs/train_stairs_ppo.py `
+  simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  simulation/isaac/rl/stairs/record_stairs_ppo.py `
+  tests/test_quadruped_stairs_rl_contract.py
+& .\.venv\Scripts\python.exe -m pytest `
+  tests/test_quadruped_stairs_rl_contract.py -q `
+  --basetemp=.pytest-tmp-v90-sustained-unload
+```
+
+Ruff passed and the focused contract suite passed with its expected
+simulator-dependent skips. Tests cover neutral nine-to-twelve expansion,
+frozen inherited gradients, support-knee mask indices, vertical progress, and
+persistent state cost. The contract remains `180 mm` rise, `250 mm` tread,
+`0.8825985 N m` applied effort, and no RGB policy observation.
+
+The 4,096-step V89 control used:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/train_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --output-dir simulation/isaac/output/rl/ppo-stairs-v89-frozen-v88-support-knees-4096-seed1034 `
+  --total-timesteps 4096 --curriculum-total-timesteps 4096 `
+  --seed 1034 --device cpu --fixed-placement-level left-quarter-tread-load `
+  --phase-train-leg front_left --phase-train-transfer `
+  --precursor-leg-model front_right=simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --phase-residual-swing-support-all --phase-compact-residual-action `
+  --phase-reset-attempts 32 `
+  --phase-transfer-unload-threshold-n 8 `
+  --phase-transfer-unload-threshold-n 4 `
+  --phase-transfer-unload-threshold-n 1 `
+  --phase-transfer-upright-cosine 0.975 `
+  --phase-transfer-upright-cosine 0.977 `
+  --phase-transfer-upright-cosine 0.9781476 `
+  --phase-transfer-unload-successes-per-level 2 `
+  --initialize-from-stairs simulation/isaac/models/ppo-stairs-v88-frozen-v84-support-flexion-8192-seed1034/drobot_stairs_ppo_final.zip `
+  --initialize-stairs-source-action-mode swing_plus_support_hips `
+  --freeze-inherited-stairs-policy-actions `
+  --ppo-learning-rate 0.00005 --ppo-initial-log-std -2.5 `
+  --ppo-entropy-coefficient 0
+```
+
+V89 completed two 8 N transfers and zero at 4 N. Its minimum load
+`5.145 N`, minimum upright cosine `0.975542`, and maximum slip `34.951 mm`
+exactly matched V88. The new support-knee rows were active: their final weight
+norms were `0.00257`, `0.00848`, and `0.00652`, so this was not a missing action
+mapping.
+
+V90 reran the same command for 8,192 steps to a new output directory after
+adding persistent state cost. It again completed only two 8 N transfers and
+none at 4 N, with the same `5.145 N` floor and `34.951 mm` slip ceiling. Its
+cumulative state-cost reward was `-405,039.928`, confirming that the sustained
+objective dominated the learning signal but did not change the physical
+boundary.
+
+Fresh strict evaluation used:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --model simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --leg-model front_right=simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --zero-action-leg front_left `
+  --transfer-model front_left=simulation/isaac/output/rl/ppo-stairs-v90-frozen-v88-support-knees-sustained-unload-8192-seed1034/drobot_stairs_ppo_final.zip `
+  --transfer-residual-swing-support-all front_left `
+  --episodes 3 --seed 1042 --device cpu --active-steps 1 `
+  --placement-level left-quarter-tread-load `
+  --maximum-lateral-deviation-m 0.20 --episode-seconds 45 `
+  --allow-unverified-model
+```
+
+V90 failed `0/3`, all by support slip. Slip was `35.093-38.372 mm`, maximum
+tilt was `11.029 deg`, front-left lift was only `4.668-5.828 mm`, mean forward
+motion was `-12.703 mm`, and mean elevation change was `-10.836 mm`. The
+seed-1042 recording contains 293 frames and is `17,157,178` bytes with SHA-256
+`c773fc1a1965e3c138b6384b9088da11620b440e6727f470517346a371a203fc`.
+It reaches `198.213 mm` front-right lift but `38.372 mm` support slip before
+front-left transfer. The V90 model SHA-256 is
+`c78b50a516fd013a1f22da1ecfaca61dfc59f596d0d33c8558cb4e43983ec4d5`.
+
+V90 is not a stair climb. Together V88-V90 rule out missing hip or knee action
+authority as the primary limitation of the current direct-transfer phase. The
+next bounded experiment should replace that phase with a stationary pre-unload
+hold: require front-left below `4 N` for at least `0.5 s`, all three support
+feet loaded, bounded pitch and slip, then freeze that checkpoint and compose
+the independently verified V80 190 mm lift. Additional traction or camera
+vision remains lower priority than this phase decomposition.

@@ -342,9 +342,13 @@ def test_first_tread_profiles_include_folded_crouch_and_sideways_hip(
         "support_margin_progress_per_m": 2000.0,
         "swing_load_reduction_per_n": 50.0,
         "body_pitch_error_progress_per_rad": 500.0,
+        "vertical_balance_target_error_progress_per_m": 1500.0,
+        "swing_load_cost_per_n": 2.0,
+        "vertical_balance_target_error_cost_per_m": 500.0,
         "maximum_progress_m_per_step": 0.010,
         "maximum_load_progress_n_per_step": 1.0,
         "maximum_pitch_progress_rad_per_step": 0.020,
+        "maximum_vertical_progress_m_per_step": 0.005,
     }
     assert front_pair["termination"]["maximum_support_slip_m"] == pytest.approx(
         0.035
@@ -1020,6 +1024,35 @@ def test_stair_policy_transfer_expands_compact_action_as_neutral_superset() -> N
         "log_std",
     ]
     assert report["action_output_target_indices"] == [0, 1, 2, 3, 4, 8]
+    assert report["skipped"] == []
+
+
+def test_stair_policy_transfer_expands_hips_with_neutral_support_knees() -> None:
+    torch = pytest.importorskip("torch")
+    source = {
+        "action_net.weight": torch.arange(18, dtype=torch.float32).reshape(9, 2),
+        "action_net.bias": torch.arange(9, dtype=torch.float32),
+        "log_std": torch.full((9,), -1.5),
+    }
+    target = {
+        "action_net.weight": torch.full((12, 2), 99.0),
+        "action_net.bias": torch.full((12,), 99.0),
+        "log_std": torch.full((12,), -2.5),
+    }
+
+    transferred, report = transfer_policy_state(
+        source,
+        target,
+        source_observation_size=82,
+        action_output_target_indices=tuple(range(9)),
+    )
+
+    assert torch.all(transferred["action_net.weight"][9:12] == 0.0)
+    assert torch.all(transferred["action_net.bias"][9:12] == 0.0)
+    assert torch.all(transferred["log_std"][9:12] == -2.5)
+    assert torch.all(transferred["action_net.weight"][:9] == source["action_net.weight"])
+    assert torch.all(transferred["action_net.bias"][:9] == source["action_net.bias"])
+    assert report["action_output_target_indices"] == list(range(9))
     assert report["skipped"] == []
 
 
@@ -3369,6 +3402,12 @@ def test_swing_support_abduction_mask_preserves_lift_authority() -> None:
         mode="swing_plus_support_hips",
     )
     assert np.flatnonzero(hip_mask).tolist() == list(range(9))
+    all_support_mask = placement_policy_action_mask(
+        dof_names,
+        target_leg="front_left",
+        mode="swing_plus_support_all",
+    )
+    assert np.flatnonzero(all_support_mask).tolist() == list(range(12))
     swing_only = placement_policy_action_mask(
         dof_names,
         target_leg="front_left",
@@ -3706,9 +3745,13 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
                     "support_margin_progress_per_m": 2000.0,
                     "swing_load_reduction_per_n": 5.0,
                     "body_pitch_error_progress_per_rad": 500.0,
+                    "vertical_balance_target_error_progress_per_m": 1500.0,
+                    "swing_load_cost_per_n": 2.0,
+                    "vertical_balance_target_error_cost_per_m": 500.0,
                     "maximum_progress_m_per_step": 0.010,
                     "maximum_load_progress_n_per_step": 1.0,
                     "maximum_pitch_progress_rad_per_step": 0.020,
+                    "maximum_vertical_progress_m_per_step": 0.005,
                 }
             }
             self.actions: list[np.ndarray] = []
@@ -3767,6 +3810,9 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
                     "placement_body_pitch_rad": (
                         0.08 if len(self.actions) == 2 else 0.12
                     ),
+                    "placement_balance_target_error_z_m": (
+                        0.004 if len(self.actions) == 2 else 0.012
+                    ),
                     "placement_transfer_base_target_error_m": (
                         0.004 if len(self.actions) == 2 else 0.009
                     ),
@@ -3800,7 +3846,7 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
         np.asarray((-0.5,), dtype=np.float32)
     )
     np.testing.assert_allclose(raw.actions[1], (-0.5, 0.0))
-    assert reward == pytest.approx(134.0)
+    assert reward == pytest.approx(139.1)
     assert terminated is True
     assert truncated is False
     assert result["phase_training_transfer_completed"] is True
@@ -3826,12 +3872,24 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
     assert result[
         "phase_training_transfer_body_pitch_error_reduction_rad"
     ] == pytest.approx(0.020)
+    assert result[
+        "phase_training_transfer_vertical_balance_error_reduction_m"
+    ] == pytest.approx(0.005)
+    assert result["phase_training_transfer_state_cost_reward"] == pytest.approx(
+        -2.4
+    )
     assert stats["transfer_progress_reward"][
         "cumulative_swing_load_reduction_n"
     ] == pytest.approx(1.0)
     assert stats["transfer_progress_reward"][
         "cumulative_body_pitch_error_reduction_rad"
     ] == pytest.approx(0.020)
+    assert stats["transfer_progress_reward"][
+        "cumulative_vertical_balance_error_reduction_m"
+    ] == pytest.approx(0.005)
+    assert stats["transfer_progress_reward"][
+        "cumulative_state_cost_reward"
+    ] == pytest.approx(-2.4)
 
     observation, info = wrapped.reset(seed=12)
     np.testing.assert_allclose(observation, (9.0, 9.0, 9.0))

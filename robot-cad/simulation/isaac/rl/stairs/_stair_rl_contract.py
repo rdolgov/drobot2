@@ -374,9 +374,13 @@ def config_for_first_tread_experiment(
                     "support_margin_progress_per_m": 2000.0,
                     "swing_load_reduction_per_n": 50.0,
                     "body_pitch_error_progress_per_rad": 500.0,
+                    "vertical_balance_target_error_progress_per_m": 1500.0,
+                    "swing_load_cost_per_n": 2.0,
+                    "vertical_balance_target_error_cost_per_m": 500.0,
                     "maximum_progress_m_per_step": 0.010,
                     "maximum_load_progress_n_per_step": 1.0,
                     "maximum_pitch_progress_rad_per_step": 0.020,
+                    "maximum_vertical_progress_m_per_step": 0.005,
                 }
                 transfer["override_by_next_swing_leg"] = transfer_overrides
                 placement["inter_leg_transfer"] = transfer
@@ -1855,6 +1859,12 @@ def placement_policy_action_mask(
             or name.endswith("_hip_flexion")
             for name in names
         ]
+    elif mode == "swing_plus_support_all":
+        # The target swing leg plus every joint on the three support legs is
+        # the full 12-DOF action. Keeping this as an explicit mode allows a
+        # compact 9-output hip policy to expand into only the three previously
+        # unavailable support-knee rows while inherited outputs stay frozen.
+        selected = [True for _ in names]
     else:
         raise ValueError(f"unknown placement action mask mode: {mode}")
     return np.asarray(selected, dtype=np.float32)

@@ -4737,6 +4737,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             [0.0, base_y],
             dtype=np.float64,
         )
+        placement_balance_target_error_z_m = 0.0
         support_loads = np.zeros(0, dtype=np.float32)
         if self.placement_reference_enabled:
             if placement_state is None or self.current_placement_level is None:
@@ -4826,6 +4827,11 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ):
                 placement_balance_target_error_xy_m = (
                     self._placement_balance_target_error_xy_m()
+                )
+            if self.placement_transfer_active:
+                placement_balance_target_error_z_m = float(
+                    placement_balance_position[2]
+                    - self.placement_transfer_target_balance_position_m[2]
                 )
             self.maximum_balance_lateral_deviation_m = max(
                 self.maximum_balance_lateral_deviation_m,
@@ -5897,6 +5903,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ),
             "placement_balance_target_error_xy_m": (
                 placement_balance_target_error_xy_m.copy()
+            ),
+            "placement_balance_target_error_z_m": (
+                placement_balance_target_error_z_m
             ),
             "support_load_sharing_vertical_correction_m_by_leg": dict(
                 zip(

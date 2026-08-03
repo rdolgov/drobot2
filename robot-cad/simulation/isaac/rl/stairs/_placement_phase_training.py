@@ -444,6 +444,21 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 0.0,
             )
         )
+        self.transfer_vertical_balance_error_progress_reward_per_m = float(
+            transfer_training_config.get(
+                "vertical_balance_target_error_progress_per_m",
+                0.0,
+            )
+        )
+        self.transfer_swing_load_cost_per_n = float(
+            transfer_training_config.get("swing_load_cost_per_n", 0.0)
+        )
+        self.transfer_vertical_balance_error_cost_per_m = float(
+            transfer_training_config.get(
+                "vertical_balance_target_error_cost_per_m",
+                0.0,
+            )
+        )
         self.transfer_progress_reward_clip_m = float(
             transfer_training_config.get(
                 "maximum_progress_m_per_step",
@@ -462,14 +477,24 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 0.020,
             )
         )
+        self.transfer_vertical_progress_reward_clip_m = float(
+            transfer_training_config.get(
+                "maximum_vertical_progress_m_per_step",
+                0.005,
+            )
+        )
         transfer_reward_values = (
             self.transfer_balance_progress_reward_per_m,
             self.transfer_support_margin_progress_reward_per_m,
             self.transfer_swing_load_reduction_reward_per_n,
             self.transfer_body_pitch_error_progress_reward_per_rad,
+            self.transfer_vertical_balance_error_progress_reward_per_m,
+            self.transfer_swing_load_cost_per_n,
+            self.transfer_vertical_balance_error_cost_per_m,
             self.transfer_progress_reward_clip_m,
             self.transfer_load_progress_reward_clip_n,
             self.transfer_pitch_progress_reward_clip_rad,
+            self.transfer_vertical_progress_reward_clip_m,
         )
         if not all(np.isfinite(value) for value in transfer_reward_values):
             raise ValueError("transfer training reward values must be finite")
@@ -481,11 +506,14 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         self.previous_transfer_support_margin_m: float | None = None
         self.previous_transfer_swing_load_n: float | None = None
         self.previous_transfer_body_pitch_error_rad: float | None = None
+        self.previous_transfer_vertical_balance_error_m: float | None = None
         self.cumulative_transfer_progress_reward = 0.0
         self.cumulative_transfer_balance_error_progress_m = 0.0
         self.cumulative_transfer_support_margin_progress_m = 0.0
         self.cumulative_transfer_swing_load_reduction_n = 0.0
         self.cumulative_transfer_body_pitch_error_reduction_rad = 0.0
+        self.cumulative_transfer_vertical_balance_error_reduction_m = 0.0
+        self.cumulative_transfer_state_cost_reward = 0.0
 
     def _validate_and_apply_transfer_unload_threshold(
         self,
@@ -607,13 +635,20 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             if body_pitch is not None and np.isfinite(float(body_pitch))
             else None
         )
+        vertical_error = info.get("placement_balance_target_error_z_m")
+        self.previous_transfer_vertical_balance_error_m = (
+            abs(float(vertical_error))
+            if vertical_error is not None
+            and np.isfinite(float(vertical_error))
+            else None
+        )
 
     def _transfer_progress_reward(
         self,
         info: Mapping[str, Any],
-    ) -> tuple[float, float, float, float, float]:
+    ) -> tuple[float, float, float, float, float, float, float]:
         if not self.train_transfer:
-            return 0.0, 0.0, 0.0, 0.0, 0.0
+            return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
         balance_error = self._transfer_balance_error_m(info)
         margin_value = info.get("placement_support_margin_m")
         support_margin = (
@@ -634,6 +669,13 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             abs(float(body_pitch_value))
             if body_pitch_value is not None
             and np.isfinite(float(body_pitch_value))
+            else None
+        )
+        vertical_error_value = info.get("placement_balance_target_error_z_m")
+        vertical_balance_error = (
+            abs(float(vertical_error_value))
+            if vertical_error_value is not None
+            and np.isfinite(float(vertical_error_value))
             else None
         )
         balance_progress = 0.0
@@ -668,10 +710,20 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             body_pitch_error_reduction = float(
                 self.previous_transfer_body_pitch_error_rad - body_pitch_error
             )
+        vertical_balance_error_reduction = 0.0
+        if (
+            vertical_balance_error is not None
+            and self.previous_transfer_vertical_balance_error_m is not None
+        ):
+            vertical_balance_error_reduction = float(
+                self.previous_transfer_vertical_balance_error_m
+                - vertical_balance_error
+            )
         self.previous_transfer_balance_error_m = balance_error
         self.previous_transfer_support_margin_m = support_margin
         self.previous_transfer_swing_load_n = swing_load
         self.previous_transfer_body_pitch_error_rad = body_pitch_error
+        self.previous_transfer_vertical_balance_error_m = vertical_balance_error
         clip_m = self.transfer_progress_reward_clip_m
         clipped_balance_progress = float(
             np.clip(balance_progress, -clip_m, clip_m)
@@ -693,6 +745,19 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 self.transfer_pitch_progress_reward_clip_rad,
             )
         )
+        clipped_vertical_balance_error_reduction = float(
+            np.clip(
+                vertical_balance_error_reduction,
+                -self.transfer_vertical_progress_reward_clip_m,
+                self.transfer_vertical_progress_reward_clip_m,
+            )
+        )
+        state_cost_reward = -(
+            self.transfer_swing_load_cost_per_n
+            * (0.0 if swing_load is None else swing_load)
+            + self.transfer_vertical_balance_error_cost_per_m
+            * (0.0 if vertical_balance_error is None else vertical_balance_error)
+        )
         progress_reward = (
             self.transfer_balance_progress_reward_per_m
             * clipped_balance_progress
@@ -702,6 +767,9 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             * clipped_swing_load_reduction
             + self.transfer_body_pitch_error_progress_reward_per_rad
             * clipped_body_pitch_error_reduction
+            + self.transfer_vertical_balance_error_progress_reward_per_m
+            * clipped_vertical_balance_error_reduction
+            + state_cost_reward
         )
         self.cumulative_transfer_progress_reward += progress_reward
         self.cumulative_transfer_balance_error_progress_m += (
@@ -716,12 +784,18 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         self.cumulative_transfer_body_pitch_error_reduction_rad += (
             clipped_body_pitch_error_reduction
         )
+        self.cumulative_transfer_vertical_balance_error_reduction_m += (
+            clipped_vertical_balance_error_reduction
+        )
+        self.cumulative_transfer_state_cost_reward += state_cost_reward
         return (
             progress_reward,
             clipped_balance_progress,
             clipped_margin_progress,
             clipped_swing_load_reduction,
             clipped_body_pitch_error_reduction,
+            clipped_vertical_balance_error_reduction,
+            state_cost_reward,
         )
 
     def _capture_phase_snapshot(
@@ -985,6 +1059,8 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             transfer_margin_progress_m,
             transfer_swing_load_reduction_n,
             transfer_body_pitch_error_reduction_rad,
+            transfer_vertical_balance_error_reduction_m,
+            transfer_state_cost_reward,
         ) = self._transfer_progress_reward(result_info)
         reward = float(reward) + transfer_progress_reward
         result_info["phase_training_transfer_progress_reward"] = (
@@ -1002,6 +1078,12 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         result_info[
             "phase_training_transfer_body_pitch_error_reduction_rad"
         ] = transfer_body_pitch_error_reduction_rad
+        result_info[
+            "phase_training_transfer_vertical_balance_error_reduction_m"
+        ] = transfer_vertical_balance_error_reduction_m
+        result_info["phase_training_transfer_state_cost_reward"] = (
+            transfer_state_cost_reward
+        )
         transfer_completed = bool(
             self.train_transfer
             and result_info.get("placement_transfer_completed_event")
@@ -1348,6 +1430,13 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 "body_pitch_error_progress_per_rad": (
                     self.transfer_body_pitch_error_progress_reward_per_rad
                 ),
+                "vertical_balance_target_error_progress_per_m": (
+                    self.transfer_vertical_balance_error_progress_reward_per_m
+                ),
+                "swing_load_cost_per_n": self.transfer_swing_load_cost_per_n,
+                "vertical_balance_target_error_cost_per_m": (
+                    self.transfer_vertical_balance_error_cost_per_m
+                ),
                 "maximum_progress_m_per_step": (
                     self.transfer_progress_reward_clip_m
                 ),
@@ -1356,6 +1445,9 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 ),
                 "maximum_pitch_progress_rad_per_step": (
                     self.transfer_pitch_progress_reward_clip_rad
+                ),
+                "maximum_vertical_progress_m_per_step": (
+                    self.transfer_vertical_progress_reward_clip_m
                 ),
                 "cumulative_reward": (
                     self.cumulative_transfer_progress_reward
@@ -1371,6 +1463,12 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 ),
                 "cumulative_body_pitch_error_reduction_rad": (
                     self.cumulative_transfer_body_pitch_error_reduction_rad
+                ),
+                "cumulative_vertical_balance_error_reduction_m": (
+                    self.cumulative_transfer_vertical_balance_error_reduction_m
+                ),
+                "cumulative_state_cost_reward": (
+                    self.cumulative_transfer_state_cost_reward
                 ),
             },
             "maximum_target_transfer_balance_error_m": (
