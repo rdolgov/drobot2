@@ -92,6 +92,31 @@ _register_variant(
     "DrobotPureStairsFirstStepWidth105Rise10HipPPORunnerCfg",
 )
 _register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low25-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low25HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low50-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low50HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low50HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low75-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low75HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low75HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low100-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low100HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low100HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low25-Consolidate-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low25HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low25ConsolidateHipPPORunnerCfg",
+)
+_register_variant(
     "Drobot-Pure-Stairs-First-Step-Landing-Low-Hip-Direct",
     "DrobotPureStairsFirstStepLandingLowHipEnvCfg",
     "DrobotPureStairsFirstStepLandingLowHipPPORunnerCfg",

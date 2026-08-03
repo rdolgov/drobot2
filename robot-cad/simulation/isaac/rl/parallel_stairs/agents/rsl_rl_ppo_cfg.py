@@ -167,6 +167,70 @@ class DrobotPureStairsFirstStepWidth105Rise10HipPPORunnerCfg(
 
 
 @configclass
+class DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg(
+    DrobotPureStairsFirstStepWidth105SupportRetentionHipPPORunnerCfg
+):
+    """Conservative PPO transfer into the first lower reset posture."""
+
+    experiment_name = (
+        "drobot_pure_stairs_first_step_width105_low25_hip_180x250_direct"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.entropy_coef = 0.001
+        self.algorithm.learning_rate = 5.0e-5
+        self.algorithm.desired_kl = 0.005
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Low50HipPPORunnerCfg(
+    DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
+):
+    experiment_name = (
+        "drobot_pure_stairs_first_step_width105_low50_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Low75HipPPORunnerCfg(
+    DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
+):
+    experiment_name = (
+        "drobot_pure_stairs_first_step_width105_low75_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Low100HipPPORunnerCfg(
+    DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
+):
+    experiment_name = (
+        "drobot_pure_stairs_first_step_width105_low100_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Low25ConsolidateHipPPORunnerCfg(
+    DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
+):
+    """Use complete rare landing sequences to move the lower-reset policy mean."""
+
+    experiment_name = (
+        "drobot_pure_stairs_first_step_width105_low25_consolidate_hip_180x250_direct"
+    )
+    num_steps_per_env = 64
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.learning_rate = 2.0e-5
+        self.algorithm.desired_kl = 0.003
+        self.algorithm.num_learning_epochs = 10
+        self.algorithm.num_mini_batches = 8
+
+
+@configclass
 class DrobotPureStairsFirstStepLandingLowHipPPORunnerCfg(
     DrobotPureStairsFirstStepLandingHipPPORunnerCfg
 ):

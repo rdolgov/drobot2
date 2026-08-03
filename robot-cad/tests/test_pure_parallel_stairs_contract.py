@@ -421,3 +421,60 @@ def test_width105_body_rise_requires_contact_gated_height_transfer() -> None:
     assert "tread_transfer = required_tread_binary * base_gain_fraction" in env_source
     assert "tread_height_delta_scale * required_tread_binary * height_delta" in env_source
     assert "Drobot-Pure-Stairs-First-Step-Width105-Rise10-Hip-Direct" in registration
+
+
+def test_width105_lower_reset_curriculum_reaches_verified_full_fold_gradually() -> None:
+    cfg_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
+    ).read_text(encoding="utf-8")
+    runner_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
+    ).read_text(encoding="utf-8")
+    registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
+        encoding="utf-8"
+    )
+
+    expected = {
+        "DrobotPureStairsFirstStepWidth105Low25HipEnvCfg": (0.42, 0.25),
+        "DrobotPureStairsFirstStepWidth105Low50HipEnvCfg": (0.38, 0.50),
+        "DrobotPureStairsFirstStepWidth105Low75HipEnvCfg": (0.34, 0.75),
+        "DrobotPureStairsFirstStepWidth105Low100HipEnvCfg": (0.30, 1.0),
+    }
+    for class_name, (height, fraction) in expected.items():
+        values = _class_assignments(cfg_source, class_name)
+        assert values["initial_base_height_m"] == height
+        assert values["reset_fold_fraction"] == fraction
+
+    assert "_apply_folded_reset(self, self.reset_fold_fraction)" in cfg_source
+    assert "LOW_FOLD_HIP_RAD - NORMAL_HIP_RAD" in cfg_source
+    assert "LOW_FOLD_KNEE_RAD - NORMAL_KNEE_RAD" in cfg_source
+    assert "DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg" in runner_source
+    assert "self.algorithm.learning_rate = 5.0e-5" in runner_source
+    for stage in ("Low25", "Low50", "Low75", "Low100"):
+        assert f"Drobot-Pure-Stairs-First-Step-Width105-{stage}-Hip-Direct" in registration
+
+
+def test_bounded_parallel_evaluator_disables_only_rgb_capture() -> None:
+    source = _source("evaluate_pure_parallel_stairs.py")
+    assert "gym.wrappers.RecordVideo = _bounded_without_rgb" in source
+    assert "isaaclab_app.launch_simulation = _launch_headless_bounded" in source
+    assert "entrypoint_common.create_isaaclab_env = _create_headless_bounded_env" in source
+    assert "args_cli.video = False" in source
+    assert "args_cli.enable_cameras = False" in source
+    assert "run_play_cli" in source
+    assert "no video file is produced" in source.lower()
+
+
+def test_low25_consolidation_uses_long_low_entropy_batches() -> None:
+    runner_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
+    ).read_text(encoding="utf-8")
+    registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
+        encoding="utf-8"
+    )
+    assert "DrobotPureStairsFirstStepWidth105Low25ConsolidateHipPPORunnerCfg" in runner_source
+    assert "num_steps_per_env = 64" in runner_source
+    assert "self.algorithm.entropy_coef = 0.0" in runner_source
+    assert "self.algorithm.learning_rate = 2.0e-5" in runner_source
+    assert "self.algorithm.num_learning_epochs = 10" in runner_source
+    assert "Drobot-Pure-Stairs-First-Step-Width105-Low25-Consolidate-Hip-Direct" in registration

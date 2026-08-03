@@ -22,6 +22,22 @@ ROBOT_USD = PROJECT_ROOT / "exports" / "isaac" / "quadruped_robot_floating.usdc"
 EFFORT_CAP_NM = 0.8825985
 LOW_FOLD_HIP_RAD = 0.7382742736
 LOW_FOLD_KNEE_RAD = 1.4765485472
+NORMAL_HIP_RAD = 0.1544915916
+NORMAL_KNEE_RAD = 0.4699252058
+
+
+def _apply_folded_reset(cfg: DrobotPureStairsEnvCfg, fraction: float) -> None:
+    """Interpolate the neutral stance toward the verified full-fold limits."""
+    hip = NORMAL_HIP_RAD + fraction * (LOW_FOLD_HIP_RAD - NORMAL_HIP_RAD)
+    knee = NORMAL_KNEE_RAD + fraction * (LOW_FOLD_KNEE_RAD - NORMAL_KNEE_RAD)
+    cfg.robot.init_state.pos = (0.0, 0.0, cfg.initial_base_height_m)
+    cfg.robot.init_state.joint_pos = {
+        ".*_hip_abduction": 0.0,
+        "front_.*_hip_flexion": -hip,
+        "rear_.*_hip_flexion": hip,
+        "front_.*_knee": knee,
+        "rear_.*_knee": -knee,
+    }
 
 
 @configclass
@@ -366,6 +382,62 @@ class DrobotPureStairsFirstStepWidth105Rise10HipEnvCfg(
     narrow_transfer_reward_scale = 0.0
     tread_height_delta_scale = 200.0
     first_step_completion_reward_scale = 15.0
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Low25HipEnvCfg(
+    DrobotPureStairsFirstStepWidth105SupportRetentionHipEnvCfg
+):
+    """First reset curriculum: 40 mm lower and 25% toward full fold."""
+
+    initial_base_height_m = 0.42
+    reset_fold_fraction = 0.25
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        _apply_folded_reset(self, self.reset_fold_fraction)
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Low50HipEnvCfg(
+    DrobotPureStairsFirstStepWidth105SupportRetentionHipEnvCfg
+):
+    """Second reset curriculum: 80 mm lower and 50% toward full fold."""
+
+    initial_base_height_m = 0.38
+    reset_fold_fraction = 0.50
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        _apply_folded_reset(self, self.reset_fold_fraction)
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Low75HipEnvCfg(
+    DrobotPureStairsFirstStepWidth105SupportRetentionHipEnvCfg
+):
+    """Third reset curriculum: 120 mm lower and 75% toward full fold."""
+
+    initial_base_height_m = 0.34
+    reset_fold_fraction = 0.75
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        _apply_folded_reset(self, self.reset_fold_fraction)
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Low100HipEnvCfg(
+    DrobotPureStairsFirstStepWidth105SupportRetentionHipEnvCfg
+):
+    """Final reset curriculum: 160 mm lower at the full-fold limits."""
+
+    initial_base_height_m = 0.30
+    reset_fold_fraction = 1.0
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        _apply_folded_reset(self, self.reset_fold_fraction)
 
 
 @configclass
