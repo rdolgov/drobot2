@@ -22,6 +22,12 @@ range. The policy still controls all 12 joints on the exact 180 mm rise by
   and 4/732 (0.5464%) in the hard half, versus model 776 at 1/1,090 (0.0917%)
   overall and 1/810 (0.1235%) in the hard half.
 - Early model 796 scored 0/577 on matched seed 1146 and was rejected.
+- A second 128-environment continuation from model 895 added another 368,640
+  transitions and produced 5/2,013 stochastic successes (0.2484%): 1/483 in
+  the easier half and 4/1,530 in the harder half. On deterministic seed 1150,
+  retained model 895 scored 2/494, while event-rich intermediate models 938
+  and 987 scored 1/534 and 0/494, and final model 1014 scored 0/473. All three
+  continuation candidates were rejected as mean-policy drift.
 - One-environment RGB review seed 1148 scored 0/11. It is qualitative review
   only; RGB is never an actor input or a training signal.
 - SHA-256 of `model_895.pt`:
