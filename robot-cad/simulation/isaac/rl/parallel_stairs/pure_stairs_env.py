@@ -345,6 +345,12 @@ class DrobotPureStairsEnv(DirectRLEnv):
         )
         other_support_count = support_count.unsqueeze(1) - supported.float()
         three_other_supports = torch.clamp(other_support_count - 2.0, 0.0, 1.0)
+        mean_other_force = (forces.sum(dim=1, keepdim=True) - forces) / 3.0
+        relative_candidate_force = forces / torch.clamp(mean_other_force, min=1.0)
+        per_foot_unload = (
+            torch.exp(-torch.square(relative_candidate_force / 0.5)) * three_other_supports
+        )
+        foot_unload = foot_lift_active * per_foot_unload.amax(dim=1)
         per_foot_center_approach = narrow_placement_score.amax(dim=2)
         supported_center_approach = (per_foot_center_approach * three_other_supports).amax(dim=1)
         foot_tip_descent = (
@@ -448,6 +454,7 @@ class DrobotPureStairsEnv(DirectRLEnv):
             + self.cfg.narrow_tread_potential_reward_scale * narrow_tread_potential
             + self.cfg.support_reward_scale * support_count
             + self.cfg.supported_lift_reward_scale * supported_lift
+            + self.cfg.foot_unload_reward_scale * foot_unload
             + self.cfg.tread_contact_reward_scale * tread_contacts
             + self.cfg.centered_tread_contact_reward_scale * centered_tread_contacts
             + self.cfg.supported_center_approach_reward_scale * supported_center_approach

@@ -207,6 +207,7 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     progress_delta_reward_scale = 60.0
     height_delta_reward_scale = 45.0
     supported_lift_reward_scale = 0.0
+    foot_unload_reward_scale = 0.0
     clearance_reward_scale = 12.0
     lift_hold_reward_scale = 0.04
     tread_hold_reward_scale = 0.0
@@ -666,6 +667,30 @@ class DrobotPureStairsYaw90FullFoldFootLift5HipEnvCfg(
     DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg
 ):
     """Bridge the folded rise policy into a held 5 cm one-foot unload."""
+
+    foot_lift_height_m = 0.05
+    foot_lift_hold_steps = 4
+
+
+@configclass
+class DrobotPureStairsYaw90FoldBridgeFootLift10HipEnvCfg(
+    DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg
+):
+    """Bridge neutral to fully folded sideways resets with symmetric unloading."""
+
+    reset_fold_fraction_min = 0.0
+    reset_fold_fraction_max = 1.0
+    reset_alpha_power = 2.0
+    reset_base_height_min_m = 0.30
+    reset_base_height_max_m = 0.46
+    foot_unload_reward_scale = 0.75
+
+
+@configclass
+class DrobotPureStairsYaw90FoldBridgeFootLift5HipEnvCfg(
+    DrobotPureStairsYaw90FoldBridgeFootLift10HipEnvCfg
+):
+    """Discover the sideways fold transfer first at a 5 cm lift gate."""
 
     foot_lift_height_m = 0.05
     foot_lift_hold_steps = 4

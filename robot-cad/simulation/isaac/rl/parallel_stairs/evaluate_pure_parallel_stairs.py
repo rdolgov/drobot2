@@ -17,6 +17,7 @@ import gymnasium as gym
 import warp as wp
 from isaaclab import app as isaaclab_app
 from isaaclab_rl.entrypoints import common as entrypoint_common
+from rsl_rl.runners import OnPolicyRunner
 
 wp.config.enable_backward = False
 
@@ -64,6 +65,14 @@ def _create_headless_bounded_env(*args: object, **kwargs: object) -> gym.Env:
 gym.wrappers.RecordVideo = _bounded_without_rgb  # type: ignore[assignment]
 isaaclab_app.launch_simulation = _launch_headless_bounded
 entrypoint_common.create_isaaclab_env = _create_headless_bounded_env
+
+
+def _skip_policy_export(self: OnPolicyRunner, path: str, filename: str, **_: object) -> None:
+    """Avoid recompiling identical deployment artifacts during checkpoint screening."""
+
+
+OnPolicyRunner.export_policy_to_jit = _skip_policy_export
+OnPolicyRunner.export_policy_to_onnx = _skip_policy_export
 
 from isaaclab_rl.entrypoints import run_play_cli  # noqa: E402
 

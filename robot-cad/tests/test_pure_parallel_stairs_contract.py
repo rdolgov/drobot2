@@ -119,6 +119,28 @@ def test_full_fold_sideways_lift_curriculum_is_force_backed_and_staged() -> None
     assert "DrobotPureStairsYaw90FullFoldFootLift5ConsolidateHipPPORunnerCfg" in runner_source
     assert "DrobotPureStairsYaw90FullFoldFootLift10ConsolidateHipPPORunnerCfg" in runner_source
     assert "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Consolidate-Hip-Direct" in registration
+
+    bridge5 = _class_assignments(
+        cfg_source, "DrobotPureStairsYaw90FoldBridgeFootLift5HipEnvCfg"
+    )
+    bridge10 = _class_assignments(
+        cfg_source, "DrobotPureStairsYaw90FoldBridgeFootLift10HipEnvCfg"
+    )
+    assert bridge10["reset_fold_fraction_min"] == 0.0
+    assert bridge10["reset_fold_fraction_max"] == 1.0
+    assert bridge10["reset_alpha_power"] == 2.0
+    assert bridge10["reset_base_height_min_m"] == 0.30
+    assert bridge10["reset_base_height_max_m"] == 0.46
+    assert bridge10["foot_unload_reward_scale"] == 0.75
+    assert bridge5["foot_lift_height_m"] == 0.05
+    assert "relative_candidate_force" in env_source
+    assert "per_foot_unload" in env_source
+    assert "foot_unload_reward_scale * foot_unload" in env_source
+    for height in ("5", "10"):
+        assert f"DrobotPureStairsYaw90FoldBridgeFootLift{height}HipPPORunnerCfg" in runner_source
+        assert f"Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift{height}-Hip-Direct" in registration
+    assert "DrobotPureStairsYaw90FoldBridgeFootLift5ConsolidateHipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift5-Consolidate-Hip-Direct" in registration
     assert "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift10-Consolidate-Hip-Direct" in registration
     assert "self.algorithm.entropy_coef = 0.0" in runner_source
     assert "self.algorithm.learning_rate = 2.0e-5" in runner_source
@@ -475,6 +497,8 @@ def test_bounded_parallel_evaluator_disables_only_rgb_capture() -> None:
     assert "entrypoint_common.create_isaaclab_env = _create_headless_bounded_env" in source
     assert "args_cli.video = False" in source
     assert "args_cli.enable_cameras = False" in source
+    assert "OnPolicyRunner.export_policy_to_jit = _skip_policy_export" in source
+    assert "OnPolicyRunner.export_policy_to_onnx = _skip_policy_export" in source
     assert "run_play_cli" in source
     assert "no video file is produced" in source.lower()
 

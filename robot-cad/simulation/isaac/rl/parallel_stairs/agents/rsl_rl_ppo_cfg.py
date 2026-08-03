@@ -323,6 +323,40 @@ class DrobotPureStairsYaw90FullFoldFootLift5HipPPORunnerCfg(
 
 
 @configclass
+class DrobotPureStairsYaw90FoldBridgeFootLift10HipPPORunnerCfg(
+    DrobotPureStairsYaw90FullFoldFootLift10HipPPORunnerCfg
+):
+    experiment_name = "drobot_pure_stairs_yaw90_fold_bridge_foot_lift10_hip_180x250_direct"
+
+
+@configclass
+class DrobotPureStairsYaw90FoldBridgeFootLift5HipPPORunnerCfg(
+    DrobotPureStairsYaw90FullFoldFootLift5HipPPORunnerCfg
+):
+    experiment_name = "drobot_pure_stairs_yaw90_fold_bridge_foot_lift5_hip_180x250_direct"
+
+
+@configclass
+class DrobotPureStairsYaw90FoldBridgeFootLift5ConsolidateHipPPORunnerCfg(
+    DrobotPureStairsYaw90FoldBridgeFootLift5HipPPORunnerCfg
+):
+    """Move frequent mixed-fold lift samples into the deterministic policy mean."""
+
+    experiment_name = (
+        "drobot_pure_stairs_yaw90_fold_bridge_foot_lift5_consolidate_hip_180x250_direct"
+    )
+    num_steps_per_env = 64
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.learning_rate = 2.0e-5
+        self.algorithm.desired_kl = 0.003
+        self.algorithm.num_learning_epochs = 10
+        self.algorithm.num_mini_batches = 8
+
+
+@configclass
 class DrobotPureStairsYaw90FullFoldFootLift5ConsolidateHipPPORunnerCfg(
     DrobotPureStairsYaw90FullFoldFootLift5HipPPORunnerCfg
 ):
