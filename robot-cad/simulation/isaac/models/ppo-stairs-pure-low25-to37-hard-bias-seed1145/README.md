@@ -72,3 +72,33 @@ Third-person seed-1176 review clips are tracked at
 `reviews/ppo-upright-rise-retained-model895-seed1176.mp4` and
 `reviews/ppo-upright-rise-fresh-model119-seed1176.mp4`. Both are honest
 ordinary failed attempts (0/5 and 0/1 respectively), not selected successes.
+
+## Two-support 5 mm rise bridge
+
+Three further 128-environment pure-PPO stages added 1,064,960 transitions.
+The strict outcome remained unchanged: hold at least 5 mm body rise for four
+steps with at least two supporting feet, remain upright, and do not fail.
+
+- A binary two-support reward gate produced 5/2,561 stochastic successes. Its
+  maximum two-support rise sample was 51.80928 mm, but event checkpoints 935,
+  963, 999, and final 1014 each scored 0 deterministic successes on seed 1179;
+  retained model 895 scored 1/144 on the same population.
+- A soft dense reward gave zero, one, and two supporting feet 0%, 50%, and
+  100% rise credit while leaving the strict success gate at two supports. It
+  produced 11/2,513 stochastic successes, all in the harder reset half.
+  Models 924 and 1003 reproduced one strict success on seed 1181 (1/170 and
+  1/150), although both scored zero in the seed-1182 256-environment tie-break.
+- A 64-step, zero-entropy, 2e-5 learning-rate consolidation from model 1003
+  added 327,680 transitions and 6/2,180 stochastic successes. Selected model
+  1016 scored 1/145 on deterministic seed 1185, with its success in the hard
+  lower-reset half; source model 1003 scored 0/146. Models 1021 and 1042
+  regressed to zero and were rejected.
+
+The experimental bridge checkpoint is
+`model_two_support_rise5_consolidated_1016.pt`, SHA-256
+`c34ce4dcca7c4659467231c45c95dc95dc875402ea0074da90b1bba7c2c0a4f2`.
+It is not promoted over retained model 895 as the safety baseline: its gain is
+rare and not robust across the 256-environment tie-break. Third-person clips
+`reviews/ppo-two-support-rise5-soft-model1003-seed1183.mp4` and
+`reviews/ppo-two-support-rise5-consolidated-model1016-seed1186.mp4` scored 0/5
+and 0/6. They are ordinary periodic attempts, not selected successes.

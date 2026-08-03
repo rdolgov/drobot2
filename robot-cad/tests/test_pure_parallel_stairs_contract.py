@@ -572,7 +572,10 @@ def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
     assert stand["support_rise_reward_scale"] == 10.0
     assert stand["support_rise_height_delta_scale"] == 180.0
     assert stand["tread_contact_reward_scale"] == 0.0
-    assert "support_rise = support_rise_gate * support_rise_gain_fraction" in env_source
+    assert (
+        "support_rise = support_rise_reward_gate * support_rise_gain_fraction"
+        in env_source
+    )
     assert "Metrics/max_four_support_base_gain_m" in env_source
     assert "self.cfg.support_rise_curriculum" in env_source
     assert "DrobotPureStairsLow25To37HardBiasStandRise10HipPPORunnerCfg" in runner_source
@@ -592,13 +595,41 @@ def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
         in registration
     )
 
+    two_support = _class_assignments(
+        cfg_source,
+        "DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipEnvCfg",
+    )
+    assert two_support["support_rise_min_base_gain_m"] == 0.005
+    assert two_support["support_rise_min_support_count"] == 2
+    assert two_support["support_rise_soft_support_reward"] is True
+    assert two_support["support_reward_scale"] == 0.25
+    assert (
+        "DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipPPORunnerCfg"
+        in runner_source
+    )
+    assert (
+        "Drobot-Pure-Stairs-Low25-To37-HardBias-TwoSupport-Rise5-Hip-Direct"
+        in registration
+    )
+    assert (
+        "DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipConsolidatePPORunnerCfg"
+        in runner_source
+    )
+    assert (
+        "Drobot-Pure-Stairs-Low25-To37-HardBias-TwoSupport-Rise5-Hip-Consolidate-Direct"
+        in registration
+    )
+    assert "self.algorithm.entropy_coef = 0.0" in runner_source
+    assert "self.algorithm.learning_rate = 2.0e-5" in runner_source
+
     upright = _class_assignments(
         cfg_source,
         "DrobotPureStairsLow25To37HardBiasUprightRise10HipEnvCfg",
     )
     assert upright["support_rise_min_support_count"] == 0
     assert upright["support_reward_scale"] == 0.0
-    assert "support_rise_gate = torch.ones_like(support_count)" in env_source
+    assert "strict_support_rise_gate = torch.ones_like(support_count)" in env_source
+    assert "support_count / float(self.cfg.support_rise_min_support_count)" in env_source
     assert ") & ~self._failed" in env_source
     assert "max(self.cfg.first_step_min_base_gain_m, 1.0e-6)" in env_source
     assert (

@@ -421,15 +421,24 @@ class DrobotPureStairsEnv(DirectRLEnv):
             1.0,
         )
         if self.cfg.support_rise_min_support_count > 0:
-            support_rise_gate = torch.clamp(
+            strict_support_rise_gate = torch.clamp(
                 support_count - float(self.cfg.support_rise_min_support_count - 1),
                 0.0,
                 1.0,
             )
+            if self.cfg.support_rise_soft_support_reward:
+                support_rise_reward_gate = torch.clamp(
+                    support_count / float(self.cfg.support_rise_min_support_count),
+                    0.0,
+                    1.0,
+                )
+            else:
+                support_rise_reward_gate = strict_support_rise_gate
         else:
-            support_rise_gate = torch.ones_like(support_count)
-        support_rise = support_rise_gate * support_rise_gain_fraction
-        support_rise_base_gain = support_rise_gate * torch.clamp(
+            strict_support_rise_gate = torch.ones_like(support_count)
+            support_rise_reward_gate = strict_support_rise_gate
+        support_rise = support_rise_reward_gate * support_rise_gain_fraction
+        support_rise_base_gain = strict_support_rise_gate * torch.clamp(
             root_z - self._episode_start_root_z, 0.0, 0.18
         )
         four_support_base_gain = full_support * torch.clamp(
@@ -483,7 +492,7 @@ class DrobotPureStairsEnv(DirectRLEnv):
             * supported_transfer_gate
             * height_delta
             + self.cfg.support_rise_height_delta_scale
-            * support_rise_gate
+            * support_rise_reward_gate
             * height_delta
             - 0.08 * upright_error
             - 0.002 * action_rate

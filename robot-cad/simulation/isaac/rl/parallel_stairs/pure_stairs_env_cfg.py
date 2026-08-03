@@ -199,6 +199,7 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     support_rise_min_base_gain_m = 0.01
     support_rise_hold_steps = 4
     support_rise_min_support_count = 4
+    support_rise_soft_support_reward = False
     foot_lift_curriculum = False
     foot_lift_height_m = 0.19
     foot_lift_hold_steps = 8
@@ -533,6 +534,18 @@ class DrobotPureStairsLow25To37HardBiasThreeSupportRise10HipEnvCfg(
     """Allow a stable three-foot support set while learning 10 mm body rise."""
 
     support_rise_min_support_count = 3
+
+
+@configclass
+class DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipEnvCfg(
+    DrobotPureStairsLow25To37HardBiasStandRise10HipEnvCfg
+):
+    """Bridge ungated extension into a held 5 mm rise on any two supports."""
+
+    support_rise_min_base_gain_m = 0.005
+    support_rise_min_support_count = 2
+    support_rise_soft_support_reward = True
+    support_reward_scale = 0.25
 
 
 @configclass

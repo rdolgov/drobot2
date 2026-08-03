@@ -259,6 +259,38 @@ class DrobotPureStairsLow25To37HardBiasThreeSupportRise10HipPPORunnerCfg(
 
 
 @configclass
+class DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipPPORunnerCfg(
+    DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
+):
+    """Bridge into a held 5 mm rise with any symmetric two-foot support set."""
+
+    experiment_name = (
+        "drobot_pure_stairs_low25_to_37_hard_bias_two_support_rise5_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipConsolidatePPORunnerCfg(
+    DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipPPORunnerCfg
+):
+    """Conservatively move rare held two-support rises into the policy mean."""
+
+    experiment_name = (
+        "drobot_pure_stairs_low25_to_37_hard_bias_two_support_rise5_hip_"
+        "consolidate_180x250_direct"
+    )
+    num_steps_per_env = 64
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.learning_rate = 2.0e-5
+        self.algorithm.desired_kl = 0.003
+        self.algorithm.num_learning_epochs = 10
+        self.algorithm.num_mini_batches = 8
+
+
+@configclass
 class DrobotPureStairsLow25To37HardBiasUprightRise10HipPPORunnerCfg(
     DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
 ):
