@@ -1,0 +1,30 @@
+[bus]
+baudrate = 1000000
+torque_limit = 300
+speed = 350
+acceleration = 10
+max_command_step_deg = 5.0
+
+[[motors]]
+number = 1
+name = "hip_abduction"
+id = 4
+direction = 1
+min_deg = -45.0
+max_deg = 45.0
+
+[[motors]]
+number = 2
+name = "hip_flexion"
+id = 5
+direction = 1
+min_deg = -90.0
+max_deg = 90.0
+
+[[motors]]
+number = 3
+name = "knee"
+id = 6
+direction = 1
+min_deg = -120.0
+max_deg = 120.0

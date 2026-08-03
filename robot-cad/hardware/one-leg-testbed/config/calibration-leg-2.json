@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-08-03T03:20:05.241228+00:00",
+  "motors": [
+    {
+      "number": 1,
+      "name": "hip_abduction",
+      "id": 4,
+      "center_tick": 2048
+    },
+    {
+      "number": 2,
+      "name": "hip_flexion",
+      "id": 5,
+      "center_tick": 2047
+    },
+    {
+      "number": 3,
+      "name": "knee",
+      "id": 6,
+      "center_tick": 2047
+    }
+  ]
+}

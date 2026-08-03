@@ -119,7 +119,7 @@ The example uses:
 
 - 1,000,000 baud;
 - 30% (`300/1000`) torque limit;
-- speed value 40;
+- speed value 350 (approximately 30.8 degrees per second);
 - acceleration value 10;
 - maximum 5-degree target change per command;
 - deliberately conservative bench-test angle limits.
@@ -129,6 +129,19 @@ Use the local file in every command:
 ```bash
 drobot-leg --config leg.toml ports
 ```
+
+The four assembled robot legs also have tracked, hardware-specific profiles and
+Windows helper scripts under [`config/`](config/README.md). Use those profiles
+directly when working with the verified ID ranges 1-3, 4-6, 7-9, or 10-12:
+
+```powershell
+.\config\show-status.ps1 -Leg 4 -Port COM4
+.\config\start-web-control.ps1 -Leg 4 -Port COM4
+```
+
+The ignored root-level files remain useful for scratch experiments. The
+tracked `config/leg-N.toml` and `config/calibration-leg-N.json` pairs are the
+shared canonical values for the assembled four-leg robot.
 
 Do not widen a joint's limits until the installed horn, printed geometry,
 cables, and test fixture have been checked through that motion.
@@ -331,6 +344,21 @@ hardware:
 The local `leg.toml` remains the source of truth for joint direction and range.
 The browser never writes configuration or calibration files.
 
+## Four-leg configuration recorded 2026-08-02
+
+All twelve motors have persistent IDs and each three-motor leg was configured,
+centered, and tested individually. The verified map, calibration snapshots,
+PowerShell helpers, repeatable calibration procedure, exact reproduction
+commands, and hardware-test limitations are maintained in
+[`config/README.md`](config/README.md).
+
+Legs 2-4 were each exercised unloaded with 15-degree guarded ramps. Positive
+motion was operator-confirmed as hip abduction outward, hip flexion forward,
+and knee forward after applying the tracked direction mappings. Every test
+returned near zero and ended with telemetry reporting torque OFF. These were
+basic direction checks, not payload, endurance, stall, thermal, cable-wear, or
+complete-robot collision tests.
+
 ## Physical range run recorded 2026-07-28
 
 The current local testbed was centered at raw tick `2048` on all three motors
@@ -386,8 +414,8 @@ explicit disarming. They do not communicate with real motors.
 
 - One unloaded wall-mounted range run has been completed, but no endurance,
   payload, current, thermal, or cable-wear run has been completed.
-- The tracked example ranges remain conservative startup assumptions. The
-  wider machine-local tested ranges are not complete-robot mechanical limits.
+- The tracked example and four-leg profile ranges are bench-control limits,
+  not complete-robot mechanical or collision-qualified limits.
 - USB disconnect, interpreter termination, or operating-system failure may
   prevent software disarm; use a physical power cutoff.
 - Browser heartbeat and page-close disarm are best-effort software safeguards,
