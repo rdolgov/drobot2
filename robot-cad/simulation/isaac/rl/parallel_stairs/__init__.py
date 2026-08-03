@@ -24,9 +24,7 @@ def _register_variant(task_id: str, env_cfg: str, runner_cfg: str) -> None:
         disable_env_checker=True,
         kwargs={
             "env_cfg_entry_point": f"{__name__}.pure_stairs_env_cfg:{env_cfg}",
-            "rsl_rl_cfg_entry_point": (
-                f"{agents.__name__}.rsl_rl_ppo_cfg:{runner_cfg}"
-            ),
+            "rsl_rl_cfg_entry_point": (f"{agents.__name__}.rsl_rl_ppo_cfg:{runner_cfg}"),
         },
     )
 
@@ -160,6 +158,36 @@ _register_variant(
     "Drobot-Pure-Stairs-Yaw90-FullFold-TwoSupport-Rise5-Hip-Direct",
     "DrobotPureStairsYaw90FullFoldTwoSupportRise5HipEnvCfg",
     "DrobotPureStairsYaw90FullFoldTwoSupportRise5HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift10-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift10HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Consolidate-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5ConsolidateHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift10-Consolidate-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift10ConsolidateHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift14-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift14HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift14HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift19-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift19HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift19HipPPORunnerCfg",
 )
 _register_variant(
     "Drobot-Pure-Stairs-Sideways-TwoSupport-Rise5-Hip-Direct",

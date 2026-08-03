@@ -86,9 +86,7 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
             num_cols=16,
             color_scheme="height",
             use_cache=True,
-            sub_terrains={
-                "exact_stairs": ExactStairsTerrainCfg(function=exact_stairs_terrain)
-            },
+            sub_terrains={"exact_stairs": ExactStairsTerrainCfg(function=exact_stairs_terrain)},
         ),
         max_init_terrain_level=0,
         collision_group=-1,
@@ -204,6 +202,7 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     foot_lift_curriculum = False
     foot_lift_height_m = 0.19
     foot_lift_hold_steps = 8
+    foot_lift_settle_steps = 0
     support_reward_scale = 0.06
     progress_delta_reward_scale = 60.0
     height_delta_reward_scale = 45.0
@@ -336,9 +335,7 @@ class DrobotPureStairsFirstStepLandingConsolidateHipEnvCfg(
 
 
 @configclass
-class DrobotPureStairsFirstStepContactRetentionHipEnvCfg(
-    DrobotPureStairsFirstStepLandingHipEnvCfg
-):
+class DrobotPureStairsFirstStepContactRetentionHipEnvCfg(DrobotPureStairsFirstStepLandingHipEnvCfg):
     """Reward centered descent while every non-swing foot stays loaded."""
 
     first_step_min_support_count = 4
@@ -635,6 +632,66 @@ class DrobotPureStairsYaw90FullFoldTwoSupportRise5HipEnvCfg(
 
 
 @configclass
+class DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg(
+    DrobotPureStairsYaw90FullFoldTwoSupportRise5HipEnvCfg
+):
+    """Lift any unloaded foot 10 cm from the settled full-fold lateral stance."""
+
+    episode_length_s = 8.0
+    support_rise_curriculum = False
+    foot_lift_curriculum = True
+    foot_lift_height_m = 0.10
+    foot_lift_hold_steps = 6
+    foot_lift_settle_steps = 60
+    support_reward_scale = 0.25
+    progress_delta_reward_scale = 0.0
+    height_delta_reward_scale = 0.0
+    clearance_reward_scale = 12.0
+    lift_hold_reward_scale = 0.10
+    supported_lift_reward_scale = 1.50
+    support_rise_reward_scale = 0.0
+    support_rise_height_delta_scale = 0.0
+    new_tread_potential_reward_scale = 0.0
+    tread_potential_reward_scale = 0.0
+    new_narrow_tread_potential_reward_scale = 0.0
+    narrow_tread_potential_reward_scale = 0.0
+    tread_contact_reward_scale = 0.0
+    centered_tread_contact_reward_scale = 0.0
+    success_completion_reward_scale = 200.0
+    report_episode_totals_on_close = True
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift5HipEnvCfg(
+    DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg
+):
+    """Bridge the folded rise policy into a held 5 cm one-foot unload."""
+
+    foot_lift_height_m = 0.05
+    foot_lift_hold_steps = 4
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift14HipEnvCfg(
+    DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg
+):
+    """Raise the same symmetric full-fold lateral lift gate to 14 cm."""
+
+    foot_lift_height_m = 0.14
+    foot_lift_hold_steps = 7
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift19HipEnvCfg(
+    DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg
+):
+    """Require the hardware target: a held 19 cm force-backed foot lift."""
+
+    foot_lift_height_m = 0.19
+    foot_lift_hold_steps = 8
+
+
+@configclass
 class DrobotPureStairsSidewaysTwoSupportRise5HipEnvCfg(
     DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipEnvCfg
 ):
@@ -696,9 +753,7 @@ class DrobotPureStairsFirstStepWidth105Low100HipEnvCfg(
 
 
 @configclass
-class DrobotPureStairsFirstStepLandingLowHipEnvCfg(
-    DrobotPureStairsFirstStepLandingHipEnvCfg
-):
+class DrobotPureStairsFirstStepLandingLowHipEnvCfg(DrobotPureStairsFirstStepLandingHipEnvCfg):
     """First-tread landing from the lowest centered, nearly folded stance."""
 
     initial_base_height_m = 0.30
@@ -716,9 +771,7 @@ class DrobotPureStairsFirstStepLandingLowHipEnvCfg(
 
 
 @configclass
-class DrobotPureStairsFirstStepLandingSidewaysHipEnvCfg(
-    DrobotPureStairsFirstStepLandingHipEnvCfg
-):
+class DrobotPureStairsFirstStepLandingSidewaysHipEnvCfg(DrobotPureStairsFirstStepLandingHipEnvCfg):
     """First-tread landing from a true 90-degree lateral approach."""
 
     reset_yaw_deg = 90.0

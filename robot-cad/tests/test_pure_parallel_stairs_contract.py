@@ -60,9 +60,7 @@ def test_exact_stair_and_policy_dimensions_are_fixed() -> None:
     assert cfg_values["stair_step_count"] == 4
     assert "EFFORT_CAP_NM = 0.8825985" in cfg_source
 
-    terrain_values = _class_assignments(
-        _source("exact_stairs_terrain.py"), "ExactStairsTerrainCfg"
-    )
+    terrain_values = _class_assignments(_source("exact_stairs_terrain.py"), "ExactStairsTerrainCfg")
     assert terrain_values["rise_m"] == 0.18
     assert terrain_values["tread_depth_m"] == 0.25
     assert terrain_values["step_count"] == 4
@@ -87,6 +85,43 @@ def test_policy_observation_uses_only_deployable_sensor_state() -> None:
     privileged = ("root_pos_w", "body_pos_w", "env_origins", "_terrain_height")
     for field in privileged:
         assert field not in observation
+
+
+def test_full_fold_sideways_lift_curriculum_is_force_backed_and_staged() -> None:
+    cfg_source = _source("pure_stairs_env_cfg.py")
+    env_source = _source("pure_stairs_env.py")
+    runner_source = _source("agents/rsl_rl_ppo_cfg.py")
+    registration = _source("__init__.py")
+
+    lift5 = _class_assignments(cfg_source, "DrobotPureStairsYaw90FullFoldFootLift5HipEnvCfg")
+    lift10 = _class_assignments(cfg_source, "DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg")
+    lift14 = _class_assignments(cfg_source, "DrobotPureStairsYaw90FullFoldFootLift14HipEnvCfg")
+    lift19 = _class_assignments(cfg_source, "DrobotPureStairsYaw90FullFoldFootLift19HipEnvCfg")
+    assert lift10["foot_lift_curriculum"] is True
+    assert lift10["foot_lift_height_m"] == 0.10
+    assert lift10["foot_lift_settle_steps"] == 60
+    assert lift10["progress_delta_reward_scale"] == 0.0
+    assert lift10["supported_lift_reward_scale"] == 1.50
+    assert lift10["success_completion_reward_scale"] == 200.0
+    assert lift5["foot_lift_height_m"] == 0.05
+    assert lift5["foot_lift_hold_steps"] == 4
+    assert lift14["foot_lift_height_m"] == 0.14
+    assert lift19["foot_lift_height_m"] == 0.19
+    assert "support_count >= 3.0" in env_source
+    assert "self._steps_since_reset > self.cfg.foot_lift_settle_steps" in env_source
+    assert "max(self.cfg.foot_lift_height_m, 1.0e-6)" in env_source
+    assert "foot_lift_success = (" in env_source
+    assert ") & ~self._failed" in env_source
+
+    for height in ("5", "10", "14", "19"):
+        assert f"DrobotPureStairsYaw90FullFoldFootLift{height}HipPPORunnerCfg" in runner_source
+        assert f"Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift{height}-Hip-Direct" in registration
+    assert "DrobotPureStairsYaw90FullFoldFootLift5ConsolidateHipPPORunnerCfg" in runner_source
+    assert "DrobotPureStairsYaw90FullFoldFootLift10ConsolidateHipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Consolidate-Hip-Direct" in registration
+    assert "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift10-Consolidate-Hip-Direct" in registration
+    assert "self.algorithm.entropy_coef = 0.0" in runner_source
+    assert "self.algorithm.learning_rate = 2.0e-5" in runner_source
 
 
 def test_reward_has_no_scripted_phase_or_reference_action() -> None:
@@ -126,9 +161,7 @@ def test_low_sideways_and_hip_variants_keep_pure_rl_contract() -> None:
 
 def test_first_step_curriculum_requires_supported_tread_hold() -> None:
     cfg_source = _source("pure_stairs_env_cfg.py")
-    first_step = _class_assignments(
-        cfg_source, "DrobotPureStairsFirstStepHipEnvCfg"
-    )
+    first_step = _class_assignments(cfg_source, "DrobotPureStairsFirstStepHipEnvCfg")
     assert first_step["reset_forward_offset_m"] == 0.10
     assert first_step["first_step_curriculum"] is True
     assert first_step["reward_tread_count"] == 1
@@ -158,15 +191,9 @@ def test_first_step_curriculum_requires_supported_tread_hold() -> None:
     assert "new_narrow_tread_potential_reward_scale" in reward
     assert "tread_contact_reward_scale" in reward
 
-    close_2 = _class_assignments(
-        cfg_source, "DrobotPureStairsFirstStepClose2HipEnvCfg"
-    )
-    close_4 = _class_assignments(
-        cfg_source, "DrobotPureStairsFirstStepClose4HipEnvCfg"
-    )
-    close_6 = _class_assignments(
-        cfg_source, "DrobotPureStairsFirstStepClose6HipEnvCfg"
-    )
+    close_2 = _class_assignments(cfg_source, "DrobotPureStairsFirstStepClose2HipEnvCfg")
+    close_4 = _class_assignments(cfg_source, "DrobotPureStairsFirstStepClose4HipEnvCfg")
+    close_6 = _class_assignments(cfg_source, "DrobotPureStairsFirstStepClose6HipEnvCfg")
     assert close_2["reset_forward_offset_m"] == 0.10
     assert close_2["first_step_min_base_gain_m"] == 0.02
     assert close_2["tread_potential_reward_scale"] == 0.40
@@ -175,17 +202,13 @@ def test_first_step_curriculum_requires_supported_tread_hold() -> None:
     assert close_4["first_step_min_base_gain_m"] == 0.04
     assert close_6["first_step_min_base_gain_m"] == 0.06
 
-    landing = _class_assignments(
-        cfg_source, "DrobotPureStairsFirstStepLandingHipEnvCfg"
-    )
+    landing = _class_assignments(cfg_source, "DrobotPureStairsFirstStepLandingHipEnvCfg")
     assert landing["first_step_require_base_gain"] is False
     assert landing["first_step_hold_steps"] == 3
     assert landing["tread_contact_reward_scale"] == 2.00
     assert landing["first_step_completion_reward_scale"] == 10.0
 
-    close_1 = _class_assignments(
-        cfg_source, "DrobotPureStairsFirstStepClose1HipEnvCfg"
-    )
+    close_1 = _class_assignments(cfg_source, "DrobotPureStairsFirstStepClose1HipEnvCfg")
     assert close_1["first_step_min_base_gain_m"] == 0.01
     assert close_1["reset_forward_jitter_m"] == 0.03
     assert close_1["first_step_hold_steps"] == 4
@@ -197,9 +220,7 @@ def test_first_step_curriculum_requires_supported_tread_hold() -> None:
 
 def test_foot_lift_curriculum_is_symmetric_and_supported() -> None:
     cfg_source = _source("pure_stairs_env_cfg.py")
-    foot_lift = _class_assignments(
-        cfg_source, "DrobotPureStairsFootLiftHipEnvCfg"
-    )
+    foot_lift = _class_assignments(cfg_source, "DrobotPureStairsFootLiftHipEnvCfg")
     assert foot_lift["foot_lift_curriculum"] is True
     assert foot_lift["reset_forward_offset_m"] == -0.10
     assert foot_lift["supported_lift_reward_scale"] == 1.50
@@ -236,12 +257,12 @@ def test_long_landing_runner_retains_complete_rare_sequences() -> None:
 
 
 def test_lift_consolidation_uses_accurate_episode_counts_and_low_entropy() -> None:
-    env_source = (
-        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env.py"
-    ).read_text(encoding="utf-8")
-    cfg_source = (
-        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
-    ).read_text(encoding="utf-8")
+    env_source = (ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env.py").read_text(
+        encoding="utf-8"
+    )
+    cfg_source = (ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py").read_text(
+        encoding="utf-8"
+    )
     runner_source = (
         ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
     ).read_text(encoding="utf-8")
@@ -270,17 +291,15 @@ def test_lift_consolidation_uses_accurate_episode_counts_and_low_entropy() -> No
 
 
 def test_landing_reset_comparison_keeps_full_fold_and_true_sideways_pose() -> None:
-    cfg_source = (
-        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
-    ).read_text(encoding="utf-8")
+    cfg_source = (ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py").read_text(
+        encoding="utf-8"
+    )
     registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
         encoding="utf-8"
     )
 
     low = _class_assignments(cfg_source, "DrobotPureStairsFirstStepLandingLowHipEnvCfg")
-    sideways = _class_assignments(
-        cfg_source, "DrobotPureStairsFirstStepLandingSidewaysHipEnvCfg"
-    )
+    sideways = _class_assignments(cfg_source, "DrobotPureStairsFirstStepLandingSidewaysHipEnvCfg")
     assert low["initial_base_height_m"] == 0.30
     assert sideways["reset_yaw_deg"] == 90.0
     assert "LOW_FOLD_HIP_RAD" in cfg_source
@@ -290,9 +309,9 @@ def test_landing_reset_comparison_keeps_full_fold_and_true_sideways_pose() -> No
 
 
 def test_landing_consolidation_reinforces_rare_exact_contacts() -> None:
-    cfg_source = (
-        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
-    ).read_text(encoding="utf-8")
+    cfg_source = (ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py").read_text(
+        encoding="utf-8"
+    )
     runner_source = (
         ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
     ).read_text(encoding="utf-8")
@@ -302,22 +321,19 @@ def test_landing_consolidation_reinforces_rare_exact_contacts() -> None:
 
     assert "class DrobotPureStairsFirstStepLandingConsolidateHipEnvCfg" in cfg_source
     assert "success_completion_reward_scale = 100.0" in cfg_source
-    assert (
-        "class DrobotPureStairsFirstStepLandingConsolidateHipPPORunnerCfg"
-        in runner_source
-    )
+    assert "class DrobotPureStairsFirstStepLandingConsolidateHipPPORunnerCfg" in runner_source
     assert "self.algorithm.entropy_coef = 0.0" in runner_source
     assert "self.algorithm.learning_rate = 5.0e-5" in runner_source
     assert "Drobot-Pure-Stairs-First-Step-Landing-Consolidate-Hip-Direct" in registration
 
 
 def test_contact_retention_requires_centered_touchdown_and_four_foot_support() -> None:
-    env_source = (
-        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env.py"
-    ).read_text(encoding="utf-8")
-    cfg_source = (
-        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
-    ).read_text(encoding="utf-8")
+    env_source = (ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env.py").read_text(
+        encoding="utf-8"
+    )
+    cfg_source = (ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py").read_text(
+        encoding="utf-8"
+    )
     runner_source = (
         ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
     ).read_text(encoding="utf-8")
@@ -340,12 +356,12 @@ def test_contact_retention_requires_centered_touchdown_and_four_foot_support() -
 
 
 def test_broad_support_retention_is_a_single_constraint_bridge() -> None:
-    env_source = (
-        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env.py"
-    ).read_text(encoding="utf-8")
-    cfg_source = (
-        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
-    ).read_text(encoding="utf-8")
+    env_source = (ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env.py").read_text(
+        encoding="utf-8"
+    )
+    cfg_source = (ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py").read_text(
+        encoding="utf-8"
+    )
     registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
         encoding="utf-8"
     )
@@ -361,9 +377,9 @@ def test_broad_support_retention_is_a_single_constraint_bridge() -> None:
 
 
 def test_width105_curriculum_narrows_only_the_valid_contact_band() -> None:
-    cfg_source = (
-        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
-    ).read_text(encoding="utf-8")
+    cfg_source = (ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py").read_text(
+        encoding="utf-8"
+    )
     runner_source = (
         ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
     ).read_text(encoding="utf-8")
@@ -381,9 +397,9 @@ def test_width105_curriculum_narrows_only_the_valid_contact_band() -> None:
 
 
 def test_width90_curriculum_continues_gradual_tread_narrowing() -> None:
-    cfg_source = (
-        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
-    ).read_text(encoding="utf-8")
+    cfg_source = (ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py").read_text(
+        encoding="utf-8"
+    )
     runner_source = (
         ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
     ).read_text(encoding="utf-8")
@@ -400,19 +416,17 @@ def test_width90_curriculum_continues_gradual_tread_narrowing() -> None:
 
 
 def test_width105_body_rise_requires_contact_gated_height_transfer() -> None:
-    env_source = (
-        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env.py"
-    ).read_text(encoding="utf-8")
-    cfg_source = (
-        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
-    ).read_text(encoding="utf-8")
+    env_source = (ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env.py").read_text(
+        encoding="utf-8"
+    )
+    cfg_source = (ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py").read_text(
+        encoding="utf-8"
+    )
     registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
         encoding="utf-8"
     )
 
-    rise10 = _class_assignments(
-        cfg_source, "DrobotPureStairsFirstStepWidth105Rise10HipEnvCfg"
-    )
+    rise10 = _class_assignments(cfg_source, "DrobotPureStairsFirstStepWidth105Rise10HipEnvCfg")
     assert rise10["first_step_min_base_gain_m"] == 0.01
     assert rise10["first_step_require_base_gain"] is True
     assert rise10["first_step_hold_steps"] == 4
@@ -424,9 +438,9 @@ def test_width105_body_rise_requires_contact_gated_height_transfer() -> None:
 
 
 def test_width105_lower_reset_curriculum_reaches_verified_full_fold_gradually() -> None:
-    cfg_source = (
-        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
-    ).read_text(encoding="utf-8")
+    cfg_source = (ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py").read_text(
+        encoding="utf-8"
+    )
     runner_source = (
         ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
     ).read_text(encoding="utf-8")
@@ -487,9 +501,7 @@ def test_low25_to_37_bridge_randomizes_only_hardware_representable_reset_state()
     runner_source = _source("agents/rsl_rl_ppo_cfg.py")
     registration = _source("__init__.py")
 
-    bridge = _class_assignments(
-        cfg_source, "DrobotPureStairsFirstStepWidth105Low25To37HipEnvCfg"
-    )
+    bridge = _class_assignments(cfg_source, "DrobotPureStairsFirstStepWidth105Low25To37HipEnvCfg")
     assert bridge["initial_base_height_m"] == 0.40
     assert bridge["reset_fold_fraction"] == 0.375
     assert bridge["reset_fold_fraction_min"] == 0.25
@@ -505,9 +517,7 @@ def test_low25_to_37_bridge_randomizes_only_hardware_representable_reset_state()
     assert "DrobotPureStairsFirstStepWidth105Low25To37HipPPORunnerCfg" in runner_source
     assert "Drobot-Pure-Stairs-First-Step-Width105-Low25-To37-Hip-Direct" in registration
 
-    fixed = _class_assignments(
-        cfg_source, "DrobotPureStairsFirstStepWidth105Low37HipEnvCfg"
-    )
+    fixed = _class_assignments(cfg_source, "DrobotPureStairsFirstStepWidth105Low37HipEnvCfg")
     assert fixed["initial_base_height_m"] == 0.40
     assert fixed["reset_fold_fraction"] == 0.375
     assert "DrobotPureStairsFirstStepWidth105Low37HipPPORunnerCfg" in runner_source
@@ -546,13 +556,16 @@ def test_hard_bias_rise10_rewards_only_four_support_body_transfer() -> None:
     assert "supported_gain_episodes={supported_gain_episodes}" in env_source
     assert "supported_gain_mean_m={supported_gain_mean_m:.8f}" in env_source
     assert (
-        "DrobotPureStairsFirstStepWidth105Low25To37HardBiasRise10HipPPORunnerCfg"
-        in runner_source
+        "DrobotPureStairsFirstStepWidth105Low25To37HardBiasRise10HipPPORunnerCfg" in runner_source
     )
     assert (
         "Drobot-Pure-Stairs-First-Step-Width105-Low25-To37-HardBias-Rise10-Hip-Direct"
         in registration
     )
+    assert "DrobotPureStairsYaw90FullFoldFootLift5ConsolidateHipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Consolidate-Hip-Direct" in registration
+    assert "self.algorithm.entropy_coef = 0.0" in runner_source
+    assert "self.algorithm.learning_rate = 2.0e-5" in runner_source
 
 
 def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
@@ -561,9 +574,7 @@ def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
     runner_source = _source("agents/rsl_rl_ppo_cfg.py")
     registration = _source("__init__.py")
 
-    stand = _class_assignments(
-        cfg_source, "DrobotPureStairsLow25To37HardBiasStandRise10HipEnvCfg"
-    )
+    stand = _class_assignments(cfg_source, "DrobotPureStairsLow25To37HardBiasStandRise10HipEnvCfg")
     assert stand["first_step_curriculum"] is False
     assert stand["support_rise_curriculum"] is True
     assert stand["support_rise_min_base_gain_m"] == 0.01
@@ -573,10 +584,7 @@ def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
     assert stand["support_rise_reward_scale"] == 10.0
     assert stand["support_rise_height_delta_scale"] == 180.0
     assert stand["tread_contact_reward_scale"] == 0.0
-    assert (
-        "support_rise = support_rise_reward_gate * support_rise_gain_fraction"
-        in env_source
-    )
+    assert "support_rise = support_rise_reward_gate * support_rise_gain_fraction" in env_source
     assert "Metrics/max_four_support_base_gain_m" in env_source
     assert "self.cfg.support_rise_curriculum" in env_source
     assert "DrobotPureStairsLow25To37HardBiasStandRise10HipPPORunnerCfg" in runner_source
@@ -587,14 +595,8 @@ def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
         "DrobotPureStairsLow25To37HardBiasThreeSupportRise10HipEnvCfg",
     )
     assert three_support["support_rise_min_support_count"] == 3
-    assert (
-        "DrobotPureStairsLow25To37HardBiasThreeSupportRise10HipPPORunnerCfg"
-        in runner_source
-    )
-    assert (
-        "Drobot-Pure-Stairs-Low25-To37-HardBias-ThreeSupport-Rise10-Hip-Direct"
-        in registration
-    )
+    assert "DrobotPureStairsLow25To37HardBiasThreeSupportRise10HipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-Low25-To37-HardBias-ThreeSupport-Rise10-Hip-Direct" in registration
 
     two_support = _class_assignments(
         cfg_source,
@@ -604,14 +606,8 @@ def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
     assert two_support["support_rise_min_support_count"] == 2
     assert two_support["support_rise_soft_support_reward"] is True
     assert two_support["support_reward_scale"] == 0.25
-    assert (
-        "DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipPPORunnerCfg"
-        in runner_source
-    )
-    assert (
-        "Drobot-Pure-Stairs-Low25-To37-HardBias-TwoSupport-Rise5-Hip-Direct"
-        in registration
-    )
+    assert "DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-Low25-To37-HardBias-TwoSupport-Rise5-Hip-Direct" in registration
     assert (
         "DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipConsolidatePPORunnerCfg"
         in runner_source
@@ -645,15 +641,9 @@ def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
     assert yaw45["reset_yaw_deg"] == 45.0
     assert yaw45["action_scale_abduction_rad"] == 0.42
     assert "self.robot.init_state.rot = (0.0, 0.0, 0.3826834324, 0.9238795325)" in cfg_source
-    assert (
-        "self.depth_sensor.offset.pos = (0.0809637264, -0.0809637264, 0.123)"
-        in cfg_source
-    )
+    assert "self.depth_sensor.offset.pos = (0.0809637264, -0.0809637264, 0.123)" in cfg_source
     assert "DrobotPureStairsYaw45FullFoldTwoSupportRise5HipPPORunnerCfg" in runner_source
-    assert (
-        "Drobot-Pure-Stairs-Yaw45-FullFold-TwoSupport-Rise5-Hip-Direct"
-        in registration
-    )
+    assert "Drobot-Pure-Stairs-Yaw45-FullFold-TwoSupport-Rise5-Hip-Direct" in registration
 
     yaw67p5 = _class_assignments(
         cfg_source,
@@ -662,15 +652,9 @@ def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
     assert yaw67p5["reset_yaw_deg"] == 67.5
     assert yaw67p5["action_scale_abduction_rad"] == 0.42
     assert "self.robot.init_state.rot = (0.0, 0.0, 0.5555702330, 0.8314696123)" in cfg_source
-    assert (
-        "self.depth_sensor.offset.pos = (0.0438172530, -0.1057842065, 0.123)"
-        in cfg_source
-    )
+    assert "self.depth_sensor.offset.pos = (0.0438172530, -0.1057842065, 0.123)" in cfg_source
     assert "DrobotPureStairsYaw67p5FullFoldTwoSupportRise5HipPPORunnerCfg" in runner_source
-    assert (
-        "Drobot-Pure-Stairs-Yaw67p5-FullFold-TwoSupport-Rise5-Hip-Direct"
-        in registration
-    )
+    assert "Drobot-Pure-Stairs-Yaw67p5-FullFold-TwoSupport-Rise5-Hip-Direct" in registration
 
     yaw90 = _class_assignments(
         cfg_source,
@@ -679,10 +663,7 @@ def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
     assert yaw90["reset_yaw_deg"] == 90.0
     assert yaw90["action_scale_abduction_rad"] == 0.42
     assert "DrobotPureStairsYaw90FullFoldTwoSupportRise5HipPPORunnerCfg" in runner_source
-    assert (
-        "Drobot-Pure-Stairs-Yaw90-FullFold-TwoSupport-Rise5-Hip-Direct"
-        in registration
-    )
+    assert "Drobot-Pure-Stairs-Yaw90-FullFold-TwoSupport-Rise5-Hip-Direct" in registration
 
     sideways = _class_assignments(
         cfg_source,
@@ -704,11 +685,5 @@ def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
     assert "support_count / float(self.cfg.support_rise_min_support_count)" in env_source
     assert ") & ~self._failed" in env_source
     assert "max(self.cfg.first_step_min_base_gain_m, 1.0e-6)" in env_source
-    assert (
-        "DrobotPureStairsLow25To37HardBiasUprightRise10HipPPORunnerCfg"
-        in runner_source
-    )
-    assert (
-        "Drobot-Pure-Stairs-Low25-To37-HardBias-Upright-Rise10-Hip-Direct"
-        in registration
-    )
+    assert "DrobotPureStairsLow25To37HardBiasUprightRise10HipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-Low25-To37-HardBias-Upright-Rise10-Hip-Direct" in registration
