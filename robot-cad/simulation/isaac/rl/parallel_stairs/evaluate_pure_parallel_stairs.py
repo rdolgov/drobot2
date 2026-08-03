@@ -14,8 +14,11 @@ import sys
 from pathlib import Path
 
 import gymnasium as gym
+import warp as wp
 from isaaclab import app as isaaclab_app
 from isaaclab_rl.entrypoints import common as entrypoint_common
+
+wp.config.enable_backward = False
 
 PACKAGE_PARENT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PACKAGE_PARENT))

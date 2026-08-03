@@ -226,6 +226,50 @@ class DrobotPureStairsFirstStepWidth105Low25To37HardBiasHipPPORunnerCfg(
 
 
 @configclass
+class DrobotPureStairsFirstStepWidth105Low25To37HardBiasRise10HipPPORunnerCfg(
+    DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
+):
+    """Conservatively continue model 895 into supported 10 mm body rise."""
+
+    experiment_name = (
+        "drobot_pure_stairs_first_step_width105_low25_to_37_hard_bias_rise10_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsLow25To37HardBiasStandRise10HipPPORunnerCfg(
+    DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
+):
+    """Learn a symmetric four-support 10 mm stand-up before tread transfer."""
+
+    experiment_name = (
+        "drobot_pure_stairs_low25_to_37_hard_bias_stand_rise10_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsLow25To37HardBiasThreeSupportRise10HipPPORunnerCfg(
+    DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
+):
+    """Learn 10 mm body rise with any stable three-foot support set."""
+
+    experiment_name = (
+        "drobot_pure_stairs_low25_to_37_hard_bias_three_support_rise10_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsLow25To37HardBiasUprightRise10HipPPORunnerCfg(
+    DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
+):
+    """Learn a held 10 mm upright body rise without prescribing a contact pattern."""
+
+    experiment_name = (
+        "drobot_pure_stairs_low25_to_37_hard_bias_upright_rise10_hip_180x250_direct"
+    )
+
+
+@configclass
 class DrobotPureStairsFirstStepWidth105Low75HipPPORunnerCfg(
     DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
 ):

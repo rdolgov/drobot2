@@ -42,3 +42,33 @@ Actor inputs remain hardware-representable IMU, VL53L5CX 8 x 8 depth, joint
 position/velocity, previous action, and four foot load/contact channels. Hip
 and knee action authority remains 0.90/1.20 rad, and every joint remains
 capped at 0.8825985 N*m.
+
+## Supported body-rise audit
+
+Five additional 128-environment pure-PPO runs added 1,843,200 transitions
+while testing progressively simpler outcome gates. None prescribed a joint
+pose, action trajectory, gait phase, leg order, or inverse-kinematics target.
+
+- Direct centered-tread plus four-support transfer: 0/1,948 successes.
+- Four-support 10 mm stand-up precursor: 0/2,327 successes.
+- Three-support 10 mm precursor: 0/2,357 successes; the maximum gated body
+  rise was 1.27977 mm.
+- Ungated upright plus 10 mm continuation from model 895: 244/2,599
+  stochastic rise events before the final simultaneous-failure exclusion,
+  with a 60.48828 mm maximum. Event-rich model 990 scored 18/167 on the first
+  deterministic comparison versus 29/176 for retained model 895, so it was
+  rejected.
+- Fresh ungated upright plus 10 mm PPO: 135/2,801 stochastic events before
+  the same final exclusion, with a 58.55331 mm maximum. It also remained below
+  the retained policy and was rejected.
+
+The final success definition explicitly requires the rise hold and `not
+failed` on the same step. Under that stricter gate, retained model 895 scored
+17/169 deterministic episodes on seed 1160, including 15/135 from the harder
+reset half. This proves limited body-extension authority under the real effort
+cap, not supported transfer or stair climbing.
+
+Third-person seed-1176 review clips are tracked at
+`reviews/ppo-upright-rise-retained-model895-seed1176.mp4` and
+`reviews/ppo-upright-rise-fresh-model119-seed1176.mp4`. Both are honest
+ordinary failed attempts (0/5 and 0/1 respectively), not selected successes.

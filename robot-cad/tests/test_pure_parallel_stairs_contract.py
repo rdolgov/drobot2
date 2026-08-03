@@ -520,3 +520,92 @@ def test_low25_to_37_bridge_randomizes_only_hardware_representable_reset_state()
     assert "self.cfg.reset_alpha_power" in env_source
     assert "DrobotPureStairsFirstStepWidth105Low25To37HardBiasHipPPORunnerCfg" in runner_source
     assert "Drobot-Pure-Stairs-First-Step-Width105-Low25-To37-HardBias-Hip-Direct" in registration
+
+
+def test_hard_bias_rise10_rewards_only_four_support_body_transfer() -> None:
+    cfg_source = _source("pure_stairs_env_cfg.py")
+    env_source = _source("pure_stairs_env.py")
+    runner_source = _source("agents/rsl_rl_ppo_cfg.py")
+    registration = _source("__init__.py")
+
+    rise10 = _class_assignments(
+        cfg_source,
+        "DrobotPureStairsFirstStepWidth105Low25To37HardBiasRise10HipEnvCfg",
+    )
+    assert rise10["first_step_min_base_gain_m"] == 0.01
+    assert rise10["first_step_require_base_gain"] is True
+    assert rise10["first_step_hold_steps"] == 4
+    assert rise10["height_delta_reward_scale"] == 0.0
+    assert rise10["tread_transfer_reward_scale"] == 0.0
+    assert rise10["supported_transfer_reward_scale"] == 12.0
+    assert rise10["supported_tread_height_delta_scale"] == 220.0
+    assert "full_support = torch.clamp(support_count - 3.0, 0.0, 1.0)" in env_source
+    assert "supported_transfer_gate = required_tread_binary * full_support" in env_source
+    assert "Metrics/max_supported_base_gain_m" in env_source
+    assert "supported_gain_episodes={supported_gain_episodes}" in env_source
+    assert "supported_gain_mean_m={supported_gain_mean_m:.8f}" in env_source
+    assert (
+        "DrobotPureStairsFirstStepWidth105Low25To37HardBiasRise10HipPPORunnerCfg"
+        in runner_source
+    )
+    assert (
+        "Drobot-Pure-Stairs-First-Step-Width105-Low25-To37-HardBias-Rise10-Hip-Direct"
+        in registration
+    )
+
+
+def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
+    cfg_source = _source("pure_stairs_env_cfg.py")
+    env_source = _source("pure_stairs_env.py")
+    runner_source = _source("agents/rsl_rl_ppo_cfg.py")
+    registration = _source("__init__.py")
+
+    stand = _class_assignments(
+        cfg_source, "DrobotPureStairsLow25To37HardBiasStandRise10HipEnvCfg"
+    )
+    assert stand["first_step_curriculum"] is False
+    assert stand["support_rise_curriculum"] is True
+    assert stand["support_rise_min_base_gain_m"] == 0.01
+    assert stand["support_rise_hold_steps"] == 4
+    assert stand["clearance_reward_scale"] == 0.0
+    assert stand["support_rise_min_support_count"] == 4
+    assert stand["support_rise_reward_scale"] == 10.0
+    assert stand["support_rise_height_delta_scale"] == 180.0
+    assert stand["tread_contact_reward_scale"] == 0.0
+    assert "support_rise = support_rise_gate * support_rise_gain_fraction" in env_source
+    assert "Metrics/max_four_support_base_gain_m" in env_source
+    assert "self.cfg.support_rise_curriculum" in env_source
+    assert "DrobotPureStairsLow25To37HardBiasStandRise10HipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-Low25-To37-HardBias-Stand-Rise10-Hip-Direct" in registration
+
+    three_support = _class_assignments(
+        cfg_source,
+        "DrobotPureStairsLow25To37HardBiasThreeSupportRise10HipEnvCfg",
+    )
+    assert three_support["support_rise_min_support_count"] == 3
+    assert (
+        "DrobotPureStairsLow25To37HardBiasThreeSupportRise10HipPPORunnerCfg"
+        in runner_source
+    )
+    assert (
+        "Drobot-Pure-Stairs-Low25-To37-HardBias-ThreeSupport-Rise10-Hip-Direct"
+        in registration
+    )
+
+    upright = _class_assignments(
+        cfg_source,
+        "DrobotPureStairsLow25To37HardBiasUprightRise10HipEnvCfg",
+    )
+    assert upright["support_rise_min_support_count"] == 0
+    assert upright["support_reward_scale"] == 0.0
+    assert "support_rise_gate = torch.ones_like(support_count)" in env_source
+    assert ") & ~self._failed" in env_source
+    assert "max(self.cfg.first_step_min_base_gain_m, 1.0e-6)" in env_source
+    assert (
+        "DrobotPureStairsLow25To37HardBiasUprightRise10HipPPORunnerCfg"
+        in runner_source
+    )
+    assert (
+        "Drobot-Pure-Stairs-Low25-To37-HardBias-Upright-Rise10-Hip-Direct"
+        in registration
+    )

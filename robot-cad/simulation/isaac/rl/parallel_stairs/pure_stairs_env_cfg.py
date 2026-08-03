@@ -195,6 +195,10 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     first_step_min_support_count = 3
     first_step_require_centered_contact = False
     centered_tread_half_width_m = 0.075
+    support_rise_curriculum = False
+    support_rise_min_base_gain_m = 0.01
+    support_rise_hold_steps = 4
+    support_rise_min_support_count = 4
     foot_lift_curriculum = False
     foot_lift_height_m = 0.19
     foot_lift_hold_steps = 8
@@ -202,12 +206,18 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     progress_delta_reward_scale = 60.0
     height_delta_reward_scale = 45.0
     supported_lift_reward_scale = 0.0
+    clearance_reward_scale = 12.0
+    lift_hold_reward_scale = 0.04
     tread_hold_reward_scale = 0.0
     tread_transfer_reward_scale = 0.0
+    supported_transfer_reward_scale = 0.0
+    support_rise_reward_scale = 0.0
     narrow_transfer_reward_scale = 0.0
     first_step_completion_reward_scale = 0.0
     success_completion_reward_scale = 25.0
     tread_height_delta_scale = 0.0
+    supported_tread_height_delta_scale = 0.0
+    support_rise_height_delta_scale = 0.0
     new_tread_potential_reward_scale = 2.0
     tread_potential_reward_scale = 0.02
     new_narrow_tread_potential_reward_scale = 0.0
@@ -456,6 +466,83 @@ class DrobotPureStairsFirstStepWidth105Low25To37HardBiasHipEnvCfg(
     """Keep the successful mixed bridge while sampling its harder half 75%."""
 
     reset_alpha_power = 0.5
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Low25To37HardBiasRise10HipEnvCfg(
+    DrobotPureStairsFirstStepWidth105Low25To37HardBiasHipEnvCfg
+):
+    """Require 10 mm of body rise while all four feet remain supported."""
+
+    first_step_min_base_gain_m = 0.01
+    first_step_require_base_gain = True
+    first_step_hold_steps = 4
+    progress_delta_reward_scale = 5.0
+    height_delta_reward_scale = 0.0
+    tread_hold_reward_scale = 3.0
+    tread_transfer_reward_scale = 0.0
+    supported_transfer_reward_scale = 12.0
+    narrow_transfer_reward_scale = 0.0
+    tread_height_delta_scale = 0.0
+    supported_tread_height_delta_scale = 220.0
+    first_step_completion_reward_scale = 20.0
+
+
+@configclass
+class DrobotPureStairsLow25To37HardBiasStandRise10HipEnvCfg(
+    DrobotPureStairsFirstStepWidth105Low25To37HardBiasHipEnvCfg
+):
+    """Pure four-support 10 mm stand-up precursor from lower resets."""
+
+    first_step_curriculum = False
+    support_rise_curriculum = True
+    episode_length_s = 6.0
+    support_rise_min_base_gain_m = 0.01
+    support_rise_hold_steps = 4
+    support_rise_min_support_count = 4
+    progress_delta_reward_scale = 0.0
+    height_delta_reward_scale = 0.0
+    clearance_reward_scale = 0.0
+    lift_hold_reward_scale = 0.0
+    support_reward_scale = 0.50
+    supported_lift_reward_scale = 0.0
+    tread_hold_reward_scale = 0.0
+    tread_transfer_reward_scale = 0.0
+    supported_transfer_reward_scale = 0.0
+    support_rise_reward_scale = 10.0
+    narrow_transfer_reward_scale = 0.0
+    tread_height_delta_scale = 0.0
+    supported_tread_height_delta_scale = 0.0
+    support_rise_height_delta_scale = 180.0
+    new_tread_potential_reward_scale = 0.0
+    tread_potential_reward_scale = 0.0
+    new_narrow_tread_potential_reward_scale = 0.0
+    narrow_tread_potential_reward_scale = 0.0
+    tread_contact_reward_scale = 0.0
+    centered_tread_contact_reward_scale = 0.0
+    supported_center_approach_reward_scale = 0.0
+    descending_center_approach_reward_scale = 0.0
+    retained_ground_support_reward_scale = 0.0
+    first_step_completion_reward_scale = 0.0
+
+
+@configclass
+class DrobotPureStairsLow25To37HardBiasThreeSupportRise10HipEnvCfg(
+    DrobotPureStairsLow25To37HardBiasStandRise10HipEnvCfg
+):
+    """Allow a stable three-foot support set while learning 10 mm body rise."""
+
+    support_rise_min_support_count = 3
+
+
+@configclass
+class DrobotPureStairsLow25To37HardBiasUprightRise10HipEnvCfg(
+    DrobotPureStairsLow25To37HardBiasStandRise10HipEnvCfg
+):
+    """Learn a held 10 mm body rise while remaining upright, without a contact gate."""
+
+    support_rise_min_support_count = 0
+    support_reward_scale = 0.0
 
 
 @configclass
