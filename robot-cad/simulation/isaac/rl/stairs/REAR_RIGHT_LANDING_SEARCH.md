@@ -756,3 +756,115 @@ the three-episode report SHA-256 is
 The next bounded experiment should train from a deterministic retained-foot
 snapshot and expose measured swing-foot total load directly in the policy
 observation; additional vision or friction is not yet the limiting factor.
+
+## V83-V85 observed-load and staged-upright transfer curriculum
+
+V83 implements the next bounded experiment. The front-pair profile now opts
+into one append-only observation,
+`placement_active_swing_total_load_normalized`, so the transfer PPO directly
+sees the normal load used by its unload gate. Existing 81-field precursor
+models remain valid prefixes. `PlacementPhaseTrainingEnv` also accepts a
+descending unload curriculum, changes the live gate only at accepted-transfer
+boundaries, and requires the last stage to equal the configured `1 N`
+deployment gate. The cached physical snapshot was already deterministic; V83
+confirmed one precursor replay followed by 13 snapshot restores.
+
+The implementation was validated with:
+
+```powershell
+& .\.venv\Scripts\python.exe -m ruff check `
+  simulation/isaac/rl/stairs/_stair_rl_contract.py `
+  simulation/isaac/rl/stairs/_quadruped_stairs_env.py `
+  simulation/isaac/rl/stairs/_placement_phase_training.py `
+  simulation/isaac/rl/stairs/train_stairs_ppo.py `
+  tests/test_quadruped_stairs_rl_contract.py
+& .\.venv\Scripts\python.exe -m pytest `
+  tests/test_quadruped_stairs_rl_contract.py -q `
+  --basetemp=.pytest-tmp-v84-contract
+```
+
+Ruff passed and the stair contract suite completed with six expected skips and
+no failures. The profile contract still declares `180 mm` rise, `250 mm`
+tread, `0.8825985 N m` applied effort, and no RGB policy input.
+
+V83 continued the V82 six-output transfer policy for 8,192 steps with `8`,
+`4`, and `1 N` stages. It preserved the learned 81-field prefix exactly and
+zero-initialized the new input column:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/train_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --world exports/isaac/quadruped_robot_stairs_v6_180mm_world.usda `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --output-dir simulation/isaac/output/rl/ppo-stairs-v83-load-observed-curriculum-8192-seed1034 `
+  --total-timesteps 8192 --seed 1034 --device cpu `
+  --fixed-placement-level left-quarter-tread-load `
+  --phase-train-leg front_left --phase-train-transfer `
+  --precursor-leg-model front_right=simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --phase-residual-swing-support-abduction --phase-compact-residual-action `
+  --phase-reset-attempts 32 `
+  --phase-transfer-unload-threshold-n 8 `
+  --phase-transfer-unload-threshold-n 4 `
+  --phase-transfer-unload-threshold-n 1 `
+  --phase-transfer-unload-successes-per-level 2 `
+  --initialize-from-stairs simulation/isaac/models/ppo-stairs-v82-front-left-unload-reward-4096-seed1034/drobot_stairs_ppo_final.zip `
+  --ppo-learning-rate 0.00003 --ppo-initial-log-std -2.5 `
+  --ppo-entropy-coefficient 0
+```
+
+V83 reached a `5.145 N` sampled minimum but completed zero 8 N transfers. Its
+end states showed the load gate was often satisfied while upright cosine was
+about `0.9764`, narrowly below the strict `0.9781476` gate. V84 therefore
+paired the same unload stages with increasing upright gates `0.975`, `0.977`,
+and `0.9781476`; the final gate is validated against the deployment config.
+The V84 command was the V83 command with output
+`ppo-stairs-v84-load-upright-curriculum-8192-seed1034`, initializer V83, and:
+
+```text
+--phase-transfer-upright-cosine 0.975
+--phase-transfer-upright-cosine 0.977
+--phase-transfer-upright-cosine 0.9781476
+```
+
+V84 completed two accepted 8 N transfers and automatically advanced to the
+4 N / `0.977` stage. Across 8,192 target steps it kept the sampled minimum load
+at `5.145 N`, minimum support margin at `40.842 mm`, and maximum support slip
+at `34.951 mm`. It did not pass 4 N. A final V85 bridge starting at `6 N /
+0.976` for 8,192 steps completed zero transfers, confirming that the current
+six-output swing-plus-support-abduction scope cannot reliably cross the next
+force band.
+
+Fresh strict-gate evaluation used:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --model simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --leg-model front_right=simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --zero-action-leg front_left `
+  --transfer-model front_left=simulation/isaac/output/rl/ppo-stairs-v84-load-upright-curriculum-8192-seed1034/drobot_stairs_ppo_final.zip `
+  --transfer-residual-swing-support-abduction front_left `
+  --episodes 3 --seed 1038 --device cpu --active-steps 1 `
+  --placement-level left-quarter-tread-load `
+  --maximum-lateral-deviation-m 0.20 --episode-seconds 45 `
+  --allow-unverified-model `
+  --report simulation/isaac/output/rl/ppo-stairs-v84-load-upright-curriculum-8192-seed1034/evaluation_seed1038_3ep.json
+```
+
+The strict result was `0/3`; all runs exceeded `35 mm` slip, and only one
+completed the front-right foothold. The V84 model SHA-256 is
+`24a86f8ef4a1744032651ef6e18f3786e78564d1157acf2e1d7fcb5552510616`;
+the evaluation-report SHA-256 is
+`b41d84939d2d2e09fd05c975e7dbe93e53a119b6cd5644362f0740c5a0dd3607`.
+The strict diagnostic recording is
+`reviews/ppo-stairs-v84-strict-eval-seed1038-ep3.mp4` (544 frames,
+11,643,347 bytes, SHA-256
+`311bf970284db37a58ef689d7bd6349c73df24eb36c6cc72a6ec7c207e9fc876`).
+
+This is meaningful curriculum progress, not a deployable stair climb. The next
+change should expose support-leg hip flexion as well as abduction and add
+explicit pitch/upright shaping. Better traction and camera vision remain lower
+priority: the policy already sees the relevant load and IMU state, while the
+limiting transfer states retain high support margin and fail force/upright
+coordination before perception becomes the bottleneck.

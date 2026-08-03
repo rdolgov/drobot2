@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from typing import Any, Protocol
 
@@ -168,6 +168,9 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         cache_phase_snapshot: bool = True,
         initial_phase_snapshot: Mapping[str, object] | None = None,
         initial_phase_snapshot_mode: str | None = None,
+        transfer_unload_thresholds_n: Sequence[float] = (),
+        transfer_unload_successes_per_level: int = 2,
+        transfer_upright_cosines: Sequence[float] = (),
     ) -> None:
         super().__init__(env)
         if maximum_reset_attempts < 1:
@@ -179,6 +182,76 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         self.raw_action_space = env.action_space
         self.target_leg = str(target_leg)
         self.train_transfer = bool(train_transfer)
+        self.transfer_unload_thresholds_n = tuple(
+            float(value) for value in transfer_unload_thresholds_n
+        )
+        self.transfer_unload_successes_per_level = int(
+            transfer_unload_successes_per_level
+        )
+        self.transfer_upright_cosines = tuple(
+            float(value) for value in transfer_upright_cosines
+        )
+        if self.transfer_unload_successes_per_level < 1:
+            raise ValueError(
+                "transfer_unload_successes_per_level must be positive"
+            )
+        if self.transfer_unload_thresholds_n and not self.train_transfer:
+            raise ValueError("transfer unload curriculum requires train_transfer")
+        if self.transfer_unload_thresholds_n:
+            if not all(
+                np.isfinite(value) and value > 0.0
+                for value in self.transfer_unload_thresholds_n
+            ):
+                raise ValueError(
+                    "transfer unload thresholds must be finite and positive"
+                )
+            if any(
+                current <= following
+                for current, following in zip(
+                    self.transfer_unload_thresholds_n,
+                    self.transfer_unload_thresholds_n[1:],
+                    strict=False,
+                )
+            ):
+                raise ValueError(
+                    "transfer unload thresholds must be strictly descending"
+                )
+        if self.transfer_upright_cosines:
+            if len(self.transfer_upright_cosines) != len(
+                self.transfer_unload_thresholds_n
+            ):
+                raise ValueError(
+                    "transfer upright gates must match unload thresholds"
+                )
+            if not all(
+                np.isfinite(value) and 0.0 < value <= 1.0
+                for value in self.transfer_upright_cosines
+            ):
+                raise ValueError(
+                    "transfer upright gates must be finite and within (0, 1]"
+                )
+            if any(
+                current > following
+                for current, following in zip(
+                    self.transfer_upright_cosines,
+                    self.transfer_upright_cosines[1:],
+                    strict=False,
+                )
+            ):
+                raise ValueError(
+                    "transfer upright gates must be nondecreasing"
+                )
+        self.transfer_unload_curriculum_level = 0
+        self.transfer_unload_level_successes = 0
+        self.transfer_unload_successes_by_level = [
+            0 for _ in self.transfer_unload_thresholds_n
+        ]
+        self.transfer_unload_curriculum_transitions: list[dict[str, float | int]] = []
+        if self.transfer_unload_thresholds_n:
+            self._validate_and_apply_transfer_unload_threshold(
+                self.transfer_unload_thresholds_n[0],
+                validate_final=True,
+            )
         self.train_post_transfer_hold_only = bool(
             train_post_transfer_hold_only
         )
@@ -396,6 +469,89 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         self.cumulative_transfer_balance_error_progress_m = 0.0
         self.cumulative_transfer_support_margin_progress_m = 0.0
         self.cumulative_transfer_swing_load_reduction_n = 0.0
+
+    def _validate_and_apply_transfer_unload_threshold(
+        self,
+        threshold_n: float,
+        *,
+        validate_final: bool = False,
+    ) -> None:
+        """Set the target leg's live gate while preserving the deployment limit."""
+
+        transfer_config = getattr(self.raw_env, "inter_leg_transfer_config", None)
+        if not isinstance(transfer_config, dict):
+            raise ValueError("raw environment has no mutable inter-leg transfer config")
+        overrides = transfer_config.setdefault("override_by_next_swing_leg", {})
+        target_config = overrides.setdefault(self.target_leg, {})
+        deployment_threshold = float(
+            target_config.get(
+                "maximum_swing_unloaded_load_n",
+                transfer_config.get("maximum_swing_unloaded_load_n", 0.0),
+            )
+        )
+        if validate_final and not np.isclose(
+            self.transfer_unload_thresholds_n[-1],
+            deployment_threshold,
+            atol=1e-9,
+        ):
+            raise ValueError(
+                "final transfer unload threshold must equal the configured "
+                f"deployment gate ({deployment_threshold:g} N)"
+            )
+        target_config["maximum_swing_unloaded_load_n"] = float(threshold_n)
+        if self.transfer_upright_cosines:
+            deployment_upright = float(
+                target_config.get(
+                    "minimum_upright_cosine",
+                    transfer_config.get(
+                        "minimum_upright_cosine",
+                        self.raw_env.placement_reference_config[
+                            "minimum_success_upright_cosine"
+                        ],
+                    ),
+                )
+            )
+            if validate_final and not np.isclose(
+                self.transfer_upright_cosines[-1],
+                deployment_upright,
+                atol=1e-9,
+            ):
+                raise ValueError(
+                    "final transfer upright gate must equal the configured "
+                    f"deployment gate ({deployment_upright:g})"
+                )
+            target_config["minimum_upright_cosine"] = (
+                self.transfer_upright_cosines[
+                    self.transfer_unload_curriculum_level
+                ]
+            )
+
+    def _record_transfer_unload_curriculum_success(self) -> None:
+        if not self.transfer_unload_thresholds_n:
+            return
+        level = self.transfer_unload_curriculum_level
+        self.transfer_unload_successes_by_level[level] += 1
+        self.transfer_unload_level_successes += 1
+        if (
+            self.transfer_unload_level_successes
+            < self.transfer_unload_successes_per_level
+            or level >= len(self.transfer_unload_thresholds_n) - 1
+        ):
+            return
+        previous_threshold = self.transfer_unload_thresholds_n[level]
+        self.transfer_unload_curriculum_level += 1
+        self.transfer_unload_level_successes = 0
+        next_threshold = self.transfer_unload_thresholds_n[
+            self.transfer_unload_curriculum_level
+        ]
+        self._validate_and_apply_transfer_unload_threshold(next_threshold)
+        self.transfer_unload_curriculum_transitions.append(
+            {
+                "completed_target_transfers": self.completed_target_transfers,
+                "from_threshold_n": previous_threshold,
+                "to_threshold_n": next_threshold,
+            }
+        )
 
     @staticmethod
     def _transfer_balance_error_m(info: Mapping[str, Any]) -> float | None:
@@ -799,6 +955,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         transfer_hold_completed = False
         if transfer_completed:
             self.completed_target_transfers += 1
+            self._record_transfer_unload_curriculum_success()
             self.transfer_post_hold_steps_remaining = (
                 self.transfer_post_hold_steps
             )
@@ -1012,6 +1169,33 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             ),
             "phase_snapshot_cached": self.phase_snapshot is not None,
             "phase_snapshot_mode": self.phase_snapshot_mode,
+            "transfer_unload_curriculum": {
+                "thresholds_n": list(self.transfer_unload_thresholds_n),
+                "successes_per_level": self.transfer_unload_successes_per_level,
+                "active_level": self.transfer_unload_curriculum_level,
+                "active_threshold_n": (
+                    self.transfer_unload_thresholds_n[
+                        self.transfer_unload_curriculum_level
+                    ]
+                    if self.transfer_unload_thresholds_n
+                    else None
+                ),
+                "upright_cosines": list(self.transfer_upright_cosines),
+                "active_upright_cosine": (
+                    self.transfer_upright_cosines[
+                        self.transfer_unload_curriculum_level
+                    ]
+                    if self.transfer_upright_cosines
+                    else None
+                ),
+                "successes_at_active_level": self.transfer_unload_level_successes,
+                "successes_by_level": list(
+                    self.transfer_unload_successes_by_level
+                ),
+                "transitions": list(
+                    self.transfer_unload_curriculum_transitions
+                ),
+            },
             "cached_phase_restores": self.cached_phase_restores,
             "failed_cached_phase_restores": (
                 self.failed_cached_phase_restores

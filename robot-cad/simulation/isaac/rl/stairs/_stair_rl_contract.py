@@ -53,6 +53,9 @@ SUPPORT_REGULATION_OBSERVATION_FIELDS = (
         for name in STAIR_FOOT_NAMES
     ),
 )
+TRANSFER_LOAD_OBSERVATION_FIELDS = (
+    "placement_active_swing_total_load_normalized",
+)
 STAIR_LEG_DOF_INDICES = (
     (0, 4, 8),
     (2, 6, 10),
@@ -375,6 +378,10 @@ def config_for_first_tread_experiment(
                 }
                 transfer["override_by_next_swing_leg"] = transfer_overrides
                 placement["inter_leg_transfer"] = transfer
+                # The transfer policy needs the measured quantity controlled by
+                # its unload gate. Keep this opt-in and append-only so the V75
+                # precursor's 81-field observation remains a valid prefix.
+                resolved["include_transfer_load_observation"] = True
                 # A second-foot success is invalid if the already completed
                 # front-right foothold has unloaded. Five newtons is safely
                 # below V74/V75's observed 11-17 N retained load but well above
@@ -2440,6 +2447,30 @@ def pack_support_regulation_observation(
     ).astype(np.float32)
 
 
+def pack_transfer_load_observation(
+    *,
+    stair_observation: Sequence[float],
+    active_swing_total_load_n: float,
+    contact_load_normalization_n: float,
+) -> np.ndarray:
+    """Append the active swing foot's measured total normal load."""
+
+    base = np.asarray(stair_observation, dtype=np.float32).reshape(-1)
+    load = float(active_swing_total_load_n)
+    load_scale = float(contact_load_normalization_n)
+    if base.size == 0 or not np.all(np.isfinite(base)):
+        raise ValueError("stair_observation must contain finite values")
+    if not np.isfinite(load) or load < 0.0:
+        raise ValueError("active_swing_total_load_n must be finite and nonnegative")
+    if not np.isfinite(load_scale) or load_scale <= 0.0:
+        raise ValueError("contact_load_normalization_n must be finite and positive")
+    return np.clip(
+        np.concatenate((base, np.asarray((load / load_scale,), dtype=np.float32))),
+        -POLICY_OBSERVATION_CLIP,
+        POLICY_OBSERVATION_CLIP,
+    ).astype(np.float32)
+
+
 def progress_gate_failures(
     *,
     completed_episodes: int,
@@ -2612,6 +2643,7 @@ def stair_observation_fields(
     include_foot_progress_observation: bool = False,
     include_placement_reference_observation: bool = False,
     include_support_regulation_observation: bool = False,
+    include_transfer_load_observation: bool = False,
     terrain_observation_fields: Sequence[str] | None = None,
 ) -> tuple[str, ...]:
     if terrain_observation_fields is None:
@@ -2649,6 +2681,12 @@ def stair_observation_fields(
                 "support regulation observation requires placement reference"
             )
         fields += SUPPORT_REGULATION_OBSERVATION_FIELDS
+    if include_transfer_load_observation:
+        if not include_placement_reference_observation:
+            raise ValueError(
+                "transfer load observation requires placement reference"
+            )
+        fields += TRANSFER_LOAD_OBSERVATION_FIELDS
     return fields
 
 

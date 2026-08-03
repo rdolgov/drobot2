@@ -37,6 +37,7 @@ from _stair_rl_contract import (
     pack_placement_reference_observation,
     pack_stair_policy_observation,
     pack_support_regulation_observation,
+    pack_transfer_load_observation,
     placement_advance_clearance_gate_state,
     placement_completion_settle_gate_failures,
     placement_contact_reached,
@@ -563,6 +564,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             self.include_placement_reference_observation
             and self.config.get("include_support_regulation_observation", False)
         )
+        self.include_transfer_load_observation = bool(
+            self.include_placement_reference_observation
+            and self.config.get("include_transfer_load_observation", False)
+        )
         self.observation_fields = stair_observation_fields(
             offsets,
             include_navigation_observation=self.include_navigation_observation,
@@ -574,6 +579,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ),
             include_support_regulation_observation=(
                 self.include_support_regulation_observation
+            ),
+            include_transfer_load_observation=(
+                self.include_transfer_load_observation
             ),
             terrain_observation_fields=terrain_field_override,
         )
@@ -3705,6 +3713,19 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                     # this is the causal one-control-step-lagged value.
                     requested_pd_effort_nm=self.latest_requested_pd_effort_nm,
                     effort_cap_nm=self.effort_cap_nm,
+                    contact_load_normalization_n=float(
+                        self.placement_reference_config[
+                            "contact_load_normalization_n"
+                        ]
+                    ),
+                )
+            if self.include_transfer_load_observation:
+                total_foot_loads = ground_loads + np.sum(step_loads, axis=1)
+                state["observation"] = pack_transfer_load_observation(
+                    stair_observation=state["observation"],
+                    active_swing_total_load_n=float(
+                        total_foot_loads[self.placement_swing_leg_index]
+                    ),
                     contact_load_normalization_n=float(
                         self.placement_reference_config[
                             "contact_load_normalization_n"

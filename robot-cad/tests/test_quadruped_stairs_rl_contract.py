@@ -35,6 +35,7 @@ from _stair_rl_contract import (  # noqa: E402
     FIRST_TREAD_EXPERIMENT_PROFILES,
     PLACEMENT_REFERENCE_OBSERVATION_FIELDS,
     SUPPORT_REGULATION_OBSERVATION_FIELDS,
+    TRANSFER_LOAD_OBSERVATION_FIELDS,
     balance_target_error_xy,
     bounded_support_incenter_target_xy,
     completed_placement_tread_load_state,
@@ -54,6 +55,7 @@ from _stair_rl_contract import (  # noqa: E402
     pack_placement_reference_observation,
     pack_stair_policy_observation,
     pack_support_regulation_observation,
+    pack_transfer_load_observation,
     placement_advance_clearance_gate_state,
     placement_completion_settle_gate_failures,
     placement_contact_reached,
@@ -293,6 +295,7 @@ def test_first_tread_profiles_include_folded_crouch_and_sideways_hip(
     assert front_pair["reset_start_yaw_range_deg"] == [-0.15, 0.15]
     assert front_pair["reset_joint_noise_rad"] == pytest.approx(0.003)
     assert "reset_joint_offsets_rad" not in front_pair
+    assert front_pair["include_transfer_load_observation"] is True
     assert front_pair_reference["touchdown_support_regulation"]["legs"] == [
         "front_right",
         "front_left",
@@ -1504,6 +1507,27 @@ def test_placement_observation_and_contact_gate_require_loaded_support(
     assert observation.shape == (
         len(base_fields) + len(PLACEMENT_REFERENCE_OBSERVATION_FIELDS),
     )
+    transfer_observation = pack_transfer_load_observation(
+        stair_observation=observation,
+        active_swing_total_load_n=7.5,
+        contact_load_normalization_n=50.0,
+    )
+    transfer_fields = stair_observation_fields(
+        staircase["terrain_sample_offsets_m"],
+        include_navigation_observation=True,
+        include_foot_progress_observation=True,
+        include_placement_reference_observation=True,
+        include_transfer_load_observation=True,
+    )
+    assert transfer_fields[-1:] == TRANSFER_LOAD_OBSERVATION_FIELDS
+    assert transfer_observation.shape == (len(transfer_fields),)
+    assert transfer_observation[-1] == pytest.approx(0.15)
+    np.testing.assert_allclose(transfer_observation[:-1], observation)
+    with pytest.raises(ValueError, match="requires placement reference"):
+        stair_observation_fields(
+            staircase["terrain_sample_offsets_m"],
+            include_transfer_load_observation=True,
+        )
     target_x = staircase["start_x_m"] + 0.24 * staircase["tread_depth_m"]
     common = {
         "swing_tip_position_m": (target_x, 0.18, 0.18),
@@ -3580,6 +3604,11 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
             self.control_hz = 10
             self.reward_config = {"success": 100.0}
             self.inter_leg_transfer_config = {
+                "maximum_swing_unloaded_load_n": 1.0,
+                "minimum_upright_cosine": 0.9781476,
+                "override_by_next_swing_leg": {
+                    "front_right": {"maximum_swing_unloaded_load_n": 1.0}
+                },
                 "training_reward": {
                     "balance_target_error_progress_per_m": 1000.0,
                     "support_margin_progress_per_m": 2000.0,
@@ -3705,6 +3734,37 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
     np.testing.assert_allclose(observation, (9.0, 9.0, 9.0))
     assert info["phase_training_snapshot_restored"] is True
     assert raw.snapshot_restores == 1
+
+    curriculum_raw = FakeTransferEnv()
+    curriculum = PlacementPhaseTrainingEnv(
+        curriculum_raw,
+        target_leg="front_right",
+        precursor_policies={"front_left": FixedPolicy()},
+        train_transfer=True,
+        transfer_unload_thresholds_n=(8.0, 4.0, 1.0),
+        transfer_unload_successes_per_level=1,
+        transfer_upright_cosines=(0.975, 0.977, 0.9781476),
+    )
+    assert curriculum_raw.inter_leg_transfer_config[
+        "override_by_next_swing_leg"
+    ]["front_right"]["maximum_swing_unloaded_load_n"] == pytest.approx(8.0)
+    curriculum.reset(seed=20)
+    curriculum.step(np.zeros(2, dtype=np.float32))
+    curriculum.reset(seed=21)
+    curriculum.step(np.zeros(2, dtype=np.float32))
+    curriculum_stats = curriculum.training_stats()["transfer_unload_curriculum"]
+    assert curriculum_stats["active_threshold_n"] == pytest.approx(1.0)
+    assert curriculum_stats["active_upright_cosine"] == pytest.approx(0.9781476)
+    assert curriculum_stats["successes_by_level"] == [1, 1, 0]
+    assert len(curriculum_stats["transitions"]) == 2
+    with pytest.raises(ValueError, match="deployment gate"):
+        PlacementPhaseTrainingEnv(
+            FakeTransferEnv(),
+            target_leg="front_right",
+            precursor_policies={"front_left": FixedPolicy()},
+            train_transfer=True,
+            transfer_unload_thresholds_n=(8.0, 2.0),
+        )
 
     hold_raw = FakeTransferEnv()
     hold_wrapped = PlacementPhaseTrainingEnv(

@@ -337,6 +337,32 @@ parser.add_argument(
     default=None,
     help="Optional learned-residual multiplier for the trained transfer leg.",
 )
+parser.add_argument(
+    "--phase-transfer-unload-threshold-n",
+    action="append",
+    type=float,
+    default=[],
+    help=(
+        "Repeat to train an inter-leg transfer through descending swing-load "
+        "gates, for example 8, 4, then the deployment gate of 1 N."
+    ),
+)
+parser.add_argument(
+    "--phase-transfer-unload-successes-per-level",
+    type=int,
+    default=2,
+    help="Accepted transfers required before descending to the next load gate.",
+)
+parser.add_argument(
+    "--phase-transfer-upright-cosine",
+    action="append",
+    type=float,
+    default=[],
+    help=(
+        "Optional increasing upright gates paired one-for-one with the unload "
+        "thresholds; the final value must equal the deployment gate."
+    ),
+)
 parser.add_argument("--gui", action="store_true")
 args, _ = parser.parse_known_args()
 if args.placement_start_level and args.fixed_placement_level:
@@ -403,6 +429,19 @@ if args.phase_transfer_residual_action_scale is not None and not (
     0.0 < args.phase_transfer_residual_action_scale <= 1.0
 ):
     parser.error("phase transfer residual action scale must be within (0, 1]")
+if args.phase_transfer_unload_successes_per_level < 1:
+    parser.error("phase transfer unload successes per level must be positive")
+if args.phase_transfer_unload_threshold_n and not args.phase_train_transfer:
+    parser.error(
+        "--phase-transfer-unload-threshold-n requires --phase-train-transfer"
+    )
+if args.phase_transfer_upright_cosine and (
+    len(args.phase_transfer_upright_cosine)
+    != len(args.phase_transfer_unload_threshold_n)
+):
+    parser.error(
+        "--phase-transfer-upright-cosine count must match unload thresholds"
+    )
 precursor_leg_model_paths = _parse_leg_model_paths(args.precursor_leg_model)
 phase_snapshot_path = (
     _resolve_project_path(args.phase_snapshot) if args.phase_snapshot else None
@@ -675,6 +714,14 @@ policy_observation_size = len(
                 "include_support_regulation_observation",
                 False,
             )
+        ),
+        include_transfer_load_observation=bool(
+            task_config.get("placement_reference", {}).get("enabled", False)
+            and task_config.get(
+                "include_placement_reference_observation",
+                True,
+            )
+            and task_config.get("include_transfer_load_observation", False)
         ),
         terrain_observation_fields=terrain_observation_fields,
     )
@@ -1503,6 +1550,15 @@ try:
             cache_phase_snapshot=not args.phase_disable_snapshot_cache,
             initial_phase_snapshot=initial_phase_snapshot,
             initial_phase_snapshot_mode=initial_phase_snapshot_mode,
+            transfer_unload_thresholds_n=(
+                args.phase_transfer_unload_threshold_n
+            ),
+            transfer_unload_successes_per_level=(
+                args.phase_transfer_unload_successes_per_level
+            ),
+            transfer_upright_cosines=(
+                args.phase_transfer_upright_cosine
+            ),
         )
         training_env = phase_training_env
         report["precursor_model_verification"] = precursor_model_verification
