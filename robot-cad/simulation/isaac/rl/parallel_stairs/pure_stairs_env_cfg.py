@@ -593,6 +593,48 @@ class DrobotPureStairsYaw45FullFoldTwoSupportRise5HipEnvCfg(
 
 
 @configclass
+class DrobotPureStairsYaw67p5FullFoldTwoSupportRise5HipEnvCfg(
+    DrobotPureStairsFullFoldTwoSupportRise5HipEnvCfg
+):
+    """Bridge the full-fold rise policy from 45 toward a lateral approach."""
+
+    reset_yaw_deg = 67.5
+    action_scale_abduction_rad = 0.42
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.robot.init_state.rot = (0.0, 0.0, 0.5555702330, 0.8314696123)
+        self.depth_sensor.offset.pos = (0.0438172530, -0.1057842065, 0.123)
+        self.depth_sensor.offset.rot = (
+            -0.1900162107,
+            -0.2843793560,
+            -0.5220652483,
+            0.7813258591,
+        )
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldTwoSupportRise5HipEnvCfg(
+    DrobotPureStairsFullFoldTwoSupportRise5HipEnvCfg
+):
+    """Evaluate the gradual-yaw policy at a fully lateral full-fold reset."""
+
+    reset_yaw_deg = 90.0
+    action_scale_abduction_rad = 0.42
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.robot.init_state.rot = (0.0, 0.0, 0.7071067812, 0.7071067812)
+        self.depth_sensor.offset.pos = (0.0, -0.1145, 0.123)
+        self.depth_sensor.offset.rot = (
+            -0.2418447626,
+            -0.2418447626,
+            -0.6644630244,
+            0.6644630244,
+        )
+
+
+@configclass
 class DrobotPureStairsSidewaysTwoSupportRise5HipEnvCfg(
     DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipEnvCfg
 ):

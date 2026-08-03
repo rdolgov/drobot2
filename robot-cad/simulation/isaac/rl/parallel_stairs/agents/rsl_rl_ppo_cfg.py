@@ -313,6 +313,28 @@ class DrobotPureStairsYaw45FullFoldTwoSupportRise5HipPPORunnerCfg(
 
 
 @configclass
+class DrobotPureStairsYaw67p5FullFoldTwoSupportRise5HipPPORunnerCfg(
+    DrobotPureStairsFullFoldTwoSupportRise5HipPPORunnerCfg
+):
+    """Continue the full-fold policy at a fixed 67.5-degree approach."""
+
+    experiment_name = (
+        "drobot_pure_stairs_yaw67p5_full_fold_two_support_rise5_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldTwoSupportRise5HipPPORunnerCfg(
+    DrobotPureStairsFullFoldTwoSupportRise5HipPPORunnerCfg
+):
+    """Evaluate and continue the gradual-yaw policy at 90 degrees."""
+
+    experiment_name = (
+        "drobot_pure_stairs_yaw90_full_fold_two_support_rise5_hip_180x250_direct"
+    )
+
+
+@configclass
 class DrobotPureStairsSidewaysTwoSupportRise5HipPPORunnerCfg(
     DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipPPORunnerCfg
 ):

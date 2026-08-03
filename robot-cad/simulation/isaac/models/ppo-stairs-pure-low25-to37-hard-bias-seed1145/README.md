@@ -168,3 +168,45 @@ This verifies that a gradual yaw bridge retains and modestly improves the
 small full-fold body-rise precursor. It still does not place a foot on the
 stair or climb. The next yaw stage should be 67.5 degrees from model 1053,
 followed by a fresh 90-degree comparison only if held-out transfer survives.
+
+## 67.5- and 90-degree full-fold transfer
+
+Model 1053 was then tested at two harder fixed yaws while retaining the exact
+full-fold reset, settling window, rise hold, actuator cap, sensor inputs, and
+0.42 rad hip-abduction action scale. At each yaw the same ToF was physically
+rotated around the body so its rays continued to face world +X and the stair.
+
+At 67.5 degrees:
+
+- Source model 1053 scored 42/335 (12.54%) on baseline seed 1205.
+- A 128-environment, 368,640-transition continuation produced 299/2,281
+  stochastic successes (13.11%) and peaked near 27.45% before drifting.
+- On held-out seed 1207, source scored 72/389 (18.51%); models 1066, 1071,
+  1077, and 1081 scored 59/387 (15.25%), 87/375 (23.20%), 53/396 (13.38%),
+  and 47/402 (11.69%).
+- Model 1071 failed confirmation on seed 1208 at 50/369 (13.55%) versus
+  source model 1053 at 64/331 (19.34%). Pooled source was 136/720 (18.89%)
+  versus 137/744 (18.41%) for model 1071, so the continuation was rejected.
+- The retained model-1053 seed-1209 review scored 0/5. SHA-256:
+  `be2e21789d4f50c505b8108d4334d5a6b01e25389949ad63ab13ed50a54052c2`.
+
+At 90 degrees:
+
+- The corrected full-fold baseline scored 62/339 (18.29%) on seed 1210.
+  This is not comparable to the earlier mixed-reset 90-degree audit and is
+  the first apples-to-apples full-fold lateral result.
+- A deliberately shorter 40-iteration, 122,880-transition continuation
+  produced 160/940 stochastic successes (17.02%) and peaked near 30.13%.
+- On held-out seed 1212, source scored 53/377 (14.06%); models 1063, 1065,
+  and 1068 scored 53/362 (14.64%), 37/391 (9.46%), and 46/370 (12.43%).
+- Model 1063 failed confirmation on seed 1213 at 36/298 (12.08%) versus
+  source at 54/313 (17.25%). Pooled source was 107/690 (15.51%) versus
+  89/660 (13.48%) for model 1063, so every trained checkpoint was rejected.
+- The retained model-1053 seed-1214 review scored 0/8. SHA-256:
+  `7982d91afa18a479a05028cfbc126e016a24efd0877ae074f4aa0a27790d8846`.
+
+The verified result is transfer, not new learning: selected yaw-45 model 1053
+retains the small supported-rise precursor at 67.5 and 90 degrees, including
+the fully folded sideways reset. Additional fixed-yaw PPO overfits the training
+population. The next curriculum must advance from body rise into force-backed
+foot lift and first-tread placement; none of these yaw tasks climbs a stair.

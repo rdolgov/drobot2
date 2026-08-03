@@ -152,6 +152,16 @@ _register_variant(
     "DrobotPureStairsYaw45FullFoldTwoSupportRise5HipPPORunnerCfg",
 )
 _register_variant(
+    "Drobot-Pure-Stairs-Yaw67p5-FullFold-TwoSupport-Rise5-Hip-Direct",
+    "DrobotPureStairsYaw67p5FullFoldTwoSupportRise5HipEnvCfg",
+    "DrobotPureStairsYaw67p5FullFoldTwoSupportRise5HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-TwoSupport-Rise5-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldTwoSupportRise5HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldTwoSupportRise5HipPPORunnerCfg",
+)
+_register_variant(
     "Drobot-Pure-Stairs-Sideways-TwoSupport-Rise5-Hip-Direct",
     "DrobotPureStairsSidewaysTwoSupportRise5HipEnvCfg",
     "DrobotPureStairsSidewaysTwoSupportRise5HipPPORunnerCfg",
