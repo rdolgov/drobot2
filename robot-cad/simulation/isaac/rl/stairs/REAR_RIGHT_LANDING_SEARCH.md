@@ -1135,3 +1135,69 @@ previous action, support contact/load, and the analytic stair profile. The V91
 result confirms that foot height is not the stair bottleneck. The remaining
 problem is acquiring and holding a safe three-foot support state after the
 first foot lands, then composing this already-successful lift policy.
+
+## V92-V93 continuous unload-hold isolation
+
+The next experiments made the inter-leg criterion stateful: the front-left
+foot must remain below the active load threshold continuously for `0.50 s`.
+The per-leg override is explicit in `_stair_rl_contract.py`, and the contract
+test asserts the value. This prevents a single noisy force sample from being
+accepted as a transferable three-foot stance.
+
+V92 tested whether the V90 boundary was caused by its frozen actor rows. The
+new `train_stairs_v92_front_left_held_unload_ppo.py` wrapper initialized all 12
+transfer actions from V90, unfroze them, and trained an `8 -> 6 -> 4 -> 1 N`
+curriculum for 8,192 steps at a `3e-5` learning rate. It used the verified V75
+front-right foothold as the precursor and retained the exact `180 mm` rise,
+`250 mm` tread, `0.8825985 N m` effort cap, and camera-blind policy inputs.
+
+V92 completed no transfer at any threshold. Minimum front-left load regressed
+to `8.921 N`, minimum upright cosine fell to `0.953835`, and support slip rose
+to `36.247 mm`. Unfreezing the complete inherited actor therefore destroyed,
+rather than extended, the best unload behavior. Its packaged checkpoint
+SHA-256 is
+`aac1a7b1bb80fe64fcecd670910425492134a07cdc906353abef3c554b2a04e9`.
+
+V93 tested the conservative alternative with
+`train_stairs_v93_front_left_frozen_base_held_unload_ppo.py`. It kept V90
+deterministic and frozen, zero-initialized a trainable 12-joint residual, and
+limited that correction to a `0.10` residual scale. Its curriculum started at
+`6 N`, then requested `4 N` and `1 N`, each with the same continuous `0.50 s`
+hold. The run is reproducible with:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation/isaac/rl/stairs/train_stairs_v93_front_left_frozen_base_held_unload_ppo.py
+```
+
+V93 completed 8,192 steps in `268.338 s`. Snapshot replay was reliable: one
+precursor rollout was cached and restored 21 times without a failed restore.
+Nevertheless, it completed zero `6 N` holds and never advanced the curriculum.
+Minimum front-left load was `8.792 N`, minimum upright cosine was `0.953237`,
+maximum pitch magnitude was `9.708 deg`, and maximum support slip was
+`35.217 mm`. The residual remained bounded: maximum learned action magnitude
+was `0.169960`, and maximum composed action magnitude was `0.057256`. The
+packaged checkpoint SHA-256 is
+`d7a8b499fae8a71d9ab82898cd0991f82dc53a93a4f1027ab717a6b81887b099`.
+
+Validation for the source and contract changes used:
+
+```powershell
+& .\.venv\Scripts\python.exe -m ruff check `
+  simulation/isaac/rl/stairs/_stair_rl_contract.py `
+  simulation/isaac/rl/stairs/train_stairs_v92_front_left_held_unload_ppo.py `
+  simulation/isaac/rl/stairs/train_stairs_v93_front_left_frozen_base_held_unload_ppo.py `
+  tests/test_quadruped_stairs_rl_contract.py
+& .\.venv\Scripts\python.exe -m pytest `
+  tests/test_quadruped_stairs_rl_contract.py -q `
+  --basetemp=.pytest-tmp-v93-held-unload
+```
+
+V92-V93 rule out both unrestricted actor fine-tuning and small frozen-base
+corrections as solutions to the current direct-transfer phase. They do not
+invalidate V91: the isolated front-left policy still raises the foot more than
+`205 mm` and holds it for `0.50 s` in `5/5` fresh episodes. The next training
+change should capture the best stable in-transfer state and train a stationary
+unload/hold phase from that snapshot, before composing the verified V91 lift.
+Traction and RGB vision are still secondary: the observed failure is loss of
+load-sharing posture on known geometry, not failure to see the stair.

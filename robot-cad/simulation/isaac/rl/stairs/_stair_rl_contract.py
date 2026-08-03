@@ -364,6 +364,10 @@ def config_for_first_tread_experiment(
                     {
                         "unload_duration_seconds": 3.0,
                         "maximum_seconds": 10.0,
+                        # The unload checkpoint is a state, not a threshold
+                        # crossing: keep every transfer gate true continuously
+                        # for half a second before the lift policy may start.
+                        "gate_hold_seconds": 0.50,
                         "swing_unload_lift_m": 0.080,
                         "maximum_swing_unloaded_load_n": 1.0,
                     }

@@ -334,6 +334,7 @@ def test_first_tread_profiles_include_folded_crouch_and_sideways_hip(
     assert front_left_transfer["maximum_swing_unloaded_load_n"] == pytest.approx(
         1.0
     )
+    assert front_left_transfer["gate_hold_seconds"] == pytest.approx(0.50)
     assert front_pair_reference[
         "completed_foot_minimum_tread_load_n"
     ] == pytest.approx(5.0)
