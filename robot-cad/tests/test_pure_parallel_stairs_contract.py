@@ -141,9 +141,42 @@ def test_first_step_curriculum_requires_supported_tread_hold() -> None:
     assert "support_count >= 3.0" in dones
     assert "_tread_hold_steps" in dones
     assert "first_step_min_base_gain_m" in dones
+    assert "first_step_require_base_gain" in dones
     assert "base_contact" in dones
     assert "base_contact_failure" in dones
     assert "retained_support" in reward
+    assert "tread_hold_fraction" in reward
+    assert "tread_transfer" in reward
+    assert "tread_height_delta_scale" in reward
+    assert "new_tread_potential_reward_scale" in reward
+    assert "tread_potential_reward_scale" in reward
+    assert "narrow_tread_potential" in reward
+    assert "new_narrow_tread_potential_reward_scale" in reward
+    assert "tread_contact_reward_scale" in reward
+
+    close_2 = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepClose2HipEnvCfg"
+    )
+    close_4 = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepClose4HipEnvCfg"
+    )
+    close_6 = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepClose6HipEnvCfg"
+    )
+    assert close_2["reset_forward_offset_m"] == 0.10
+    assert close_2["first_step_min_base_gain_m"] == 0.02
+    assert close_2["tread_potential_reward_scale"] == 0.40
+    assert close_2["new_narrow_tread_potential_reward_scale"] == 8.0
+    assert close_2["narrow_tread_potential_reward_scale"] == 1.00
+    assert close_4["first_step_min_base_gain_m"] == 0.04
+    assert close_6["first_step_min_base_gain_m"] == 0.06
+
+    landing = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepLandingHipEnvCfg"
+    )
+    assert landing["first_step_require_base_gain"] is False
+    assert landing["first_step_hold_steps"] == 3
+    assert landing["tread_contact_reward_scale"] == 2.00
 
 
 def test_foot_lift_curriculum_is_symmetric_and_supported() -> None:

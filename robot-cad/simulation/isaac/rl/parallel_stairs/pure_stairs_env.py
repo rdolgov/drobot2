@@ -77,6 +77,9 @@ class DrobotPureStairsEnv(DirectRLEnv):
         self._episode_max_foot_clearance = torch.zeros(self.num_envs, device=self.device)
         self._episode_best_tread_contacts = torch.zeros(self.num_envs, device=self.device)
         self._episode_best_tread_potential = torch.zeros(self.num_envs, device=self.device)
+        self._episode_best_narrow_tread_potential = torch.zeros(
+            self.num_envs, device=self.device
+        )
         self._tread_hold_steps = torch.zeros(
             self.num_envs, dtype=torch.long, device=self.device
         )
@@ -244,6 +247,18 @@ class DrobotPureStairsEnv(DirectRLEnv):
         new_tread_potential = torch.clamp(
             tread_potential - self._episode_best_tread_potential, 0.0, 0.10
         )
+        # The broad potential preserves discovery from low foot poses. This
+        # narrower surface band distinguishes a landing approach from merely
+        # lifting near the stair. It remains symmetric over every foot/tread.
+        narrow_placement_score = torch.exp(
+            -torch.square(tip_x_error / 0.13) - torch.square(tip_z_error / 0.055)
+        )
+        narrow_tread_potential = narrow_placement_score.amax(dim=(1, 2))
+        new_narrow_tread_potential = torch.clamp(
+            narrow_tread_potential - self._episode_best_narrow_tread_potential,
+            0.0,
+            0.15,
+        )
 
         progress_delta = torch.clamp(root_x - self._previous_root_x, -0.02, 0.03)
         height_delta = torch.clamp(root_z - self._previous_root_z, -0.02, 0.03)
@@ -252,6 +267,19 @@ class DrobotPureStairsEnv(DirectRLEnv):
         )
         lift_hold = torch.clamp(max_clearance / 0.19, 0.0, 1.0)
         supported_lift = lift_hold * torch.clamp(support_count - 2.0, 0.0, 1.0)
+        tread_binary = torch.clamp(tread_contacts, 0.0, 1.0)
+        tread_hold_fraction = torch.clamp(
+            self._tread_hold_steps.float() / max(self.cfg.first_step_hold_steps, 1),
+            0.0,
+            1.0,
+        )
+        base_gain_fraction = torch.clamp(
+            (root_z - self._episode_start_root_z)
+            / max(self.cfg.first_step_min_base_gain_m, 1.0e-6),
+            0.0,
+            1.0,
+        )
+        tread_transfer = tread_binary * base_gain_fraction
         upright_error = torch.sum(
             torch.square(self._robot.data.projected_gravity_b.torch[:, :2]), dim=1
         )
@@ -271,12 +299,18 @@ class DrobotPureStairsEnv(DirectRLEnv):
             + 45.0 * height_delta
             + 12.0 * new_clearance
             + 0.04 * lift_hold
-            + 2.0 * new_tread_potential
-            + 0.02 * tread_potential
+            + self.cfg.new_tread_potential_reward_scale * new_tread_potential
+            + self.cfg.tread_potential_reward_scale * tread_potential
+            + self.cfg.new_narrow_tread_potential_reward_scale
+            * new_narrow_tread_potential
+            + self.cfg.narrow_tread_potential_reward_scale * narrow_tread_potential
             + self.cfg.support_reward_scale * support_count
             + self.cfg.supported_lift_reward_scale * supported_lift
-            + 0.35 * tread_contacts
+            + self.cfg.tread_contact_reward_scale * tread_contacts
             + 0.20 * retained_support
+            + self.cfg.tread_hold_reward_scale * tread_hold_fraction
+            + self.cfg.tread_transfer_reward_scale * tread_transfer
+            + self.cfg.tread_height_delta_scale * tread_binary * height_delta
             - 0.08 * upright_error
             - 0.002 * action_rate
             - 0.0005 * effort
@@ -303,6 +337,9 @@ class DrobotPureStairsEnv(DirectRLEnv):
         )
         self._episode_best_tread_potential = torch.maximum(
             self._episode_best_tread_potential, tread_potential
+        )
+        self._episode_best_narrow_tread_potential = torch.maximum(
+            self._episode_best_narrow_tread_potential, narrow_tread_potential
         )
         self._episode_max_tread_hold_steps = torch.maximum(
             self._episode_max_tread_hold_steps, self._tread_hold_steps
@@ -360,9 +397,14 @@ class DrobotPureStairsEnv(DirectRLEnv):
             & (local[:, 2] >= self.cfg.minimum_top_base_height_m)
             & (upright_cosine >= 0.75)
         )
+        base_gain_ok = (
+            root[:, 2] - self._episode_start_root_z >= self.cfg.first_step_min_base_gain_m
+            if self.cfg.first_step_require_base_gain
+            else torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
+        )
         first_step_success = (
             (self._tread_hold_steps >= self.cfg.first_step_hold_steps)
-            & (root[:, 2] - self._episode_start_root_z >= self.cfg.first_step_min_base_gain_m)
+            & base_gain_ok
             & (upright_cosine >= 0.70)
         )
         foot_lift_success = self._lift_hold_steps >= self.cfg.foot_lift_hold_steps
@@ -396,6 +438,9 @@ class DrobotPureStairsEnv(DirectRLEnv):
             self.extras.setdefault("log", {})["Metrics/best_tread_potential"] = (
                 self._episode_best_tread_potential[env_ids].mean().item()
             )
+            self.extras.setdefault("log", {})[
+                "Metrics/best_narrow_tread_potential"
+            ] = self._episode_best_narrow_tread_potential[env_ids].mean().item()
             self.extras.setdefault("log", {})["Metrics/max_tread_hold_s"] = (
                 self._episode_max_tread_hold_steps[env_ids].float().mean().item()
                 * self.step_dt
@@ -445,6 +490,7 @@ class DrobotPureStairsEnv(DirectRLEnv):
         self._episode_max_foot_clearance[env_ids] = 0.0
         self._episode_best_tread_contacts[env_ids] = 0.0
         self._episode_best_tread_potential[env_ids] = 0.0
+        self._episode_best_narrow_tread_potential[env_ids] = 0.0
         self._tread_hold_steps[env_ids] = 0
         self._episode_max_tread_hold_steps[env_ids] = 0
         self._lift_hold_steps[env_ids] = 0

@@ -169,12 +169,21 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     reset_forward_jitter_m = 0.02
     first_step_curriculum = False
     first_step_min_base_gain_m = 0.06
+    first_step_require_base_gain = True
     first_step_hold_steps = 8
     foot_lift_curriculum = False
     foot_lift_height_m = 0.19
     foot_lift_hold_steps = 8
     support_reward_scale = 0.06
     supported_lift_reward_scale = 0.0
+    tread_hold_reward_scale = 0.0
+    tread_transfer_reward_scale = 0.0
+    tread_height_delta_scale = 0.0
+    new_tread_potential_reward_scale = 2.0
+    tread_potential_reward_scale = 0.02
+    new_narrow_tread_potential_reward_scale = 0.0
+    narrow_tread_potential_reward_scale = 0.0
+    tread_contact_reward_scale = 0.35
     reward_tread_count = 4
     base_contact_grace_steps = 30
     base_contact_failure_drop_m = 0.08
@@ -248,6 +257,75 @@ class DrobotPureStairsFirstStepHipEnvCfg(DrobotPureStairsHipEnvCfg):
     reward_tread_count = 1
     support_reward_scale = 0.25
     supported_lift_reward_scale = 0.50
+
+
+@configclass
+class DrobotPureStairsFirstStepLandingHipEnvCfg(DrobotPureStairsFirstStepHipEnvCfg):
+    """Learn a supported, phase-free first-tread landing before body transfer."""
+
+    reset_forward_offset_m = 0.10
+    reset_forward_jitter_m = 0.03
+    first_step_min_base_gain_m = 0.0
+    first_step_require_base_gain = False
+    first_step_hold_steps = 3
+    tread_hold_reward_scale = 2.00
+    tread_transfer_reward_scale = 0.0
+    tread_height_delta_scale = 0.0
+    new_tread_potential_reward_scale = 4.0
+    tread_potential_reward_scale = 0.40
+    new_narrow_tread_potential_reward_scale = 8.0
+    narrow_tread_potential_reward_scale = 1.00
+    tread_contact_reward_scale = 2.00
+
+
+@configclass
+class DrobotPureStairsFirstStepClose2HipEnvCfg(DrobotPureStairsFirstStepHipEnvCfg):
+    """Contact-preserving first-step stage requiring 2 cm of supported base gain."""
+
+    reset_forward_offset_m = 0.10
+    reset_forward_jitter_m = 0.03
+    first_step_min_base_gain_m = 0.02
+    first_step_hold_steps = 5
+    tread_hold_reward_scale = 0.80
+    tread_transfer_reward_scale = 2.50
+    tread_height_delta_scale = 120.0
+    new_tread_potential_reward_scale = 4.0
+    tread_potential_reward_scale = 0.40
+    new_narrow_tread_potential_reward_scale = 8.0
+    narrow_tread_potential_reward_scale = 1.00
+    tread_contact_reward_scale = 1.00
+
+
+@configclass
+class DrobotPureStairsFirstStepClose4HipEnvCfg(DrobotPureStairsFirstStepHipEnvCfg):
+    """Intermediate first-step stage requiring 4 cm of supported base gain."""
+
+    reset_forward_offset_m = 0.10
+    reset_forward_jitter_m = 0.03
+    first_step_min_base_gain_m = 0.04
+    first_step_hold_steps = 6
+    tread_hold_reward_scale = 0.90
+    tread_transfer_reward_scale = 3.00
+    tread_height_delta_scale = 140.0
+    new_tread_potential_reward_scale = 3.5
+    tread_potential_reward_scale = 0.35
+    tread_contact_reward_scale = 1.20
+
+
+@configclass
+class DrobotPureStairsFirstStepClose6HipEnvCfg(DrobotPureStairsFirstStepHipEnvCfg):
+    """Final stage requiring the full 6 cm first-step base gain."""
+
+    reset_forward_offset_m = 0.10
+    reset_forward_jitter_m = 0.03
+    first_step_min_base_gain_m = 0.06
+    first_step_hold_steps = 8
+    tread_hold_reward_scale = 1.00
+    tread_transfer_reward_scale = 3.50
+    tread_height_delta_scale = 160.0
+    new_tread_potential_reward_scale = 3.0
+    tread_potential_reward_scale = 0.30
+    tread_contact_reward_scale = 1.50
 
 
 @configclass

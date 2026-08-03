@@ -52,6 +52,26 @@ _register_variant(
     "DrobotPureStairsFirstStepHipPPORunnerCfg",
 )
 _register_variant(
+    "Drobot-Pure-Stairs-First-Step-Landing-Hip-Direct",
+    "DrobotPureStairsFirstStepLandingHipEnvCfg",
+    "DrobotPureStairsFirstStepLandingHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Close2-Hip-Direct",
+    "DrobotPureStairsFirstStepClose2HipEnvCfg",
+    "DrobotPureStairsFirstStepClose2HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Close4-Hip-Direct",
+    "DrobotPureStairsFirstStepClose4HipEnvCfg",
+    "DrobotPureStairsFirstStepClose4HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Close6-Hip-Direct",
+    "DrobotPureStairsFirstStepClose6HipEnvCfg",
+    "DrobotPureStairsFirstStepClose6HipPPORunnerCfg",
+)
+_register_variant(
     "Drobot-Pure-Stairs-Foot-Lift-Hip-Direct",
     "DrobotPureStairsFootLiftHipEnvCfg",
     "DrobotPureStairsFootLiftHipPPORunnerCfg",

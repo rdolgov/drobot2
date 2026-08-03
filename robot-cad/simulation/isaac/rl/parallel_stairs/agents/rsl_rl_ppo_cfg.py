@@ -70,6 +70,42 @@ class DrobotPureStairsFirstStepHipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
 
 
 @configclass
+class DrobotPureStairsFirstStepLandingHipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
+    experiment_name = "drobot_pure_stairs_first_step_landing_hip_180x250_direct"
+    save_interval = 1
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.learning_rate = 1.0e-4
+        self.algorithm.desired_kl = 0.01
+
+
+@configclass
+class DrobotPureStairsFirstStepClose2HipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
+    experiment_name = "drobot_pure_stairs_first_step_close2_hip_180x250_direct"
+    save_interval = 1
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.learning_rate = 1.0e-4
+        self.algorithm.desired_kl = 0.01
+
+
+@configclass
+class DrobotPureStairsFirstStepClose4HipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
+    experiment_name = "drobot_pure_stairs_first_step_close4_hip_180x250_direct"
+    save_interval = 10
+
+
+@configclass
+class DrobotPureStairsFirstStepClose6HipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
+    experiment_name = "drobot_pure_stairs_first_step_close6_hip_180x250_direct"
+    save_interval = 10
+
+
+@configclass
 class DrobotPureStairsFootLiftHipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
     experiment_name = "drobot_pure_stairs_foot_lift_hip_direct"
     save_interval = 10

@@ -71,6 +71,16 @@ tread contacts and 0.0778 s of hold. First-step success remained 0% because the
 best base-height gain was only 0.0108 m versus the required 0.06 m. Iteration
 300 is packaged as a contact checkpoint, not a completed-step policy.
 
+A fourth round introduced a narrow, surface-centered landing potential while
+keeping the broad discovery potential and symmetric any-foot objective. A
+supported-landing curriculum produced 20% and 14.3% success batches, and a
+low-entropy replay reproduced a 20% batch. Transferring that checkpoint to a
+20 mm body-rise stage processed 245,760 more transitions. The best reset batch
+averaged 0.50 force-verified tread contacts, maximum supported tread hold was
+0.1333 s, and maximum body gain was 0.0116 m. These maxima were not combined in
+one episode, so the 20 mm stage and full stair climb remain at 0% success. The
+six-second deterministic review is an honest attempt/reset video, not a pass.
+
 ## Editable sources
 
 - `simulation/isaac/rl/parallel_stairs/pure_stairs_env.py`: vectorized
