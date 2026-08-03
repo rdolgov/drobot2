@@ -102,6 +102,16 @@ _register_variant(
     "DrobotPureStairsFirstStepWidth105Low50HipPPORunnerCfg",
 )
 _register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low25-To37-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low25To37HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low25To37HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low37-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low37HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low37HipPPORunnerCfg",
+)
+_register_variant(
     "Drobot-Pure-Stairs-First-Step-Width105-Low75-Hip-Direct",
     "DrobotPureStairsFirstStepWidth105Low75HipEnvCfg",
     "DrobotPureStairsFirstStepWidth105Low75HipPPORunnerCfg",

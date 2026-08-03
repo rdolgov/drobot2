@@ -478,3 +478,36 @@ def test_low25_consolidation_uses_long_low_entropy_batches() -> None:
     assert "self.algorithm.learning_rate = 2.0e-5" in runner_source
     assert "self.algorithm.num_learning_epochs = 10" in runner_source
     assert "Drobot-Pure-Stairs-First-Step-Width105-Low25-Consolidate-Hip-Direct" in registration
+
+
+def test_low25_to_37_bridge_randomizes_only_hardware_representable_reset_state() -> None:
+    cfg_source = _source("pure_stairs_env_cfg.py")
+    env_source = _source("pure_stairs_env.py")
+    runner_source = _source("agents/rsl_rl_ppo_cfg.py")
+    registration = _source("__init__.py")
+
+    bridge = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepWidth105Low25To37HipEnvCfg"
+    )
+    assert bridge["initial_base_height_m"] == 0.40
+    assert bridge["reset_fold_fraction"] == 0.375
+    assert bridge["reset_fold_fraction_min"] == 0.25
+    assert bridge["reset_fold_fraction_max"] == 0.375
+    assert bridge["reset_base_height_min_m"] == 0.40
+    assert bridge["reset_base_height_max_m"] == 0.42
+    assert "reset_fraction = fold_min + reset_alpha * (fold_max - fold_min)" in env_source
+    assert "height_max\n                + reset_alpha * (height_min - height_max)" in env_source
+    observation = _method_source(env_source, "DrobotPureStairsEnv", "_get_observations")
+    assert "self._reset_fold_fraction" not in observation
+    assert "hard_reset = self._reset_fold_fraction[env_ids] >= reset_midpoint" in env_source
+    assert "hard_completed={hard_completed} hard_successful={hard_successful}" in env_source
+    assert "DrobotPureStairsFirstStepWidth105Low25To37HipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-First-Step-Width105-Low25-To37-Hip-Direct" in registration
+
+    fixed = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepWidth105Low37HipEnvCfg"
+    )
+    assert fixed["initial_base_height_m"] == 0.40
+    assert fixed["reset_fold_fraction"] == 0.375
+    assert "DrobotPureStairsFirstStepWidth105Low37HipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-First-Step-Width105-Low37-Hip-Direct" in registration

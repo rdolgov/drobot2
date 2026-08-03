@@ -14,7 +14,13 @@ from isaaclab.envs import DirectRLEnv
 from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.utils.math import quat_apply
 
-from .pure_stairs_env_cfg import DrobotPureStairsEnvCfg
+from .pure_stairs_env_cfg import (
+    LOW_FOLD_HIP_RAD,
+    LOW_FOLD_KNEE_RAD,
+    NORMAL_HIP_RAD,
+    NORMAL_KNEE_RAD,
+    DrobotPureStairsEnvCfg,
+)
 
 DISTAL_LINK_LENGTH_M = 0.159896689
 FOOT_CONTACT_RADIUS_M = 0.0125
@@ -98,6 +104,11 @@ class DrobotPureStairsEnv(DirectRLEnv):
         self._failed = torch.zeros_like(self._success)
         self._completed_episode_count = torch.zeros((), dtype=torch.long, device=self.device)
         self._successful_episode_count = torch.zeros((), dtype=torch.long, device=self.device)
+        self._easy_reset_episode_count = torch.zeros((), dtype=torch.long, device=self.device)
+        self._easy_reset_success_count = torch.zeros((), dtype=torch.long, device=self.device)
+        self._hard_reset_episode_count = torch.zeros((), dtype=torch.long, device=self.device)
+        self._hard_reset_success_count = torch.zeros((), dtype=torch.long, device=self.device)
+        self._reset_fold_fraction = torch.zeros(self.num_envs, device=self.device)
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
@@ -134,9 +145,15 @@ class DrobotPureStairsEnv(DirectRLEnv):
             completed = int(self._completed_episode_count.item())
             successful = int(self._successful_episode_count.item())
             rate = successful / max(completed, 1)
+            easy_completed = int(self._easy_reset_episode_count.item())
+            easy_successful = int(self._easy_reset_success_count.item())
+            hard_completed = int(self._hard_reset_episode_count.item())
+            hard_successful = int(self._hard_reset_success_count.item())
             print(
                 "[DROBOT_EPISODE_TOTALS] "
-                f"completed={completed} successful={successful} rate={rate:.8f}"
+                f"completed={completed} successful={successful} rate={rate:.8f} "
+                f"easy_completed={easy_completed} easy_successful={easy_successful} "
+                f"hard_completed={hard_completed} hard_successful={hard_successful}"
             )
         super().close()
 
@@ -532,6 +549,21 @@ class DrobotPureStairsEnv(DirectRLEnv):
             successful_count = (self._success[env_ids] & completed).sum()
             self._completed_episode_count += completed_count
             self._successful_episode_count += successful_count
+            fold_min = self.cfg.reset_fold_fraction_min
+            fold_max = self.cfg.reset_fold_fraction_max
+            if fold_min is not None and fold_max is not None:
+                reset_midpoint = 0.5 * (fold_min + fold_max)
+                hard_reset = self._reset_fold_fraction[env_ids] >= reset_midpoint
+                easy_completed = completed & ~hard_reset
+                hard_completed = completed & hard_reset
+                self._easy_reset_episode_count += easy_completed.sum()
+                self._easy_reset_success_count += (
+                    self._success[env_ids] & easy_completed
+                ).sum()
+                self._hard_reset_episode_count += hard_completed.sum()
+                self._hard_reset_success_count += (
+                    self._success[env_ids] & hard_completed
+                ).sum()
             cumulative_success_rate = self._successful_episode_count.float() / torch.clamp(
                 self._completed_episode_count, min=1
             ).float()
@@ -591,10 +623,42 @@ class DrobotPureStairsEnv(DirectRLEnv):
             )
 
         joint_pos = self._robot.data.default_joint_pos.torch[env_ids].clone()
+        fold_min = self.cfg.reset_fold_fraction_min
+        fold_max = self.cfg.reset_fold_fraction_max
+        reset_alpha = None
+        if fold_min is not None and fold_max is not None:
+            reset_alpha = torch.rand(len(env_ids), device=self.device)
+            reset_fraction = fold_min + reset_alpha * (fold_max - fold_min)
+            reset_hip = NORMAL_HIP_RAD + reset_fraction * (
+                LOW_FOLD_HIP_RAD - NORMAL_HIP_RAD
+            )
+            reset_knee = NORMAL_KNEE_RAD + reset_fraction * (
+                LOW_FOLD_KNEE_RAD - NORMAL_KNEE_RAD
+            )
+            for joint_index, joint_name in enumerate(self._robot.joint_names):
+                if joint_name.endswith("hip_abduction"):
+                    joint_pos[:, joint_index] = 0.0
+                elif joint_name.startswith("front_") and joint_name.endswith("hip_flexion"):
+                    joint_pos[:, joint_index] = -reset_hip
+                elif joint_name.startswith("rear_") and joint_name.endswith("hip_flexion"):
+                    joint_pos[:, joint_index] = reset_hip
+                elif joint_name.startswith("front_") and joint_name.endswith("knee"):
+                    joint_pos[:, joint_index] = reset_knee
+                elif joint_name.startswith("rear_") and joint_name.endswith("knee"):
+                    joint_pos[:, joint_index] = -reset_knee
+            self._reset_fold_fraction[env_ids] = reset_fraction
         joint_pos += 0.01 * (2.0 * torch.rand_like(joint_pos) - 1.0)
         joint_vel = torch.zeros_like(self._robot.data.default_joint_vel.torch[env_ids])
         root_pose = self._robot.data.default_root_pose.torch[env_ids].clone()
         root_pose[:, :3] += self._terrain.env_origins[env_ids]
+        height_min = self.cfg.reset_base_height_min_m
+        height_max = self.cfg.reset_base_height_max_m
+        if reset_alpha is not None and height_min is not None and height_max is not None:
+            root_pose[:, 2] = (
+                self._terrain.env_origins[env_ids, 2]
+                + height_max
+                + reset_alpha * (height_min - height_max)
+            )
         root_pose[:, 0] += self.cfg.reset_forward_offset_m
         root_pose[:, 0] += self.cfg.reset_forward_jitter_m * (
             2.0 * torch.rand(len(env_ids), device=self.device) - 1.0

@@ -183,6 +183,10 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     reset_yaw_deg = 0.0
     reset_forward_offset_m = 0.0
     reset_forward_jitter_m = 0.02
+    reset_fold_fraction_min = None
+    reset_fold_fraction_max = None
+    reset_base_height_min_m = None
+    reset_base_height_max_m = None
     first_step_curriculum = False
     first_step_min_base_gain_m = 0.06
     first_step_require_base_gain = True
@@ -406,6 +410,38 @@ class DrobotPureStairsFirstStepWidth105Low50HipEnvCfg(
 
     initial_base_height_m = 0.38
     reset_fold_fraction = 0.50
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        _apply_folded_reset(self, self.reset_fold_fraction)
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Low25To37HipEnvCfg(
+    DrobotPureStairsFirstStepWidth105SupportRetentionHipEnvCfg
+):
+    """Bridge Low25 to a 40 cm, 37.5%-folded posture on every reset."""
+
+    initial_base_height_m = 0.40
+    reset_fold_fraction = 0.375
+    reset_fold_fraction_min = 0.25
+    reset_fold_fraction_max = 0.375
+    reset_base_height_min_m = 0.40
+    reset_base_height_max_m = 0.42
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        _apply_folded_reset(self, self.reset_fold_fraction)
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Low37HipEnvCfg(
+    DrobotPureStairsFirstStepWidth105SupportRetentionHipEnvCfg
+):
+    """Fixed 40 cm, 37.5%-folded reset promoted from the mixed bridge."""
+
+    initial_base_height_m = 0.40
+    reset_fold_fraction = 0.375
 
     def __post_init__(self) -> None:
         super().__post_init__()

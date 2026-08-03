@@ -193,6 +193,28 @@ class DrobotPureStairsFirstStepWidth105Low50HipPPORunnerCfg(
 
 
 @configclass
+class DrobotPureStairsFirstStepWidth105Low25To37HipPPORunnerCfg(
+    DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
+):
+    """Transfer model 734 across correlated Low25-to-Low37.5 resets."""
+
+    experiment_name = (
+        "drobot_pure_stairs_first_step_width105_low25_to_37_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Low37HipPPORunnerCfg(
+    DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
+):
+    """Transfer the mixed-reset winner to the fixed Low37.5 posture."""
+
+    experiment_name = (
+        "drobot_pure_stairs_first_step_width105_low37_hip_180x250_direct"
+    )
+
+
+@configclass
 class DrobotPureStairsFirstStepWidth105Low75HipPPORunnerCfg(
     DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
 ):
