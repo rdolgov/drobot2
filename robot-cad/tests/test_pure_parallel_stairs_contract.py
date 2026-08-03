@@ -287,3 +287,25 @@ def test_landing_reset_comparison_keeps_full_fold_and_true_sideways_pose() -> No
     assert "LOW_FOLD_KNEE_RAD" in cfg_source
     assert "Drobot-Pure-Stairs-First-Step-Landing-Low-Hip-Direct" in registration
     assert "Drobot-Pure-Stairs-First-Step-Landing-Sideways-Hip-Direct" in registration
+
+
+def test_landing_consolidation_reinforces_rare_exact_contacts() -> None:
+    cfg_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
+    ).read_text(encoding="utf-8")
+    runner_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
+    ).read_text(encoding="utf-8")
+    registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "class DrobotPureStairsFirstStepLandingConsolidateHipEnvCfg" in cfg_source
+    assert "success_completion_reward_scale = 100.0" in cfg_source
+    assert (
+        "class DrobotPureStairsFirstStepLandingConsolidateHipPPORunnerCfg"
+        in runner_source
+    )
+    assert "self.algorithm.entropy_coef = 0.0" in runner_source
+    assert "self.algorithm.learning_rate = 5.0e-5" in runner_source
+    assert "Drobot-Pure-Stairs-First-Step-Landing-Consolidate-Hip-Direct" in registration

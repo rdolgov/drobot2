@@ -11,6 +11,8 @@ exact 180 mm rise by 250 mm tread.
 - Following 10 mm body-rise stage: 0/5,443.
 - Fully folded 300 mm-start adaptation: 0/506.
 - True 90-degree sideways adaptation: 0/2,888.
+- Low-entropy landing consolidation: 27/5,481 stochastic (0.4926%) and
+  2/1,336 deterministic (0.1497%); no material improvement over model 477.
 - SHA-256 of `model_477.pt`:
   `3475f961ce0225a957c7fb64732bcdb4e2d858a3cdf371fcc006dda98868ebc2`.
 

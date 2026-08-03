@@ -145,6 +145,13 @@ support on the 250 mm tread. The forward stance remains the best measured
 starting point; the immediate bottleneck is support-preserving tread contact,
 not raw leg reach.
 
+A final low-entropy exact-landing consolidation processed another 184,320
+transitions. It achieved 27/5,481 stochastic training successes (0.4926%), but
+its unseen deterministic mean produced 2/1,336 (0.1497%), effectively unchanged
+from model 477's 0.1474%. Because the landing prerequisite did not materially
+improve, the 10 mm body-rise stage was not retried. More continuation under the
+same reward is unlikely to be the highest-value next experiment.
+
 ## Editable sources
 
 - `simulation/isaac/rl/parallel_stairs/pure_stairs_env.py`: vectorized
@@ -262,6 +269,9 @@ as an absolute path:
 - The transferred model-477 mean achieved 2/1,357 (0.1474%) exact supported
   first-tread landings; 10 mm body rise, low-fold landing, and sideways landing
   remained at 0% in their bounded runs.
+- A low-entropy landing consolidation reached 27/5,481 stochastic (0.4926%)
+  and 2/1,336 deterministic (0.1497%), which was not a material mean-policy
+  improvement.
 - The single-robot review clip is explicitly a failed deterministic sample
   (seed 1115, 0/12), consistent with a policy that succeeds only about one in
   ten episodes. It is not presented as a pass video.

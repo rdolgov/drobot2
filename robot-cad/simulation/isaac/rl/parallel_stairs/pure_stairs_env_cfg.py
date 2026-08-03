@@ -287,6 +287,15 @@ class DrobotPureStairsFirstStepLandingHipEnvCfg(DrobotPureStairsFirstStepHipEnvC
 
 
 @configclass
+class DrobotPureStairsFirstStepLandingConsolidateHipEnvCfg(
+    DrobotPureStairsFirstStepLandingHipEnvCfg
+):
+    """Move rare supported tread landings into the policy mean."""
+
+    success_completion_reward_scale = 100.0
+
+
+@configclass
 class DrobotPureStairsFirstStepLandingLowHipEnvCfg(
     DrobotPureStairsFirstStepLandingHipEnvCfg
 ):
