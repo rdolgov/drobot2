@@ -22,6 +22,41 @@ class DrobotTwoModeGaussianDistributionCfg(RslRlMLPModelCfg.DistributionCfg):
 
 
 @configclass
+class DrobotPersistentModeGaussianDistributionCfg(RslRlMLPModelCfg.DistributionCfg):
+    """One learned whole-action mode held for the complete environment episode."""
+
+    class_name: str = (
+        "parallel_stairs.persistent_mode_policy:PersistentModeGaussianDistribution"
+    )
+    init_std: float = 0.20
+    num_modes: int = 2
+    std_range: tuple[float, float] = (1.0e-4, 2.0)
+
+
+@configclass
+class DrobotPersistentBiasGaussianDistributionCfg(RslRlMLPModelCfg.DistributionCfg):
+    """One learned joint-space exploration bias retained across an episode."""
+
+    class_name: str = (
+        "parallel_stairs.persistent_mode_policy:PersistentBiasGaussianDistribution"
+    )
+    init_action_std: float = 0.08
+    init_bias_std: float = 0.20
+    num_modes: int = 2
+    commitment_credit_scale: float = 1.0
+    std_range: tuple[float, float] = (1.0e-4, 2.0)
+
+
+@configclass
+class DrobotPersistentBiasConsolidateDistributionCfg(
+    DrobotPersistentBiasGaussianDistributionCfg
+):
+    """Give each once-per-episode bias decision trajectory-scale credit."""
+
+    commitment_credit_scale: float = 32.0
+
+
+@configclass
 class DrobotPureStairsPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     """PPO with enough capacity for depth plus proprioception, without oversizing."""
 
@@ -445,6 +480,90 @@ class DrobotPureStairsYaw90FullFoldFootLift5GruHipPPORunnerCfg(
         self.algorithm.learning_rate = 2.0e-4
         self.algorithm.desired_kl = 0.01
         self.algorithm.num_mini_batches = 8
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift5PersistentModeHipPPORunnerCfg(
+    DrobotPureStairsPPORunnerCfg
+):
+    """Choose a learned latent strategy once per episode and retain it."""
+
+    experiment_name = (
+        "drobot_pure_stairs_yaw90_fullfold_foot_lift5_persistent_mode_hip_180x250_direct"
+    )
+    num_steps_per_env = 64
+    save_interval = 1
+    actor = RslRlMLPModelCfg(
+        class_name="parallel_stairs.persistent_mode_policy:PersistentModeActor",
+        hidden_dims=[512, 512],
+        activation="elu",
+        obs_normalization=True,
+        distribution_cfg=DrobotPersistentModeGaussianDistributionCfg(),
+    )
+    critic = RslRlMLPModelCfg(
+        hidden_dims=[512, 512],
+        activation="elu",
+        obs_normalization=True,
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.class_name = (
+            "parallel_stairs.persistent_mode_policy:PersistentModePPO"
+        )
+        self.algorithm.entropy_coef = 0.001
+        self.algorithm.learning_rate = 5.0e-5
+        self.algorithm.desired_kl = 0.005
+        self.algorithm.num_learning_epochs = 10
+        self.algorithm.num_mini_batches = 8
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasHipPPORunnerCfg(
+    DrobotPureStairsYaw90FullFoldFootLift5PersistentModeHipPPORunnerCfg
+):
+    """Explore a coherent learned joint bias for each complete attempt."""
+
+    experiment_name = (
+        "drobot_pure_stairs_yaw90_fullfold_foot_lift5_persistent_bias_hip_180x250_direct"
+    )
+    actor = RslRlMLPModelCfg(
+        class_name="parallel_stairs.persistent_mode_policy:PersistentBiasActor",
+        hidden_dims=[512, 512],
+        activation="elu",
+        obs_normalization=True,
+        distribution_cfg=DrobotPersistentBiasGaussianDistributionCfg(),
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.class_name = (
+            "parallel_stairs.persistent_mode_policy:PersistentBiasPPO"
+        )
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasConsolidateHipPPORunnerCfg(
+    DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasHipPPORunnerCfg
+):
+    """Move successful coherent episode biases into their deterministic centers."""
+
+    experiment_name = (
+        "drobot_pure_stairs_yaw90_fullfold_foot_lift5_persistent_bias_consolidate_hip_180x250_direct"
+    )
+    actor = RslRlMLPModelCfg(
+        class_name="parallel_stairs.persistent_mode_policy:PersistentBiasActor",
+        hidden_dims=[512, 512],
+        activation="elu",
+        obs_normalization=True,
+        distribution_cfg=DrobotPersistentBiasConsolidateDistributionCfg(),
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.learning_rate = 2.0e-5
+        self.algorithm.desired_kl = 0.003
 
 
 @configclass

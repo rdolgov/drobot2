@@ -332,6 +332,8 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/parallel_stairs/two_mode_gaussian.py` | Implements an exact two-component whole-action Gaussian PPO distribution whose deterministic action selects a learned component rather than averaging modes | unchanged 70-value actor observation | sampled actions, exact mixture log probability, and committed deterministic action |
 | `simulation/isaac/rl/parallel_stairs/transplant_two_mode_checkpoint.py` | Converts a widened single-Gaussian checkpoint into two antisymmetrically separated modes while preserving its average action | 512-by-512 RSL-RL checkpoint | verified two-mode training initializer |
 | `simulation/isaac/rl/parallel_stairs/force_two_mode_checkpoint.py` | Forces either learned mixture component for diagnostic deterministic evaluation | trained two-mode checkpoint | evaluation-only component checkpoint |
+| `simulation/isaac/rl/parallel_stairs/persistent_mode_policy.py` | Implements reward-trained discrete and continuous episode commitments, exact PPO replay likelihoods, and deterministic JIT deployment with commitment reset | unchanged 70-value actor observation | coherent whole-episode exploration and deployable actions |
+| `simulation/isaac/rl/parallel_stairs/transplant_persistent_bias_checkpoint.py` | Expands a two-mode checkpoint with zero-centered learned 12-joint episode biases while preserving its deterministic control outputs | trained two-mode checkpoint | persistent-bias PPO initializer |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-Stand-Rise10-Hip-Direct` | Tests a symmetric four-support, 10 mm body-rise precursor from lower hardware-representable resets | IMU, depth, joints, previous action, and foot loads | strict body-rise checkpoint telemetry |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-ThreeSupport-Rise10-Hip-Direct` | Relaxes the same pure-PPO body-rise precursor to any three verified supports | same 70 deployable actor inputs | three-support rise telemetry |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-Upright-Rise10-Hip-Direct` | Uses the literal non-failing upright + held 10 mm body-rise outcome without a contact-pattern gate | same 70 deployable actor inputs | ungated extension checkpoint telemetry |
@@ -351,6 +353,9 @@ an underscore are imported helpers and are not launched directly.
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-GRU-Hip-Direct` | Adds a 128-state GRU so the sensor-only actor can coordinate a persistent multi-step unload | same 70 deployable inputs and symmetric physical reward | recurrent PPO checkpoints |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-SuccessDominant-GRU-Hip-Direct` | Removes the per-step four-foot support income that made waiting competitive with terminal success and doubles the held-lift payoff | same recurrent sensor-only actor | controlled reward-economics evidence |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-SensorAsym-GRU-Hip-Direct` | Adds bounded symmetric joint and lateral reset differences visible through existing joint/load/IMU sensors | no leg identifier or non-deployable observation | sensor-conditioned mode-selection evidence |
+| `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentMode-Hip-Direct` | Samples one learned discrete whole-action mode per episode and retains it until reset | same 70 deployable inputs and symmetric physical reward | episode-consistent mode PPO checkpoints |
+| `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-Hip-Direct` | Samples one learned 12-joint bias per episode plus small per-step action noise | same 70 deployable inputs; no leg identifier, phase, or reference motion | coherent episode-exploration PPO checkpoints |
+| `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-Consolidate-Hip-Direct` | Gives the one-time latent choice 32-times policy-gradient/KL credit while removing entropy and reducing learning rate | same sensor-only actor and exact full-fold sideways reset | controlled latent-credit comparison |
 | `Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift10-Hip-Direct` | Applies the same fold-distribution bridge and symmetric unload signal at the 100 mm gate | same 70 deployable actor inputs; no selected leg or reference motion | 10 cm transfer candidates for exact full-fold evaluation |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift14-Hip-Direct` | Defines the 140 mm intermediate force-backed lift stage without prescribing a swing leg | same 70 deployable actor inputs | next-stage PPO checkpoints |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift19-Hip-Direct` | Defines the required 190 mm force-backed lift from the fully folded sideways stance | same 70 deployable actor inputs | final lift-stage PPO checkpoints |
@@ -370,6 +375,15 @@ actor state has `178,923` values and the training-only critic has `176,084`,
 for `355,007` model-state values total. This is still smaller than the
 `512 x 512` feed-forward comparison actor, so the recurrent result is not a
 large-model capacity test.
+
+The persistent-bias comparison uses `70 -> 512 -> 512 -> 50`: two mode logits,
+two 12-action control means, and two learned 12-joint bias centers. It has
+`324,706` trainable actor parameters (`324,917` saved values including the
+70-value normalizer buffers), about `1.30 MB` as FP32 deployment weights. Its
+full RSL-RL training checkpoint is `7,511,983` bytes because it also contains
+the critic, normalizers, and optimizer state. This is already a comfortable
+deployment size; the current evidence points to episode-level credit and
+symmetry consolidation rather than insufficient network capacity.
 
 The 2026-08-03 folded-sideways bridge round added a symmetric relative-force
 unload reward and sampled the full `0.46` to `0.30 m` reset range without a
@@ -428,6 +442,26 @@ is promoted to 100 mm. The honest post-training third-person attempts are
 archived as
 `reviews/ppo-stairs-success-dominant-gru-model98-seed1263.mp4` and
 `reviews/ppo-stairs-sensor-asym-gru-model147-seed1270.mp4`.
+
+The 2026-08-03 episode-commitment round then added `1,024,000` substantive
+parallel transitions (`1,048,576` including three smoke iterations) from the
+literal `0.30 m` fully folded, 90-degree sideways reset. The discrete
+persistent-mode run produced `44/2,468` strict stochastic successes (`1.78%`)
+and explored `112.6 mm` maximum foot clearance, but four deterministic screens
+and forced checks of both components remained at zero. The continuous
+persistent-bias run improved stochastic exploration to `52/2,003` (`2.60%`),
+with an early cumulative peak of `17/231` (`7.36%`), but six deterministic
+screens remained at zero. Scaling the one-time commitment credit by 32 produced
+`27/1,048` (`2.58%`) and did not consolidate the sampled behavior into the
+policy center. The latest model 961 completed `0/29` strict episodes in the
+30-second deterministic playback. It is not promoted to 100 or 190 mm. The
+ordinary third-person evidence is archived as
+`reviews/ppo-stairs-persistent-bias-model961-seed1297-30s.mp4`; it shows a
+stable folded stance with small motion but no meaningful unload-and-lift
+sequence. The next controlled experiment should optimize the persistent
+12-joint episode distribution directly from ranked whole-episode returns (for
+example an elite/CEM-style reward-only update), then fine-tune the resulting
+deterministic center with sensor feedback.
 
 | `simulation/isaac/models/ppo-walk-v1-2m/` | Tracks the frozen flat-walking dependency used by v5 residual control | validated flat PPO ZIP | release dependency |
 | `simulation/isaac/models/ppo-stairs-pure-parallel-v1-lifthold-seed1059/agent.yaml` | Captures the exact RSL-RL PPO configuration for the packaged lift-hold checkpoint | saved training parameters | no generated data |

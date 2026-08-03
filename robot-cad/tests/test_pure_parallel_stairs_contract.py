@@ -591,6 +591,58 @@ def test_two_mode_policy_preserves_pure_sensor_contract_and_commits_deterministi
     )
 
 
+def test_persistent_mode_is_sampled_once_and_replayed_by_ppo() -> None:
+    policy = _source("persistent_mode_policy.py")
+    runner = _source("agents/rsl_rl_ppo_cfg.py")
+    registration = _source("__init__.py")
+
+    assert "needs_mode = one_hot.sum(dim=-1) < 0.5" in policy
+    assert "torch.multinomial" in policy
+    assert "self._commitment_state[:, dones == 1, :] = 0.0" in policy
+    assert "padded_new_mode[0]" in policy
+    assert "gaussian + self._new_mode.to(gaussian.dtype) * selected_logit" in policy
+    assert "self.transition.actions = self.actor(obs, stochastic_output=True)" in policy
+    assert "self.transition.hidden_states = (" in policy
+    assert "selected leg" not in policy.lower()
+    assert "DrobotPersistentModeGaussianDistributionCfg" in runner
+    assert "DrobotPureStairsYaw90FullFoldFootLift5PersistentModeHipPPORunnerCfg" in runner
+    assert "PersistentModePPO" in runner
+    assert (
+        "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentMode-Hip-Direct"
+        in registration
+    )
+
+    transplant = _source("transplant_persistent_bias_checkpoint.py")
+    assert "PersistentBiasGaussianDistribution" in policy
+    assert "PersistentBiasActor" in policy
+    assert "_TorchPersistentBiasActor" in policy
+    assert "def as_jit(self) -> nn.Module:" in policy
+    assert "proposed_bias = torch.normal" in policy
+    assert "episode_bias = torch.where" in policy
+    assert "bias_log_prob + categorical_log_prob" in policy
+    assert "DrobotPersistentBiasGaussianDistributionCfg" in runner
+    assert "DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasHipPPORunnerCfg" in runner
+    assert "PersistentBiasPPO" in runner
+    assert "commitment_credit_scale" in policy
+    assert "DrobotPersistentBiasConsolidateDistributionCfg" in runner
+    assert "commitment_credit_scale: float = 32.0" in runner
+    assert (
+        "DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasConsolidateHipPPORunnerCfg"
+        in runner
+    )
+    assert "widened_weight = output_weight.new_zeros(50" in transplant
+    assert 'actor["distribution.action_std_param"]' in transplant
+    assert 'actor["distribution.bias_std_param"]' in transplant
+    assert (
+        "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-Hip-Direct"
+        in registration
+    )
+    assert (
+        "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-Consolidate-Hip-Direct"
+        in registration
+    )
+
+
 def test_low25_consolidation_uses_long_low_entropy_batches() -> None:
     runner_source = (
         ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
