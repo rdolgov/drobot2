@@ -132,6 +132,8 @@ def test_first_step_curriculum_requires_supported_tread_hold() -> None:
     assert first_step["reset_forward_offset_m"] == 0.10
     assert first_step["first_step_curriculum"] is True
     assert first_step["reward_tread_count"] == 1
+    assert first_step["support_reward_scale"] == 0.25
+    assert first_step["supported_lift_reward_scale"] == 0.50
 
     env_source = _source("pure_stairs_env.py")
     dones = _method_source(env_source, "DrobotPureStairsEnv", "_get_dones")

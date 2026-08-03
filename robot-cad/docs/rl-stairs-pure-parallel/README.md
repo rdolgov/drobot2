@@ -62,6 +62,15 @@ attempts and resets rather than a clean sustained success. This establishes
 that the simulated mechanism and policy can sometimes satisfy the 190 mm
 supported-lift gate; it does not yet establish robustness or stair climbing.
 
+The selected 19 cm lift checkpoint was then transferred back to the first-tread
+task for another 368,640 transitions. The first-step reward retained supported
+lifting while adding symmetric tread placement, support retention, and base
+elevation. At iterations 301 and 302, PPO produced force-verified first-tread
+contacts and short supported holds; the best logged reset batch averaged 0.333
+tread contacts and 0.0778 s of hold. First-step success remained 0% because the
+best base-height gain was only 0.0108 m versus the required 0.06 m. Iteration
+300 is packaged as a contact checkpoint, not a completed-step policy.
+
 ## Editable sources
 
 - `simulation/isaac/rl/parallel_stairs/pure_stairs_env.py`: vectorized

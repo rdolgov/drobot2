@@ -246,6 +246,8 @@ class DrobotPureStairsFirstStepHipEnvCfg(DrobotPureStairsHipEnvCfg):
     reset_forward_jitter_m = 0.03
     first_step_curriculum = True
     reward_tread_count = 1
+    support_reward_scale = 0.25
+    supported_lift_reward_scale = 0.50
 
 
 @configclass

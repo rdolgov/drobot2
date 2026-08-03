@@ -1,0 +1,28 @@
+{
+  "status": "FIRST_TREAD_CONTACT_FOUND_FIRST_STEP_NOT_PASSED",
+  "algorithm": "pure PPO transfer",
+  "parallel_environments": 128,
+  "seed": 1082,
+  "iterations": 120,
+  "transitions": 368640,
+  "stair_geometry_m": {"rise": 0.18, "tread_depth": 0.25},
+  "transferred_from": "simulation/isaac/models/ppo-foot-lift-pure-19cm-seed1079/model.pt",
+  "metrics": {
+    "best_average_tread_contacts": 0.3333333433,
+    "best_tread_contact_iteration": 301,
+    "best_average_tread_hold_s": 0.0777777880,
+    "best_tread_hold_iteration": 301,
+    "best_tread_potential": 0.8616671562,
+    "maximum_supported_lift_hold_s": 0.2166666687,
+    "maximum_foot_clearance_m": 0.2470756024,
+    "maximum_progress_m": 0.0974726677,
+    "maximum_base_gain_m": 0.0108109415,
+    "first_step_success_rate": 0.0
+  },
+  "selected_checkpoint": {
+    "source_iteration": 300,
+    "sha256": "8A83EB2547DA37F65C4A5C881082DEE45D7031D73C892AB58A5B065496508D5F"
+  },
+  "actor_uses_rgb": false,
+  "effort_limit_nm": 0.8825985
+}
