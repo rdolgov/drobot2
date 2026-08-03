@@ -293,19 +293,7 @@ class DrobotPureStairsEnv(DirectRLEnv):
         body_rate = torch.sum(
             torch.square(self._robot.data.root_ang_vel_b.torch[:, :2]), dim=1
         )
-        current_stable_tread = (
-            (tread_contacts >= 1.0) & (support_count >= 3.0) & (upright_error <= 0.51)
-        )
-        predicted_hold_complete = (
-            self._tread_hold_steps + current_stable_tread.long()
-            >= self.cfg.first_step_hold_steps
-        )
-        base_gain_complete = (
-            base_gain_fraction >= 1.0
-            if self.cfg.first_step_require_base_gain
-            else torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
-        )
-        first_step_completion = (predicted_hold_complete & base_gain_complete).float()
+        first_step_completion = self._success.float()
 
         reward = (
             0.01

@@ -94,6 +94,13 @@ that satisfies support, hold, upright, and stage-height conditions; this fixes
 successful termination previously discarding future survival reward, but a
 completion event must still be sampled before PPO can reinforce it.
 
+A follow-up 307,200-transition landing run tested rewarding downward fork-tip
+motion inside an 80 mm band above the first tread. It produced no tread contact,
+so that touchdown-velocity term was rejected rather than retained in the task.
+The DirectRLEnv audit also confirmed that dones are computed before rewards;
+the completion bonus now uses the environment's authoritative success flag on
+the terminal transition instead of predicting the next hold count.
+
 ## Editable sources
 
 - `simulation/isaac/rl/parallel_stairs/pure_stairs_env.py`: vectorized

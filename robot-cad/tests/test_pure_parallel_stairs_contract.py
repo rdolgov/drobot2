@@ -149,7 +149,7 @@ def test_first_step_curriculum_requires_supported_tread_hold() -> None:
     assert "tread_transfer" in reward
     assert "narrow_transfer = narrow_tread_potential * base_gain_fraction" in reward
     assert "narrow_transfer_reward_scale" in reward
-    assert "predicted_hold_complete" in reward
+    assert "first_step_completion = self._success.float()" in reward
     assert "first_step_completion_reward_scale" in reward
     assert "tread_height_delta_scale" in reward
     assert "new_tread_potential_reward_scale" in reward
