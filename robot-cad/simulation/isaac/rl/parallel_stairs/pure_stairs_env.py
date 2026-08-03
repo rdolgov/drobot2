@@ -302,6 +302,13 @@ class DrobotPureStairsEnv(DirectRLEnv):
         root_pos = self._robot.data.root_pos_w.torch
         root_x = root_pos[:, 0]
         root_z = root_pos[:, 2]
+        support_rise_settling = (
+            self._steps_since_reset <= self.cfg.support_rise_settle_steps
+        )
+        self._episode_start_root_z.copy_(
+            torch.where(support_rise_settling, root_z, self._episode_start_root_z)
+        )
+        support_rise_active = (~support_rise_settling).float()
 
         foot_pos = self._foot_tip_positions()
         foot_x = foot_pos[:, :, 0] - self._terrain.env_origins[:, 0:1]
@@ -437,6 +444,8 @@ class DrobotPureStairsEnv(DirectRLEnv):
         else:
             strict_support_rise_gate = torch.ones_like(support_count)
             support_rise_reward_gate = strict_support_rise_gate
+        strict_support_rise_gate = strict_support_rise_gate * support_rise_active
+        support_rise_reward_gate = support_rise_reward_gate * support_rise_active
         support_rise = support_rise_reward_gate * support_rise_gain_fraction
         support_rise_base_gain = strict_support_rise_gate * torch.clamp(
             root_z - self._episode_start_root_z, 0.0, 0.18
@@ -608,6 +617,7 @@ class DrobotPureStairsEnv(DirectRLEnv):
         )
         stable_support_rise = (
             (support_count >= self.cfg.support_rise_min_support_count)
+            & (self._steps_since_reset > self.cfg.support_rise_settle_steps)
             & (
                 root[:, 2] - self._episode_start_root_z
                 >= self.cfg.support_rise_min_base_gain_m

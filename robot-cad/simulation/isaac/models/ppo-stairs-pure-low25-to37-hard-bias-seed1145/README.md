@@ -102,3 +102,39 @@ rare and not robust across the 256-environment tie-break. Third-person clips
 `reviews/ppo-two-support-rise5-soft-model1003-seed1183.mp4` and
 `reviews/ppo-two-support-rise5-consolidated-model1016-seed1186.mp4` scored 0/5
 and 0/6. They are ordinary periodic attempts, not selected successes.
+
+## Full-fold and sideways hip-leverage audit
+
+The next pure-PPO round tested whether a lower start and more lateral hip
+authority make the 5 mm, two-support rise precursor easier. The actor inputs,
+12-joint action space, exact 180 mm rise by 250 mm tread, and 0.8825985 N*m
+effort cap stayed unchanged.
+
+- The full-fold reset uses the hardware-representable 100% folded pose at a
+  0.30 m base height. A 60-step settling window and 12-step success hold prevent
+  spawn depenetration from being counted as learned body rise. The earlier
+  ungated measurement of 5,411/5,422 was therefore rejected as an artifact.
+- Under the corrected gate, the zero-action control scored 17/148 (11.49%) and
+  source model 1016 scored 23/143 (16.08%) on seed 1187.
+- Full-fold continuation added 368,640 transitions and 272/2,260 stochastic
+  successes. Selected model 1030 pooled 163/774 deterministic successes
+  (21.06%) on seeds 1189 and 1190 versus 140/854 (16.39%) for source model
+  1016: +4.67 percentage points, or about 28.5% relative improvement.
+- `model_full_fold_rise5_1030.pt` is that selected checkpoint. SHA-256:
+  `46d6f0c000531dc4d6e22ca4f16d06b080d9510903e42d38295739e9099d61f9`.
+- The ordinary seed-1191 third-person review scored 0/4. This is intentionally
+  not a searched success clip.
+- A true 90-degree sideways task remounted the same simulated VL53L5CX toward
+  the stair and expanded hip-abduction action scale from 0.30 to 0.42 rad.
+  Source model 1030 scored 1/265 during the baseline population. The 368,640
+  transition continuation found 7/4,165 stochastic successes, but source and
+  event checkpoints 1037, 1070, and 1093 all scored 0 on held-out seed 1197.
+  The sideways continuation was rejected rather than packaged.
+- The ordinary lateral seed-1198 third-person review scored 0/6. Its SHA-256
+  is `f0a8f7120d4a62e09d365fc0ee40d913836d9b6a967e31c146ff97eb92194b46`.
+
+The lower full-fold start is a verified improvement for this small supported
+rise precursor. Direct 90-degree lateral transfer is not. The next justified
+curriculum is a gradual 0-to-45-to-90-degree yaw bridge while keeping the
+single depth sensor physically aimed at the stair. Neither result demonstrates
+foot placement, a complete 180 mm step, or a stair climb.

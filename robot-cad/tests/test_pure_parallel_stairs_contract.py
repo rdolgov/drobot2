@@ -476,6 +476,7 @@ def test_low25_consolidation_uses_long_low_entropy_batches() -> None:
     assert "num_steps_per_env = 64" in runner_source
     assert "self.algorithm.entropy_coef = 0.0" in runner_source
     assert "self.algorithm.learning_rate = 2.0e-5" in runner_source
+
     assert "self.algorithm.num_learning_epochs = 10" in runner_source
     assert "Drobot-Pure-Stairs-First-Step-Width105-Low25-Consolidate-Hip-Direct" in registration
 
@@ -621,6 +622,31 @@ def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
     )
     assert "self.algorithm.entropy_coef = 0.0" in runner_source
     assert "self.algorithm.learning_rate = 2.0e-5" in runner_source
+
+    full_fold = _class_assignments(
+        cfg_source,
+        "DrobotPureStairsFullFoldTwoSupportRise5HipEnvCfg",
+    )
+    assert full_fold["initial_base_height_m"] == 0.30
+    assert full_fold["reset_fold_fraction"] == 1.0
+    assert full_fold["reset_fold_fraction_min"] is None
+    assert full_fold["reset_fold_fraction_max"] is None
+    assert full_fold["support_rise_settle_steps"] == 60
+    assert full_fold["support_rise_hold_steps"] == 12
+    assert "self._steps_since_reset > self.cfg.support_rise_settle_steps" in env_source
+    assert "support_rise_reward_gate * support_rise_active" in env_source
+    assert "DrobotPureStairsFullFoldTwoSupportRise5HipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-FullFold-TwoSupport-Rise5-Hip-Direct" in registration
+
+    sideways = _class_assignments(
+        cfg_source,
+        "DrobotPureStairsSidewaysTwoSupportRise5HipEnvCfg",
+    )
+    assert sideways["reset_yaw_deg"] == 90.0
+    assert sideways["action_scale_abduction_rad"] == 0.42
+    assert "self.depth_sensor.offset.pos = (0.0, -0.1145, 0.123)" in cfg_source
+    assert "DrobotPureStairsSidewaysTwoSupportRise5HipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-Sideways-TwoSupport-Rise5-Hip-Direct" in registration
 
     upright = _class_assignments(
         cfg_source,

@@ -291,6 +291,28 @@ class DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipConsolidatePPORunnerCfg
 
 
 @configclass
+class DrobotPureStairsFullFoldTwoSupportRise5HipPPORunnerCfg(
+    DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipPPORunnerCfg
+):
+    """Learn the held two-support rise from the verified full-fold reset."""
+
+    experiment_name = (
+        "drobot_pure_stairs_full_fold_two_support_rise5_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsSidewaysTwoSupportRise5HipPPORunnerCfg(
+    DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipPPORunnerCfg
+):
+    """Learn the held two-support rise with a lateral body and hip leverage."""
+
+    experiment_name = (
+        "drobot_pure_stairs_sideways_two_support_rise5_hip_180x250_direct"
+    )
+
+
+@configclass
 class DrobotPureStairsLow25To37HardBiasUprightRise10HipPPORunnerCfg(
     DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
 ):

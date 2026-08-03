@@ -200,6 +200,7 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     support_rise_hold_steps = 4
     support_rise_min_support_count = 4
     support_rise_soft_support_reward = False
+    support_rise_settle_steps = 0
     foot_lift_curriculum = False
     foot_lift_height_m = 0.19
     foot_lift_hold_steps = 8
@@ -546,6 +547,49 @@ class DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipEnvCfg(
     support_rise_min_support_count = 2
     support_rise_soft_support_reward = True
     support_reward_scale = 0.25
+
+
+@configclass
+class DrobotPureStairsFullFoldTwoSupportRise5HipEnvCfg(
+    DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipEnvCfg
+):
+    """Test the held two-support rise from the verified full-fold reset."""
+
+    initial_base_height_m = 0.30
+    reset_fold_fraction = 1.0
+    reset_fold_fraction_min = None
+    reset_fold_fraction_max = None
+    reset_base_height_min_m = None
+    reset_base_height_max_m = None
+    support_rise_settle_steps = 60
+    support_rise_hold_steps = 12
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        _apply_folded_reset(self, self.reset_fold_fraction)
+
+
+@configclass
+class DrobotPureStairsSidewaysTwoSupportRise5HipEnvCfg(
+    DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipEnvCfg
+):
+    """Test a lateral body approach with the same ToF sensor facing the stair."""
+
+    reset_yaw_deg = 90.0
+    action_scale_abduction_rad = 0.42
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # The body is lateral, so remount the existing front ToF toward body -Y,
+        # which remains world +X (toward the stair) at the 90-degree reset.
+        self.robot.init_state.rot = (0.0, 0.0, 0.7071067812, 0.7071067812)
+        self.depth_sensor.offset.pos = (0.0, -0.1145, 0.123)
+        self.depth_sensor.offset.rot = (
+            -0.2418447626,
+            -0.2418447626,
+            -0.6644630244,
+            0.6644630244,
+        )
 
 
 @configclass
