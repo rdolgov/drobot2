@@ -186,6 +186,16 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--transfer-residual-swing-support-abduction",
+    action="append",
+    default=[],
+    metavar="LEG",
+    help=(
+        "Map a compact transfer policy onto the swing leg plus all support "
+        "hip-abduction joints instead of the default support-only mask."
+    ),
+)
+parser.add_argument(
     "--post-transfer-model",
     action="append",
     default=[],
@@ -417,6 +427,21 @@ transfer_model_paths = _parse_leg_models(
     args.transfer_model,
     "--transfer-model",
 )
+transfer_residual_swing_support_abduction = set(
+    args.transfer_residual_swing_support_abduction
+)
+if len(transfer_residual_swing_support_abduction) != len(
+    args.transfer_residual_swing_support_abduction
+):
+    parser.error(
+        "duplicate --transfer-residual-swing-support-abduction leg"
+    )
+if not transfer_residual_swing_support_abduction.issubset(
+    transfer_model_paths
+):
+    parser.error(
+        "swing/support-abduction transfer masks require --transfer-model"
+    )
 post_transfer_model_paths = _parse_leg_models(
     args.post_transfer_model,
     "--post-transfer-model",
@@ -544,6 +569,9 @@ report: dict[str, object] = {
     "transfer_models": {
         leg: str(path) for leg, path in transfer_model_paths.items()
     },
+    "transfer_residual_swing_support_abduction": sorted(
+        transfer_residual_swing_support_abduction
+    ),
     "post_transfer_models": {
         leg: str(path) for leg, path in post_transfer_model_paths.items()
     },
@@ -851,10 +879,15 @@ try:
                 f"Transfer model hash mismatch for {leg}: {path}"
             )
         transfer_model = PPO.load(str(path), device=args.device)
+        transfer_mode = (
+            "swing_plus_support_abduction"
+            if leg in transfer_residual_swing_support_abduction
+            else "support_only"
+        )
         support_mask = placement_policy_action_mask(
             raw_env.dof_names,
             target_leg=leg,
-            mode="support_only",
+            mode=transfer_mode,
         )
         expected_action_size = int(np.count_nonzero(support_mask))
         if tuple(transfer_model.action_space.shape) != (expected_action_size,):
@@ -875,7 +908,7 @@ try:
             "source_task_id": manifest.get("task_id"),
             "observation_shape": list(transfer_model.observation_space.shape),
             "action_shape": list(transfer_model.action_space.shape),
-            "residual_mask": "support_only",
+            "residual_mask": transfer_mode,
             "policy_post_hold_seconds": (
                 transfer_policy_post_hold_seconds
             ),
@@ -944,6 +977,31 @@ try:
             policy_observation,
             deterministic=not args.stochastic,
         )
+
+    def transfer_policy_action(
+        transfer_policies: dict[str, PPO],
+        leg: str,
+        policy_observation: np.ndarray,
+    ) -> np.ndarray:
+        transfer_model = transfer_policies[leg]
+        compact_action, _ = predict_with_observation_prefix(
+            transfer_model,
+            policy_observation,
+            deterministic=not args.stochastic,
+        )
+        transfer_mode = (
+            "swing_plus_support_abduction"
+            if leg in transfer_residual_swing_support_abduction
+            else "support_only"
+        )
+        return expand_compact_masked_action(
+            compact_action,
+            placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=leg,
+                mode=transfer_mode,
+            ),
+        )
         return expand_compact_masked_action(
             compact_action,
             placement_policy_action_mask(
@@ -1004,7 +1062,7 @@ try:
             transfer_model = transfer_models.get(active_leg)
             if transfer_model is None:
                 return np.zeros(raw_env.action_space.shape, dtype=np.float32)
-            return transfer_support_action(
+            return transfer_policy_action(
                 transfer_models,
                 active_leg,
                 observation,

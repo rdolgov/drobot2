@@ -665,3 +665,94 @@ slip. RGB is recording-only; the policy remains camera-blind and consumes IMU,
 joint/proprioceptive state, previous action, contact/load, and known analytic
 stair geometry. This validates isolated foot lift and balance only. It does
 not validate a second-foot transfer or complete stair climbing.
+
+## V81-V82 retained first-foot load and hip-assisted transfer
+
+The next composition experiment starts with the V75 front-right foothold,
+requires that completed foot to retain at least `5 N` of geometry-qualified
+tread load, caps whole-support slip at `35 mm`, then trains a compact six-output
+front-left transfer policy. The six outputs control front-left hip abduction,
+hip flexion, and knee plus the three support-leg hip-abduction joints. This is
+the smallest action space that can both use the swing hip and shift lateral
+support. It keeps the exact `180 mm` rise by `250 mm` tread, the measured
+`0.8825985 N m` applied effort cap, and camera-blind policy input.
+
+The first 2,048-step V81 run used:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --output-dir simulation\isaac\output\rl\ppo-stairs-v81-front-left-transfer-2048-seed1032 `
+  --total-timesteps 2048 --curriculum-total-timesteps 2048 `
+  --fixed-placement-level left-quarter-tread-load `
+  --phase-train-leg front_left --phase-train-transfer `
+  --precursor-leg-model front_right=simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025\drobot_stairs_ppo_final.zip `
+  --phase-residual-swing-support-abduction --phase-compact-residual-action `
+  --seed 1032 --device cpu --ppo-learning-rate 0.00005 `
+  --ppo-initial-log-std -4.0 --ppo-entropy-coefficient 0
+```
+
+V81 retained about `20 N` on the placed foot but reached only `7.232 N`
+minimum front-left load and completed zero transfers. Fresh seed 1033 became
+heavier at `26.623 N`, lifted only `6.510 mm`, and exceeded the slip limit at
+`35.578 mm`. Inspection found that the phase wrapper rewarded balance and
+support-margin progress but did not directly reward unloading the designated
+swing foot.
+
+V82 adds a measured swing-load-reduction term (`50` reward per newton, clipped
+to `1 N` progress per control step) while retaining balance and support-margin
+progress terms. The 4,096-step rerun was:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --output-dir simulation\isaac\output\rl\ppo-stairs-v82-front-left-unload-reward-4096-seed1034 `
+  --total-timesteps 4096 --curriculum-total-timesteps 4096 `
+  --fixed-placement-level left-quarter-tread-load `
+  --phase-train-leg front_left --phase-train-transfer `
+  --precursor-leg-model front_right=simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025\drobot_stairs_ppo_final.zip `
+  --phase-residual-swing-support-abduction --phase-compact-residual-action `
+  --seed 1034 --device cpu --ppo-learning-rate 0.00003 `
+  --ppo-initial-log-std -2.5 --ppo-entropy-coefficient 0
+```
+
+Training improved minimum swing load to `5.145 N`, kept maximum support slip
+at `34.951 mm`, and accumulated `95.679 N` of clipped load-reduction progress,
+but still completed zero transfers. Fresh evaluation used three episodes:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\evaluate_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --model simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025\drobot_stairs_ppo_final.zip `
+  --leg-model front_right=simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025\drobot_stairs_ppo_final.zip `
+  --zero-action-leg front_left `
+  --transfer-model front_left=simulation\isaac\output\rl\ppo-stairs-v82-front-left-unload-reward-4096-seed1034\drobot_stairs_ppo_final.zip `
+  --transfer-residual-swing-support-abduction front_left `
+  --episodes 3 --seed 1036 --device cpu --active-steps 1 `
+  --placement-level left-quarter-tread-load `
+  --maximum-lateral-deviation-m 0.20 --episode-seconds 45 `
+  --allow-unverified-model `
+  --report simulation\isaac\output\rl\ppo-stairs-v82-front-left-unload-reward-4096-seed1034\evaluation_seed1036_3ep.json
+```
+
+One of three episodes reached transfer. It retained `20.010 N` on the first
+tread with `31.576 mm` maximum support slip, but the left foot remained at
+`7.979 N` and lifted only `6.707 mm`; the other two exceeded the `35 mm` slip
+cap before the first foothold completed. V82 is therefore an improved training
+signal but not a generalizing transfer policy. The representative failure was
+recorded with the same composition plus `--skip-episodes 1` to
+`reviews/ppo-stairs-v82-front-left-transfer-eval-seed1036-ep2.mp4`. The MP4 is
+The web-review H.264 transcode preserves all 633 frames and is `309,237`
+bytes with SHA-256
+`48c3d7b09919da355a510e3791163dc50c494cc7f15e8413e95526be33ff1a98`.
+
+The V82 model SHA-256 is
+`5069f46744036cc92b52a3dcf21af3cab7fa0ebc0d33b747c47a8dfabdb5eeea`;
+the three-episode report SHA-256 is
+`729faccd40ccfe899182660d40d3db56a240b275bfb60853f6cc21a1f65da7ad`.
+The next bounded experiment should train from a deterministic retained-foot
+snapshot and expose measured swing-foot total load directly in the policy
+observation; additional vision or friction is not yet the limiting factor.

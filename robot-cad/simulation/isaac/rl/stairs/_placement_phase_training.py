@@ -358,16 +358,30 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 0.0,
             )
         )
+        self.transfer_swing_load_reduction_reward_per_n = float(
+            transfer_training_config.get(
+                "swing_load_reduction_per_n",
+                0.0,
+            )
+        )
         self.transfer_progress_reward_clip_m = float(
             transfer_training_config.get(
                 "maximum_progress_m_per_step",
                 0.010,
             )
         )
+        self.transfer_load_progress_reward_clip_n = float(
+            transfer_training_config.get(
+                "maximum_load_progress_n_per_step",
+                1.0,
+            )
+        )
         transfer_reward_values = (
             self.transfer_balance_progress_reward_per_m,
             self.transfer_support_margin_progress_reward_per_m,
+            self.transfer_swing_load_reduction_reward_per_n,
             self.transfer_progress_reward_clip_m,
+            self.transfer_load_progress_reward_clip_n,
         )
         if not all(np.isfinite(value) for value in transfer_reward_values):
             raise ValueError("transfer training reward values must be finite")
@@ -377,9 +391,11 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             )
         self.previous_transfer_balance_error_m: float | None = None
         self.previous_transfer_support_margin_m: float | None = None
+        self.previous_transfer_swing_load_n: float | None = None
         self.cumulative_transfer_progress_reward = 0.0
         self.cumulative_transfer_balance_error_progress_m = 0.0
         self.cumulative_transfer_support_margin_progress_m = 0.0
+        self.cumulative_transfer_swing_load_reduction_n = 0.0
 
     @staticmethod
     def _transfer_balance_error_m(info: Mapping[str, Any]) -> float | None:
@@ -406,19 +422,32 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             if margin is not None and np.isfinite(float(margin))
             else None
         )
+        swing_load = info.get("placement_transfer_swing_total_load_n")
+        self.previous_transfer_swing_load_n = (
+            max(0.0, float(swing_load))
+            if swing_load is not None and np.isfinite(float(swing_load))
+            else None
+        )
 
     def _transfer_progress_reward(
         self,
         info: Mapping[str, Any],
-    ) -> tuple[float, float, float]:
+    ) -> tuple[float, float, float, float]:
         if not self.train_transfer:
-            return 0.0, 0.0, 0.0
+            return 0.0, 0.0, 0.0, 0.0
         balance_error = self._transfer_balance_error_m(info)
         margin_value = info.get("placement_support_margin_m")
         support_margin = (
             float(margin_value)
             if margin_value is not None
             and np.isfinite(float(margin_value))
+            else None
+        )
+        swing_load_value = info.get("placement_transfer_swing_total_load_n")
+        swing_load = (
+            max(0.0, float(swing_load_value))
+            if swing_load_value is not None
+            and np.isfinite(float(swing_load_value))
             else None
         )
         balance_progress = 0.0
@@ -437,8 +466,17 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             margin_progress = float(
                 support_margin - self.previous_transfer_support_margin_m
             )
+        swing_load_reduction = 0.0
+        if (
+            swing_load is not None
+            and self.previous_transfer_swing_load_n is not None
+        ):
+            swing_load_reduction = float(
+                self.previous_transfer_swing_load_n - swing_load
+            )
         self.previous_transfer_balance_error_m = balance_error
         self.previous_transfer_support_margin_m = support_margin
+        self.previous_transfer_swing_load_n = swing_load
         clip_m = self.transfer_progress_reward_clip_m
         clipped_balance_progress = float(
             np.clip(balance_progress, -clip_m, clip_m)
@@ -446,11 +484,20 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         clipped_margin_progress = float(
             np.clip(margin_progress, -clip_m, clip_m)
         )
+        clipped_swing_load_reduction = float(
+            np.clip(
+                swing_load_reduction,
+                -self.transfer_load_progress_reward_clip_n,
+                self.transfer_load_progress_reward_clip_n,
+            )
+        )
         progress_reward = (
             self.transfer_balance_progress_reward_per_m
             * clipped_balance_progress
             + self.transfer_support_margin_progress_reward_per_m
             * clipped_margin_progress
+            + self.transfer_swing_load_reduction_reward_per_n
+            * clipped_swing_load_reduction
         )
         self.cumulative_transfer_progress_reward += progress_reward
         self.cumulative_transfer_balance_error_progress_m += (
@@ -459,7 +506,15 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         self.cumulative_transfer_support_margin_progress_m += (
             clipped_margin_progress
         )
-        return progress_reward, clipped_balance_progress, clipped_margin_progress
+        self.cumulative_transfer_swing_load_reduction_n += (
+            clipped_swing_load_reduction
+        )
+        return (
+            progress_reward,
+            clipped_balance_progress,
+            clipped_margin_progress,
+            clipped_swing_load_reduction,
+        )
 
     def _capture_phase_snapshot(
         self,
@@ -720,6 +775,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             transfer_progress_reward,
             transfer_balance_progress_m,
             transfer_margin_progress_m,
+            transfer_swing_load_reduction_n,
         ) = self._transfer_progress_reward(result_info)
         reward = float(reward) + transfer_progress_reward
         result_info["phase_training_transfer_progress_reward"] = (
@@ -730,6 +786,9 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
         )
         result_info["phase_training_transfer_support_margin_progress_m"] = (
             transfer_margin_progress_m
+        )
+        result_info["phase_training_transfer_swing_load_reduction_n"] = (
+            transfer_swing_load_reduction_n
         )
         transfer_completed = bool(
             self.train_transfer
@@ -1036,8 +1095,14 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 "support_margin_progress_per_m": (
                     self.transfer_support_margin_progress_reward_per_m
                 ),
+                "swing_load_reduction_per_n": (
+                    self.transfer_swing_load_reduction_reward_per_n
+                ),
                 "maximum_progress_m_per_step": (
                     self.transfer_progress_reward_clip_m
+                ),
+                "maximum_load_progress_n_per_step": (
+                    self.transfer_load_progress_reward_clip_n
                 ),
                 "cumulative_reward": (
                     self.cumulative_transfer_progress_reward
@@ -1047,6 +1112,9 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 ),
                 "cumulative_support_margin_progress_m": (
                     self.cumulative_transfer_support_margin_progress_m
+                ),
+                "cumulative_swing_load_reduction_n": (
+                    self.cumulative_transfer_swing_load_reduction_n
                 ),
             },
             "maximum_target_transfer_balance_error_m": (

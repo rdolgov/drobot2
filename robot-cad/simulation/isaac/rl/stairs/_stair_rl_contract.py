@@ -74,6 +74,7 @@ FIRST_TREAD_EXPERIMENT_PROFILES = (
     "forward-preposition-load-advance-forward",
     "forward-preposition-load-advance-forward-deep",
     "forward-preposition-load-advance-forward-floor",
+    "front-pair-preposition-load-advance-forward-floor",
     "forward-preposition-load-catch-forward-fast",
     "forward-preposition-load-catch-centered",
     "fully-folded-forward",
@@ -144,6 +145,7 @@ def config_for_first_tread_experiment(
         "forward-preposition-load-advance-forward",
         "forward-preposition-load-advance-forward-deep",
         "forward-preposition-load-advance-forward-floor",
+        "front-pair-preposition-load-advance-forward-floor",
         "forward-preposition-load-catch-forward-fast",
         "forward-preposition-load-catch-centered",
     }:
@@ -175,6 +177,7 @@ def config_for_first_tread_experiment(
                 "forward-preposition-load-advance-forward",
                 "forward-preposition-load-advance-forward-deep",
                 "forward-preposition-load-advance-forward-floor",
+                "front-pair-preposition-load-advance-forward-floor",
                 "forward-preposition-load-catch-forward-fast",
                 "forward-preposition-load-catch-centered",
             }:
@@ -193,6 +196,7 @@ def config_for_first_tread_experiment(
             "forward-preposition-load-advance-forward",
             "forward-preposition-load-advance-forward-deep",
             "forward-preposition-load-advance-forward-floor",
+            "front-pair-preposition-load-advance-forward-floor",
         }:
             catch_parameters = {
                 "forward-preposition-load-catch-half": (0.50, 0.50, 1.50, 1.0),
@@ -233,6 +237,12 @@ def config_for_first_tread_experiment(
                     0.75,
                     1.0,
                 ),
+                "front-pair-preposition-load-advance-forward-floor": (
+                    1.00,
+                    0.00,
+                    0.75,
+                    1.0,
+                ),
                 "forward-preposition-load-catch-forward-fast": (
                     1.00,
                     0.50,
@@ -258,9 +268,15 @@ def config_for_first_tread_experiment(
             # the tread, but V61 kept that bias throughout touchdown. Latch on
             # geometry-qualified top load and smoothly return the commanded
             # body shift toward the new four-foot support polygon.
+            regulated_legs = (
+                ["front_right", "front_left"]
+                if selected
+                == "front-pair-preposition-load-advance-forward-floor"
+                else ["front_right"]
+            )
             placement["touchdown_support_regulation"] = {
                 "enabled": True,
-                "legs": ["front_right"],
+                "legs": regulated_legs,
                 "phases": ["lower", "hold"],
                 "contact_threshold_n": contact_threshold_n,
                 "release_duration_seconds": duration_seconds,
@@ -279,6 +295,7 @@ def config_for_first_tread_experiment(
                 "forward-preposition-load-advance-forward",
                 "forward-preposition-load-advance-forward-deep",
                 "forward-preposition-load-advance-forward-floor",
+                "front-pair-preposition-load-advance-forward-floor",
             }:
                 placement["touchdown_support_regulation"].update(
                     {
@@ -289,7 +306,10 @@ def config_for_first_tread_experiment(
                 if selected == "forward-preposition-load-advance-forward-deep":
                     for level in placement_curriculum["levels"]:
                         level["landing_lift_m"] = 0.085
-                elif selected == "forward-preposition-load-advance-forward-floor":
+                elif selected in {
+                    "forward-preposition-load-advance-forward-floor",
+                    "front-pair-preposition-load-advance-forward-floor",
+                }:
                     for level in placement_curriculum["levels"]:
                         level["landing_lift_m"] = 0.055
             # Cap only geometry-qualified tread-top load. This protects the
@@ -297,7 +317,7 @@ def config_for_first_tread_experiment(
             # controller or satisfy placement success.
             placement["touchdown_load_regulation"] = {
                 "enabled": True,
-                "legs": ["front_right"],
+                "legs": regulated_legs,
                 "phases": ["lower", "hold"],
                 "target_tread_load_n": 10.0,
                 "proportional_gain_m_per_n": 0.0005,
@@ -305,6 +325,65 @@ def config_for_first_tread_experiment(
                 "attack_smoothing_factor": 0.50,
                 "release_smoothing_factor": 0.05,
             }
+            if selected == "front-pair-preposition-load-advance-forward-floor":
+                # Reproduce V74/V75 exactly for the precursor leg even though
+                # the older front-pair task owns a per-leg override. The next
+                # left-foot stage continues to use the selected (and likewise
+                # pre-positioned/deepened) curriculum level.
+                resolved["reset_start_y_range_m"] = [-0.002, 0.002]
+                resolved["reset_start_yaw_range_deg"] = [-0.15, 0.15]
+                resolved["reset_joint_noise_rad"] = 0.003
+                resolved.pop("reset_joint_offsets_rad", None)
+                level_override_by_leg = deepcopy(
+                    dict(placement.get("level_override_by_leg", {}))
+                )
+                level_override_by_leg["front_right"] = {
+                    "success_mode": "tread_contact",
+                    "apex_lift_m": 0.200,
+                    "landing_lift_m": 0.055,
+                    "lift_forward_offset_m": 0.080,
+                    "swing_forward_offset_m": 0.165,
+                    "landing_forward_offset_m": 0.150,
+                    "target_tread_fraction": 0.25,
+                    "contact_hold_seconds": 0.50,
+                }
+                placement["level_override_by_leg"] = level_override_by_leg
+                transfer = deepcopy(
+                    dict(placement.get("inter_leg_transfer", {}))
+                )
+                transfer_overrides = deepcopy(
+                    dict(transfer.get("override_by_next_swing_leg", {}))
+                )
+                front_left_transfer = deepcopy(
+                    dict(transfer_overrides.get("front_left", {}))
+                )
+                front_left_transfer.update(
+                    {
+                        "unload_duration_seconds": 3.0,
+                        "maximum_seconds": 10.0,
+                        "swing_unload_lift_m": 0.080,
+                        "maximum_swing_unloaded_load_n": 1.0,
+                    }
+                )
+                transfer_overrides["front_left"] = front_left_transfer
+                transfer["training_reward"] = {
+                    "balance_target_error_progress_per_m": 1000.0,
+                    "support_margin_progress_per_m": 2000.0,
+                    "swing_load_reduction_per_n": 50.0,
+                    "maximum_progress_m_per_step": 0.010,
+                    "maximum_load_progress_n_per_step": 1.0,
+                }
+                transfer["override_by_next_swing_leg"] = transfer_overrides
+                placement["inter_leg_transfer"] = transfer
+                # A second-foot success is invalid if the already completed
+                # front-right foothold has unloaded. Five newtons is safely
+                # below V74/V75's observed 11-17 N retained load but well above
+                # the 1 N contact-noise threshold. The 35 mm slip limit admits
+                # the verified V75 prefix while bounding any additional motion.
+                placement["completed_foot_minimum_tread_load_n"] = 5.0
+                termination = deepcopy(dict(resolved["termination"]))
+                termination["maximum_support_slip_m"] = 0.035
+                resolved["termination"] = termination
     elif selected == "fully-folded-forward":
         # 160.370 mm down with 25 mm fore/aft puts the knee at 119 degrees,
         # one degree inside the measured 120-degree hardware limit.
@@ -2210,6 +2289,37 @@ def placement_lift_hold_reached(
         and np.all(support_loads >= threshold)
         and float(support_margin_m) >= float(minimum_support_margin_m)
         and float(-gravity[2]) >= float(minimum_upright_cosine)
+    )
+
+
+def completed_placement_tread_load_state(
+    step_top_normal_loads_n: Sequence[Sequence[float]],
+    completed_leg_indices: Sequence[int],
+    *,
+    minimum_tread_load_n: float,
+) -> tuple[bool, float, np.ndarray]:
+    """Return whether every completed foothold retains qualified top load."""
+
+    loads = np.asarray(step_top_normal_loads_n, dtype=np.float64)
+    if loads.ndim != 2 or not np.all(np.isfinite(loads)):
+        raise ValueError("step_top_normal_loads_n must be a finite matrix")
+    if np.any(loads < 0.0):
+        raise ValueError("step_top_normal_loads_n cannot be negative")
+    threshold = float(minimum_tread_load_n)
+    if not np.isfinite(threshold) or threshold <= 0.0:
+        raise ValueError("minimum_tread_load_n must be finite and positive")
+    indices = tuple(int(value) for value in completed_leg_indices)
+    if len(set(indices)) != len(indices) or any(
+        value < 0 or value >= loads.shape[0] for value in indices
+    ):
+        raise ValueError("completed_leg_indices must be unique valid rows")
+    if not indices:
+        return True, 0.0, np.zeros(0, dtype=np.float32)
+    completed_loads = np.sum(loads[list(indices), :], axis=1)
+    return (
+        bool(np.all(completed_loads >= threshold)),
+        float(np.min(completed_loads)),
+        completed_loads.astype(np.float32),
     )
 
 

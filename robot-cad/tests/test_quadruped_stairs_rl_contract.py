@@ -37,6 +37,7 @@ from _stair_rl_contract import (  # noqa: E402
     SUPPORT_REGULATION_OBSERVATION_FIELDS,
     balance_target_error_xy,
     bounded_support_incenter_target_xy,
+    completed_placement_tread_load_state,
     compose_bounded_residual_action,
     config_for_first_tread_experiment,
     config_for_height_stage,
@@ -166,6 +167,7 @@ def test_first_tread_profiles_include_folded_crouch_and_sideways_hip(
         "forward-preposition-load-advance-forward",
         "forward-preposition-load-advance-forward-deep",
         "forward-preposition-load-advance-forward-floor",
+        "front-pair-preposition-load-advance-forward-floor",
         "forward-preposition-load-catch-forward-fast",
         "forward-preposition-load-catch-centered",
         "fully-folded-forward",
@@ -276,6 +278,71 @@ def test_first_tread_profiles_include_folded_crouch_and_sideways_hip(
     assert advance_catch["placement_reference"][
         "touchdown_support_regulation"
     ]["precontact_forward_release_phase"] == "advance"
+
+    with (
+        STAIRS_DIR / "quadruped_stairs_v14_front_pair_right_then_left.yaml"
+    ).open("r", encoding="utf-8") as stream:
+        front_pair_config = yaml.safe_load(stream)
+    front_pair = config_for_first_tread_experiment(
+        front_pair_config["task"],
+        "front-pair-preposition-load-advance-forward-floor",
+    )
+    front_pair_reference = front_pair["placement_reference"]
+    assert front_pair["reset_start_x_range_m"] == [0.35, 0.37]
+    assert front_pair["reset_start_y_range_m"] == [-0.002, 0.002]
+    assert front_pair["reset_start_yaw_range_deg"] == [-0.15, 0.15]
+    assert front_pair["reset_joint_noise_rad"] == pytest.approx(0.003)
+    assert "reset_joint_offsets_rad" not in front_pair
+    assert front_pair_reference["touchdown_support_regulation"]["legs"] == [
+        "front_right",
+        "front_left",
+    ]
+    assert front_pair_reference["touchdown_load_regulation"]["legs"] == [
+        "front_right",
+        "front_left",
+    ]
+    right_override = front_pair_reference["level_override_by_leg"][
+        "front_right"
+    ]
+    assert right_override == {
+        "success_mode": "tread_contact",
+        "apex_lift_m": pytest.approx(0.200),
+        "landing_lift_m": pytest.approx(0.055),
+        "lift_forward_offset_m": pytest.approx(0.080),
+        "swing_forward_offset_m": pytest.approx(0.165),
+        "landing_forward_offset_m": pytest.approx(0.150),
+        "target_tread_fraction": pytest.approx(0.25),
+        "contact_hold_seconds": pytest.approx(0.50),
+    }
+    left_quarter = next(
+        level
+        for level in front_pair["placement_curriculum"]["levels"]
+        if level["id"] == "left-quarter-tread-load"
+    )
+    assert left_quarter["landing_lift_m"] == pytest.approx(0.055)
+    assert left_quarter["swing_forward_offset_m"] == pytest.approx(0.165)
+    front_left_transfer = front_pair_reference["inter_leg_transfer"][
+        "override_by_next_swing_leg"
+    ]["front_left"]
+    assert front_left_transfer["unload_duration_seconds"] == pytest.approx(3.0)
+    assert front_left_transfer["maximum_seconds"] == pytest.approx(10.0)
+    assert front_left_transfer["swing_unload_lift_m"] == pytest.approx(0.080)
+    assert front_left_transfer["maximum_swing_unloaded_load_n"] == pytest.approx(
+        1.0
+    )
+    assert front_pair_reference[
+        "completed_foot_minimum_tread_load_n"
+    ] == pytest.approx(5.0)
+    assert front_pair_reference["inter_leg_transfer"]["training_reward"] == {
+        "balance_target_error_progress_per_m": 1000.0,
+        "support_margin_progress_per_m": 2000.0,
+        "swing_load_reduction_per_n": 50.0,
+        "maximum_progress_m_per_step": 0.010,
+        "maximum_load_progress_n_per_step": 1.0,
+    }
+    assert front_pair["termination"]["maximum_support_slip_m"] == pytest.approx(
+        0.035
+    )
 
 
 def test_foot_contact_patch_contract_preserves_fork_tip_reach() -> None:
@@ -3224,6 +3291,43 @@ def test_lift_hold_requires_height_support_margin_and_upright_body() -> None:
     ) is False
 
 
+def test_completed_foothold_retention_requires_qualified_tread_load() -> None:
+    top_loads = np.asarray(
+        [
+            [6.0, 0.0, 0.0, 0.0],
+            [0.0, 7.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0],
+        ],
+        dtype=np.float32,
+    )
+    loaded, minimum, completed = completed_placement_tread_load_state(
+        top_loads,
+        (0, 1),
+        minimum_tread_load_n=5.0,
+    )
+    assert loaded is True
+    assert minimum == pytest.approx(6.0)
+    assert completed.tolist() == pytest.approx([6.0, 7.0])
+
+    loaded, minimum, _ = completed_placement_tread_load_state(
+        top_loads,
+        (0, 1),
+        minimum_tread_load_n=6.5,
+    )
+    assert loaded is False
+    assert minimum == pytest.approx(6.0)
+
+    loaded, minimum, completed = completed_placement_tread_load_state(
+        top_loads,
+        (),
+        minimum_tread_load_n=5.0,
+    )
+    assert loaded is True
+    assert minimum == pytest.approx(0.0)
+    assert completed.size == 0
+
+
 def test_phase_training_replays_verified_prefix_before_exposing_target() -> None:
     gym = pytest.importorskip("gymnasium")
     from _placement_phase_training import PlacementPhaseTrainingEnv
@@ -3479,7 +3583,9 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
                 "training_reward": {
                     "balance_target_error_progress_per_m": 1000.0,
                     "support_margin_progress_per_m": 2000.0,
+                    "swing_load_reduction_per_n": 5.0,
                     "maximum_progress_m_per_step": 0.010,
+                    "maximum_load_progress_n_per_step": 1.0,
                 }
             }
             self.actions: list[np.ndarray] = []
@@ -3539,7 +3645,9 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
                         0.004 if len(self.actions) == 2 else 0.009
                     ),
                     "placement_transfer_body_rate_rad_s": 0.08,
-                    "placement_transfer_swing_total_load_n": 0.2,
+                    "placement_transfer_swing_total_load_n": (
+                        0.2 if len(self.actions) >= 2 else 2.2
+                    ),
                 },
             )
 
@@ -3566,7 +3674,7 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
         np.asarray((-0.5,), dtype=np.float32)
     )
     np.testing.assert_allclose(raw.actions[1], (-0.5, 0.0))
-    assert reward == pytest.approx(119.0)
+    assert reward == pytest.approx(124.0)
     assert terminated is True
     assert truncated is False
     assert result["phase_training_transfer_completed"] is True
@@ -3586,6 +3694,12 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
     assert result["phase_training_transfer_support_margin_progress_m"] == (
         pytest.approx(0.006)
     )
+    assert result["phase_training_transfer_swing_load_reduction_n"] == (
+        pytest.approx(1.0)
+    )
+    assert stats["transfer_progress_reward"][
+        "cumulative_swing_load_reduction_n"
+    ] == pytest.approx(1.0)
 
     observation, info = wrapped.reset(seed=12)
     np.testing.assert_allclose(observation, (9.0, 9.0, 9.0))
@@ -3612,7 +3726,7 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
     assert result["phase_training_transfer_post_hold_completed"] is False
     assert result["phase_training_transfer_post_hold_remaining_steps"] == 2
     np.testing.assert_allclose(hold_raw.actions[1], (0.0, 0.0))
-    assert reward == pytest.approx(2.0)
+    assert reward == pytest.approx(7.0)
     assert terminated is False
     _, _, terminated, _, result = hold_wrapped.step(
         np.asarray((-0.3,), dtype=np.float32)

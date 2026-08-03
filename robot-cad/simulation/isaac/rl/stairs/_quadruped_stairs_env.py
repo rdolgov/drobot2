@@ -24,6 +24,7 @@ from _stair_rl_contract import (
     PLACEMENT_REFERENCE_OBSERVATION_FIELDS,
     balance_target_error_xy,
     bounded_support_incenter_target_xy,
+    completed_placement_tread_load_state,
     curriculum_active_steps,
     equalized_foot_load_vertical_corrections,
     foot_tread_progress,
@@ -621,6 +622,20 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "placement_reference.sequence_legs must be unique known legs"
             )
         self.placement_sequence_legs = configured_placement_sequence
+        self.completed_foot_minimum_tread_load_n = float(
+            self.placement_reference_config.get(
+                "completed_foot_minimum_tread_load_n",
+                self.placement_reference_config.get(
+                    "contact_on_threshold_n",
+                    1.0,
+                ),
+            )
+        )
+        if not 0.0 < self.completed_foot_minimum_tread_load_n <= 100.0:
+            raise ValueError(
+                "placement_reference.completed_foot_minimum_tread_load_n "
+                "must be within (0, 100]"
+            )
         self.advance_clearance_gate_config = dict(
             self.placement_reference_config.get(
                 "advance_clearance_gate",
@@ -1312,6 +1327,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             dtype=np.float64,
         )
         self.minimum_placement_support_margin_m = float("inf")
+        self.minimum_completed_foot_tread_load_n = float("inf")
         self.latest_support_margin_regulation_active = False
         self.latest_support_margin_requested_target_xy_m = np.zeros(
             2,
@@ -3818,6 +3834,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.minimum_post_touchdown_support_normal_load_n_by_leg.fill(np.inf)
         self.support_normal_loads_at_maximum_tread_load_n_by_leg.fill(0.0)
         self.minimum_placement_support_margin_m = float("inf")
+        self.minimum_completed_foot_tread_load_n = float("inf")
         self.latest_support_margin_regulation_active = False
         self.latest_support_margin_requested_target_xy_m.fill(0.0)
         self.latest_support_margin_constrained_target_xy_m.fill(0.0)
@@ -4326,6 +4343,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         self.minimum_post_touchdown_support_normal_load_n_by_leg.fill(np.inf)
         self.support_normal_loads_at_maximum_tread_load_n_by_leg.fill(0.0)
         self.minimum_placement_support_margin_m = float("inf")
+        self.minimum_completed_foot_tread_load_n = float("inf")
         self.latest_placement_pitch_rear_correction_scale = 1.0
         self.maximum_swing_tread_normal_load_n = 0.0
         self.maximum_tread_normal_load_n_by_leg.fill(0.0)
@@ -4347,18 +4365,23 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         completed_indices = [
             LEGS.index(leg) for leg in self.completed_placement_legs
         ]
-        completed_tread_loads = (
-            np.sum(self.latest_step_top_normal_loads_n[completed_indices], axis=1)
-            if completed_indices
-            else np.zeros(0, dtype=np.float32)
+        (
+            completed_tread_loaded,
+            completed_tread_min_load_n,
+            completed_tread_loads,
+        ) = completed_placement_tread_load_state(
+            self.latest_step_top_normal_loads_n,
+            completed_indices,
+            minimum_tread_load_n=(
+                self.completed_foot_minimum_tread_load_n
+            ),
         )
         support_loads = ground_loads + np.sum(step_loads, axis=1)
         restored_support_loads = support_loads[
             list(self.placement_support_leg_indices)
         ]
         if (
-            completed_indices
-            and np.any(completed_tread_loads < contact_threshold)
+            completed_indices and not completed_tread_loaded
         ) or np.any(restored_support_loads < contact_threshold):
             raise RuntimeError(
                 "Placement phase snapshot did not restore force-backed support: "
@@ -4366,7 +4389,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "raw_completed_step_layer_loads_n="
                 f"{np.sum(step_loads[completed_indices], axis=1).tolist()}, "
                 f"support_loads_n={restored_support_loads.tolist()}, "
-                f"threshold_n={contact_threshold}"
+                "completed_threshold_n="
+                f"{self.completed_foot_minimum_tread_load_n}, "
+                f"support_threshold_n={contact_threshold}"
             )
         observation = np.asarray(self._read_state()["observation"]).copy()
         return observation, {
@@ -4385,9 +4410,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 self.phase_snapshot_restore_settle_control_steps
             ),
             "placement_phase_snapshot_completed_tread_min_load_n": (
-                float(np.min(completed_tread_loads))
-                if completed_tread_loads.size
-                else 0.0
+                completed_tread_min_load_n
             ),
             "placement_phase_snapshot_support_min_load_n": float(
                 np.min(restored_support_loads)
@@ -4672,6 +4695,8 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         placement_transfer_base_speed_m_s = 0.0
         placement_transfer_body_rate_rad_s = 0.0
         placement_transfer_gate_failures: tuple[str, ...] = ()
+        placement_completed_tread_loaded = True
+        placement_completed_tread_min_load_n = 0.0
         placement_pre_unload_gate_now = False
         placement_pre_unload_gate_failures: tuple[str, ...] = ()
         placement_completion_gate_failures: tuple[str, ...] = ()
@@ -4717,6 +4742,25 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             contact_threshold = float(
                 self.placement_reference_config["contact_on_threshold_n"]
             )
+            completed_indices = [
+                LEGS.index(leg) for leg in self.completed_placement_legs
+            ]
+            (
+                placement_completed_tread_loaded,
+                placement_completed_tread_min_load_n,
+                _completed_tread_loads,
+            ) = completed_placement_tread_load_state(
+                step_top_loads,
+                completed_indices,
+                minimum_tread_load_n=(
+                    self.completed_foot_minimum_tread_load_n
+                ),
+            )
+            if completed_indices:
+                self.minimum_completed_foot_tread_load_n = min(
+                    self.minimum_completed_foot_tread_load_n,
+                    placement_completed_tread_min_load_n,
+                )
             placement_support_contact_fraction = float(
                 np.mean(support_loads >= contact_threshold)
             )
@@ -4886,6 +4930,10 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                         ]
                     ),
                 )
+                placement_contact_now = bool(
+                    placement_contact_now
+                    and placement_completed_tread_loaded
+                )
             elif placement_success_mode == "tread_contact":
                 early_contact_after_clearance = bool(
                     active_placement_level.get(
@@ -4903,6 +4951,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 )
                 placement_contact_now = bool(
                     placement_contact_expected
+                    and placement_completed_tread_loaded
                     and placement_contact_reached(
                     swing_tip_position_m=swing_tip,
                     swing_tread_normal_load_n=placement_swing_tread_load,
@@ -4958,20 +5007,9 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                         - self.placement_transfer_target_balance_position_m[:2]
                     )
                 )
-                completed_indices = [
-                    LEGS.index(leg) for leg in self.completed_placement_legs
-                ]
-                completed_tread_loaded = bool(
-                    completed_indices
-                    and np.all(
-                        step_top_loads[completed_indices, 0]
-                        >= contact_threshold
-                    )
-                )
+                completed_tread_loaded = placement_completed_tread_loaded
                 placement_transfer_completed_tread_min_load_n = float(
-                    np.min(step_top_loads[completed_indices, 0])
-                    if completed_indices
-                    else 0.0
+                    placement_completed_tread_min_load_n
                 )
                 placement_transfer_swing_total_load_n = float(
                     ground_loads[self.placement_swing_leg_index]
@@ -5643,6 +5681,20 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ),
             "placement_curriculum_level": self.current_placement_level_id,
             "placement_contact_now": placement_contact_now,
+            "placement_completed_tread_loaded": (
+                placement_completed_tread_loaded
+            ),
+            "placement_completed_tread_min_load_n": (
+                placement_completed_tread_min_load_n
+            ),
+            "completed_foot_minimum_tread_load_n": (
+                self.completed_foot_minimum_tread_load_n
+            ),
+            "minimum_completed_foot_tread_load_n": (
+                self.minimum_completed_foot_tread_load_n
+                if np.isfinite(self.minimum_completed_foot_tread_load_n)
+                else None
+            ),
             "placement_contact_expected": placement_contact_expected,
             "placement_early_contact_hold_elapsed_s": (
                 self.placement_early_contact_hold_elapsed_s
@@ -5953,6 +6005,19 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                 "final_placement_transfer_upright_cosine": upright_cosine,
                 "final_placement_transfer_completed_tread_min_load_n": (
                     placement_transfer_completed_tread_min_load_n
+                ),
+                "final_completed_foot_tread_loaded": (
+                    placement_completed_tread_loaded
+                ),
+                "final_completed_foot_tread_min_load_n": (
+                    placement_completed_tread_min_load_n
+                ),
+                "minimum_completed_foot_tread_load_n": (
+                    self.minimum_completed_foot_tread_load_n
+                    if np.isfinite(
+                        self.minimum_completed_foot_tread_load_n
+                    )
+                    else None
                 ),
                 "final_placement_transfer_swing_total_load_n": (
                     placement_transfer_swing_total_load_n
