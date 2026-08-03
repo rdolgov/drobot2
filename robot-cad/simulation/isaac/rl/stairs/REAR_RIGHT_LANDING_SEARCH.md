@@ -607,3 +607,61 @@ rise by `250 mm` tread and the applied joint effort stays capped at
 `0.8825985 N m`. This is one-foot placement, not a completed stair climb. The
 next bounded task should restore the cleaner V74 boundary and train front-left
 placement while explicitly penalizing any loss of front-right tread load.
+
+## V80 simplified single-foot 190 mm lift
+
+Before adding a second stair foothold, V80 isolates the user's hardware-level
+reach question: raise front-left at least `190 mm`, hold it for `0.50 s`, keep
+the three support feet loaded, and do not tip. The task reuses the V15
+single-foot environment and current real-test hardware profile. The staircase
+remains exactly `180 mm` rise by `250 mm` tread, and applied effort remains
+capped at `0.8825985 N m`.
+
+The fresh 2,048-step fine-tune used:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\train_stairs_v80_single_foot_190mm_ppo.py
+```
+
+The wrapper resumes the verified V17 isolated-lift policy, starts directly at
+`front-left-stabilized-190mm-lift-hold`, and preserves the saved PPO algorithm
+contract. All six recent training episodes passed. Their lift range was
+`203.626-208.060 mm`, maximum tilt was `2.758 deg`, and maximum support slip
+was `3.382 mm`.
+
+Independent deterministic evaluation used a fresh seed:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\evaluate_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v15_front_left_stabilized_lift.yaml `
+  --model simulation\isaac\output\rl\ppo-stairs-v80-single-foot-190mm-2048-seed1030\drobot_stairs_ppo_final.zip `
+  --episodes 5 --seed 1031 --device cpu --active-steps 1 `
+  --placement-level front-left-stabilized-190mm-lift-hold `
+  --maximum-lateral-deviation-m 0.20 `
+  --report simulation\isaac\output\rl\ppo-stairs-v80-single-foot-190mm-eval-5ep-seed1031.json
+```
+
+All `5/5` episodes passed with `204.900-208.077 mm` lift, no failure reasons,
+`2.324 deg` maximum tilt, `3.337 mm` maximum support slip, and at least
+`10.386 N` on every support foot. The accepted replay was recorded with:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\record_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v15_front_left_stabilized_lift.yaml `
+  --model simulation\isaac\output\rl\ppo-stairs-v80-single-foot-190mm-2048-seed1030\drobot_stairs_ppo_final.zip `
+  --seed 1031 --device cpu --active-steps 1 `
+  --placement-level front-left-stabilized-190mm-lift-hold `
+  --camera-view external --fps 30 --width 960 --height 540 `
+  --video reviews\ppo-stairs-v80-single-foot-190mm-eval-seed1031.mp4 `
+  --thumbnail reviews\ppo-stairs-v80-single-foot-190mm-eval-seed1031.png `
+  --report simulation\isaac\output\rl\ppo-stairs-v80-single-foot-190mm-record-seed1031.json
+```
+
+The 166-frame H.264 MP4 is `7,221,002` bytes with SHA-256
+`1f7800f75b7c38f93e545692d7da45d45f84c01c9d06874d91a8447b71e658ef`.
+It reaches `207.761 mm` lift with `2.130 deg` tilt and `3.174 mm` support
+slip. RGB is recording-only; the policy remains camera-blind and consumes IMU,
+joint/proprioceptive state, previous action, contact/load, and known analytic
+stair geometry. This validates isolated foot lift and balance only. It does
+not validate a second-foot transfer or complete stair climbing.
