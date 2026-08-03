@@ -1091,3 +1091,47 @@ hold: require front-left below `4 N` for at least `0.5 s`, all three support
 feet loaded, bounded pitch and slip, then freeze that checkpoint and compose
 the independently verified V80 190 mm lift. Additional traction or camera
 vision remains lower priority than this phase decomposition.
+
+## V91 isolated 190 mm raise-and-hold confirmation
+
+Before changing the difficult inter-leg transfer again, V91 rechecked the
+simpler hardware question directly: can the robot raise one front foot above a
+`190 mm` clearance gate and remain on the other three feet? The new
+`train_stairs_v91_front_left_190mm_hold_ppo.py` wrapper fixes the task at the
+`front-left-stabilized-190mm-lift-hold` level, resumes the verified V80 policy,
+and performs only 1,024 additional PPO steps. Stair approach, tread contact,
+and inter-leg transfer are outside this experiment.
+
+The first launch was rejected before physics or training because a proposed
+`2e-5` learning rate did not match the resumed checkpoint's verified PPO
+contract. V91 was relaunched at the checkpoint's `5e-5` rate. All three
+completed training episodes then passed: lift was `203.058-207.323 mm`, body
+tilt stayed at or below `3.064 deg`, support slip stayed at or below
+`3.509 mm`, and every stance foot retained contact.
+
+Fresh evaluation used:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v15_front_left_stabilized_lift.yaml `
+  --model simulation/isaac/output/rl/ppo-stairs-v91-front-left-190mm-hold-1024-seed1043/drobot_stairs_ppo_final.zip `
+  --episodes 5 --seed 1044 --device cpu --active-steps 1 `
+  --placement-level front-left-stabilized-190mm-lift-hold `
+  --maximum-lateral-deviation-m 0.20 `
+  --report simulation/isaac/output/rl/ppo-stairs-v91-front-left-190mm-hold-1024-seed1043/evaluation_seed1044_5ep.json
+```
+
+It passed `5/5`: front-left lift was `205.004-208.036 mm`, the `0.50 s`
+clearance hold completed in every episode, maximum body tilt was `2.333 deg`,
+maximum support slip was `3.308 mm`, and the minimum support-foot load was
+`10.324 N`. The selected recorded episode reached `207.755 mm` lift with
+`2.133 deg` tilt and `3.208 mm` slip. Its 166-frame H.264 video is
+`reviews/ppo-stairs-v91-front-left-190mm-hold-seed1044.mp4`.
+
+The environment still uses the exact `180 mm` rise and `250 mm` tread, the
+real-test `0.8825985 N m` applied effort cap, and no RGB policy observation.
+The camera is recording-only; control uses IMU, joint/proprioceptive state,
+previous action, support contact/load, and the analytic stair profile. The V91
+result confirms that foot height is not the stair bottleneck. The remaining
+problem is acquiring and holding a safe three-foot support state after the
+first foot lands, then composing this already-successful lift policy.
