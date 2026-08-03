@@ -638,6 +638,23 @@ def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
     assert "DrobotPureStairsFullFoldTwoSupportRise5HipPPORunnerCfg" in runner_source
     assert "Drobot-Pure-Stairs-FullFold-TwoSupport-Rise5-Hip-Direct" in registration
 
+    yaw45 = _class_assignments(
+        cfg_source,
+        "DrobotPureStairsYaw45FullFoldTwoSupportRise5HipEnvCfg",
+    )
+    assert yaw45["reset_yaw_deg"] == 45.0
+    assert yaw45["action_scale_abduction_rad"] == 0.42
+    assert "self.robot.init_state.rot = (0.0, 0.0, 0.3826834324, 0.9238795325)" in cfg_source
+    assert (
+        "self.depth_sensor.offset.pos = (0.0809637264, -0.0809637264, 0.123)"
+        in cfg_source
+    )
+    assert "DrobotPureStairsYaw45FullFoldTwoSupportRise5HipPPORunnerCfg" in runner_source
+    assert (
+        "Drobot-Pure-Stairs-Yaw45-FullFold-TwoSupport-Rise5-Hip-Direct"
+        in registration
+    )
+
     sideways = _class_assignments(
         cfg_source,
         "DrobotPureStairsSidewaysTwoSupportRise5HipEnvCfg",

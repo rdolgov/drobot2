@@ -302,6 +302,17 @@ class DrobotPureStairsFullFoldTwoSupportRise5HipPPORunnerCfg(
 
 
 @configclass
+class DrobotPureStairsYaw45FullFoldTwoSupportRise5HipPPORunnerCfg(
+    DrobotPureStairsFullFoldTwoSupportRise5HipPPORunnerCfg
+):
+    """Continue the full-fold policy at a fixed 45-degree stair approach."""
+
+    experiment_name = (
+        "drobot_pure_stairs_yaw45_full_fold_two_support_rise5_hip_180x250_direct"
+    )
+
+
+@configclass
 class DrobotPureStairsSidewaysTwoSupportRise5HipPPORunnerCfg(
     DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipPPORunnerCfg
 ):

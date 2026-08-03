@@ -570,6 +570,29 @@ class DrobotPureStairsFullFoldTwoSupportRise5HipEnvCfg(
 
 
 @configclass
+class DrobotPureStairsYaw45FullFoldTwoSupportRise5HipEnvCfg(
+    DrobotPureStairsFullFoldTwoSupportRise5HipEnvCfg
+):
+    """Bridge the full-fold rise policy halfway toward a lateral approach."""
+
+    reset_yaw_deg = 45.0
+    action_scale_abduction_rad = 0.42
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.robot.init_state.rot = (0.0, 0.0, 0.3826834324, 0.9238795325)
+        # Mount the existing ToF at body -45 degrees so it still faces world
+        # +X (the stair direction) after the 45-degree body reset.
+        self.depth_sensor.offset.pos = (0.0809637264, -0.0809637264, 0.123)
+        self.depth_sensor.offset.rot = (
+            -0.1308854424,
+            -0.3159854101,
+            -0.3596047975,
+            0.8681627792,
+        )
+
+
+@configclass
 class DrobotPureStairsSidewaysTwoSupportRise5HipEnvCfg(
     DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipEnvCfg
 ):

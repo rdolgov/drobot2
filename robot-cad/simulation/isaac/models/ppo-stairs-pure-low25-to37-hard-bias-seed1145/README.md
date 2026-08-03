@@ -138,3 +138,33 @@ rise precursor. Direct 90-degree lateral transfer is not. The next justified
 curriculum is a gradual 0-to-45-to-90-degree yaw bridge while keeping the
 single depth sensor physically aimed at the stair. Neither result demonstrates
 foot placement, a complete 180 mm step, or a stair climb.
+
+## 45-degree full-fold yaw bridge
+
+The first gradual-yaw stage keeps the honest 100% folded reset, 60-step
+settling window, 12-step rise hold, exact 180 x 250 mm stair, and 0.8825985 N*m
+effort cap. It rotates the body 45 degrees, places the same simulated ToF at
+body -45 degrees so its rays still face the stair, and uses the same 0.42 rad
+bounded hip-abduction action scale as the lateral audit.
+
+- Source model 1030 scored 67/396 (16.92%) on baseline seed 1200.
+- The 128-environment continuation added 368,640 transitions and 327/2,222
+  stochastic successes (14.72%). Its training rate peaked at model 1038,
+  then drifted downward; final training rate was not used for selection.
+- On held-out seed 1202, source model 1030 scored 68/378 (17.99%). Models
+  1038, 1046, 1053, and 1058 scored 66/460 (14.35%), 68/460 (14.78%),
+  86/438 (19.63%), and 50/518 (9.65%), respectively.
+- On confirmation seed 1203, source model 1030 scored 53/437 (12.13%) and
+  selected model 1053 scored 62/471 (13.16%).
+- Pooled held-out comparison: model 1053 scored 148/909 (16.28%) versus
+  121/815 (14.85%) for source model 1030, a +1.44-point or approximately
+  9.7% relative improvement.
+- `model_yaw45_full_fold_rise5_1053.pt` is the selected checkpoint. SHA-256:
+  `095aabf35522bc96cfaab5a19d2e47bb066db8be14ddd95e446ff8cbd218e854`.
+- The corrected ordinary seed-1204 third-person review scored 0/5. SHA-256:
+  `43eb95ee23a0d0c3d833ca3523e9f5a2afda34af434af938fd03cd0437d61245`.
+
+This verifies that a gradual yaw bridge retains and modestly improves the
+small full-fold body-rise precursor. It still does not place a foot on the
+stair or climb. The next yaw stage should be 67.5 degrees from model 1053,
+followed by a fresh 90-degree comparison only if held-out transfer survives.
