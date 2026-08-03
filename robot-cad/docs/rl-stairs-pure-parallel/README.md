@@ -81,6 +81,19 @@ averaged 0.50 force-verified tread contacts, maximum supported tread hold was
 one episode, so the 20 mm stage and full stair climb remain at 0% success. The
 six-second deterministic review is an honest attempt/reset video, not a pass.
 
+A fifth round inserted a 10 mm body-rise bridge and processed 1,846,272 more
+transitions across 128- and 512-environment runs. It tested contact-retention
+reward, a narrow-placement-by-base-gain transfer term, lower forward-progress
+weight, wider reset distance, and higher Gaussian action exploration. An exact
+landing replay again produced a 20% supported-landing batch at iteration 349.
+The 10 mm transfer later produced a 0.20 contact batch with 0.060 s hold and,
+in a different reset batch, 0.0161 m body gain. It never combined the hold and
+height gate, so 10 mm success remained 0% and the 20/40/60 mm stages were not
+attempted. The reward now includes an explicit completion bonus on the step
+that satisfies support, hold, upright, and stage-height conditions; this fixes
+successful termination previously discarding future survival reward, but a
+completion event must still be sampled before PPO can reinforce it.
+
 ## Editable sources
 
 - `simulation/isaac/rl/parallel_stairs/pure_stairs_env.py`: vectorized

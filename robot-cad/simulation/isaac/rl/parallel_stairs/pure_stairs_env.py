@@ -280,6 +280,7 @@ class DrobotPureStairsEnv(DirectRLEnv):
             1.0,
         )
         tread_transfer = tread_binary * base_gain_fraction
+        narrow_transfer = narrow_tread_potential * base_gain_fraction
         upright_error = torch.sum(
             torch.square(self._robot.data.projected_gravity_b.torch[:, :2]), dim=1
         )
@@ -292,11 +293,24 @@ class DrobotPureStairsEnv(DirectRLEnv):
         body_rate = torch.sum(
             torch.square(self._robot.data.root_ang_vel_b.torch[:, :2]), dim=1
         )
+        current_stable_tread = (
+            (tread_contacts >= 1.0) & (support_count >= 3.0) & (upright_error <= 0.51)
+        )
+        predicted_hold_complete = (
+            self._tread_hold_steps + current_stable_tread.long()
+            >= self.cfg.first_step_hold_steps
+        )
+        base_gain_complete = (
+            base_gain_fraction >= 1.0
+            if self.cfg.first_step_require_base_gain
+            else torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
+        )
+        first_step_completion = (predicted_hold_complete & base_gain_complete).float()
 
         reward = (
             0.01
-            + 60.0 * progress_delta
-            + 45.0 * height_delta
+            + self.cfg.progress_delta_reward_scale * progress_delta
+            + self.cfg.height_delta_reward_scale * height_delta
             + 12.0 * new_clearance
             + 0.04 * lift_hold
             + self.cfg.new_tread_potential_reward_scale * new_tread_potential
@@ -310,6 +324,8 @@ class DrobotPureStairsEnv(DirectRLEnv):
             + 0.20 * retained_support
             + self.cfg.tread_hold_reward_scale * tread_hold_fraction
             + self.cfg.tread_transfer_reward_scale * tread_transfer
+            + self.cfg.narrow_transfer_reward_scale * narrow_transfer
+            + self.cfg.first_step_completion_reward_scale * first_step_completion
             + self.cfg.tread_height_delta_scale * tread_binary * height_delta
             - 0.08 * upright_error
             - 0.002 * action_rate

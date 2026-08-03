@@ -147,6 +147,10 @@ def test_first_step_curriculum_requires_supported_tread_hold() -> None:
     assert "retained_support" in reward
     assert "tread_hold_fraction" in reward
     assert "tread_transfer" in reward
+    assert "narrow_transfer = narrow_tread_potential * base_gain_fraction" in reward
+    assert "narrow_transfer_reward_scale" in reward
+    assert "predicted_hold_complete" in reward
+    assert "first_step_completion_reward_scale" in reward
     assert "tread_height_delta_scale" in reward
     assert "new_tread_potential_reward_scale" in reward
     assert "tread_potential_reward_scale" in reward
@@ -177,6 +181,18 @@ def test_first_step_curriculum_requires_supported_tread_hold() -> None:
     assert landing["first_step_require_base_gain"] is False
     assert landing["first_step_hold_steps"] == 3
     assert landing["tread_contact_reward_scale"] == 2.00
+    assert landing["first_step_completion_reward_scale"] == 10.0
+
+    close_1 = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepClose1HipEnvCfg"
+    )
+    assert close_1["first_step_min_base_gain_m"] == 0.01
+    assert close_1["reset_forward_jitter_m"] == 0.03
+    assert close_1["first_step_hold_steps"] == 4
+    assert close_1["progress_delta_reward_scale"] == 10.0
+    assert close_1["height_delta_reward_scale"] == 60.0
+    assert close_1["narrow_transfer_reward_scale"] == 4.00
+    assert close_1["first_step_completion_reward_scale"] == 15.0
 
 
 def test_foot_lift_curriculum_is_symmetric_and_supported() -> None:

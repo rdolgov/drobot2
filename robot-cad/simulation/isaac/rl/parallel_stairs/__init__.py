@@ -57,6 +57,11 @@ _register_variant(
     "DrobotPureStairsFirstStepLandingHipPPORunnerCfg",
 )
 _register_variant(
+    "Drobot-Pure-Stairs-First-Step-Close1-Hip-Direct",
+    "DrobotPureStairsFirstStepClose1HipEnvCfg",
+    "DrobotPureStairsFirstStepClose1HipPPORunnerCfg",
+)
+_register_variant(
     "Drobot-Pure-Stairs-First-Step-Close2-Hip-Direct",
     "DrobotPureStairsFirstStepClose2HipEnvCfg",
     "DrobotPureStairsFirstStepClose2HipPPORunnerCfg",

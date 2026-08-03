@@ -175,9 +175,13 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     foot_lift_height_m = 0.19
     foot_lift_hold_steps = 8
     support_reward_scale = 0.06
+    progress_delta_reward_scale = 60.0
+    height_delta_reward_scale = 45.0
     supported_lift_reward_scale = 0.0
     tread_hold_reward_scale = 0.0
     tread_transfer_reward_scale = 0.0
+    narrow_transfer_reward_scale = 0.0
+    first_step_completion_reward_scale = 0.0
     tread_height_delta_scale = 0.0
     new_tread_potential_reward_scale = 2.0
     tread_potential_reward_scale = 0.02
@@ -276,6 +280,29 @@ class DrobotPureStairsFirstStepLandingHipEnvCfg(DrobotPureStairsFirstStepHipEnvC
     new_narrow_tread_potential_reward_scale = 8.0
     narrow_tread_potential_reward_scale = 1.00
     tread_contact_reward_scale = 2.00
+    first_step_completion_reward_scale = 10.0
+
+
+@configclass
+class DrobotPureStairsFirstStepClose1HipEnvCfg(DrobotPureStairsFirstStepHipEnvCfg):
+    """Bridge supported landing into 1 cm of body rise."""
+
+    reset_forward_offset_m = 0.10
+    reset_forward_jitter_m = 0.03
+    first_step_min_base_gain_m = 0.01
+    first_step_hold_steps = 4
+    progress_delta_reward_scale = 10.0
+    height_delta_reward_scale = 60.0
+    tread_hold_reward_scale = 3.00
+    tread_transfer_reward_scale = 3.00
+    narrow_transfer_reward_scale = 4.00
+    tread_height_delta_scale = 180.0
+    new_tread_potential_reward_scale = 4.0
+    tread_potential_reward_scale = 0.40
+    new_narrow_tread_potential_reward_scale = 8.0
+    narrow_tread_potential_reward_scale = 1.00
+    tread_contact_reward_scale = 3.00
+    first_step_completion_reward_scale = 15.0
 
 
 @configclass
@@ -288,12 +315,14 @@ class DrobotPureStairsFirstStepClose2HipEnvCfg(DrobotPureStairsFirstStepHipEnvCf
     first_step_hold_steps = 5
     tread_hold_reward_scale = 0.80
     tread_transfer_reward_scale = 2.50
+    narrow_transfer_reward_scale = 3.00
     tread_height_delta_scale = 120.0
     new_tread_potential_reward_scale = 4.0
     tread_potential_reward_scale = 0.40
     new_narrow_tread_potential_reward_scale = 8.0
     narrow_tread_potential_reward_scale = 1.00
     tread_contact_reward_scale = 1.00
+    first_step_completion_reward_scale = 20.0
 
 
 @configclass
@@ -306,10 +335,12 @@ class DrobotPureStairsFirstStepClose4HipEnvCfg(DrobotPureStairsFirstStepHipEnvCf
     first_step_hold_steps = 6
     tread_hold_reward_scale = 0.90
     tread_transfer_reward_scale = 3.00
+    narrow_transfer_reward_scale = 2.50
     tread_height_delta_scale = 140.0
     new_tread_potential_reward_scale = 3.5
     tread_potential_reward_scale = 0.35
     tread_contact_reward_scale = 1.20
+    first_step_completion_reward_scale = 25.0
 
 
 @configclass
@@ -322,10 +353,12 @@ class DrobotPureStairsFirstStepClose6HipEnvCfg(DrobotPureStairsFirstStepHipEnvCf
     first_step_hold_steps = 8
     tread_hold_reward_scale = 1.00
     tread_transfer_reward_scale = 3.50
+    narrow_transfer_reward_scale = 2.00
     tread_height_delta_scale = 160.0
     new_tread_potential_reward_scale = 3.0
     tread_potential_reward_scale = 0.30
     tread_contact_reward_scale = 1.50
+    first_step_completion_reward_scale = 30.0
 
 
 @configclass

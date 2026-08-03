@@ -76,7 +76,19 @@ class DrobotPureStairsFirstStepLandingHipPPORunnerCfg(DrobotPureStairsHipPPORunn
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        self.algorithm.entropy_coef = 0.0
+        self.algorithm.entropy_coef = 0.002
+        self.algorithm.learning_rate = 1.0e-4
+        self.algorithm.desired_kl = 0.01
+
+
+@configclass
+class DrobotPureStairsFirstStepClose1HipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
+    experiment_name = "drobot_pure_stairs_first_step_close1_hip_180x250_direct"
+    save_interval = 1
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.entropy_coef = 0.002
         self.algorithm.learning_rate = 1.0e-4
         self.algorithm.desired_kl = 0.01
 
