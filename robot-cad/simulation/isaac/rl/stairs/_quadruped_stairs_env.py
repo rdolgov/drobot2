@@ -4699,6 +4699,13 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
         imu_observation = np.asarray(state["imu_observation"])
         projected_gravity = imu_observation[3:6]
         upright_cosine = float(np.clip(-projected_gravity[2], -1.0, 1.0))
+        body_pitch_rad = math.atan2(
+            float(projected_gravity[0]),
+            math.hypot(
+                float(projected_gravity[1]),
+                float(projected_gravity[2]),
+            ),
+        )
         placement_contact_now = False
         placement_contact_expected = False
         placement_swing_lift_m = 0.0
@@ -5722,6 +5729,7 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
             ),
             "placement_swing_lift_m": placement_swing_lift_m,
             "placement_upright_cosine": upright_cosine,
+            "placement_body_pitch_rad": body_pitch_rad,
             "placement_goal_hold_step_count": self.goal_hold_step_count,
             "placement_completion_gate_failures": (
                 placement_completion_gate_failures

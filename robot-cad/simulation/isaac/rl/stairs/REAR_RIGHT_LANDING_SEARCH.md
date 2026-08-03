@@ -868,3 +868,111 @@ explicit pitch/upright shaping. Better traction and camera vision remain lower
 priority: the policy already sees the relevant load and IMU state, while the
 limiting transfer states retain high support margin and fail force/upright
 coordination before perception becomes the bottleneck.
+
+## V86-V88 support-hip flexion and pitch shaping
+
+The V84 recommendation was tested by adding support-leg hip flexion to the
+compact transfer policy and adding potential-difference reward for reducing
+absolute body pitch. The new `swing_plus_support_hips` action mode maps nine
+compact outputs to all three front-left joints plus hip abduction and flexion
+on each support leg; support knees remain fixed. Exact policy transfer expands
+V84's six outputs into the corresponding nine-output rows, initializes the
+three new hip-flexion action means to zero, and records the mapping in the
+training report. A freeze mode preserves the inherited actor and six output
+rows while allowing only the three new action rows and value network to train.
+
+Validation used:
+
+```powershell
+& .\.venv\Scripts\python.exe -m ruff check `
+  simulation/isaac/rl/stairs/_policy_transfer.py `
+  simulation/isaac/rl/stairs/_stair_rl_contract.py `
+  simulation/isaac/rl/stairs/_quadruped_stairs_env.py `
+  simulation/isaac/rl/stairs/_placement_phase_training.py `
+  simulation/isaac/rl/stairs/train_stairs_ppo.py `
+  simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  simulation/isaac/rl/stairs/record_stairs_ppo.py `
+  tests/test_quadruped_stairs_rl_contract.py
+& .\.venv\Scripts\python.exe -m pytest `
+  tests/test_quadruped_stairs_rl_contract.py -q `
+  --basetemp=.pytest-tmp-v88-freeze
+```
+
+The focused contract suite passed with its expected simulator-dependent skips.
+It covers the exact six-to-nine row mapping, neutral new action means, frozen
+inherited gradients, the nine-joint mask, and pitch-progress reward. The
+physical contract is unchanged: `180 mm` rise, `250 mm` tread,
+`0.8825985 N m` applied effort, and no RGB policy observation.
+
+V86 expanded V84 and trained every actor row for 8,192 steps at learning rate
+`3e-5`, seed 1040. Six precursor attempts failed before a usable retained-foot
+snapshot. It completed zero 8 N transfers, with `9.367 N` minimum swing load,
+`0.952500` minimum upright cosine, and `35.370 mm` maximum slip. V87 repeated
+the experiment on V84's seed 1034 to control the snapshot: it exactly repeated
+the V84 floor, completing two 8 N transfers but none at 4 N, with `5.145 N`
+minimum load, `0.975542` minimum upright cosine, and `34.951 mm` maximum slip.
+
+V88 is the isolation test. It uses the same seed-1034 snapshot, learning rate
+`5e-5`, and `--freeze-inherited-stairs-policy-actions`, so only the new support
+hip-flexion output rows can alter the actor:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/train_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --output-dir simulation/isaac/output/rl/ppo-stairs-v88-frozen-v84-support-flexion-8192-seed1034 `
+  --total-timesteps 8192 --seed 1034 --device cpu `
+  --fixed-placement-level left-quarter-tread-load `
+  --phase-train-leg front_left --phase-train-transfer `
+  --precursor-leg-model front_right=simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --phase-residual-swing-support-hips --phase-compact-residual-action `
+  --phase-transfer-unload-threshold-n 8 `
+  --phase-transfer-unload-threshold-n 4 `
+  --phase-transfer-unload-threshold-n 1 `
+  --phase-transfer-upright-cosine 0.975 `
+  --phase-transfer-upright-cosine 0.977 `
+  --phase-transfer-upright-cosine 0.9781476 `
+  --phase-transfer-unload-successes-per-level 2 `
+  --initialize-from-stairs simulation/isaac/models/ppo-stairs-v84-load-upright-curriculum-8192-seed1034/drobot_stairs_ppo_final.zip `
+  --initialize-stairs-source-action-mode swing_plus_support_abduction `
+  --freeze-inherited-stairs-policy-actions `
+  --ppo-learning-rate 0.00005 --ppo-initial-log-std -2.5 `
+  --ppo-entropy-coefficient 0
+```
+
+V88 again completed two 8 N transfers and zero at 4 N. Its minimum load,
+upright score, and maximum slip exactly matched V87. This controlled result
+rules out support hip-flexion outputs alone as the missing degree of freedom.
+
+Fresh deterministic strict evaluation used V75 for the first front-right
+foothold and V88 for the front-left transfer:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --model simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --leg-model front_right=simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --zero-action-leg front_left `
+  --transfer-model front_left=simulation/isaac/output/rl/ppo-stairs-v88-frozen-v84-support-flexion-8192-seed1034/drobot_stairs_ppo_final.zip `
+  --transfer-residual-swing-support-hips front_left `
+  --episodes 3 --seed 1041 --device cpu --active-steps 1 `
+  --placement-level left-quarter-tread-load `
+  --maximum-lateral-deviation-m 0.20 --episode-seconds 45 `
+  --allow-unverified-model
+```
+
+The result was `0/3`; all episodes exceeded the support-slip gate at
+`35.010-42.692 mm`, maximum tilt reached `11.279 deg`, mean forward motion was
+`-7.725 mm`, and mean elevation change was `-11.758 mm`. The recorded seed-1041
+episode lifted front-right `198.085 mm` but rear-left slipped `42.692 mm` before
+the front-left transfer. Its H.264 MP4 is `17,679,034` bytes with SHA-256
+`942e16482ab25e8cf3aed57460fc80349cd00beb8476bfc05763eeaa4c3f1f31`.
+The V88 model SHA-256 is
+`6a02ec152836c832147dc56dc696d9fe463becf8484988d7601abbce51fbf8cf`.
+
+V88 is not a stair climb. The next bounded experiment should expose support
+knee extension and train an explicit pre-unload or vertical-COM phase while
+keeping the inherited V84 actor frozen. Better traction and camera vision stay
+lower priority: the policy already measures swing-foot load and body attitude,
+and the failure occurs in coordinated load sharing before terrain perception.

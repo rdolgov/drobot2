@@ -18,6 +18,7 @@ for module_dir in (str(ISAAC_DIR), str(RL_DIR), str(STAIRS_DIR)):
         sys.path.insert(0, module_dir)
 
 from _policy_transfer import (  # noqa: E402
+    freeze_policy_for_action_expansion,
     observation_prefix_compatibility,
     physical_action_output_ratios,
     predict_with_observation_prefix,
@@ -340,8 +341,10 @@ def test_first_tread_profiles_include_folded_crouch_and_sideways_hip(
         "balance_target_error_progress_per_m": 1000.0,
         "support_margin_progress_per_m": 2000.0,
         "swing_load_reduction_per_n": 50.0,
+        "body_pitch_error_progress_per_rad": 500.0,
         "maximum_progress_m_per_step": 0.010,
         "maximum_load_progress_n_per_step": 1.0,
+        "maximum_pitch_progress_rad_per_step": 0.020,
     }
     assert front_pair["termination"]["maximum_support_slip_m"] == pytest.approx(
         0.035
@@ -974,6 +977,89 @@ def test_flat_policy_transfer_can_preserve_physical_action_mean() -> None:
         "action_net.weight",
         "action_net.bias",
     ]
+
+
+def test_stair_policy_transfer_expands_compact_action_as_neutral_superset() -> None:
+    torch = pytest.importorskip("torch")
+    source = {
+        "action_net.weight": torch.arange(12, dtype=torch.float32).reshape(6, 2),
+        "action_net.bias": torch.arange(6, dtype=torch.float32),
+        "log_std": torch.full((6,), -1.5),
+        "value_net.bias": torch.tensor([7.0]),
+    }
+    target = {
+        "action_net.weight": torch.full((9, 2), 99.0),
+        "action_net.bias": torch.full((9,), 99.0),
+        "log_std": torch.full((9,), -2.5),
+        "value_net.bias": torch.zeros(1),
+    }
+
+    transferred, report = transfer_policy_state(
+        source,
+        target,
+        source_observation_size=82,
+        action_output_target_indices=(0, 1, 2, 3, 4, 8),
+    )
+
+    assert torch.all(transferred["action_net.weight"][5:8] == 0.0)
+    assert torch.all(transferred["action_net.bias"][5:8] == 0.0)
+    assert torch.all(transferred["log_std"][5:8] == -2.5)
+    assert torch.all(
+        transferred["action_net.weight"][[0, 1, 2, 3, 4, 8]]
+        == source["action_net.weight"]
+    )
+    assert torch.all(
+        transferred["action_net.bias"][[0, 1, 2, 3, 4, 8]]
+        == source["action_net.bias"]
+    )
+    assert torch.all(transferred["log_std"][[0, 1, 2, 3, 4, 8]] == -1.5)
+    assert transferred["value_net.bias"].item() == pytest.approx(7.0)
+    assert report["expanded_action_outputs"] == [
+        "action_net.weight",
+        "action_net.bias",
+        "log_std",
+    ]
+    assert report["action_output_target_indices"] == [0, 1, 2, 3, 4, 8]
+    assert report["skipped"] == []
+
+
+def test_frozen_action_expansion_trains_only_new_actor_rows() -> None:
+    torch = pytest.importorskip("torch")
+
+    class FakeMlpExtractor:
+        def __init__(self) -> None:
+            self.policy_net = torch.nn.Sequential(
+                torch.nn.Linear(2, 3),
+                torch.nn.ELU(),
+            )
+
+    class FakePolicy:
+        def __init__(self) -> None:
+            self.mlp_extractor = FakeMlpExtractor()
+            self.action_net = torch.nn.Linear(3, 5)
+            self.log_std = torch.nn.Parameter(torch.zeros(5))
+
+    policy = FakePolicy()
+    report = freeze_policy_for_action_expansion(
+        policy,
+        inherited_action_target_indices=(0, 1, 4),
+    )
+    latent = policy.mlp_extractor.policy_net(torch.ones(2))
+    loss = policy.action_net(latent).sum() + policy.log_std.sum()
+    loss.backward()
+
+    assert all(
+        parameter.grad is None
+        for parameter in policy.mlp_extractor.policy_net.parameters()
+    )
+    assert torch.all(policy.action_net.weight.grad[[0, 1, 4]] == 0.0)
+    assert torch.all(policy.action_net.bias.grad[[0, 1, 4]] == 0.0)
+    assert torch.all(policy.log_std.grad[[0, 1, 4]] == 0.0)
+    assert torch.all(policy.action_net.weight.grad[[2, 3]] != 0.0)
+    assert torch.all(policy.action_net.bias.grad[[2, 3]] != 0.0)
+    assert torch.all(policy.log_std.grad[[2, 3]] != 0.0)
+    assert report["new_trainable_action_indices"] == [2, 3]
+    assert report["value_network_trainable"] is True
 
 
 def test_balance_transfer_keeps_only_the_shared_48_value_prefix() -> None:
@@ -3277,6 +3363,12 @@ def test_swing_support_abduction_mask_preserves_lift_authority() -> None:
         mode="swing_plus_support_abduction",
     )
     assert np.flatnonzero(mask).tolist() == [0, 1, 2, 3, 4, 8]
+    hip_mask = placement_policy_action_mask(
+        dof_names,
+        target_leg="front_left",
+        mode="swing_plus_support_hips",
+    )
+    assert np.flatnonzero(hip_mask).tolist() == list(range(9))
     swing_only = placement_policy_action_mask(
         dof_names,
         target_leg="front_left",
@@ -3613,8 +3705,10 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
                     "balance_target_error_progress_per_m": 1000.0,
                     "support_margin_progress_per_m": 2000.0,
                     "swing_load_reduction_per_n": 5.0,
+                    "body_pitch_error_progress_per_rad": 500.0,
                     "maximum_progress_m_per_step": 0.010,
                     "maximum_load_progress_n_per_step": 1.0,
+                    "maximum_pitch_progress_rad_per_step": 0.020,
                 }
             }
             self.actions: list[np.ndarray] = []
@@ -3670,6 +3764,9 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
                     "placement_support_contact_fraction": 1.0,
                     "maximum_support_slip_m": 0.004,
                     "placement_upright_cosine": 0.985,
+                    "placement_body_pitch_rad": (
+                        0.08 if len(self.actions) == 2 else 0.12
+                    ),
                     "placement_transfer_base_target_error_m": (
                         0.004 if len(self.actions) == 2 else 0.009
                     ),
@@ -3703,7 +3800,7 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
         np.asarray((-0.5,), dtype=np.float32)
     )
     np.testing.assert_allclose(raw.actions[1], (-0.5, 0.0))
-    assert reward == pytest.approx(124.0)
+    assert reward == pytest.approx(134.0)
     assert terminated is True
     assert truncated is False
     assert result["phase_training_transfer_completed"] is True
@@ -3715,7 +3812,7 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
     )
     assert stats["minimum_target_transfer_swing_load_n"] == pytest.approx(0.2)
     assert stats["transfer_progress_reward"]["cumulative_reward"] == (
-        pytest.approx(17.0)
+        pytest.approx(27.0)
     )
     assert result["phase_training_transfer_balance_error_progress_m"] == (
         pytest.approx(0.005)
@@ -3726,9 +3823,15 @@ def test_transfer_training_controls_supports_and_ends_on_gate_acceptance() -> No
     assert result["phase_training_transfer_swing_load_reduction_n"] == (
         pytest.approx(1.0)
     )
+    assert result[
+        "phase_training_transfer_body_pitch_error_reduction_rad"
+    ] == pytest.approx(0.020)
     assert stats["transfer_progress_reward"][
         "cumulative_swing_load_reduction_n"
     ] == pytest.approx(1.0)
+    assert stats["transfer_progress_reward"][
+        "cumulative_body_pitch_error_reduction_rad"
+    ] == pytest.approx(0.020)
 
     observation, info = wrapped.reset(seed=12)
     np.testing.assert_allclose(observation, (9.0, 9.0, 9.0))

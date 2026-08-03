@@ -26,6 +26,7 @@ for module_dir in (str(ISAAC_DIR), str(RL_DIR), str(SCRIPT_DIR)):
 
 from _policy_transfer import (  # noqa: E402
     EXPANDABLE_INPUT_WEIGHTS,
+    freeze_policy_for_action_expansion,
     physical_action_output_ratios,
     policy_observation_prefix_compatibility,
     transfer_policy_state,
@@ -137,6 +138,29 @@ parser.add_argument(
     help=(
         "Initialize a new same-shape stair policy from another stair model. "
         "Policy parameters transfer; optimizer state does not."
+    ),
+)
+parser.add_argument(
+    "--initialize-stairs-source-action-mode",
+    choices=(
+        "support_only",
+        "swing_only",
+        "support_abduction_only",
+        "swing_plus_support_abduction",
+        "swing_plus_support_hips",
+    ),
+    default=None,
+    help=(
+        "Raw-joint mask represented by a compact stair initializer. Use this "
+        "only to expand a learned compact action into a strict superset."
+    ),
+)
+parser.add_argument(
+    "--freeze-inherited-stairs-policy-actions",
+    action="store_true",
+    help=(
+        "With compact stair action expansion, freeze the inherited actor and "
+        "six mapped outputs so PPO trains only newly appended action rows."
     ),
 )
 parser.add_argument(
@@ -298,6 +322,14 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--phase-residual-swing-support-hips",
+    action="store_true",
+    help=(
+        "Apply PPO to all three swing-leg joints plus hip abduction and hip "
+        "flexion on every support leg."
+    ),
+)
+parser.add_argument(
     "--phase-compact-residual-action",
     action="store_true",
     help=(
@@ -409,6 +441,22 @@ if sum(value is not None for value in initialization_options) > 1:
     parser.error(
         "--resume, --initialize-from-flat, --initialize-from-stairs, and "
         "--initialize-from-balance are mutually exclusive"
+    )
+if (
+    args.initialize_stairs_source_action_mode is not None
+    and args.initialize_from_stairs is None
+):
+    parser.error(
+        "--initialize-stairs-source-action-mode requires "
+        "--initialize-from-stairs"
+    )
+if (
+    args.freeze_inherited_stairs_policy_actions
+    and args.initialize_stairs_source_action_mode is None
+):
+    parser.error(
+        "--freeze-inherited-stairs-policy-actions requires "
+        "--initialize-stairs-source-action-mode"
     )
 if args.total_timesteps is not None and args.total_timesteps <= 0:
     parser.error("--total-timesteps must be positive")
@@ -542,6 +590,7 @@ phase_mask_flags = (
     args.phase_residual_swing_only,
     args.phase_residual_support_abduction_only,
     args.phase_residual_swing_support_abduction,
+    args.phase_residual_swing_support_hips,
 )
 if sum(phase_mask_flags) > 1:
     parser.error("phase residual joint masks are mutually exclusive")
@@ -551,10 +600,20 @@ if args.phase_compact_residual_action and not any(phase_mask_flags):
     parser.error(
         "--phase-compact-residual-action requires a phase residual joint mask"
     )
+if (
+    args.initialize_stairs_source_action_mode is not None
+    and not args.phase_compact_residual_action
+):
+    parser.error(
+        "--initialize-stairs-source-action-mode requires "
+        "--phase-compact-residual-action"
+    )
 
 phase_policy_action_size = 12
 if args.phase_compact_residual_action:
-    if args.phase_residual_swing_support_abduction:
+    if args.phase_residual_swing_support_hips:
+        phase_policy_action_size = 9
+    elif args.phase_residual_swing_support_abduction:
         phase_policy_action_size = 6
     elif args.phase_residual_support_only:
         phase_policy_action_size = 9
@@ -1292,6 +1351,15 @@ report: dict[str, object] = {
     "phase_residual_swing_support_abduction": (
         args.phase_residual_swing_support_abduction
     ),
+    "phase_residual_swing_support_hips": (
+        args.phase_residual_swing_support_hips
+    ),
+    "initialize_stairs_source_action_mode": (
+        args.initialize_stairs_source_action_mode
+    ),
+    "freeze_inherited_stairs_policy_actions": (
+        args.freeze_inherited_stairs_policy_actions
+    ),
     "phase_compact_residual_action": args.phase_compact_residual_action,
     "phase_snapshot_cache_enabled": not args.phase_disable_snapshot_cache,
     "phase_snapshot": (
@@ -1429,7 +1497,13 @@ try:
                 target_leg=str(args.phase_train_leg),
                 mode="swing_only",
             )
-        if args.phase_residual_swing_support_abduction:
+        if args.phase_residual_swing_support_hips:
+            target_residual_mask = placement_policy_action_mask(
+                raw_env.dof_names,
+                target_leg=str(args.phase_train_leg),
+                mode="swing_plus_support_hips",
+            )
+        elif args.phase_residual_swing_support_abduction:
             target_residual_mask = placement_policy_action_mask(
                 raw_env.dof_names,
                 target_leg=str(args.phase_train_leg),
@@ -1747,13 +1821,75 @@ try:
             source_model = PPO.load(str(transferred_from), device=args.device)
             source_observation_size = int(source_model.observation_space.shape[0])
             target_observation_size = int(model.observation_space.shape[0])
-            if tuple(source_model.action_space.shape) != tuple(
-                model.action_space.shape
-            ):
-                raise RuntimeError("Stair source and target action shapes differ")
+            source_action_size = int(source_model.action_space.shape[0])
+            target_action_size = int(model.action_space.shape[0])
+            action_output_target_indices: tuple[int, ...] | None = None
+            action_expansion_report: dict[str, object] | None = None
+            if source_action_size != target_action_size:
+                if args.initialize_stairs_source_action_mode is None:
+                    raise RuntimeError(
+                        "Stair source and target action shapes differ; compact "
+                        "expansion requires --initialize-stairs-source-action-mode"
+                    )
+                if target_residual_mask is None:
+                    raise RuntimeError(
+                        "Compact stair action expansion requires a target mask"
+                    )
+                source_action_mask = placement_policy_action_mask(
+                    raw_env.dof_names,
+                    target_leg=str(args.phase_train_leg),
+                    mode=str(args.initialize_stairs_source_action_mode),
+                )
+                source_raw_indices = np.flatnonzero(source_action_mask).tolist()
+                target_raw_indices = np.flatnonzero(target_residual_mask).tolist()
+                if len(source_raw_indices) != source_action_size:
+                    raise RuntimeError(
+                        "Declared stair source action mode does not match the "
+                        f"source policy: {len(source_raw_indices)} != "
+                        f"{source_action_size}"
+                    )
+                if len(target_raw_indices) != target_action_size:
+                    raise RuntimeError(
+                        "Target compact action mask does not match the policy"
+                    )
+                target_compact_index_by_raw = {
+                    raw_index: compact_index
+                    for compact_index, raw_index in enumerate(target_raw_indices)
+                }
+                missing_raw_indices = [
+                    raw_index
+                    for raw_index in source_raw_indices
+                    if raw_index not in target_compact_index_by_raw
+                ]
+                if missing_raw_indices:
+                    raise RuntimeError(
+                        "Target compact action is not a strict superset of the "
+                        f"source mask: missing raw indices {missing_raw_indices}"
+                    )
+                if target_action_size <= source_action_size:
+                    raise RuntimeError(
+                        "Compact stair action expansion requires a larger target"
+                    )
+                action_output_target_indices = tuple(
+                    target_compact_index_by_raw[raw_index]
+                    for raw_index in source_raw_indices
+                )
+                action_expansion_report = {
+                    "source_action_mode": (
+                        args.initialize_stairs_source_action_mode
+                    ),
+                    "source_raw_action_indices": source_raw_indices,
+                    "target_raw_action_indices": target_raw_indices,
+                    "source_to_target_compact_indices": list(
+                        action_output_target_indices
+                    ),
+                }
             source_state = source_model.policy.state_dict()
             target_state = model.policy.state_dict()
-            if source_observation_size == target_observation_size:
+            if (
+                source_observation_size == target_observation_size
+                and action_output_target_indices is None
+            ):
                 mismatched = [
                     name
                     for name, tensor in target_state.items()
@@ -1770,13 +1906,29 @@ try:
                     "mode": "exact_same_shape",
                     "expanded_inputs": [],
                 }
-            elif source_observation_size < target_observation_size:
+            elif source_observation_size <= target_observation_size:
                 transferred_state, stair_transfer_report = transfer_policy_state(
                     source_state,
                     target_state,
                     source_observation_size=source_observation_size,
+                    action_output_target_indices=(
+                        action_output_target_indices
+                    ),
                 )
-                stair_transfer_report["mode"] = "expanded_observation"
+                stair_transfer_report["mode"] = (
+                    "expanded_observation_and_action"
+                    if source_observation_size < target_observation_size
+                    and action_output_target_indices is not None
+                    else (
+                        "expanded_observation"
+                        if source_observation_size < target_observation_size
+                        else "expanded_action"
+                    )
+                )
+                if action_expansion_report is not None:
+                    stair_transfer_report["action_expansion"] = (
+                        action_expansion_report
+                    )
                 if stair_transfer_report["skipped"]:
                     raise RuntimeError(
                         "Expanded stair policy transfer skipped parameters: "
@@ -1794,6 +1946,19 @@ try:
                 )
                 stair_transfer_report["log_std_overridden_after_transfer"] = (
                     float(ppo_config["initial_log_std"])
+                )
+            if args.freeze_inherited_stairs_policy_actions:
+                if action_output_target_indices is None:
+                    raise RuntimeError(
+                        "Frozen inherited actions require an expanded action"
+                    )
+                stair_transfer_report["action_training_scope"] = (
+                    freeze_policy_for_action_expansion(
+                        model.policy,
+                        inherited_action_target_indices=(
+                            action_output_target_indices
+                        ),
+                    )
                 )
             report["stair_policy_transfer"] = {
                 "source_model": str(transferred_from),

@@ -196,6 +196,16 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--transfer-residual-swing-support-hips",
+    action="append",
+    default=[],
+    metavar="LEG",
+    help=(
+        "Map a compact transfer policy onto the swing leg plus hip abduction "
+        "and hip flexion on every support leg."
+    ),
+)
+parser.add_argument(
     "--post-transfer-model",
     action="append",
     default=[],
@@ -430,6 +440,13 @@ transfer_model_paths = _parse_leg_models(
 transfer_residual_swing_support_abduction = set(
     args.transfer_residual_swing_support_abduction
 )
+transfer_residual_swing_support_hips = set(
+    args.transfer_residual_swing_support_hips
+)
+if len(transfer_residual_swing_support_hips) != len(
+    args.transfer_residual_swing_support_hips
+):
+    parser.error("duplicate --transfer-residual-swing-support-hips leg")
 if len(transfer_residual_swing_support_abduction) != len(
     args.transfer_residual_swing_support_abduction
 ):
@@ -442,6 +459,10 @@ if not transfer_residual_swing_support_abduction.issubset(
     parser.error(
         "swing/support-abduction transfer masks require --transfer-model"
     )
+if not transfer_residual_swing_support_hips.issubset(transfer_model_paths):
+    parser.error("swing/support-hips transfer masks require --transfer-model")
+if transfer_residual_swing_support_abduction & transfer_residual_swing_support_hips:
+    parser.error("transfer compact action masks are mutually exclusive per leg")
 post_transfer_model_paths = _parse_leg_models(
     args.post_transfer_model,
     "--post-transfer-model",
@@ -571,6 +592,9 @@ report: dict[str, object] = {
     },
     "transfer_residual_swing_support_abduction": sorted(
         transfer_residual_swing_support_abduction
+    ),
+    "transfer_residual_swing_support_hips": sorted(
+        transfer_residual_swing_support_hips
     ),
     "post_transfer_models": {
         leg: str(path) for leg, path in post_transfer_model_paths.items()
@@ -880,9 +904,13 @@ try:
             )
         transfer_model = PPO.load(str(path), device=args.device)
         transfer_mode = (
-            "swing_plus_support_abduction"
-            if leg in transfer_residual_swing_support_abduction
-            else "support_only"
+            "swing_plus_support_hips"
+            if leg in transfer_residual_swing_support_hips
+            else (
+                "swing_plus_support_abduction"
+                if leg in transfer_residual_swing_support_abduction
+                else "support_only"
+            )
         )
         support_mask = placement_policy_action_mask(
             raw_env.dof_names,
@@ -990,9 +1018,13 @@ try:
             deterministic=not args.stochastic,
         )
         transfer_mode = (
-            "swing_plus_support_abduction"
-            if leg in transfer_residual_swing_support_abduction
-            else "support_only"
+            "swing_plus_support_hips"
+            if leg in transfer_residual_swing_support_hips
+            else (
+                "swing_plus_support_abduction"
+                if leg in transfer_residual_swing_support_abduction
+                else "support_only"
+            )
         )
         return expand_compact_masked_action(
             compact_action,

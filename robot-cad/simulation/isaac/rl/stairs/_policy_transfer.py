@@ -142,6 +142,7 @@ def transfer_policy_state(
     source_observation_size: int,
     shared_observation_prefix_size: int | None = None,
     action_output_ratios: Sequence[float] | None = None,
+    action_output_target_indices: Sequence[int] | None = None,
 ) -> tuple[dict[str, Any], dict[str, object]]:
     """Copy compatible parameters and zero new terrain-input columns.
 
@@ -167,7 +168,20 @@ def transfer_policy_state(
     }
     copied_exact: list[str] = []
     expanded_inputs: list[str] = []
+    expanded_action_outputs: list[str] = []
     skipped: list[dict[str, object]] = []
+    output_target_indices = (
+        None
+        if action_output_target_indices is None
+        else tuple(int(index) for index in action_output_target_indices)
+    )
+    if output_target_indices is not None:
+        if not output_target_indices:
+            raise ValueError("action_output_target_indices cannot be empty")
+        if any(index < 0 for index in output_target_indices):
+            raise ValueError("action output target indices cannot be negative")
+        if len(set(output_target_indices)) != len(output_target_indices):
+            raise ValueError("action output target indices must be unique")
     for name, target_tensor in target_state.items():
         source_tensor = source_state.get(name)
         if source_tensor is None:
@@ -194,6 +208,28 @@ def transfer_policy_state(
             expanded[:, :shared_prefix] = source_tensor[:, :shared_prefix]
             transferred[name] = expanded
             expanded_inputs.append(name)
+            continue
+        if (
+            output_target_indices is not None
+            and name in ("action_net.weight", "action_net.bias", "log_std")
+        ):
+            if (
+                source_tensor.ndim != target_tensor.ndim
+                or source_tensor.shape[0] != len(output_target_indices)
+                or target_tensor.shape[0] <= source_tensor.shape[0]
+                or tuple(source_tensor.shape[1:]) != tuple(target_tensor.shape[1:])
+                or max(output_target_indices) >= target_tensor.shape[0]
+            ):
+                raise ValueError(
+                    f"Unexpected transferable action shape for {name}: "
+                    f"{tuple(source_tensor.shape)} -> {tuple(target_tensor.shape)}"
+                )
+            expanded = target_tensor.detach().clone()
+            if name != "log_std":
+                expanded.zero_()
+            expanded[list(output_target_indices)] = source_tensor
+            transferred[name] = expanded
+            expanded_action_outputs.append(name)
             continue
         skipped.append(
             {
@@ -243,6 +279,12 @@ def transfer_policy_state(
         "copied_exact": copied_exact,
         "expanded_input_count": len(expanded_inputs),
         "expanded_inputs": expanded_inputs,
+        "expanded_action_outputs": expanded_action_outputs,
+        "action_output_target_indices": (
+            list(output_target_indices)
+            if output_target_indices is not None
+            else None
+        ),
         "skipped": skipped,
         "optimizer_transferred": False,
         "new_input_columns_initialized_to_zero": True,
@@ -254,3 +296,62 @@ def transfer_policy_state(
         "rescaled_action_outputs": rescaled_outputs,
     }
     return transferred, report
+
+
+def freeze_policy_for_action_expansion(
+    policy: Any,
+    *,
+    inherited_action_target_indices: Sequence[int],
+) -> dict[str, object]:
+    """Freeze an inherited actor and train only newly appended action rows.
+
+    The value network remains trainable. The policy feature network and the
+    inherited output rows receive no gradients, so a compact source skill is
+    preserved while neutral action rows learn a strict action-space superset.
+    """
+
+    action_net = getattr(policy, "action_net", None)
+    log_std = getattr(policy, "log_std", None)
+    mlp_extractor = getattr(policy, "mlp_extractor", None)
+    policy_net = getattr(mlp_extractor, "policy_net", None)
+    if action_net is None or log_std is None or policy_net is None:
+        raise ValueError("policy does not expose PPO actor expansion parameters")
+    action_size = int(action_net.weight.shape[0])
+    if (
+        action_net.bias.shape != (action_size,)
+        or log_std.shape != (action_size,)
+    ):
+        raise ValueError("policy action outputs do not share one flat shape")
+    inherited = tuple(int(index) for index in inherited_action_target_indices)
+    if (
+        not inherited
+        or any(index < 0 or index >= action_size for index in inherited)
+        or len(set(inherited)) != len(inherited)
+    ):
+        raise ValueError("inherited action target indices are invalid")
+    new_indices = tuple(
+        index for index in range(action_size) if index not in set(inherited)
+    )
+    if not new_indices:
+        raise ValueError("action expansion has no new trainable outputs")
+
+    frozen_policy_parameters = 0
+    for parameter in policy_net.parameters():
+        parameter.requires_grad_(False)
+        frozen_policy_parameters += int(parameter.numel())
+
+    for parameter in (action_net.weight, action_net.bias, log_std):
+        row_mask = parameter.new_zeros(parameter.shape)
+        row_mask[list(new_indices)] = 1.0
+        parameter.register_hook(
+            lambda gradient, mask=row_mask: gradient * mask
+        )
+
+    return {
+        "mode": "frozen_actor_train_new_action_rows",
+        "action_size": action_size,
+        "inherited_action_target_indices": list(inherited),
+        "new_trainable_action_indices": list(new_indices),
+        "frozen_policy_parameter_count": frozen_policy_parameters,
+        "value_network_trainable": True,
+    }
