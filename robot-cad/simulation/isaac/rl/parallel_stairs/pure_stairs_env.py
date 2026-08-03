@@ -1,0 +1,323 @@
+"""Pure-reward vectorized stair environment for Drobot."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import gymnasium as gym
+import isaaclab.sim as sim_utils
+import torch
+import warp as wp
+from isaaclab import cloner
+from isaaclab.assets import Articulation
+from isaaclab.envs import DirectRLEnv
+from isaaclab.sensors import ContactSensor, RayCaster
+from isaaclab.utils.math import quat_apply
+
+from .pure_stairs_env_cfg import DrobotPureStairsEnvCfg
+
+DISTAL_LINK_LENGTH_M = 0.159896689
+FOOT_CONTACT_RADIUS_M = 0.0125
+
+
+class DrobotPureStairsEnv(DirectRLEnv):
+    """Learn stair climbing without prescribed phases, leg order, or trajectories."""
+
+    cfg: DrobotPureStairsEnvCfg
+
+    def __init__(
+        self,
+        cfg: DrobotPureStairsEnvCfg,
+        render_mode: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(cfg, render_mode, **kwargs)
+
+        self._actions = torch.zeros(
+            self.num_envs, gym.spaces.flatdim(self.single_action_space), device=self.device
+        )
+        self._previous_actions = torch.zeros_like(self._actions)
+        self._joint_scale = torch.tensor(
+            [
+                self.cfg.action_scale_abduction_rad
+                if name.endswith("hip_abduction")
+                else self.cfg.action_scale_hip_rad
+                if name.endswith("hip_flexion")
+                else self.cfg.action_scale_knee_rad
+                for name in self._robot.joint_names
+            ],
+            dtype=torch.float32,
+            device=self.device,
+        )
+        if len(self._robot.joint_names) != 12:
+            raise RuntimeError(f"Expected 12 joints, got {self._robot.joint_names}")
+
+        self._base_ids, _ = self._contact_sensor.find_sensors("base_link")
+        self._foot_sensor_ids, self._foot_sensor_names = self._contact_sensor.find_sensors(
+            ".*_distal_link"
+        )
+        self._foot_body_ids, self._foot_body_names = self._robot.find_bodies(
+            ".*_distal_link"
+        )
+        if len(self._foot_sensor_ids) != 4 or len(self._foot_body_ids) != 4:
+            raise RuntimeError(
+                "Expected four distal foot bodies; got "
+                f"sensor={self._foot_sensor_names}, bodies={self._foot_body_names}"
+            )
+
+        self._depth_pending = torch.ones((self.num_envs, 24), device=self.device)
+        self._depth_observation = torch.ones_like(self._depth_pending)
+        self._depth_frame = 0
+        self._previous_root_x = torch.zeros(self.num_envs, device=self.device)
+        self._previous_root_z = torch.zeros(self.num_envs, device=self.device)
+        self._episode_max_progress = torch.zeros(self.num_envs, device=self.device)
+        self._episode_max_base_gain = torch.zeros(self.num_envs, device=self.device)
+        self._episode_max_foot_clearance = torch.zeros(self.num_envs, device=self.device)
+        self._episode_best_tread_contacts = torch.zeros(self.num_envs, device=self.device)
+        self._success = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self._failed = torch.zeros_like(self._success)
+
+    def _setup_scene(self):
+        self._robot = Articulation(self.cfg.robot)
+        self.scene.articulations["robot"] = self._robot
+        self._contact_sensor = ContactSensor(self.cfg.contact_sensor)
+        self.scene.sensors["contact_sensor"] = self._contact_sensor
+        self._depth_sensor = RayCaster(self.cfg.depth_sensor)
+        self.scene.sensors["depth_sensor"] = self._depth_sensor
+
+        self.cfg.terrain.num_envs = self.scene.cfg.num_envs
+        self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
+        self._terrain = self.cfg.terrain.class_type(self.cfg.terrain)
+
+        src, dest = "/World/envs/env_0", "/World/envs/env_{}"
+        positions = cloner.grid_transforms(
+            self.scene.num_envs, self.scene.cfg.env_spacing, device=self.device
+        )[0]
+        plan = cloner.clone_plan_from_env_0(
+            src, dest, self.scene.num_envs, self.device, positions
+        )
+        cloner.replicate(plan, stage=self.scene.stage)
+        if self.device == "cpu":
+            self.scene.filter_collisions(global_prim_paths=[self.cfg.terrain.prim_path])
+
+        light = sim_utils.DomeLightCfg(intensity=1800.0, color=(0.8, 0.8, 0.8))
+        light.func("/World/Light", light)
+
+    def _pre_physics_step(self, actions: torch.Tensor):
+        self._previous_actions.copy_(self._actions)
+        self._actions = torch.clamp(actions, -1.0, 1.0)
+        self._processed_actions = (
+            self._robot.data.default_joint_pos.torch + self._joint_scale * self._actions
+        )
+
+    def _apply_action(self):
+        self._robot.set_joint_position_target_index(target=self._processed_actions)
+
+    def _foot_forces(self) -> torch.Tensor:
+        forces = self._contact_sensor.data.net_forces_w.torch[:, self._foot_sensor_ids]
+        return torch.linalg.norm(forces, dim=-1)
+
+    def _terrain_height(self, x_from_origin: torch.Tensor) -> torch.Tensor:
+        step = torch.floor(
+            (x_from_origin - self.cfg.stair_start_from_origin_m)
+            / self.cfg.stair_tread_depth_m
+        ) + 1.0
+        step = torch.clamp(step, 0.0, float(self.cfg.stair_step_count))
+        return step * self.cfg.stair_rise_m
+
+    def _foot_tip_positions(self) -> torch.Tensor:
+        """Return the four modeled fork-tip contact points in world coordinates."""
+        body_pos = self._robot.data.body_pos_w.torch[:, self._foot_body_ids]
+        body_quat = self._robot.data.body_quat_w.torch[:, self._foot_body_ids]
+        local_tip = torch.zeros_like(body_pos)
+        local_tip[:, :, 0] = DISTAL_LINK_LENGTH_M
+        rotated_tip = quat_apply(
+            body_quat.reshape(-1, 4), local_tip.reshape(-1, 3)
+        ).reshape(self.num_envs, 4, 3)
+        tip_pos = body_pos + rotated_tip
+        tip_pos[:, :, 2] -= FOOT_CONTACT_RADIUS_M
+        return tip_pos
+
+    def _read_depth(self) -> torch.Tensor:
+        hits = self._depth_sensor.data.ray_hits_w.torch
+        starts = self._depth_sensor.data.pos_w.torch.unsqueeze(1)
+        distances = torch.linalg.norm(hits - starts, dim=-1)
+        distances = torch.nan_to_num(
+            distances, nan=4.0, posinf=4.0, neginf=4.0
+        ).clamp(0.02, 4.0)
+        grid = distances.reshape(self.num_envs, 8, 8)
+
+        accuracy = torch.where(grid <= 0.20, 0.015, 0.05 * grid)
+        grid = grid + (2.0 * torch.rand_like(grid) - 1.0) * accuracy
+        dropout = torch.rand_like(grid) < 0.05
+        grid = torch.where(dropout, torch.full_like(grid, 4.0), grid).clamp(0.02, 4.0)
+
+        lanes = [grid[:, :, 0:3], grid[:, :, 3:5], grid[:, :, 5:8]]
+        compressed = torch.cat([lane.mean(dim=2) for lane in lanes], dim=1)
+        return (compressed / 1.5).clamp(0.0, 1.0)
+
+    def _update_depth_latency(self):
+        # Control is 30 Hz; every second control frame is one 15 Hz sensor frame.
+        self._depth_frame += 1
+        if self._depth_frame % 2 == 0:
+            self._depth_observation.copy_(self._depth_pending)
+            self._depth_pending.copy_(self._read_depth())
+
+    def _get_observations(self) -> dict[str, torch.Tensor]:
+        self._update_depth_latency()
+        forces = self._foot_forces()
+        contacts = torch.tanh(forces / 20.0)
+        obs = torch.cat(
+            (
+                self._robot.data.root_ang_vel_b.torch * 0.25,
+                self._robot.data.projected_gravity_b.torch,
+                self._robot.data.joint_pos.torch
+                - self._robot.data.default_joint_pos.torch,
+                self._robot.data.joint_vel.torch * 0.20,
+                self._previous_actions,
+                contacts,
+                self._depth_observation,
+            ),
+            dim=-1,
+        )
+        return {"policy": torch.clamp(obs, -10.0, 10.0)}
+
+    def _get_rewards(self) -> torch.Tensor:
+        root_pos = self._robot.data.root_pos_w.torch
+        root_x = root_pos[:, 0]
+        root_z = root_pos[:, 2]
+        x_from_origin = root_x - self._terrain.env_origins[:, 0]
+
+        foot_pos = self._foot_tip_positions()
+        foot_x = foot_pos[:, :, 0] - self._terrain.env_origins[:, 0:1]
+        foot_ground = self._terrain_height(foot_x)
+        foot_clearance = foot_pos[:, :, 2] - self._terrain.env_origins[:, 2:3] - foot_ground
+        max_clearance = foot_clearance.max(dim=1).values
+
+        forces = self._foot_forces()
+        contact = forces > 1.0
+        on_tread = contact & (torch.abs(foot_clearance) < 0.025) & (foot_ground > 0.0)
+        tread_contacts = torch.sum(on_tread.float(), dim=1)
+
+        progress_delta = torch.clamp(root_x - self._previous_root_x, -0.02, 0.03)
+        height_delta = torch.clamp(root_z - self._previous_root_z, -0.02, 0.03)
+        new_clearance = torch.clamp(
+            max_clearance - self._episode_max_foot_clearance, 0.0, 0.04
+        )
+        lift_hold = torch.clamp(max_clearance / 0.19, 0.0, 1.0)
+        upright_error = torch.sum(
+            torch.square(self._robot.data.projected_gravity_b.torch[:, :2]), dim=1
+        )
+        action_rate = torch.sum(
+            torch.square(self._actions - self._previous_actions), dim=1
+        )
+        effort = torch.sum(
+            torch.square(self._robot.data.applied_torque.torch / 0.8825985), dim=1
+        )
+        body_rate = torch.sum(
+            torch.square(self._robot.data.root_ang_vel_b.torch[:, :2]), dim=1
+        )
+
+        reward = (
+            0.01
+            + 60.0 * progress_delta
+            + 45.0 * height_delta
+            + 12.0 * new_clearance
+            + 0.04 * lift_hold
+            + 0.20 * tread_contacts
+            - 0.08 * upright_error
+            - 0.002 * action_rate
+            - 0.0005 * effort
+            - 0.002 * body_rate
+        )
+        reward = torch.where(self._failed, reward - 5.0, reward)
+        reward = torch.where(self._success, reward + 25.0, reward)
+
+        self._previous_root_x.copy_(root_x)
+        self._previous_root_z.copy_(root_z)
+        self._episode_max_progress = torch.maximum(self._episode_max_progress, x_from_origin)
+        self._episode_max_base_gain = torch.maximum(
+            self._episode_max_base_gain,
+            root_z - self._terrain.env_origins[:, 2] - 0.46,
+        )
+        self._episode_max_foot_clearance = torch.maximum(
+            self._episode_max_foot_clearance, max_clearance
+        )
+        self._episode_best_tread_contacts = torch.maximum(
+            self._episode_best_tread_contacts, tread_contacts
+        )
+        return reward
+
+    def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
+        root = self._robot.data.root_pos_w.torch
+        local = root - self._terrain.env_origins
+        upright_cosine = -self._robot.data.projected_gravity_b.torch[:, 2]
+        self._failed = (
+            (local[:, 2] < self.cfg.minimum_base_height_m)
+            | (upright_cosine < self.cfg.minimum_upright_cosine)
+            | (torch.abs(local[:, 1]) > self.cfg.maximum_lateral_deviation_m)
+            | (local[:, 0] < -0.40)
+        )
+        self._success = (
+            (local[:, 0] >= self.cfg.top_success_x_from_origin_m)
+            & (local[:, 2] >= self.cfg.minimum_top_base_height_m)
+            & (upright_cosine >= 0.75)
+        )
+        time_out = self.episode_length_buf >= self.max_episode_length - 1
+        return self._failed | self._success, time_out
+
+    def _reset_idx(self, env_ids: Sequence[int] | torch.Tensor | None):
+        if env_ids is None:
+            env_ids = wp.to_torch(self._robot._ALL_INDICES)
+        env_ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long)
+
+        if len(env_ids) > 0:
+            self.extras.setdefault("log", {})["Metrics/max_progress_m"] = (
+                self._episode_max_progress[env_ids].mean().item()
+            )
+            self.extras.setdefault("log", {})["Metrics/max_base_gain_m"] = (
+                self._episode_max_base_gain[env_ids].mean().item()
+            )
+            self.extras.setdefault("log", {})["Metrics/max_foot_clearance_m"] = (
+                self._episode_max_foot_clearance[env_ids].mean().item()
+            )
+            self.extras.setdefault("log", {})["Metrics/best_tread_contacts"] = (
+                self._episode_best_tread_contacts[env_ids].mean().item()
+            )
+            self.extras.setdefault("log", {})["Metrics/success_rate"] = (
+                self._success[env_ids].float().mean().item()
+            )
+
+        self._robot.reset(env_ids)
+        super()._reset_idx(env_ids)
+        if len(env_ids) == self.num_envs:
+            self.episode_length_buf[:] = torch.randint_like(
+                self.episode_length_buf, high=int(self.max_episode_length)
+            )
+
+        joint_pos = self._robot.data.default_joint_pos.torch[env_ids].clone()
+        joint_pos += 0.01 * (2.0 * torch.rand_like(joint_pos) - 1.0)
+        joint_vel = torch.zeros_like(self._robot.data.default_joint_vel.torch[env_ids])
+        root_pose = self._robot.data.default_root_pose.torch[env_ids].clone()
+        root_pose[:, :3] += self._terrain.env_origins[env_ids]
+        root_pose[:, 0] += 0.02 * (2.0 * torch.rand(len(env_ids), device=self.device) - 1.0)
+        root_pose[:, 1] += 0.01 * (2.0 * torch.rand(len(env_ids), device=self.device) - 1.0)
+        root_vel = torch.zeros_like(self._robot.data.default_root_vel.torch[env_ids])
+
+        self._robot.write_root_pose_to_sim_index(root_pose=root_pose, env_ids=env_ids)
+        self._robot.write_root_velocity_to_sim_index(root_velocity=root_vel, env_ids=env_ids)
+        self._robot.write_joint_position_to_sim_index(position=joint_pos, env_ids=env_ids)
+        self._robot.write_joint_velocity_to_sim_index(velocity=joint_vel, env_ids=env_ids)
+
+        self._actions[env_ids] = 0.0
+        self._previous_actions[env_ids] = 0.0
+        self._depth_pending[env_ids] = 1.0
+        self._depth_observation[env_ids] = 1.0
+        self._previous_root_x[env_ids] = root_pose[:, 0]
+        self._previous_root_z[env_ids] = root_pose[:, 2]
+        self._episode_max_progress[env_ids] = 0.0
+        self._episode_max_base_gain[env_ids] = 0.0
+        self._episode_max_foot_clearance[env_ids] = 0.0
+        self._episode_best_tread_contacts[env_ids] = 0.0
+        self._success[env_ids] = False
+        self._failed[env_ids] = False
