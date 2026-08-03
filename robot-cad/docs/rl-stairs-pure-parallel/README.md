@@ -46,6 +46,22 @@ fork-tip clearance, and two simultaneous tread contacts. Full-climb success
 remained 0%. The selected six-second deterministic iteration-260 playback did
 not climb the first step.
 
+A third round simplified the objective before returning to tread placement.
+The direct first-tread curriculum first processed 168,960 transitions without
+a tread contact, while frequently producing 190 mm or greater unsupported foot
+clearance. Training then used a symmetric `100 -> 140 -> 190 mm` supported-lift
+curriculum: any foot may lift, but at least three feet must remain in
+force-verified support and the body must remain upright. The three stages
+processed 307,200, 307,200, and 460,800 transitions respectively.
+
+The final 190 mm stage produced intermittent strict successes. Its best logged
+reset batch was 50% successful at iteration 149, and maximum observed foot
+clearance was 0.3126 m. The success did not converge: later batches returned to
+0%, and the selected deterministic iteration-220 review shows autonomous lift
+attempts and resets rather than a clean sustained success. This establishes
+that the simulated mechanism and policy can sometimes satisfy the 190 mm
+supported-lift gate; it does not yet establish robustness or stair climbing.
+
 ## Editable sources
 
 - `simulation/isaac/rl/parallel_stairs/pure_stairs_env.py`: vectorized
@@ -105,6 +121,13 @@ action. Episodes terminate for insufficient base height, excessive tilt,
 excessive lateral displacement, walking backward out of the approach, or the
 12-second time limit.
 
+The foot-lift precursor adds no phase or leg identity. Its continuous reward
+combines symmetric maximum clearance with retained support, and its staged
+success gates require 100 mm for six steps, 140 mm for seven steps, and finally
+190 mm for eight steps. Base contact is penalized; it becomes a fall failure
+only when accompanied by meaningful height loss or tilt, allowing low postures
+without treating every incidental sensor impulse as a terminal fall.
+
 The terrain uses four solid steps, a 0.45 m approach measured from the robot
 spawn origin, and a 0.75 m top platform. Static/dynamic friction are 1.10/0.90.
 
@@ -148,6 +171,10 @@ as an absolute path:
 - The second-round deterministic playback wrote a six-second, 180-frame MP4
   from iteration 260. RGB was used only to record the review; the actor still
   consumed IMU, depth, joint, previous-action, and foot-load values only.
+- The supported-lift stages processed 1,075,200 transitions. The final 190 mm
+  stage reached a best logged 50% reset-batch success rate, but success remained
+  intermittent. The model-220 deterministic recording is therefore an attempt
+  review, not a pass video.
 - No simulation result here proves hardware transfer, robust first-step
   acquisition, or a full climb. Continue training and evaluate several unseen
   seeds before considering mechanical changes or a larger neural network.

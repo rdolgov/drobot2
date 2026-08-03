@@ -165,6 +165,20 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     action_scale_knee_rad = 0.90
     initial_base_height_m = 0.46
     reset_yaw_deg = 0.0
+    reset_forward_offset_m = 0.0
+    reset_forward_jitter_m = 0.02
+    first_step_curriculum = False
+    first_step_min_base_gain_m = 0.06
+    first_step_hold_steps = 8
+    foot_lift_curriculum = False
+    foot_lift_height_m = 0.19
+    foot_lift_hold_steps = 8
+    support_reward_scale = 0.06
+    supported_lift_reward_scale = 0.0
+    reward_tread_count = 4
+    base_contact_grace_steps = 30
+    base_contact_failure_drop_m = 0.08
+    base_contact_failure_upright_cosine = 0.75
     stair_rise_m = 0.18
     stair_tread_depth_m = 0.25
     stair_start_from_origin_m = 0.45
@@ -221,3 +235,43 @@ class DrobotPureStairsSidewaysHipEnvCfg(DrobotPureStairsHipEnvCfg):
         super().__post_init__()
         # Isaac Lab asset configs use quaternion order (x, y, z, w).
         self.robot.init_state.rot = (0.0, 0.0, 0.7071067812, 0.7071067812)
+
+
+@configclass
+class DrobotPureStairsFirstStepHipEnvCfg(DrobotPureStairsHipEnvCfg):
+    """Pure-PPO curriculum for supported acquisition of the first tread."""
+
+    episode_length_s = 8.0
+    reset_forward_offset_m = 0.10
+    reset_forward_jitter_m = 0.03
+    first_step_curriculum = True
+    reward_tread_count = 1
+
+
+@configclass
+class DrobotPureStairsFootLiftHipEnvCfg(DrobotPureStairsHipEnvCfg):
+    """Pure-PPO precursor: lift any foot 19 cm while retaining three-foot support."""
+
+    episode_length_s = 6.0
+    reset_forward_offset_m = -0.10
+    reset_forward_jitter_m = 0.02
+    foot_lift_curriculum = True
+    reward_tread_count = 1
+    support_reward_scale = 0.25
+    supported_lift_reward_scale = 1.50
+
+
+@configclass
+class DrobotPureStairsFootLift10HipEnvCfg(DrobotPureStairsFootLiftHipEnvCfg):
+    """First height stage for learning stable three-foot support."""
+
+    foot_lift_height_m = 0.10
+    foot_lift_hold_steps = 6
+
+
+@configclass
+class DrobotPureStairsFootLift14HipEnvCfg(DrobotPureStairsFootLiftHipEnvCfg):
+    """Intermediate height stage before the required 19 cm hold."""
+
+    foot_lift_height_m = 0.14
+    foot_lift_hold_steps = 7

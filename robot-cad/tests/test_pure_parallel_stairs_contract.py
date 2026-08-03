@@ -122,3 +122,49 @@ def test_low_sideways_and_hip_variants_keep_pure_rl_contract() -> None:
     assert "soft_joint_pos_limits" in pre_step
     assert "placement_score" in reward
     assert "tread_potential" in reward
+
+
+def test_first_step_curriculum_requires_supported_tread_hold() -> None:
+    cfg_source = _source("pure_stairs_env_cfg.py")
+    first_step = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepHipEnvCfg"
+    )
+    assert first_step["reset_forward_offset_m"] == 0.10
+    assert first_step["first_step_curriculum"] is True
+    assert first_step["reward_tread_count"] == 1
+
+    env_source = _source("pure_stairs_env.py")
+    dones = _method_source(env_source, "DrobotPureStairsEnv", "_get_dones")
+    reward = _method_source(env_source, "DrobotPureStairsEnv", "_get_rewards")
+    assert "support_count >= 3.0" in dones
+    assert "_tread_hold_steps" in dones
+    assert "first_step_min_base_gain_m" in dones
+    assert "base_contact" in dones
+    assert "base_contact_failure" in dones
+    assert "retained_support" in reward
+
+
+def test_foot_lift_curriculum_is_symmetric_and_supported() -> None:
+    cfg_source = _source("pure_stairs_env_cfg.py")
+    foot_lift = _class_assignments(
+        cfg_source, "DrobotPureStairsFootLiftHipEnvCfg"
+    )
+    assert foot_lift["foot_lift_curriculum"] is True
+    assert foot_lift["reset_forward_offset_m"] == -0.10
+    assert foot_lift["supported_lift_reward_scale"] == 1.50
+
+    env_source = _source("pure_stairs_env.py")
+    dones = _method_source(env_source, "DrobotPureStairsEnv", "_get_dones")
+    assert "foot_clearance.max" in dones
+    assert "support_count >= 3.0" in dones
+    assert "foot_lift_height_m" in dones
+    assert "_lift_hold_steps" in dones
+
+    reward = _method_source(env_source, "DrobotPureStairsEnv", "_get_rewards")
+    assert "supported_lift" in reward
+    assert "supported_lift_reward_scale" in reward
+
+    lift_10 = _class_assignments(cfg_source, "DrobotPureStairsFootLift10HipEnvCfg")
+    lift_14 = _class_assignments(cfg_source, "DrobotPureStairsFootLift14HipEnvCfg")
+    assert lift_10["foot_lift_height_m"] == 0.10
+    assert lift_14["foot_lift_height_m"] == 0.14

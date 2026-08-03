@@ -62,3 +62,26 @@ class DrobotPureStairsLowHipPPORunnerCfg(DrobotPureStairsPPORunnerCfg):
 @configclass
 class DrobotPureStairsSidewaysHipPPORunnerCfg(DrobotPureStairsPPORunnerCfg):
     experiment_name = "drobot_pure_stairs_sideways_hip_180x250_direct"
+
+
+@configclass
+class DrobotPureStairsFirstStepHipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
+    experiment_name = "drobot_pure_stairs_first_step_hip_180x250_direct"
+
+
+@configclass
+class DrobotPureStairsFootLiftHipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
+    experiment_name = "drobot_pure_stairs_foot_lift_hip_direct"
+    save_interval = 10
+
+
+@configclass
+class DrobotPureStairsFootLift10HipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
+    experiment_name = "drobot_pure_stairs_foot_lift_10_hip_direct"
+    save_interval = 10
+
+
+@configclass
+class DrobotPureStairsFootLift14HipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
+    experiment_name = "drobot_pure_stairs_foot_lift_14_hip_direct"
+    save_interval = 10
