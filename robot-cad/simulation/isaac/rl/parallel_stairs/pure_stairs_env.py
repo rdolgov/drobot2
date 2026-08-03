@@ -336,7 +336,7 @@ class DrobotPureStairsEnv(DirectRLEnv):
             0.0,
             1.0,
         )
-        tread_transfer = tread_binary * base_gain_fraction
+        tread_transfer = required_tread_binary * base_gain_fraction
         narrow_transfer = narrow_tread_potential * base_gain_fraction
         upright_error = torch.sum(
             torch.square(self._robot.data.projected_gravity_b.torch[:, :2]), dim=1
@@ -378,7 +378,7 @@ class DrobotPureStairsEnv(DirectRLEnv):
             + self.cfg.tread_transfer_reward_scale * tread_transfer
             + self.cfg.narrow_transfer_reward_scale * narrow_transfer
             + self.cfg.first_step_completion_reward_scale * first_step_completion
-            + self.cfg.tread_height_delta_scale * tread_binary * height_delta
+            + self.cfg.tread_height_delta_scale * required_tread_binary * height_delta
             - 0.08 * upright_error
             - 0.002 * action_rate
             - 0.0005 * effort

@@ -333,6 +333,42 @@ class DrobotPureStairsFirstStepBroadSupportRetentionHipEnvCfg(
 
 
 @configclass
+class DrobotPureStairsFirstStepWidth105SupportRetentionHipEnvCfg(
+    DrobotPureStairsFirstStepContactRetentionHipEnvCfg
+):
+    """First width curriculum: keep contact within +/-105 mm of tread center."""
+
+    centered_tread_half_width_m = 0.105
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth90SupportRetentionHipEnvCfg(
+    DrobotPureStairsFirstStepContactRetentionHipEnvCfg
+):
+    """Second width curriculum: keep contact within +/-90 mm of tread center."""
+
+    centered_tread_half_width_m = 0.090
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Rise10HipEnvCfg(
+    DrobotPureStairsFirstStepWidth105SupportRetentionHipEnvCfg
+):
+    """Require 10 mm body rise while retaining a +/-105 mm four-support landing."""
+
+    first_step_min_base_gain_m = 0.01
+    first_step_require_base_gain = True
+    first_step_hold_steps = 4
+    progress_delta_reward_scale = 10.0
+    height_delta_reward_scale = 5.0
+    tread_hold_reward_scale = 3.0
+    tread_transfer_reward_scale = 10.0
+    narrow_transfer_reward_scale = 0.0
+    tread_height_delta_scale = 200.0
+    first_step_completion_reward_scale = 15.0
+
+
+@configclass
 class DrobotPureStairsFirstStepLandingLowHipEnvCfg(
     DrobotPureStairsFirstStepLandingHipEnvCfg
 ):

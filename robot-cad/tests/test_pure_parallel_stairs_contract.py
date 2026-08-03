@@ -358,3 +358,66 @@ def test_broad_support_retention_is_a_single_constraint_bridge() -> None:
     assert broad["retained_ground_support_reward_scale"] == 3.0
     assert "required_tread_binary" in env_source
     assert "Drobot-Pure-Stairs-First-Step-Broad-Support-Retention-Hip-Direct" in registration
+
+
+def test_width105_curriculum_narrows_only_the_valid_contact_band() -> None:
+    cfg_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
+    ).read_text(encoding="utf-8")
+    runner_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
+    ).read_text(encoding="utf-8")
+    registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
+        encoding="utf-8"
+    )
+
+    width105 = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepWidth105SupportRetentionHipEnvCfg"
+    )
+    assert width105["centered_tread_half_width_m"] == 0.105
+    assert "DrobotPureStairsFirstStepContactRetentionHipEnvCfg" in cfg_source
+    assert "DrobotPureStairsFirstStepWidth105SupportRetentionHipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-First-Step-Width105-Support-Retention-Hip-Direct" in registration
+
+
+def test_width90_curriculum_continues_gradual_tread_narrowing() -> None:
+    cfg_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
+    ).read_text(encoding="utf-8")
+    runner_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
+    ).read_text(encoding="utf-8")
+    registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
+        encoding="utf-8"
+    )
+
+    width90 = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepWidth90SupportRetentionHipEnvCfg"
+    )
+    assert width90["centered_tread_half_width_m"] == 0.090
+    assert "DrobotPureStairsFirstStepWidth90SupportRetentionHipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-First-Step-Width90-Support-Retention-Hip-Direct" in registration
+
+
+def test_width105_body_rise_requires_contact_gated_height_transfer() -> None:
+    env_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env.py"
+    ).read_text(encoding="utf-8")
+    cfg_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
+    ).read_text(encoding="utf-8")
+    registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
+        encoding="utf-8"
+    )
+
+    rise10 = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepWidth105Rise10HipEnvCfg"
+    )
+    assert rise10["first_step_min_base_gain_m"] == 0.01
+    assert rise10["first_step_require_base_gain"] is True
+    assert rise10["first_step_hold_steps"] == 4
+    assert rise10["tread_transfer_reward_scale"] == 10.0
+    assert rise10["narrow_transfer_reward_scale"] == 0.0
+    assert "tread_transfer = required_tread_binary * base_gain_fraction" in env_source
+    assert "tread_height_delta_scale * required_tread_binary * height_delta" in env_source
+    assert "Drobot-Pure-Stairs-First-Step-Width105-Rise10-Hip-Direct" in registration

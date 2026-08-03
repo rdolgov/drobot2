@@ -169,8 +169,20 @@ unseen noisy-sensor seed 1120. This is a small but genuine mean-policy result:
 the held-out rate is close to the stochastic training rate. A subsequent
 184,320-transition transfer to the stricter centered-contact gate achieved
 0/5,433, so that centered checkpoint was rejected. Model 556 from the broad
-four-support stage is retained as the new curriculum checkpoint. It still does
-not raise the body, complete a step, or climb the staircase.
+four-support stage remained the starting point for a gradual width curriculum.
+
+The first width stage removed the outer 20 mm from each end of the 250 mm tread,
+requiring contact inside a centered `+/-105 mm` band while retaining all four
+supports. It produced 7/7,322 stochastic successes (0.0956%) over 245,760
+transitions. Despite that lower exploratory rate, model 635 preserved the mean
+policy result on unseen noisy-sensor seed 1123: 3/1,248 (0.2404%), effectively
+identical to model 556's 3/1,245 broad-band result. A further `+/-90 mm` stage
+collapsed to 1/6,983 stochastic (0.0143%) and 0/1,153 deterministic, so model
+714 was rejected. Finally, a contact-gated 10 mm body-rise transfer from model
+635 processed 184,320 transitions and achieved 0/5,379. Model 635 is the new
+selected curriculum checkpoint: it improves the placement constraint without
+losing measured mean-policy repeatability, but it still does not raise the body,
+complete a step, or climb the staircase.
 
 ## Editable sources
 
@@ -295,6 +307,10 @@ as an absolute path:
 - The broad four-support model-556 mean achieved 3/1,245 (0.2410%) held-out
   landings after 23/7,283 (0.3158%) during stochastic PPO. The stricter centered
   transfer remained 0/5,433 and was rejected.
+- Width105 model 635 retained 3/1,248 (0.2404%) held-out four-support landings
+  after narrowing the accepted contact band by 40 mm total. Width90 fell to
+  0/1,153 deterministic, and the contact-gated 10 mm body-rise bridge remained
+  0/5,379.
 - The single-robot review clip is explicitly a failed deterministic sample
   (seed 1115, 0/12), consistent with a policy that succeeds only about one in
   ten episodes. It is not presented as a pass video.

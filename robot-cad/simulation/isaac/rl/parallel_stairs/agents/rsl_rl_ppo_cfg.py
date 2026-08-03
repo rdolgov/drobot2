@@ -136,6 +136,37 @@ class DrobotPureStairsFirstStepBroadSupportRetentionHipPPORunnerCfg(
 
 
 @configclass
+class DrobotPureStairsFirstStepWidth105SupportRetentionHipPPORunnerCfg(
+    DrobotPureStairsFirstStepLandingHipPPORunnerCfg
+):
+    """Narrow broad four-support contacts to a 210 mm centered tread band."""
+
+    experiment_name = (
+        "drobot_pure_stairs_first_step_width105_support_retention_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth90SupportRetentionHipPPORunnerCfg(
+    DrobotPureStairsFirstStepLandingHipPPORunnerCfg
+):
+    """Narrow four-support contacts to a 180 mm centered tread band."""
+
+    experiment_name = (
+        "drobot_pure_stairs_first_step_width90_support_retention_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Rise10HipPPORunnerCfg(
+    DrobotPureStairsFirstStepLandingHipPPORunnerCfg
+):
+    """Transfer the verified +/-105 mm landing into 10 mm of body rise."""
+
+    experiment_name = "drobot_pure_stairs_first_step_width105_rise10_hip_180x250_direct"
+
+
+@configclass
 class DrobotPureStairsFirstStepLandingLowHipPPORunnerCfg(
     DrobotPureStairsFirstStepLandingHipPPORunnerCfg
 ):
