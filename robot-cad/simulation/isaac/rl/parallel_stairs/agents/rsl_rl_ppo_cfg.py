@@ -357,6 +357,31 @@ class DrobotPureStairsYaw90FoldBridgeFootLift5ConsolidateHipPPORunnerCfg(
 
 
 @configclass
+class DrobotPureStairsYaw90FoldBridgeFootLift5Wide512HipPPORunnerCfg(
+    DrobotPureStairsYaw90FoldBridgeFootLift5ConsolidateHipPPORunnerCfg
+):
+    """Capacity A/B that preserves the learned policy while widening both MLPs."""
+
+    experiment_name = "drobot_pure_stairs_yaw90_fold_bridge_foot_lift5_wide512_hip_180x250_direct"
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.actor.hidden_dims = [512, 512]
+        self.critic.hidden_dims = [512, 512]
+
+
+@configclass
+class DrobotPureStairsYaw90FoldTail75FootLift5Wide512HipPPORunnerCfg(
+    DrobotPureStairsYaw90FoldBridgeFootLift5Wide512HipPPORunnerCfg
+):
+    """Bias the pure-PPO reset distribution toward the exact folded endpoint."""
+
+    experiment_name = (
+        "drobot_pure_stairs_yaw90_fold_tail75_foot_lift5_wide512_hip_180x250_direct"
+    )
+
+
+@configclass
 class DrobotPureStairsYaw90FullFoldFootLift5ConsolidateHipPPORunnerCfg(
     DrobotPureStairsYaw90FullFoldFootLift5HipPPORunnerCfg
 ):

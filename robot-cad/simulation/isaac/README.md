@@ -328,6 +328,7 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/parallel_stairs/pure_stairs_env.py` | Implements all-joint pure actions, deployable IMU/joint/load/depth observations, physical fork-tip lift/tread reward, and non-scripted success/failure gates | pure task config and simulator sensors | observations, rewards, metrics, and resets |
 | `simulation/isaac/rl/parallel_stairs/train_pure_parallel_stairs.py` | Registers and launches 128-way RSL-RL PPO training without gait phases, IK, or scripted leg order | task and agent config | checkpoints, parameters, and TensorBoard events |
 | `simulation/isaac/rl/parallel_stairs/evaluate_pure_parallel_stairs.py` | Runs a bounded many-environment deterministic comparison without RGB frame capture | task, agent config, checkpoint, and step count | exact episode totals |
+| `simulation/isaac/rl/parallel_stairs/widen_rsl_rl_checkpoint.py` | Duplicates hidden units and divides downstream weights to widen both PPO MLPs without changing their outputs | 256-by-256 RSL-RL checkpoint | verified 512-by-512 checkpoint with reset optimizer moments |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-Stand-Rise10-Hip-Direct` | Tests a symmetric four-support, 10 mm body-rise precursor from lower hardware-representable resets | IMU, depth, joints, previous action, and foot loads | strict body-rise checkpoint telemetry |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-ThreeSupport-Rise10-Hip-Direct` | Relaxes the same pure-PPO body-rise precursor to any three verified supports | same 70 deployable actor inputs | three-support rise telemetry |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-Upright-Rise10-Hip-Direct` | Uses the literal non-failing upright + held 10 mm body-rise outcome without a contact-pattern gate | same 70 deployable actor inputs | ungated extension checkpoint telemetry |
@@ -339,6 +340,10 @@ an underscore are imported helpers and are not launched directly.
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift10-Hip-Direct` | Raises the same force-backed lateral unload gate to 100 mm for six control steps | same 70 deployable actor inputs | staged lift telemetry and held-out comparisons |
 | `Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift5-Hip-Direct` | Samples the full neutral-to-folded 0.46-to-0.30 m reset range at yaw 90 and adds a symmetric relative-force unload signal before the 50 mm gate | same 70 deployable actor inputs; no selected leg or reference motion | fold-transfer PPO checkpoints |
 | `Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift5-Consolidate-Hip-Direct` | Uses long low-entropy PPO batches on the same mixed-fold 50 mm task to move sampled successes into the policy mean | same 70 deployable actor inputs and 256-by-256 actor | deterministic full-fold promotion candidates |
+| `Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift5-Wide512-Hip-Direct` | Continues the same pure-PPO bridge after a function-preserving 256-to-512 hidden-width transplant | same 70 inputs, symmetric reward, and no reference motion | controlled capacity A/B checkpoints |
+| `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Wide512-Hip-Direct` | Evaluates the widened actor from the exact fully folded sideways reset | same 512-by-512 actor and strict force-backed 50 mm gate | deterministic capacity promotion evidence |
+| `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Coupled-Wide512-Hip-Direct` | Couples lift and relative-force unload reward on the same unnamed foot from the exact folded reset | symmetric physical outcomes; no selected leg, phase, or reference action | mode-consolidation PPO checkpoints |
+| `Drobot-Pure-Stairs-Yaw90-FoldTail75-Foot-Lift5-Wide512-Hip-Direct` | Restricts resets to 75%-to-fully-folded and biases samples toward the endpoint | same symmetric pure-RL reward and 512-by-512 actor | endpoint-focused curriculum checkpoints |
 | `Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift10-Hip-Direct` | Applies the same fold-distribution bridge and symmetric unload signal at the 100 mm gate | same 70 deployable actor inputs; no selected leg or reference motion | 10 cm transfer candidates for exact full-fold evaluation |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift14-Hip-Direct` | Defines the 140 mm intermediate force-backed lift stage without prescribing a swing leg | same 70 deployable actor inputs | next-stage PPO checkpoints |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift19-Hip-Direct` | Defines the required 190 mm force-backed lift from the fully folded sideways stance | same 70 deployable actor inputs | final lift-stage PPO checkpoints |
@@ -365,6 +370,27 @@ promoted to the 100 mm task and no improvement video is claimed. The evidence
 favors a controlled `512 x 512` actor comparison next while retaining the
 current actor as the control; it does not yet show that capacity, rather than
 policy-mean consolidation, is the root cause.
+
+The controlled width comparison then widened both hidden layers from `256` to
+`512` with a function-preserving checkpoint transplant. Maximum actor and
+critic output errors were `5.96e-7` and `1.53e-5`, respectively. Over `819,200`
+new transitions the wider bridge policy reached `1,312/7,455` stochastic
+successes (`17.60%`), only modestly above the matched narrow control's
+`1,228/7,391` (`16.61%`). Deterministic exact-full-fold evaluations remained
+`0/45` at model 764 and `0/48` at model 714.
+
+Three endpoint experiments added another `1,228,800` transitions. The biased
+75%-to-full-fold tail produced `43/1,782` stochastic successes but `0/47`
+deterministic successes. Direct exact-full-fold PPO produced `40/2,384`, and a
+same-foot coupled lift-and-unload reward produced `40/1,961`; their early
+deterministic checkpoints were still `0/50` and `0/48`. These literal endpoint
+successes demonstrate that the 50 mm lift is physically learnable, while the
+ordinary Gaussian policy mean continues to settle into a stable no-lift
+stance. The width hypothesis is therefore rejected for this stage, no model is
+promoted to 100 mm, and the next experiment should address the multimodal
+policy distribution without adding a selected leg, gait phase, reference
+action, or non-deployable observation. The third-person diagnostic is archived
+as `reviews/ppo-stairs-fold-tail75-wide512-model813-seed1238.mp4`.
 
 | `simulation/isaac/models/ppo-walk-v1-2m/` | Tracks the frozen flat-walking dependency used by v5 residual control | validated flat PPO ZIP | release dependency |
 | `simulation/isaac/models/ppo-stairs-pure-parallel-v1-lifthold-seed1059/agent.yaml` | Captures the exact RSL-RL PPO configuration for the packaged lift-hold checkpoint | saved training parameters | no generated data |

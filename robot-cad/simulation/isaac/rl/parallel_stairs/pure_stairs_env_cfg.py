@@ -208,6 +208,7 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     height_delta_reward_scale = 45.0
     supported_lift_reward_scale = 0.0
     foot_unload_reward_scale = 0.0
+    unloaded_lift_reward_scale = 0.0
     clearance_reward_scale = 12.0
     lift_hold_reward_scale = 0.04
     tread_hold_reward_scale = 0.0
@@ -673,6 +674,16 @@ class DrobotPureStairsYaw90FullFoldFootLift5HipEnvCfg(
 
 
 @configclass
+class DrobotPureStairsYaw90FullFoldFootLift5CoupledHipEnvCfg(
+    DrobotPureStairsYaw90FullFoldFootLift5HipEnvCfg
+):
+    """Couple lift and unload credit on the same unnamed physical foot."""
+
+    foot_unload_reward_scale = 0.75
+    unloaded_lift_reward_scale = 4.0
+
+
+@configclass
 class DrobotPureStairsYaw90FoldBridgeFootLift10HipEnvCfg(
     DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg
 ):
@@ -694,6 +705,19 @@ class DrobotPureStairsYaw90FoldBridgeFootLift5HipEnvCfg(
 
     foot_lift_height_m = 0.05
     foot_lift_hold_steps = 4
+
+
+@configclass
+class DrobotPureStairsYaw90FoldTail75FootLift5HipEnvCfg(
+    DrobotPureStairsYaw90FoldBridgeFootLift5HipEnvCfg
+):
+    """Concentrate PPO on the 75%-to-fully-folded curriculum endpoint."""
+
+    reset_fold_fraction_min = 0.75
+    reset_fold_fraction_max = 1.0
+    reset_alpha_power = 0.5
+    reset_base_height_min_m = 0.30
+    reset_base_height_max_m = 0.34
 
 
 @configclass

@@ -120,12 +120,8 @@ def test_full_fold_sideways_lift_curriculum_is_force_backed_and_staged() -> None
     assert "DrobotPureStairsYaw90FullFoldFootLift10ConsolidateHipPPORunnerCfg" in runner_source
     assert "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Consolidate-Hip-Direct" in registration
 
-    bridge5 = _class_assignments(
-        cfg_source, "DrobotPureStairsYaw90FoldBridgeFootLift5HipEnvCfg"
-    )
-    bridge10 = _class_assignments(
-        cfg_source, "DrobotPureStairsYaw90FoldBridgeFootLift10HipEnvCfg"
-    )
+    bridge5 = _class_assignments(cfg_source, "DrobotPureStairsYaw90FoldBridgeFootLift5HipEnvCfg")
+    bridge10 = _class_assignments(cfg_source, "DrobotPureStairsYaw90FoldBridgeFootLift10HipEnvCfg")
     assert bridge10["reset_fold_fraction_min"] == 0.0
     assert bridge10["reset_fold_fraction_max"] == 1.0
     assert bridge10["reset_alpha_power"] == 2.0
@@ -136,11 +132,37 @@ def test_full_fold_sideways_lift_curriculum_is_force_backed_and_staged() -> None
     assert "relative_candidate_force" in env_source
     assert "per_foot_unload" in env_source
     assert "foot_unload_reward_scale * foot_unload" in env_source
+    assert "per_foot_lift * per_foot_unload" in env_source
+    assert "unloaded_lift_reward_scale * unloaded_lift" in env_source
     for height in ("5", "10"):
         assert f"DrobotPureStairsYaw90FoldBridgeFootLift{height}HipPPORunnerCfg" in runner_source
         assert f"Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift{height}-Hip-Direct" in registration
     assert "DrobotPureStairsYaw90FoldBridgeFootLift5ConsolidateHipPPORunnerCfg" in runner_source
     assert "Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift5-Consolidate-Hip-Direct" in registration
+    assert "DrobotPureStairsYaw90FoldBridgeFootLift5Wide512HipPPORunnerCfg" in runner_source
+    assert "self.actor.hidden_dims = [512, 512]" in runner_source
+    assert "self.critic.hidden_dims = [512, 512]" in runner_source
+    assert "Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift5-Wide512-Hip-Direct" in registration
+    assert "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Wide512-Hip-Direct" in registration
+    coupled = _class_assignments(
+        cfg_source, "DrobotPureStairsYaw90FullFoldFootLift5CoupledHipEnvCfg"
+    )
+    assert coupled["foot_unload_reward_scale"] == 0.75
+    assert coupled["unloaded_lift_reward_scale"] == 4.0
+    assert (
+        "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Coupled-Wide512-Hip-Direct"
+        in registration
+    )
+    tail75 = _class_assignments(
+        cfg_source, "DrobotPureStairsYaw90FoldTail75FootLift5HipEnvCfg"
+    )
+    assert tail75["reset_fold_fraction_min"] == 0.75
+    assert tail75["reset_fold_fraction_max"] == 1.0
+    assert tail75["reset_alpha_power"] == 0.5
+    assert tail75["reset_base_height_min_m"] == 0.30
+    assert tail75["reset_base_height_max_m"] == 0.34
+    assert "DrobotPureStairsYaw90FoldTail75FootLift5Wide512HipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-Yaw90-FoldTail75-Foot-Lift5-Wide512-Hip-Direct" in registration
     assert "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift10-Consolidate-Hip-Direct" in registration
     assert "self.algorithm.entropy_coef = 0.0" in runner_source
     assert "self.algorithm.learning_rate = 2.0e-5" in runner_source
@@ -310,6 +332,17 @@ def test_lift_consolidation_uses_accurate_episode_counts_and_low_entropy() -> No
     assert 'std_key = "distribution.std_param"' in anneal_source
     assert 'infos["noise_anneal"]' in anneal_source
     assert '"mlp_weights_changed": False' in anneal_source
+
+    widen_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/widen_rsl_rl_checkpoint.py"
+    ).read_text(encoding="utf-8")
+    assert 'widened["mlp.2.weight"] = second_weight[mapping]' in widen_source
+    assert "output_weight[:, mapping].clone()" in widen_source
+    assert "downstream_split.unsqueeze(0)" in widen_source
+    assert '"symmetry_breaking_downstream_split": [0.49, 0.51]' in widen_source
+    assert 'optimizer["state"] = {}' in widen_source
+    assert '"function_preserving": True' in widen_source
+    assert "max(actor_error, critic_error) > 1.0e-4" in widen_source
 
 
 def test_landing_reset_comparison_keeps_full_fold_and_true_sideways_pose() -> None:
