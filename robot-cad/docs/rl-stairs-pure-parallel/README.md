@@ -29,6 +29,23 @@ success rate remained 0%, and a fresh deterministic playback of iteration 600
 approached and lifted at the first riser but did not climb. These are useful
 exploration and reward-shaping results, not a stair-placement pass.
 
+The second round added more hip authority, a symmetric any-foot-to-any-tread
+placement potential, target clamping at the robot's real soft joint limits,
+and separate pure-PPO reset tasks for a nearly fully folded 300 mm stance and
+a true 90-degree sideways stance. These are reset conditions only: there is
+still no scripted action, gait phase, leg order, IK reference, or trajectory.
+
+The folded, forward, and sideways comparisons processed 122,880, 122,880, and
+61,440 valid transitions respectively. The folded policy mainly learned to
+survive in the crouch. The sideways policy learned some lateral displacement
+but no tread contact. The forward hip-authority policy found two simultaneous
+tread contacts and was continued. Including that continuation and a lower
+entropy consolidation, this round processed 1,499,136 valid transitions.
+Training maxima were 0.4344 m progress, 0.1127 m base-height gain, 0.6520 m
+fork-tip clearance, and two simultaneous tread contacts. Full-climb success
+remained 0%. The selected six-second deterministic iteration-260 playback did
+not climb the first step.
+
 ## Editable sources
 
 - `simulation/isaac/rl/parallel_stairs/pure_stairs_env.py`: vectorized
@@ -72,13 +89,16 @@ reward, failure termination, and evaluation metrics.
 
 The action is a normalized 12-vector mapped to joint-position targets around
 the nominal stance. The actuator configuration retains the real-test
-`0.8825985 N*m` effort cap on every joint.
+`0.8825985 N*m` effort cap on every joint. The hip-authority variants use
+0.30 rad abduction, 0.90 rad hip-flexion, and 1.20 rad knee action scales, then
+clamp every target to the URDF-derived soft limits.
 
 ## Reward and reset
 
 The reward combines forward base displacement, upward base displacement,
 incremental maximum-foot clearance, a persistent hold reward that saturates at
-`190 mm` clearance, contacts supported on higher treads, an alive term,
+`190 mm` clearance, a symmetric distance potential from every physical fork
+tip to every tread, contacts supported on higher treads, an alive term,
 uprightness, action-rate, effort, and body-rate penalties. There is
 no gait clock, commanded foot, gait phase, reference trajectory, or scripted
 action. Episodes terminate for insufficient base height, excessive tilt,
@@ -98,6 +118,12 @@ From the repository root in PowerShell:
 & C:\Users\roman\Documents\dev\IsaacLab\isaaclab.bat -p simulation/isaac/rl/parallel_stairs/train_pure_parallel_stairs.py --rl_library rsl_rl --task Drobot-Pure-Stairs-Direct --num_envs 128 --seed 1055 --device cuda --max_iterations 80 --run_name pure128-seed1055
 
 & C:\Users\roman\Documents\dev\IsaacLab\isaaclab.bat -p simulation/isaac/rl/parallel_stairs/train_pure_parallel_stairs.py --rl_library rsl_rl --task Drobot-Pure-Stairs-Direct --num_envs 128 --seed 1055 --device cuda --resume --load_run 2026-08-02_21-25-21_pure128-seed1055 --checkpoint model_79.pt --max_iterations 400 --run_name pure128-resume400-seed1055
+
+& C:\Users\roman\Documents\dev\IsaacLab\isaaclab.bat -p simulation/isaac/rl/parallel_stairs/train_pure_parallel_stairs.py --rl_library rsl_rl --task Drobot-Pure-Stairs-Low-Hip-Direct --num_envs 128 --seed 1062 --device cuda --max_iterations 40 --run_name compare-low-fold-hip-seed1062
+
+& C:\Users\roman\Documents\dev\IsaacLab\isaaclab.bat -p simulation/isaac/rl/parallel_stairs/train_pure_parallel_stairs.py --rl_library rsl_rl --task Drobot-Pure-Stairs-Sideways-Hip-Direct --num_envs 128 --seed 1064 --device cuda --max_iterations 20 --run_name compare-sideways-hip-fixed-seed1064
+
+& C:\Users\roman\Documents\dev\IsaacLab\isaaclab.bat -p simulation/isaac/rl/parallel_stairs/train_pure_parallel_stairs.py --rl_library rsl_rl --task Drobot-Pure-Stairs-Hip-Direct --num_envs 128 --seed 1066 --device cuda --resume --load_run 2026-08-02_22-42-05_forward-hip-long-seed1065 --checkpoint model_100.pt --max_iterations 200 --run_name forward-hip-consolidate-seed1066
 ```
 
 To record a deterministic 12-second review run, supply the selected checkpoint
@@ -119,6 +145,9 @@ as an absolute path:
   reached two valid simultaneous tread contacts during stochastic exploration.
 - Deterministic playback loaded the saved 70-input, 256-by-256 actor and wrote
   an 8-second, 240-frame MP4. It did not climb the first riser.
+- The second-round deterministic playback wrote a six-second, 180-frame MP4
+  from iteration 260. RGB was used only to record the review; the actor still
+  consumed IMU, depth, joint, previous-action, and foot-load values only.
 - No simulation result here proves hardware transfer, robust first-step
   acquisition, or a full climb. Continue training and evaluate several unseen
   seeds before considering mechanical changes or a larger neural network.

@@ -1,0 +1,40 @@
+{
+  "task": "Drobot-Pure-Stairs-Hip-Direct",
+  "status": "evaluation_only_not_a_successful_climb_policy",
+  "stair_rise_m": 0.18,
+  "stair_tread_depth_m": 0.25,
+  "parallel_environments": 128,
+  "effort_cap_nm": 0.8825985,
+  "actor_observation_count": 70,
+  "actor_hidden_dimensions": [256, 256],
+  "rgb_is_policy_input": false,
+  "round_valid_transitions": 1499136,
+  "reset_comparison": {
+    "low_fold_transitions": 122880,
+    "forward_hip_transitions": 122880,
+    "sideways_hip_transitions": 61440,
+    "result": "forward_hip_selected"
+  },
+  "forward_continuation_transitions": 577536,
+  "forward_consolidation_transitions": 614400,
+  "training_maxima": {
+    "best_tread_contacts": 2.0,
+    "best_tread_contacts_iteration": 272,
+    "max_progress_m": 0.4343675077,
+    "max_base_gain_m": 0.1126968563,
+    "max_foot_clearance_m": 0.6520228386,
+    "success_rate": 0.0
+  },
+  "deterministic_review": {
+    "checkpoint_iteration": 260,
+    "seed": 1068,
+    "frames": 180,
+    "duration_s": 6.0,
+    "result": "approach_and_leg_articulation_no_first_step_climb"
+  },
+  "sha256": {
+    "model.pt": "9765c7718ce7ef57d79f09ad129fa17af9aefb09f1c6d53b31f8c749eb9e55b3",
+    "model-after-two-contact-event.pt": "c2f1a591c8bd5e03b958301926a43397c744d6fc0b3731591d3001730d6af539",
+    "review_mp4": "d707ca5ce98089e4a3539af80cd0833d0edc0306f1575a22b6f6e6f732aa0cc5"
+  }
+}

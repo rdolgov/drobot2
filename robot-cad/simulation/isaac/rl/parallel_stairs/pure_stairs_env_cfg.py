@@ -20,6 +20,8 @@ from .exact_stairs_terrain import ExactStairsTerrainCfg, exact_stairs_terrain
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 ROBOT_USD = PROJECT_ROOT / "exports" / "isaac" / "quadruped_robot_floating.usdc"
 EFFORT_CAP_NM = 0.8825985
+LOW_FOLD_HIP_RAD = 0.7382742736
+LOW_FOLD_KNEE_RAD = 1.4765485472
 
 
 @configclass
@@ -161,6 +163,8 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     action_scale_abduction_rad = 0.18
     action_scale_hip_rad = 0.60
     action_scale_knee_rad = 0.90
+    initial_base_height_m = 0.46
+    reset_yaw_deg = 0.0
     stair_rise_m = 0.18
     stair_tread_depth_m = 0.25
     stair_start_from_origin_m = 0.45
@@ -178,3 +182,42 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
         if self.terrain.terrain_generator is not None:
             self.terrain.terrain_generator.num_rows = 1
             self.terrain.terrain_generator.num_cols = 1
+
+
+@configclass
+class DrobotPureStairsHipEnvCfg(DrobotPureStairsEnvCfg):
+    """Forward reset with more hip authority, still bounded by real limits."""
+
+    action_scale_abduction_rad = 0.30
+    action_scale_hip_rad = 0.90
+    action_scale_knee_rad = 1.20
+
+
+@configclass
+class DrobotPureStairsLowHipEnvCfg(DrobotPureStairsHipEnvCfg):
+    """Start near the lowest centered stance allowed by soft joint limits."""
+
+    initial_base_height_m = 0.30
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.robot.init_state.pos = (0.0, 0.0, self.initial_base_height_m)
+        self.robot.init_state.joint_pos = {
+            ".*_hip_abduction": 0.0,
+            "front_.*_hip_flexion": -LOW_FOLD_HIP_RAD,
+            "rear_.*_hip_flexion": LOW_FOLD_HIP_RAD,
+            "front_.*_knee": LOW_FOLD_KNEE_RAD,
+            "rear_.*_knee": -LOW_FOLD_KNEE_RAD,
+        }
+
+
+@configclass
+class DrobotPureStairsSidewaysHipEnvCfg(DrobotPureStairsHipEnvCfg):
+    """Start at 90 degrees to test a genuinely lateral stair approach."""
+
+    reset_yaw_deg = 90.0
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # Isaac Lab asset configs use quaternion order (x, y, z, w).
+        self.robot.init_state.rot = (0.0, 0.0, 0.7071067812, 0.7071067812)

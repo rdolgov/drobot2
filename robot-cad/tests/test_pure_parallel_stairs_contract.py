@@ -101,3 +101,24 @@ def test_reward_has_no_scripted_phase_or_reference_action() -> None:
     )
     for forbidden in forbidden_terms:
         assert forbidden not in lowered
+
+
+def test_low_sideways_and_hip_variants_keep_pure_rl_contract() -> None:
+    cfg_source = _source("pure_stairs_env_cfg.py")
+    hip = _class_assignments(cfg_source, "DrobotPureStairsHipEnvCfg")
+    low = _class_assignments(cfg_source, "DrobotPureStairsLowHipEnvCfg")
+    sideways = _class_assignments(cfg_source, "DrobotPureStairsSidewaysHipEnvCfg")
+
+    assert hip["action_scale_abduction_rad"] == 0.30
+    assert hip["action_scale_hip_rad"] == 0.90
+    assert hip["action_scale_knee_rad"] == 1.20
+    assert low["initial_base_height_m"] == 0.30
+    assert sideways["reset_yaw_deg"] == 90.0
+    assert "(0.0, 0.0, 0.7071067812, 0.7071067812)" in cfg_source
+
+    env_source = _source("pure_stairs_env.py")
+    pre_step = _method_source(env_source, "DrobotPureStairsEnv", "_pre_physics_step")
+    reward = _method_source(env_source, "DrobotPureStairsEnv", "_get_rewards")
+    assert "soft_joint_pos_limits" in pre_step
+    assert "placement_score" in reward
+    assert "tread_potential" in reward

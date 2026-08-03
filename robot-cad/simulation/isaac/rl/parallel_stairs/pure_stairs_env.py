@@ -74,6 +74,7 @@ class DrobotPureStairsEnv(DirectRLEnv):
         self._episode_max_base_gain = torch.zeros(self.num_envs, device=self.device)
         self._episode_max_foot_clearance = torch.zeros(self.num_envs, device=self.device)
         self._episode_best_tread_contacts = torch.zeros(self.num_envs, device=self.device)
+        self._episode_best_tread_potential = torch.zeros(self.num_envs, device=self.device)
         self._success = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self._failed = torch.zeros_like(self._success)
 
@@ -108,6 +109,10 @@ class DrobotPureStairsEnv(DirectRLEnv):
         self._actions = torch.clamp(actions, -1.0, 1.0)
         self._processed_actions = (
             self._robot.data.default_joint_pos.torch + self._joint_scale * self._actions
+        )
+        limits = self._robot.data.soft_joint_pos_limits.torch
+        self._processed_actions = torch.clamp(
+            self._processed_actions, limits[:, :, 0], limits[:, :, 1]
         )
 
     def _apply_action(self):
@@ -199,6 +204,26 @@ class DrobotPureStairsEnv(DirectRLEnv):
         on_tread = contact & (torch.abs(foot_clearance) < 0.025) & (foot_ground > 0.0)
         tread_contacts = torch.sum(on_tread.float(), dim=1)
 
+        # Symmetric, phase-free placement potential. Every foot is compared with
+        # every tread; the actor never receives these simulator coordinates.
+        tread_index = torch.arange(
+            1, self.cfg.stair_step_count + 1, device=self.device, dtype=torch.float32
+        )
+        tread_center_x = self.cfg.stair_start_from_origin_m + (
+            tread_index - 0.5
+        ) * self.cfg.stair_tread_depth_m
+        tread_height = tread_index * self.cfg.stair_rise_m
+        tip_x_error = foot_x.unsqueeze(-1) - tread_center_x.view(1, 1, -1)
+        tip_z_local = foot_pos[:, :, 2] - self._terrain.env_origins[:, 2:3]
+        tip_z_error = tip_z_local.unsqueeze(-1) - tread_height.view(1, 1, -1)
+        placement_score = torch.exp(
+            -torch.square(tip_x_error / 0.35) - torch.square(tip_z_error / 0.20)
+        )
+        tread_potential = placement_score.amax(dim=(1, 2))
+        new_tread_potential = torch.clamp(
+            tread_potential - self._episode_best_tread_potential, 0.0, 0.10
+        )
+
         progress_delta = torch.clamp(root_x - self._previous_root_x, -0.02, 0.03)
         height_delta = torch.clamp(root_z - self._previous_root_z, -0.02, 0.03)
         new_clearance = torch.clamp(
@@ -224,6 +249,8 @@ class DrobotPureStairsEnv(DirectRLEnv):
             + 45.0 * height_delta
             + 12.0 * new_clearance
             + 0.04 * lift_hold
+            + 2.0 * new_tread_potential
+            + 0.02 * tread_potential
             + 0.20 * tread_contacts
             - 0.08 * upright_error
             - 0.002 * action_rate
@@ -238,13 +265,16 @@ class DrobotPureStairsEnv(DirectRLEnv):
         self._episode_max_progress = torch.maximum(self._episode_max_progress, x_from_origin)
         self._episode_max_base_gain = torch.maximum(
             self._episode_max_base_gain,
-            root_z - self._terrain.env_origins[:, 2] - 0.46,
+            root_z - self._terrain.env_origins[:, 2] - self.cfg.initial_base_height_m,
         )
         self._episode_max_foot_clearance = torch.maximum(
             self._episode_max_foot_clearance, max_clearance
         )
         self._episode_best_tread_contacts = torch.maximum(
             self._episode_best_tread_contacts, tread_contacts
+        )
+        self._episode_best_tread_potential = torch.maximum(
+            self._episode_best_tread_potential, tread_potential
         )
         return reward
 
@@ -284,6 +314,9 @@ class DrobotPureStairsEnv(DirectRLEnv):
             self.extras.setdefault("log", {})["Metrics/best_tread_contacts"] = (
                 self._episode_best_tread_contacts[env_ids].mean().item()
             )
+            self.extras.setdefault("log", {})["Metrics/best_tread_potential"] = (
+                self._episode_best_tread_potential[env_ids].mean().item()
+            )
             self.extras.setdefault("log", {})["Metrics/success_rate"] = (
                 self._success[env_ids].float().mean().item()
             )
@@ -319,5 +352,6 @@ class DrobotPureStairsEnv(DirectRLEnv):
         self._episode_max_base_gain[env_ids] = 0.0
         self._episode_max_foot_clearance[env_ids] = 0.0
         self._episode_best_tread_contacts[env_ids] = 0.0
+        self._episode_best_tread_potential[env_ids] = 0.0
         self._success[env_ids] = False
         self._failed[env_ids] = False

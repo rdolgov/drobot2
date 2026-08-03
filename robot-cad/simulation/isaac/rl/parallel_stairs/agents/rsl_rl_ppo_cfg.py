@@ -41,3 +41,24 @@ class DrobotPureStairsPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.015,
         max_grad_norm=1.0,
     )
+
+
+@configclass
+class DrobotPureStairsHipPPORunnerCfg(DrobotPureStairsPPORunnerCfg):
+    experiment_name = "drobot_pure_stairs_hip_180x250_direct"
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # Once tread contact emerges, consolidate instead of continually
+        # inflating action noise around the real joint limits.
+        self.algorithm.entropy_coef = 0.002
+
+
+@configclass
+class DrobotPureStairsLowHipPPORunnerCfg(DrobotPureStairsPPORunnerCfg):
+    experiment_name = "drobot_pure_stairs_low_hip_180x250_direct"
+
+
+@configclass
+class DrobotPureStairsSidewaysHipPPORunnerCfg(DrobotPureStairsPPORunnerCfg):
+    experiment_name = "drobot_pure_stairs_sideways_hip_180x250_direct"
