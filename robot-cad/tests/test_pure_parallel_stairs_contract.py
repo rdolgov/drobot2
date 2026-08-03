@@ -309,3 +309,52 @@ def test_landing_consolidation_reinforces_rare_exact_contacts() -> None:
     assert "self.algorithm.entropy_coef = 0.0" in runner_source
     assert "self.algorithm.learning_rate = 5.0e-5" in runner_source
     assert "Drobot-Pure-Stairs-First-Step-Landing-Consolidate-Hip-Direct" in registration
+
+
+def test_contact_retention_requires_centered_touchdown_and_four_foot_support() -> None:
+    env_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env.py"
+    ).read_text(encoding="utf-8")
+    cfg_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
+    ).read_text(encoding="utf-8")
+    runner_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
+    ).read_text(encoding="utf-8")
+    registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "class DrobotPureStairsFirstStepContactRetentionHipEnvCfg" in cfg_source
+    assert "first_step_min_support_count = 4" in cfg_source
+    assert "first_step_require_centered_contact = True" in cfg_source
+    assert "centered_tread_contact_reward_scale = 4.0" in cfg_source
+    assert "descending_center_approach_reward_scale = 4.0" in cfg_source
+    assert "retained_ground_support_reward_scale = 3.0" in cfg_source
+    assert "three_other_supports" in env_source
+    assert "descending_center_approach" in env_source
+    assert "required_tread_contacts" in env_source
+    assert "support_count >= self.cfg.first_step_min_support_count" in env_source
+    assert "class DrobotPureStairsFirstStepContactRetentionHipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-First-Step-Contact-Retention-Hip-Direct" in registration
+
+
+def test_broad_support_retention_is_a_single_constraint_bridge() -> None:
+    env_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env.py"
+    ).read_text(encoding="utf-8")
+    cfg_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
+    ).read_text(encoding="utf-8")
+    registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
+        encoding="utf-8"
+    )
+
+    broad = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepBroadSupportRetentionHipEnvCfg"
+    )
+    assert broad["first_step_min_support_count"] == 4
+    assert broad["first_step_require_centered_contact"] is False
+    assert broad["retained_ground_support_reward_scale"] == 3.0
+    assert "required_tread_binary" in env_source
+    assert "Drobot-Pure-Stairs-First-Step-Broad-Support-Retention-Hip-Direct" in registration

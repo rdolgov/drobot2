@@ -152,6 +152,26 @@ from model 477's 0.1474%. Because the landing prerequisite did not materially
 improve, the 10 mm body-rise stage was not retried. More continuation under the
 same reward is unlikely to be the highest-value next experiment.
 
+The next curriculum corrected an important weakness in that landing gate: the
+older success condition allowed one tread foot plus only two of the remaining
+three feet in ground support. A new phase-free gate requires a tread landing to
+persist for three policy steps while all four feet are force-supported. It also
+rewards tread-centered approach and downward motion only when the other three
+feet remain loaded. These signals use simulator ground truth for reward and
+metrics only; they add nothing to the 70-value actor observation.
+
+A direct jump to a centered four-support landing was too sparse, producing
+0/9,042 successes in 307,200 transitions. An intermediate broad-contact stage,
+initialized from landing model 477, processed 245,760 transitions in 128
+parallel environments and achieved 23/7,283 four-support landing episodes
+(0.3158%). Its deterministic mean policy then achieved 3/1,245 (0.2410%) on
+unseen noisy-sensor seed 1120. This is a small but genuine mean-policy result:
+the held-out rate is close to the stochastic training rate. A subsequent
+184,320-transition transfer to the stricter centered-contact gate achieved
+0/5,433, so that centered checkpoint was rejected. Model 556 from the broad
+four-support stage is retained as the new curriculum checkpoint. It still does
+not raise the body, complete a step, or climb the staircase.
+
 ## Editable sources
 
 - `simulation/isaac/rl/parallel_stairs/pure_stairs_env.py`: vectorized
@@ -272,6 +292,9 @@ as an absolute path:
 - A low-entropy landing consolidation reached 27/5,481 stochastic (0.4926%)
   and 2/1,336 deterministic (0.1497%), which was not a material mean-policy
   improvement.
+- The broad four-support model-556 mean achieved 3/1,245 (0.2410%) held-out
+  landings after 23/7,283 (0.3158%) during stochastic PPO. The stricter centered
+  transfer remained 0/5,433 and was rejected.
 - The single-robot review clip is explicitly a failed deterministic sample
   (seed 1115, 0/12), consistent with a policy that succeeds only about one in
   ten episodes. It is not presented as a pass video.

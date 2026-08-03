@@ -114,6 +114,28 @@ class DrobotPureStairsFirstStepLandingConsolidateHipPPORunnerCfg(
 
 
 @configclass
+class DrobotPureStairsFirstStepContactRetentionHipPPORunnerCfg(
+    DrobotPureStairsFirstStepLandingHipPPORunnerCfg
+):
+    """Explore centered touchdown while retaining all three other supports."""
+
+    experiment_name = (
+        "drobot_pure_stairs_first_step_contact_retention_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsFirstStepBroadSupportRetentionHipPPORunnerCfg(
+    DrobotPureStairsFirstStepLandingHipPPORunnerCfg
+):
+    """Intermediate PPO stage: broad tread contact with all four supports."""
+
+    experiment_name = (
+        "drobot_pure_stairs_first_step_broad_support_retention_hip_180x250_direct"
+    )
+
+
+@configclass
 class DrobotPureStairsFirstStepLandingLowHipPPORunnerCfg(
     DrobotPureStairsFirstStepLandingHipPPORunnerCfg
 ):

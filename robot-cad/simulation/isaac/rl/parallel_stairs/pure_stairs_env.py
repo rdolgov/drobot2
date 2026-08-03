@@ -70,12 +70,19 @@ class DrobotPureStairsEnv(DirectRLEnv):
         self._depth_frame = 0
         self._previous_root_x = torch.zeros(self.num_envs, device=self.device)
         self._previous_root_z = torch.zeros(self.num_envs, device=self.device)
+        self._previous_foot_tip_z = torch.zeros((self.num_envs, 4), device=self.device)
         self._episode_start_root_x = torch.zeros(self.num_envs, device=self.device)
         self._episode_start_root_z = torch.zeros(self.num_envs, device=self.device)
         self._episode_max_progress = torch.zeros(self.num_envs, device=self.device)
         self._episode_max_base_gain = torch.zeros(self.num_envs, device=self.device)
         self._episode_max_foot_clearance = torch.zeros(self.num_envs, device=self.device)
         self._episode_best_tread_contacts = torch.zeros(self.num_envs, device=self.device)
+        self._episode_best_centered_tread_contacts = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self._episode_best_supported_center_approach = torch.zeros(
+            self.num_envs, device=self.device
+        )
         self._episode_best_tread_potential = torch.zeros(self.num_envs, device=self.device)
         self._episode_best_narrow_tread_potential = torch.zeros(
             self.num_envs, device=self.device
@@ -257,6 +264,10 @@ class DrobotPureStairsEnv(DirectRLEnv):
         tip_x_error = foot_x.unsqueeze(-1) - tread_center_x.view(1, 1, -1)
         tip_z_local = foot_pos[:, :, 2] - self._terrain.env_origins[:, 2:3]
         tip_z_error = tip_z_local.unsqueeze(-1) - tread_height.view(1, 1, -1)
+        centered_on_tread = on_tread & (
+            torch.abs(tip_x_error).amin(dim=2) <= self.cfg.centered_tread_half_width_m
+        )
+        centered_tread_contacts = torch.sum(centered_on_tread.float(), dim=1)
         placement_score = torch.exp(
             -torch.square(tip_x_error / 0.35) - torch.square(tip_z_error / 0.20)
         )
@@ -276,6 +287,26 @@ class DrobotPureStairsEnv(DirectRLEnv):
             0.0,
             0.15,
         )
+        other_support_count = support_count.unsqueeze(1) - supported.float()
+        three_other_supports = torch.clamp(other_support_count - 2.0, 0.0, 1.0)
+        per_foot_center_approach = narrow_placement_score.amax(dim=2)
+        supported_center_approach = (
+            per_foot_center_approach * three_other_supports
+        ).amax(dim=1)
+        foot_tip_descent = torch.clamp(
+            self._previous_foot_tip_z - foot_pos[:, :, 2], 0.0, 0.03
+        ) / 0.03
+        above_tread_band = (tip_z_error >= 0.0) & (tip_z_error <= 0.12)
+        descending_pair_score = (
+            torch.exp(-torch.square(tip_x_error / 0.10))
+            * torch.exp(-torch.square(tip_z_error / 0.07))
+            * above_tread_band.float()
+        )
+        descending_center_approach = (
+            descending_pair_score.amax(dim=2)
+            * foot_tip_descent
+            * three_other_supports
+        ).amax(dim=1)
 
         progress_delta = torch.clamp(root_x - self._previous_root_x, -0.02, 0.03)
         height_delta = torch.clamp(root_z - self._previous_root_z, -0.02, 0.03)
@@ -285,6 +316,15 @@ class DrobotPureStairsEnv(DirectRLEnv):
         lift_hold = torch.clamp(max_clearance / 0.19, 0.0, 1.0)
         supported_lift = lift_hold * torch.clamp(support_count - 2.0, 0.0, 1.0)
         tread_binary = torch.clamp(tread_contacts, 0.0, 1.0)
+        centered_tread_binary = torch.clamp(centered_tread_contacts, 0.0, 1.0)
+        required_tread_binary = (
+            centered_tread_binary
+            if self.cfg.first_step_require_centered_contact
+            else tread_binary
+        )
+        retained_ground_support = required_tread_binary * torch.clamp(
+            ground_contacts / 3.0, 0.0, 1.0
+        )
         tread_hold_fraction = torch.clamp(
             self._tread_hold_steps.float() / max(self.cfg.first_step_hold_steps, 1),
             0.0,
@@ -326,6 +366,13 @@ class DrobotPureStairsEnv(DirectRLEnv):
             + self.cfg.support_reward_scale * support_count
             + self.cfg.supported_lift_reward_scale * supported_lift
             + self.cfg.tread_contact_reward_scale * tread_contacts
+            + self.cfg.centered_tread_contact_reward_scale * centered_tread_contacts
+            + self.cfg.supported_center_approach_reward_scale
+            * supported_center_approach
+            + self.cfg.descending_center_approach_reward_scale
+            * descending_center_approach
+            + self.cfg.retained_ground_support_reward_scale
+            * retained_ground_support
             + 0.20 * retained_support
             + self.cfg.tread_hold_reward_scale * tread_hold_fraction
             + self.cfg.tread_transfer_reward_scale * tread_transfer
@@ -347,6 +394,7 @@ class DrobotPureStairsEnv(DirectRLEnv):
 
         self._previous_root_x.copy_(root_x)
         self._previous_root_z.copy_(root_z)
+        self._previous_foot_tip_z.copy_(foot_pos[:, :, 2])
         self._episode_max_progress = torch.maximum(
             self._episode_max_progress, root_x - self._episode_start_root_x
         )
@@ -359,6 +407,12 @@ class DrobotPureStairsEnv(DirectRLEnv):
         )
         self._episode_best_tread_contacts = torch.maximum(
             self._episode_best_tread_contacts, tread_contacts
+        )
+        self._episode_best_centered_tread_contacts = torch.maximum(
+            self._episode_best_centered_tread_contacts, centered_tread_contacts
+        )
+        self._episode_best_supported_center_approach = torch.maximum(
+            self._episode_best_supported_center_approach, supported_center_approach
         )
         self._episode_best_tread_potential = torch.maximum(
             self._episode_best_tread_potential, tread_potential
@@ -388,7 +442,32 @@ class DrobotPureStairsEnv(DirectRLEnv):
             (supported & (foot_ground > 0.0)).float(), dim=1
         )
         support_count = torch.sum(supported.float(), dim=1)
-        stable_tread = (tread_contacts >= 1.0) & (support_count >= 3.0)
+        tread_index = torch.arange(
+            1, self.cfg.reward_tread_count + 1, device=self.device, dtype=torch.float32
+        )
+        tread_center_x = self.cfg.stair_start_from_origin_m + (
+            tread_index - 0.5
+        ) * self.cfg.stair_tread_depth_m
+        centered_contact_count = torch.sum(
+            (
+                supported
+                & (foot_ground > 0.0)
+                & (
+                    torch.abs(foot_x.unsqueeze(-1) - tread_center_x.view(1, 1, -1))
+                    .amin(dim=2)
+                    <= self.cfg.centered_tread_half_width_m
+                )
+            ).float(),
+            dim=1,
+        )
+        required_tread_contacts = (
+            centered_contact_count
+            if self.cfg.first_step_require_centered_contact
+            else tread_contacts
+        )
+        stable_tread = (required_tread_contacts >= 1.0) & (
+            support_count >= self.cfg.first_step_min_support_count
+        )
         self._tread_hold_steps = torch.where(
             stable_tread, self._tread_hold_steps + 1, torch.zeros_like(self._tread_hold_steps)
         )
@@ -468,6 +547,12 @@ class DrobotPureStairsEnv(DirectRLEnv):
             self.extras.setdefault("log", {})["Metrics/best_tread_contacts"] = (
                 self._episode_best_tread_contacts[env_ids].mean().item()
             )
+            self.extras.setdefault("log", {})[
+                "Metrics/best_centered_tread_contacts"
+            ] = self._episode_best_centered_tread_contacts[env_ids].mean().item()
+            self.extras.setdefault("log", {})[
+                "Metrics/best_supported_center_approach"
+            ] = self._episode_best_supported_center_approach[env_ids].mean().item()
             self.extras.setdefault("log", {})["Metrics/best_tread_potential"] = (
                 self._episode_best_tread_potential[env_ids].mean().item()
             )
@@ -528,12 +613,15 @@ class DrobotPureStairsEnv(DirectRLEnv):
         self._depth_observation[env_ids] = 1.0
         self._previous_root_x[env_ids] = root_pose[:, 0]
         self._previous_root_z[env_ids] = root_pose[:, 2]
+        self._previous_foot_tip_z[env_ids] = 0.0
         self._episode_start_root_x[env_ids] = root_pose[:, 0]
         self._episode_start_root_z[env_ids] = root_pose[:, 2]
         self._episode_max_progress[env_ids] = 0.0
         self._episode_max_base_gain[env_ids] = 0.0
         self._episode_max_foot_clearance[env_ids] = 0.0
         self._episode_best_tread_contacts[env_ids] = 0.0
+        self._episode_best_centered_tread_contacts[env_ids] = 0.0
+        self._episode_best_supported_center_approach[env_ids] = 0.0
         self._episode_best_tread_potential[env_ids] = 0.0
         self._episode_best_narrow_tread_potential[env_ids] = 0.0
         self._tread_hold_steps[env_ids] = 0

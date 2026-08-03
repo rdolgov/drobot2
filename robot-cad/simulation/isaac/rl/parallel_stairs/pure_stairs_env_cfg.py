@@ -171,6 +171,9 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     first_step_min_base_gain_m = 0.06
     first_step_require_base_gain = True
     first_step_hold_steps = 8
+    first_step_min_support_count = 3
+    first_step_require_centered_contact = False
+    centered_tread_half_width_m = 0.075
     foot_lift_curriculum = False
     foot_lift_height_m = 0.19
     foot_lift_hold_steps = 8
@@ -189,6 +192,10 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     new_narrow_tread_potential_reward_scale = 0.0
     narrow_tread_potential_reward_scale = 0.0
     tread_contact_reward_scale = 0.35
+    centered_tread_contact_reward_scale = 0.0
+    supported_center_approach_reward_scale = 0.0
+    descending_center_approach_reward_scale = 0.0
+    retained_ground_support_reward_scale = 0.0
     reward_tread_count = 4
     base_contact_grace_steps = 30
     base_contact_failure_drop_m = 0.08
@@ -292,6 +299,36 @@ class DrobotPureStairsFirstStepLandingConsolidateHipEnvCfg(
 ):
     """Move rare supported tread landings into the policy mean."""
 
+    success_completion_reward_scale = 100.0
+
+
+@configclass
+class DrobotPureStairsFirstStepContactRetentionHipEnvCfg(
+    DrobotPureStairsFirstStepLandingHipEnvCfg
+):
+    """Reward centered descent while every non-swing foot stays loaded."""
+
+    first_step_min_support_count = 4
+    first_step_require_centered_contact = True
+    centered_tread_half_width_m = 0.075
+    centered_tread_contact_reward_scale = 4.0
+    supported_center_approach_reward_scale = 3.0
+    descending_center_approach_reward_scale = 4.0
+    retained_ground_support_reward_scale = 3.0
+    success_completion_reward_scale = 100.0
+
+
+@configclass
+class DrobotPureStairsFirstStepBroadSupportRetentionHipEnvCfg(
+    DrobotPureStairsFirstStepLandingHipEnvCfg
+):
+    """Bridge rare tread contact into a full four-foot support state."""
+
+    first_step_min_support_count = 4
+    first_step_require_centered_contact = False
+    supported_center_approach_reward_scale = 2.0
+    descending_center_approach_reward_scale = 2.0
+    retained_ground_support_reward_scale = 3.0
     success_completion_reward_scale = 100.0
 
 
