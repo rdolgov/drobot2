@@ -1,0 +1,57 @@
+{
+  "status": "STOCHASTIC_100_PERCENT_BATCH_NOT_DETERMINISTICALLY_CONVERGED",
+  "algorithm": "pure PPO",
+  "parallel_environments": 128,
+  "seed": 1102,
+  "source_checkpoint_iteration": 260,
+  "selected_checkpoint_iteration": 359,
+  "new_transitions": 307200,
+  "actor_observation_values": 70,
+  "actor_inputs": [
+    "IMU angular velocity",
+    "IMU projected gravity",
+    "joint position error",
+    "joint velocity",
+    "previous action",
+    "four foot load/contact channels",
+    "VL53L5CX compressed depth"
+  ],
+  "excluded_actor_inputs": [
+    "RGB camera",
+    "simulator root pose",
+    "simulator stair coordinates",
+    "terrain height ground truth"
+  ],
+  "success_contract": {
+    "symmetric_any_foot": true,
+    "minimum_clearance_m": 0.19,
+    "hold_steps": 8,
+    "control_rate_hz": 30,
+    "minimum_supported_feet": 3,
+    "minimum_upright_cosine": 0.7
+  },
+  "continuation_metrics": {
+    "best_success_rate": 1.0,
+    "best_success_iterations": [260, 355],
+    "final_success_rate": 0.0,
+    "maximum_clearance_m": 0.3890727758,
+    "maximum_clearance_iteration": 312,
+    "maximum_lift_hold_s": 0.2666667104,
+    "maximum_lift_hold_iteration": 355
+  },
+  "selected_checkpoint_sha256": "13A8E70AE3FF77ED4119F06F34303D512FD2C6045D94F0E83EF6D0A416C00676",
+  "review": {
+    "seed": 1103,
+    "frames": 180,
+    "fps": 30,
+    "policy_mode": "deterministic",
+    "video": "reviews/ppo-foot-lift-pure-19cm-model359-seed1103.mp4",
+    "note": "Unseen-seed mean policy folds and resets; not a deterministic supported-lift pass."
+  },
+  "stair_geometry_m": {
+    "rise": 0.18,
+    "tread_depth": 0.25
+  },
+  "effort_limit_nm": 0.8825985
+}
+

@@ -112,6 +112,14 @@ That continuation produced repeated strict success batches, peaking at 50%,
 and the new deterministic six-second review still collapses and resets; it is
 not a foot-lift pass or a stair-climb pass.
 
+A further 307,200-transition continuation reproduced the stochastic lift more
+strongly: two reset batches reached 100% strict success, maximum clearance was
+0.3891 m, and the supported hold reached the complete 0.2667 s gate. The final
+batch was still 0%, and deterministic iteration-359 playback on unseen seed
+1103 folded and reset. The useful conclusion is unchanged: reachable motion
+and successful sampled actions exist, but PPO has not yet moved that behavior
+into a reliable mean policy.
+
 ## Editable sources
 
 - `simulation/isaac/rl/parallel_stairs/pure_stairs_env.py`: vectorized
