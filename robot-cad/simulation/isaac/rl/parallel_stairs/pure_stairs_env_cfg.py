@@ -185,6 +185,7 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     reset_forward_jitter_m = 0.02
     reset_fold_fraction_min = None
     reset_fold_fraction_max = None
+    reset_alpha_power = 1.0
     reset_base_height_min_m = None
     reset_base_height_max_m = None
     first_step_curriculum = False
@@ -446,6 +447,15 @@ class DrobotPureStairsFirstStepWidth105Low37HipEnvCfg(
     def __post_init__(self) -> None:
         super().__post_init__()
         _apply_folded_reset(self, self.reset_fold_fraction)
+
+
+@configclass
+class DrobotPureStairsFirstStepWidth105Low25To37HardBiasHipEnvCfg(
+    DrobotPureStairsFirstStepWidth105Low25To37HipEnvCfg
+):
+    """Keep the successful mixed bridge while sampling its harder half 75%."""
+
+    reset_alpha_power = 0.5
 
 
 @configclass

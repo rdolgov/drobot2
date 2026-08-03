@@ -215,6 +215,17 @@ class DrobotPureStairsFirstStepWidth105Low37HipPPORunnerCfg(
 
 
 @configclass
+class DrobotPureStairsFirstStepWidth105Low25To37HardBiasHipPPORunnerCfg(
+    DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
+):
+    """Continue model 776 with 75% of resets in the bridge's harder half."""
+
+    experiment_name = (
+        "drobot_pure_stairs_first_step_width105_low25_to_37_hard_bias_hip_180x250_direct"
+    )
+
+
+@configclass
 class DrobotPureStairsFirstStepWidth105Low75HipPPORunnerCfg(
     DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg
 ):

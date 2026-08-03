@@ -511,3 +511,12 @@ def test_low25_to_37_bridge_randomizes_only_hardware_representable_reset_state()
     assert fixed["reset_fold_fraction"] == 0.375
     assert "DrobotPureStairsFirstStepWidth105Low37HipPPORunnerCfg" in runner_source
     assert "Drobot-Pure-Stairs-First-Step-Width105-Low37-Hip-Direct" in registration
+
+    hard_bias = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepWidth105Low25To37HardBiasHipEnvCfg"
+    )
+    assert hard_bias["reset_alpha_power"] == 0.5
+    assert "torch.rand(len(env_ids), device=self.device).pow(" in env_source
+    assert "self.cfg.reset_alpha_power" in env_source
+    assert "DrobotPureStairsFirstStepWidth105Low25To37HardBiasHipPPORunnerCfg" in runner_source
+    assert "Drobot-Pure-Stairs-First-Step-Width105-Low25-To37-HardBias-Hip-Direct" in registration

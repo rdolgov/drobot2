@@ -627,7 +627,9 @@ class DrobotPureStairsEnv(DirectRLEnv):
         fold_max = self.cfg.reset_fold_fraction_max
         reset_alpha = None
         if fold_min is not None and fold_max is not None:
-            reset_alpha = torch.rand(len(env_ids), device=self.device)
+            reset_alpha = torch.rand(len(env_ids), device=self.device).pow(
+                self.cfg.reset_alpha_power
+            )
             reset_fraction = fold_min + reset_alpha * (fold_max - fold_min)
             reset_hip = NORMAL_HIP_RAD + reset_fraction * (
                 LOW_FOLD_HIP_RAD - NORMAL_HIP_RAD
