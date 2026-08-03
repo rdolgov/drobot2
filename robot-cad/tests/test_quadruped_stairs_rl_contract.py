@@ -73,6 +73,7 @@ from _stair_rl_contract import (  # noqa: E402
     reanchor_inter_leg_transfer_snapshot,
     split_post_clearance_advance_fractions,
     stabilized_support_reference_base_delta,
+    stable_transfer_snapshot_gate_failures,
     staged_support_rear_pitch_scale,
     staged_swing_outward_offset_m,
     staged_swing_reference_base_delta,
@@ -2748,6 +2749,59 @@ def test_pre_unload_gate_requires_stable_four_foot_support() -> None:
         "base_not_settled",
         "body_rate_high",
         "body_not_upright",
+    )
+
+
+def test_stable_transfer_snapshot_allows_only_reanchorable_deficiencies() -> None:
+    ready = {
+        "transfer_gate_failures": (
+            "transfer_incomplete",
+            "swing_unload_incomplete",
+            "next_swing_still_loaded",
+            "base_target_error_high",
+        ),
+        "swing_load_n": 9.5,
+        "maximum_swing_load_n": 12.0,
+        "support_contact_fraction": 1.0,
+        "support_margin_m": 0.025,
+        "minimum_support_margin_m": 0.015,
+        "support_slip_m": 0.018,
+        "maximum_support_slip_m": 0.020,
+        "upright_cosine": 0.985,
+        "minimum_upright_cosine": 0.975,
+        "base_speed_m_s": 0.020,
+        "maximum_base_speed_m_s": 0.050,
+        "body_rate_rad_s": 0.10,
+        "maximum_body_rate_rad_s": 0.25,
+    }
+    assert stable_transfer_snapshot_gate_failures(**ready) == ()
+
+    unstable = dict(ready)
+    unstable.update(
+        transfer_gate_failures=(
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "body_not_upright",
+        ),
+        swing_load_n=12.1,
+        support_contact_fraction=2.0 / 3.0,
+        support_margin_m=0.014,
+        support_slip_m=0.021,
+        upright_cosine=0.974,
+        base_speed_m_s=0.051,
+        body_rate_rad_s=0.251,
+    )
+    assert stable_transfer_snapshot_gate_failures(**unstable) == (
+        "transfer_gate:support_contact_lost",
+        "transfer_gate:placed_tread_unloaded",
+        "transfer_gate:body_not_upright",
+        "swing_load_high",
+        "support_contact_lost",
+        "support_margin_low",
+        "support_slip_high",
+        "body_not_upright",
+        "base_not_settled",
+        "body_rate_high",
     )
 
 

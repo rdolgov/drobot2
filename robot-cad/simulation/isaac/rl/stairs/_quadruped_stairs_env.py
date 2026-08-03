@@ -5083,7 +5083,13 @@ class QuadrupedStairsEnv(QuadrupedWalkEnv):
                         0.0,
                     )
                 )
-                if swing_unload_lift_m > 0.0:
+                require_swing_unload = bool(
+                    active_transfer_config.get(
+                        "require_swing_unload",
+                        swing_unload_lift_m > 0.0,
+                    )
+                )
+                if require_swing_unload:
                     if placement_transfer_swing_total_load_n > float(
                         active_transfer_config[
                             "maximum_swing_unloaded_load_n"

@@ -941,8 +941,9 @@ hip-flexion output rows can alter the actor:
 ```
 
 V88 again completed two 8 N transfers and zero at 4 N. Its minimum load,
-upright score, and maximum slip exactly matched V87. This controlled result
-rules out support hip-flexion outputs alone as the missing degree of freedom.
+upright score, and maximum slip exactly matched V87. The later V94-V95 audit
+found that the transfer residual scale was zero, so these matching results do
+not rule out hip flexion: the learned outputs had no physical authority.
 
 Fresh deterministic strict evaluation used V75 for the first front-right
 foothold and V88 for the front-left transfer:
@@ -1084,9 +1085,10 @@ It reaches `198.213 mm` front-right lift but `38.372 mm` support slip before
 front-left transfer. The V90 model SHA-256 is
 `c78b50a516fd013a1f22da1ecfaca61dfc59f596d0d33c8558cb4e43983ec4d5`.
 
-V90 is not a stair climb. Together V88-V90 rule out missing hip or knee action
-authority as the primary limitation of the current direct-transfer phase. The
-next bounded experiment should replace that phase with a stationary pre-unload
+V90 is not a stair climb. The later V94-V95 audit found that V88-V90's learned
+transfer outputs were multiplied by a zero residual scale. Those runs therefore
+do not rule out hip or knee authority. The next bounded experiment should
+replace that phase with a stationary pre-unload
 hold: require front-left below `4 N` for at least `0.5 s`, all three support
 feet loaded, bounded pitch and slip, then freeze that checkpoint and compose
 the independently verified V80 190 mm lift. Additional traction or camera
@@ -1193,11 +1195,61 @@ Validation for the source and contract changes used:
   --basetemp=.pytest-tmp-v93-held-unload
 ```
 
-V92-V93 rule out both unrestricted actor fine-tuning and small frozen-base
-corrections as solutions to the current direct-transfer phase. They do not
+The later V94-V95 audit found that V92-V93 also inherited a zero physical
+transfer-residual scale. They test snapshot reliability and reward bookkeeping,
+but do not rule out either unrestricted actor fine-tuning or small frozen-base
+corrections. They do not
 invalidate V91: the isolated front-left policy still raises the foot more than
 `205 mm` and holds it for `0.50 s` in `5/5` fresh episodes. The next training
 change should capture the best stable in-transfer state and train a stationary
 unload/hold phase from that snapshot, before composing the verified V91 lift.
 Traction and RGB vision are still secondary: the observed failure is loss of
 load-sharing posture on known geometry, not failure to see the stair.
+
+## V94-V97 stationary transfer audit and corrected active control
+
+V94 added a verified simulator snapshot at the best stable front-left transfer
+boundary. The candidate was selected at transfer step 292 after a continuous
+`0.10 s` stable window: front-left load `9.435354 N`, completed-tread minimum
+load `19.115591 N`, upright cosine `0.985547`, support margin `104.497 mm`,
+support slip `21.117 mm`, base speed `0.020033 m/s`, and body rate
+`0.043351 rad/s`. The snapshot reanchors the COM target to the measured pose and
+has SHA-256
+`83b57f09a5059b34fcbd54a44584bb204977f37d3207bb79d278fab1a7d63c7c`.
+
+The first stationary V94 run restored the snapshot `23/23` times, but exposed a
+decisive implementation error: `inter_leg_transfer.residual_action_scale` was
+`0.0`. PPO produced nonzero hip and knee actions, but the environment multiplied
+them by zero. V95 explicitly set the scale to `1.0`, making all 12 residual
+actions physically active for the first time. Its best transient front-left
+load was `7.769737 N`, but it never held the 8 N gate; the repeated analytic
+unload after snapshot restore drove tilt to `18.109 deg` and support slip to
+`35.029 mm`.
+
+V96 fixed that snapshot-specific double-lift by adding
+`--phase-transfer-swing-unload-lift-m 0`. This froze the already-achieved
+analytic pose and extended every episode from about `6.2 s` to the full `10 s`.
+It also reduced maximum slip to `2.465 mm` and kept upright cosine at or above
+`0.984699`. However, zero lift previously changed the gate semantics from
+"unload below threshold" to "remain in contact," and the already-placed
+front-right tread foot decayed to `0 N` without any reward penalty.
+
+V97 makes the objective explicit with
+`--phase-transfer-require-swing-unload` and adds a configurable cost for load
+deficit on an already-placed tread foot. The 8,192-step seed-1051 run used a
+`20 -> 12 -> 8 -> 4 -> 1 N` curriculum, full 12-joint residual authority, zero
+additional analytic lift, and a `100` reward/N completed-tread deficit cost. It
+remained stable (`2.666 mm` maximum slip, `0.984620` minimum upright cosine,
+`103.692 mm` minimum support margin) but completed no gate. Best transient
+front-left load was `18.279501 N`; the front-right tread load still decayed to
+`0 N`. Model SHA-256 is
+`e0e7dd3810782cb4cb6cd6e3148425d5d6cf5921386b78984d5bae45bef18fca`.
+
+This is negative transfer evidence, not a stair climb and not a replacement for
+the successful V91 video. It narrows the next experiment: preserve the placed
+front-right contact mechanically/control-wise while changing the diagonal
+stance geometry or body-height target, then train only the front-left unload.
+More traction is not indicated by the `2.666 mm` slip result, and better vision
+cannot fix a stationary known-geometry load-retention failure. Camera remains
+recording-only; policy inputs remain IMU, joints/proprioception, previous action,
+contact/load, and analytic `180 mm` rise by `250 mm` tread geometry.

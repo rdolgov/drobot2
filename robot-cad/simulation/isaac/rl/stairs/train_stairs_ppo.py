@@ -379,6 +379,33 @@ parser.add_argument(
     help="Optional learned-residual multiplier for the trained transfer leg.",
 )
 parser.add_argument(
+    "--phase-transfer-swing-unload-lift-m",
+    type=float,
+    default=None,
+    help=(
+        "Optional analytic swing-unload lift for transfer phase training. "
+        "Use zero with a captured mid-transfer snapshot to avoid applying "
+        "the already-realized analytic lift a second time."
+    ),
+)
+parser.add_argument(
+    "--phase-transfer-require-swing-unload",
+    action="store_true",
+    help=(
+        "Enforce the transfer swing-load threshold even when a captured "
+        "pose uses zero additional analytic unload lift."
+    ),
+)
+parser.add_argument(
+    "--phase-transfer-completed-tread-deficit-cost-per-n",
+    type=float,
+    default=None,
+    help=(
+        "Optional training cost for each newton below the required load on "
+        "an already-placed tread foot."
+    ),
+)
+parser.add_argument(
     "--phase-transfer-unload-threshold-n",
     action="append",
     type=float,
@@ -486,6 +513,15 @@ if args.phase_transfer_residual_action_scale is not None and not (
     0.0 < args.phase_transfer_residual_action_scale <= 1.0
 ):
     parser.error("phase transfer residual action scale must be within (0, 1]")
+if args.phase_transfer_swing_unload_lift_m is not None and not (
+    0.0 <= args.phase_transfer_swing_unload_lift_m <= 0.25
+):
+    parser.error("phase transfer swing unload lift must be within [0, 0.25] m")
+if (
+    args.phase_transfer_completed_tread_deficit_cost_per_n is not None
+    and args.phase_transfer_completed_tread_deficit_cost_per_n < 0.0
+):
+    parser.error("phase transfer completed tread deficit cost cannot be negative")
 if args.phase_transfer_unload_successes_per_level < 1:
     parser.error("phase transfer unload successes per level must be positive")
 if args.phase_transfer_unload_threshold_n and not args.phase_train_transfer:
@@ -538,6 +574,25 @@ if args.phase_transfer_residual_action_scale is not None and (
 ):
     parser.error(
         "--phase-transfer-residual-action-scale requires transfer phase training"
+    )
+if args.phase_transfer_swing_unload_lift_m is not None and (
+    phase_snapshot_path is None or not args.phase_train_transfer
+):
+    parser.error(
+        "--phase-transfer-swing-unload-lift-m requires transfer phase "
+        "training from a snapshot"
+    )
+if args.phase_transfer_require_swing_unload and not args.phase_train_transfer:
+    parser.error(
+        "--phase-transfer-require-swing-unload requires transfer phase training"
+    )
+if (
+    args.phase_transfer_completed_tread_deficit_cost_per_n is not None
+    and not args.phase_train_transfer
+):
+    parser.error(
+        "--phase-transfer-completed-tread-deficit-cost-per-n requires "
+        "transfer phase training"
     )
 if precursor_leg_model_paths and not args.phase_train_leg:
     parser.error("--precursor-leg-model requires --phase-train-leg")
@@ -674,6 +729,31 @@ if args.phase_transfer_residual_action_scale is not None:
     )
     transfer_override["residual_action_scale"] = float(
         args.phase_transfer_residual_action_scale
+    )
+if args.phase_transfer_swing_unload_lift_m is not None:
+    transfer_override = task_config["placement_reference"][
+        "inter_leg_transfer"
+    ].setdefault("override_by_next_swing_leg", {}).setdefault(
+        str(args.phase_train_leg),
+        {},
+    )
+    transfer_override["swing_unload_lift_m"] = float(
+        args.phase_transfer_swing_unload_lift_m
+    )
+if args.phase_transfer_require_swing_unload:
+    transfer_override = task_config["placement_reference"][
+        "inter_leg_transfer"
+    ].setdefault("override_by_next_swing_leg", {}).setdefault(
+        str(args.phase_train_leg),
+        {},
+    )
+    transfer_override["require_swing_unload"] = True
+if args.phase_transfer_completed_tread_deficit_cost_per_n is not None:
+    task_config["placement_reference"]["inter_leg_transfer"].setdefault(
+        "training_reward",
+        {},
+    )["completed_tread_load_deficit_cost_per_n"] = float(
+        args.phase_transfer_completed_tread_deficit_cost_per_n
     )
 configured_transfer_post_hold_seconds = float(
     task_config.get("placement_reference", {})
@@ -1333,6 +1413,15 @@ report: dict[str, object] = {
     ),
     "phase_transfer_residual_action_scale": (
         args.phase_transfer_residual_action_scale
+    ),
+    "phase_transfer_swing_unload_lift_m": (
+        args.phase_transfer_swing_unload_lift_m
+    ),
+    "phase_transfer_require_swing_unload": (
+        args.phase_transfer_require_swing_unload
+    ),
+    "phase_transfer_completed_tread_deficit_cost_per_n": (
+        args.phase_transfer_completed_tread_deficit_cost_per_n
     ),
     "phase_post_transfer_hold_only": args.phase_post_transfer_hold_only,
     "precursor_leg_models": {

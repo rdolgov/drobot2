@@ -1055,6 +1055,87 @@ def inter_leg_pre_unload_gate_failures(
     return tuple(failures)
 
 
+def stable_transfer_snapshot_gate_failures(
+    *,
+    transfer_gate_failures: Sequence[str],
+    swing_load_n: float,
+    maximum_swing_load_n: float,
+    support_contact_fraction: float,
+    support_margin_m: float,
+    minimum_support_margin_m: float,
+    support_slip_m: float,
+    maximum_support_slip_m: float,
+    upright_cosine: float,
+    minimum_upright_cosine: float,
+    base_speed_m_s: float,
+    maximum_base_speed_m_s: float,
+    body_rate_rad_s: float,
+    maximum_body_rate_rad_s: float,
+) -> tuple[str, ...]:
+    """Gate a stable near-unload state before saving a training snapshot.
+
+    A candidate may still be partway through the analytic transfer and may
+    still carry load on the future swing foot. Those two deficiencies are the
+    purpose of the stationary follow-up phase. Contact loss, low support
+    margin, excessive motion, tilt, or slip are never admitted into the saved
+    boundary.
+    """
+
+    numeric_values = (
+        swing_load_n,
+        maximum_swing_load_n,
+        support_contact_fraction,
+        support_margin_m,
+        minimum_support_margin_m,
+        support_slip_m,
+        maximum_support_slip_m,
+        upright_cosine,
+        minimum_upright_cosine,
+        base_speed_m_s,
+        maximum_base_speed_m_s,
+        body_rate_rad_s,
+        maximum_body_rate_rad_s,
+    )
+    if not all(np.isfinite(float(value)) for value in numeric_values):
+        return ("non_finite_snapshot_metric",)
+    if (
+        maximum_swing_load_n <= 0.0
+        or minimum_support_margin_m < 0.0
+        or maximum_support_slip_m < 0.0
+        or not 0.0 < minimum_upright_cosine <= 1.0
+        or maximum_base_speed_m_s < 0.0
+        or maximum_body_rate_rad_s < 0.0
+    ):
+        raise ValueError("Stable snapshot thresholds are invalid")
+
+    allowed_incomplete = {
+        "transfer_incomplete",
+        "swing_unload_incomplete",
+        "next_swing_still_loaded",
+        "base_target_error_high",
+    }
+    failures = [
+        f"transfer_gate:{failure}"
+        for failure in transfer_gate_failures
+        if str(failure) not in allowed_incomplete
+    ]
+    if float(swing_load_n) > float(maximum_swing_load_n):
+        failures.append("swing_load_high")
+    if float(support_contact_fraction) < 1.0:
+        failures.append("support_contact_lost")
+    if float(support_margin_m) < float(minimum_support_margin_m):
+        failures.append("support_margin_low")
+    if float(support_slip_m) > float(maximum_support_slip_m):
+        failures.append("support_slip_high")
+    if float(upright_cosine) < float(minimum_upright_cosine):
+        failures.append("body_not_upright")
+    if float(base_speed_m_s) > float(maximum_base_speed_m_s):
+        failures.append("base_not_settled")
+    if float(body_rate_rad_s) > float(maximum_body_rate_rad_s):
+        failures.append("body_rate_high")
+    return tuple(dict.fromkeys(failures))
+
+
 def support_triangle_incenter_xy(
     support_points_xy_m: Sequence[Sequence[float]],
 ) -> np.ndarray:

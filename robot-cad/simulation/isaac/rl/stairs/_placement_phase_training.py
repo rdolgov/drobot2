@@ -459,6 +459,12 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 0.0,
             )
         )
+        self.transfer_completed_tread_load_deficit_cost_per_n = float(
+            transfer_training_config.get(
+                "completed_tread_load_deficit_cost_per_n",
+                0.0,
+            )
+        )
         self.transfer_progress_reward_clip_m = float(
             transfer_training_config.get(
                 "maximum_progress_m_per_step",
@@ -491,6 +497,7 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             self.transfer_vertical_balance_error_progress_reward_per_m,
             self.transfer_swing_load_cost_per_n,
             self.transfer_vertical_balance_error_cost_per_m,
+            self.transfer_completed_tread_load_deficit_cost_per_n,
             self.transfer_progress_reward_clip_m,
             self.transfer_load_progress_reward_clip_n,
             self.transfer_pitch_progress_reward_clip_rad,
@@ -757,6 +764,20 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
             * (0.0 if swing_load is None else swing_load)
             + self.transfer_vertical_balance_error_cost_per_m
             * (0.0 if vertical_balance_error is None else vertical_balance_error)
+            + self.transfer_completed_tread_load_deficit_cost_per_n
+            * max(
+                0.0,
+                float(self.raw_env.completed_foot_minimum_tread_load_n)
+                - max(
+                    0.0,
+                    float(
+                        info.get(
+                            "placement_transfer_completed_tread_min_load_n",
+                            0.0,
+                        )
+                    ),
+                ),
+            )
         )
         progress_reward = (
             self.transfer_balance_progress_reward_per_m
@@ -1436,6 +1457,9 @@ class PlacementPhaseTrainingEnv(gym.Wrapper):
                 "swing_load_cost_per_n": self.transfer_swing_load_cost_per_n,
                 "vertical_balance_target_error_cost_per_m": (
                     self.transfer_vertical_balance_error_cost_per_m
+                ),
+                "completed_tread_load_deficit_cost_per_n": (
+                    self.transfer_completed_tread_load_deficit_cost_per_n
                 ),
                 "maximum_progress_m_per_step": (
                     self.transfer_progress_reward_clip_m

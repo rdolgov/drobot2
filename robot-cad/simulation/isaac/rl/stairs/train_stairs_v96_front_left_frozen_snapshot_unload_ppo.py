@@ -1,0 +1,104 @@
+"""Train front-left unloading without replaying the captured analytic lift.
+
+The V94 snapshot was captured after the analytic transfer had already unloaded
+the front-left foot to 9.44 N. Replaying another 80 mm analytic lift from that
+pose caused V95 to tip and slip. V96 freezes the analytic lift at the captured
+pose and gives PPO full residual authority for the remaining held unload.
+"""
+
+from __future__ import annotations
+
+import runpy
+import sys
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parents[3]
+TRAINER = SCRIPT_DIR / "train_stairs_ppo.py"
+DEFAULT_CONFIG = SCRIPT_DIR / "quadruped_stairs_v14_front_pair_right_then_left.yaml"
+DEFAULT_SNAPSHOT = (
+    PROJECT_ROOT
+    / "simulation"
+    / "isaac"
+    / "output"
+    / "rl"
+    / "front-left-stationary-unload-snapshot-v94-seed1047.json"
+)
+DEFAULT_OUTPUT = (
+    PROJECT_ROOT
+    / "simulation"
+    / "isaac"
+    / "output"
+    / "rl"
+    / "ppo-stairs-v96-front-left-frozen-snapshot-unload-12288-seed1050"
+)
+
+
+def _has_option(arguments: list[str], option: str) -> bool:
+    return any(
+        argument == option or argument.startswith(f"{option}=")
+        for argument in arguments
+    )
+
+
+def main() -> None:
+    arguments = list(sys.argv[1:])
+    defaults = (
+        ("--config", str(DEFAULT_CONFIG)),
+        (
+            "--first-tread-profile",
+            "front-pair-preposition-load-advance-forward-floor",
+        ),
+        ("--output-dir", str(DEFAULT_OUTPUT)),
+        ("--total-timesteps", "12288"),
+        ("--curriculum-total-timesteps", "12288"),
+        ("--seed", "1050"),
+        ("--device", "cpu"),
+        ("--fixed-placement-level", "left-quarter-tread-load"),
+        ("--phase-train-leg", "front_left"),
+        ("--phase-train-transfer", ""),
+        ("--phase-snapshot", str(DEFAULT_SNAPSHOT)),
+        ("--phase-residual-swing-support-all", ""),
+        ("--phase-compact-residual-action", ""),
+        ("--phase-transfer-residual-action-scale", "1.0"),
+        ("--phase-transfer-swing-unload-lift-m", "0.0"),
+        ("--phase-transfer-unload-successes-per-level", "1"),
+        ("--ppo-learning-rate", "0.00002"),
+        ("--ppo-initial-log-std", "-3.50"),
+        ("--ppo-entropy-coefficient", "0"),
+    )
+    for option, value in reversed(defaults):
+        if not _has_option(arguments, option):
+            arguments[:0] = [option] if not value else [option, value]
+    if not _has_option(arguments, "--phase-transfer-unload-threshold-n"):
+        arguments[:0] = [
+            "--phase-transfer-unload-threshold-n",
+            "12",
+            "--phase-transfer-unload-threshold-n",
+            "10",
+            "--phase-transfer-unload-threshold-n",
+            "8",
+            "--phase-transfer-unload-threshold-n",
+            "4",
+            "--phase-transfer-unload-threshold-n",
+            "1",
+        ]
+    if not _has_option(arguments, "--phase-transfer-upright-cosine"):
+        arguments[:0] = [
+            "--phase-transfer-upright-cosine",
+            "0.975",
+            "--phase-transfer-upright-cosine",
+            "0.975",
+            "--phase-transfer-upright-cosine",
+            "0.975",
+            "--phase-transfer-upright-cosine",
+            "0.977",
+            "--phase-transfer-upright-cosine",
+            "0.9781476",
+        ]
+    sys.argv = [str(TRAINER), *arguments]
+    runpy.run_path(str(TRAINER), run_name="__main__")
+
+
+if __name__ == "__main__":
+    main()
