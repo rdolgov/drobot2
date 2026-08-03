@@ -120,6 +120,31 @@ batch was still 0%, and deterministic iteration-359 playback on unseen seed
 and successful sampled actions exist, but PPO has not yet moved that behavior
 into a reliable mean policy.
 
+Those historical reset-batch percentages were subsequently found to describe
+only the environments that happened to reset on the logged step, sometimes a
+single robot. They must not be interpreted as whole-population success rates.
+The logger now accumulates every completed episode and prints authoritative
+totals when a bounded run closes.
+
+Using the corrected metric, a 184,320-transition low-entropy consolidation of
+the 190 mm supported-lift policy completed 5,580 episodes with 375 successes
+(6.7204%) during stochastic PPO. Its deterministic mean policy was then tested
+on two unseen 128-environment seeds with sensor noise: seed 1105 achieved
+151/1,384 (10.9104%), and seed 1106 achieved 142/1,388 (10.2305%). The pooled
+result is 293/2,772 (10.5700%). This is a reproducible supported foot-lift
+result, but it is not yet a stair climb.
+
+Transferring that mean policy to exact first-tread landing produced 24/5,495
+(0.4368%) stochastic training successes. Deterministic evaluation achieved
+2/1,357 (0.1474%) exact supported landings. A following 10 mm body-rise stage
+produced 0/5,443 successes. Thirty-iteration adaptations from the same landing
+checkpoint also produced 0/506 successes from the nearly fully folded 300 mm
+start and 0/2,888 from a true 90-degree sideways start. Sideways exploration
+did generate up to 286.5 mm foot clearance, but did not convert it into valid
+support on the 250 mm tread. The forward stance remains the best measured
+starting point; the immediate bottleneck is support-preserving tread contact,
+not raw leg reach.
+
 ## Editable sources
 
 - `simulation/isaac/rl/parallel_stairs/pure_stairs_env.py`: vectorized
@@ -230,9 +255,16 @@ as an absolute path:
   from iteration 260. RGB was used only to record the review; the actor still
   consumed IMU, depth, joint, previous-action, and foot-load values only.
 - The supported-lift stages processed 1,075,200 transitions. The final 190 mm
-  stage reached a best logged 50% reset-batch success rate, but success remained
-  intermittent. The model-220 deterministic recording is therefore an attempt
-  review, not a pass video.
+  stage reached intermittent success. Historical reset-batch percentages are
+  retained above only as experiment history and are not population estimates.
+- The consolidated model-418 mean policy achieved 293/2,772 (10.5700%) strict
+  supported lifts across two unseen deterministic, noisy-sensor evaluations.
+- The transferred model-477 mean achieved 2/1,357 (0.1474%) exact supported
+  first-tread landings; 10 mm body rise, low-fold landing, and sideways landing
+  remained at 0% in their bounded runs.
+- The single-robot review clip is explicitly a failed deterministic sample
+  (seed 1115, 0/12), consistent with a policy that succeeds only about one in
+  ten episodes. It is not presented as a pass video.
 - No simulation result here proves hardware transfer, robust first-step
   acquisition, or a full climb. Continue training and evaluate several unseen
   seeds before considering mechanical changes or a larger neural network.

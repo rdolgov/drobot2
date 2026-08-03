@@ -97,6 +97,20 @@ class DrobotPureStairsFirstStepLandingLongHipPPORunnerCfg(
 
 
 @configclass
+class DrobotPureStairsFirstStepLandingLowHipPPORunnerCfg(
+    DrobotPureStairsFirstStepLandingHipPPORunnerCfg
+):
+    experiment_name = "drobot_pure_stairs_first_step_landing_low_hip_180x250_direct"
+
+
+@configclass
+class DrobotPureStairsFirstStepLandingSidewaysHipPPORunnerCfg(
+    DrobotPureStairsFirstStepLandingHipPPORunnerCfg
+):
+    experiment_name = "drobot_pure_stairs_first_step_landing_sideways_hip_180x250_direct"
+
+
+@configclass
 class DrobotPureStairsFirstStepClose1HipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
     experiment_name = "drobot_pure_stairs_first_step_close1_hip_180x250_direct"
     save_interval = 1
@@ -136,6 +150,22 @@ class DrobotPureStairsFirstStepClose6HipPPORunnerCfg(DrobotPureStairsHipPPORunne
 class DrobotPureStairsFootLiftHipPPORunnerCfg(DrobotPureStairsHipPPORunnerCfg):
     experiment_name = "drobot_pure_stairs_foot_lift_hip_direct"
     save_interval = 10
+
+
+@configclass
+class DrobotPureStairsFootLiftConsolidateHipPPORunnerCfg(
+    DrobotPureStairsFootLiftHipPPORunnerCfg
+):
+    """Low-entropy PPO stage for moving rare supported lifts into the mean."""
+
+    experiment_name = "drobot_pure_stairs_foot_lift_consolidate_hip_direct"
+    save_interval = 1
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.learning_rate = 5.0e-5
+        self.algorithm.desired_kl = 0.005
 
 
 @configclass

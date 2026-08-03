@@ -89,6 +89,8 @@ class DrobotPureStairsEnv(DirectRLEnv):
         self._steps_since_reset = torch.zeros_like(self._tread_hold_steps)
         self._success = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self._failed = torch.zeros_like(self._success)
+        self._completed_episode_count = torch.zeros((), dtype=torch.long, device=self.device)
+        self._successful_episode_count = torch.zeros((), dtype=torch.long, device=self.device)
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
@@ -115,6 +117,21 @@ class DrobotPureStairsEnv(DirectRLEnv):
 
         light = sim_utils.DomeLightCfg(intensity=1800.0, color=(0.8, 0.8, 0.8))
         light.func("/World/Light", light)
+
+    def close(self):
+        """Report exact episode totals for bounded deterministic evaluations."""
+
+        if getattr(self.cfg, "report_episode_totals_on_close", False) and hasattr(
+            self, "_completed_episode_count"
+        ):
+            completed = int(self._completed_episode_count.item())
+            successful = int(self._successful_episode_count.item())
+            rate = successful / max(completed, 1)
+            print(
+                "[DROBOT_EPISODE_TOTALS] "
+                f"completed={completed} successful={successful} rate={rate:.8f}"
+            )
+        super().close()
 
     def _pre_physics_step(self, actions: torch.Tensor):
         self._previous_actions.copy_(self._actions)
@@ -322,7 +339,11 @@ class DrobotPureStairsEnv(DirectRLEnv):
             - 1.0 * base_contact.float()
         )
         reward = torch.where(self._failed, reward - 5.0, reward)
-        reward = torch.where(self._success, reward + 25.0, reward)
+        reward = torch.where(
+            self._success,
+            reward + self.cfg.success_completion_reward_scale,
+            reward,
+        )
 
         self._previous_root_x.copy_(root_x)
         self._previous_root_z.copy_(root_z)
@@ -427,6 +448,14 @@ class DrobotPureStairsEnv(DirectRLEnv):
         env_ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long)
 
         if len(env_ids) > 0:
+            completed = self._steps_since_reset[env_ids] > 0
+            completed_count = completed.sum()
+            successful_count = (self._success[env_ids] & completed).sum()
+            self._completed_episode_count += completed_count
+            self._successful_episode_count += successful_count
+            cumulative_success_rate = self._successful_episode_count.float() / torch.clamp(
+                self._completed_episode_count, min=1
+            ).float()
             self.extras.setdefault("log", {})["Metrics/max_progress_m"] = (
                 self._episode_max_progress[env_ids].mean().item()
             )
@@ -453,8 +482,20 @@ class DrobotPureStairsEnv(DirectRLEnv):
                 self._episode_max_lift_hold_steps[env_ids].float().mean().item()
                 * self.step_dt
             )
+            self.extras.setdefault("log", {})["Metrics/reset_success_rate"] = (
+                successful_count.float() / torch.clamp(completed_count, min=1).float()
+            ).item()
+            self.extras.setdefault("log", {})["Metrics/reset_episode_count"] = (
+                completed_count.item()
+            )
             self.extras.setdefault("log", {})["Metrics/success_rate"] = (
-                self._success[env_ids].float().mean().item()
+                cumulative_success_rate.item()
+            )
+            self.extras.setdefault("log", {})["Metrics/successful_episodes"] = (
+                self._successful_episode_count.item()
+            )
+            self.extras.setdefault("log", {})["Metrics/completed_episodes"] = (
+                self._completed_episode_count.item()
             )
 
         self._robot.reset(env_ids)

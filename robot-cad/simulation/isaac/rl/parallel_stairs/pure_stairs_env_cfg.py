@@ -182,6 +182,7 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     tread_transfer_reward_scale = 0.0
     narrow_transfer_reward_scale = 0.0
     first_step_completion_reward_scale = 0.0
+    success_completion_reward_scale = 25.0
     tread_height_delta_scale = 0.0
     new_tread_potential_reward_scale = 2.0
     tread_potential_reward_scale = 0.02
@@ -201,6 +202,7 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
     minimum_base_height_m = 0.18
     minimum_upright_cosine = 0.55
     maximum_lateral_deviation_m = 0.55
+    report_episode_totals_on_close = False
 
     def play_mode(self) -> None:
         """Use one terrain tile so the playback camera and robot share world origin."""
@@ -261,6 +263,7 @@ class DrobotPureStairsFirstStepHipEnvCfg(DrobotPureStairsHipEnvCfg):
     reward_tread_count = 1
     support_reward_scale = 0.25
     supported_lift_reward_scale = 0.50
+    report_episode_totals_on_close = True
 
 
 @configclass
@@ -281,6 +284,39 @@ class DrobotPureStairsFirstStepLandingHipEnvCfg(DrobotPureStairsFirstStepHipEnvC
     narrow_tread_potential_reward_scale = 1.00
     tread_contact_reward_scale = 2.00
     first_step_completion_reward_scale = 10.0
+
+
+@configclass
+class DrobotPureStairsFirstStepLandingLowHipEnvCfg(
+    DrobotPureStairsFirstStepLandingHipEnvCfg
+):
+    """First-tread landing from the lowest centered, nearly folded stance."""
+
+    initial_base_height_m = 0.30
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.robot.init_state.pos = (0.0, 0.0, self.initial_base_height_m)
+        self.robot.init_state.joint_pos = {
+            ".*_hip_abduction": 0.0,
+            "front_.*_hip_flexion": -LOW_FOLD_HIP_RAD,
+            "rear_.*_hip_flexion": LOW_FOLD_HIP_RAD,
+            "front_.*_knee": LOW_FOLD_KNEE_RAD,
+            "rear_.*_knee": -LOW_FOLD_KNEE_RAD,
+        }
+
+
+@configclass
+class DrobotPureStairsFirstStepLandingSidewaysHipEnvCfg(
+    DrobotPureStairsFirstStepLandingHipEnvCfg
+):
+    """First-tread landing from a true 90-degree lateral approach."""
+
+    reset_yaw_deg = 90.0
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.robot.init_state.rot = (0.0, 0.0, 0.7071067812, 0.7071067812)
 
 
 @configclass
@@ -372,6 +408,14 @@ class DrobotPureStairsFootLiftHipEnvCfg(DrobotPureStairsHipEnvCfg):
     reward_tread_count = 1
     support_reward_scale = 0.25
     supported_lift_reward_scale = 1.50
+
+
+@configclass
+class DrobotPureStairsFootLiftConsolidateHipEnvCfg(DrobotPureStairsFootLiftHipEnvCfg):
+    """Move rare supported lifts into the policy mean without prescribing a leg."""
+
+    success_completion_reward_scale = 100.0
+    report_episode_totals_on_close = True
 
 
 @configclass

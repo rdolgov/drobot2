@@ -233,3 +233,57 @@ def test_long_landing_runner_retains_complete_rare_sequences() -> None:
     assert "self.algorithm.num_learning_epochs = 10" in runner_source
     assert "self.algorithm.num_mini_batches = 8" in runner_source
     assert "Drobot-Pure-Stairs-First-Step-Landing-Long-Hip-Direct" in registration
+
+
+def test_lift_consolidation_uses_accurate_episode_counts_and_low_entropy() -> None:
+    env_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env.py"
+    ).read_text(encoding="utf-8")
+    cfg_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
+    ).read_text(encoding="utf-8")
+    runner_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/agents/rsl_rl_ppo_cfg.py"
+    ).read_text(encoding="utf-8")
+    registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "self._completed_episode_count += completed_count" in env_source
+    assert "self._successful_episode_count += successful_count" in env_source
+    assert '"Metrics/reset_success_rate"' in env_source
+    assert '"Metrics/completed_episodes"' in env_source
+    assert '"[DROBOT_EPISODE_TOTALS] "' in env_source
+    assert "class DrobotPureStairsFootLiftConsolidateHipEnvCfg" in cfg_source
+    assert "success_completion_reward_scale = 100.0" in cfg_source
+    assert "class DrobotPureStairsFootLiftConsolidateHipPPORunnerCfg" in runner_source
+    assert "self.algorithm.entropy_coef = 0.0" in runner_source
+    assert "self.algorithm.learning_rate = 5.0e-5" in runner_source
+    assert "Drobot-Pure-Stairs-Foot-Lift-Consolidate-Hip-Direct" in registration
+
+    anneal_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/anneal_rsl_rl_checkpoint.py"
+    ).read_text(encoding="utf-8")
+    assert 'std_key = "distribution.std_param"' in anneal_source
+    assert 'infos["noise_anneal"]' in anneal_source
+    assert '"mlp_weights_changed": False' in anneal_source
+
+
+def test_landing_reset_comparison_keeps_full_fold_and_true_sideways_pose() -> None:
+    cfg_source = (
+        ROOT / "simulation/isaac/rl/parallel_stairs/pure_stairs_env_cfg.py"
+    ).read_text(encoding="utf-8")
+    registration = (ROOT / "simulation/isaac/rl/parallel_stairs/__init__.py").read_text(
+        encoding="utf-8"
+    )
+
+    low = _class_assignments(cfg_source, "DrobotPureStairsFirstStepLandingLowHipEnvCfg")
+    sideways = _class_assignments(
+        cfg_source, "DrobotPureStairsFirstStepLandingSidewaysHipEnvCfg"
+    )
+    assert low["initial_base_height_m"] == 0.30
+    assert sideways["reset_yaw_deg"] == 90.0
+    assert "LOW_FOLD_HIP_RAD" in cfg_source
+    assert "LOW_FOLD_KNEE_RAD" in cfg_source
+    assert "Drobot-Pure-Stairs-First-Step-Landing-Low-Hip-Direct" in registration
+    assert "Drobot-Pure-Stairs-First-Step-Landing-Sideways-Hip-Direct" in registration
