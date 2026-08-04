@@ -334,7 +334,7 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/parallel_stairs/force_two_mode_checkpoint.py` | Forces either learned mixture component for diagnostic deterministic evaluation | trained two-mode checkpoint | evaluation-only component checkpoint |
 | `simulation/isaac/rl/parallel_stairs/persistent_mode_policy.py` | Implements reward-trained discrete and continuous episode commitments, exact PPO replay likelihoods, and deterministic JIT deployment with commitment reset | unchanged 70-value actor observation | coherent whole-episode exploration and deployable actions |
 | `simulation/isaac/rl/parallel_stairs/transplant_persistent_bias_checkpoint.py` | Expands a two-mode checkpoint with zero-centered learned 12-joint episode biases while preserving its deterministic control outputs | trained two-mode checkpoint | persistent-bias PPO initializer |
-| `simulation/isaac/rl/parallel_stairs/optimize_episode_bias_cem.py` | Runs a reward-ranked multi-population diagonal CEM over one held 12-joint episode bias per parallel environment, with antithetic samples, winner-centered refinement, and optional randomized resets | unchanged deterministic 70-input sensor policy and strict environment reward | baked deterministic checkpoints and a complete JSON search report |
+| `simulation/isaac/rl/parallel_stairs/optimize_episode_bias_cem.py` | Runs a reward-ranked multi-population diagonal CEM over held 12-joint episode biases, with antithetic samples, winner-centered refinement, randomized resets, and optional repeated randomized evaluations of every candidate | unchanged deterministic 70-input sensor policy and strict environment reward | baked deterministic checkpoints and a complete JSON search report |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-Stand-Rise10-Hip-Direct` | Tests a symmetric four-support, 10 mm body-rise precursor from lower hardware-representable resets | IMU, depth, joints, previous action, and foot loads | strict body-rise checkpoint telemetry |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-ThreeSupport-Rise10-Hip-Direct` | Relaxes the same pure-PPO body-rise precursor to any three verified supports | same 70 deployable actor inputs | three-support rise telemetry |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-Upright-Rise10-Hip-Direct` | Uses the literal non-failing upright + held 10 mm body-rise outcome without a contact-pattern gate | same 70 deployable actor inputs | ungated extension checkpoint telemetry |
@@ -366,6 +366,52 @@ an underscore are imported helpers and are not launched directly.
 | `Drobot-Pure-Stairs-Sideways-TwoSupport-Rise5-Hip-Direct` | Rotates the robot 90 degrees, aims the existing ToF sensor toward the stair, and expands bounded hip-abduction authority | same 70 deployable actor inputs | lateral hip-leverage telemetry and PPO checkpoints |
 | `simulation/isaac/rl/parallel_stairs/zero_agent_pure_parallel_stairs.py` | Runs a vectorized zero-action task smoke for scene and throughput validation | pure task config | console metrics |
 | `simulation/isaac/rl/parallel_stairs/play_pure_parallel_stairs.py` | Loads a pure-parallel checkpoint for deterministic evaluation and optional short RGB recording | task, agent config, and checkpoint | H.264 MP4 |
+| `simulation/isaac/rl/parallel_stairs/run_stair_rl_workflow.ps1` | Runs the current folded-sideways 7.5 cm checkpoint as one visible robot, a bounded five-robot GUI fine-tune, or a long 128-robot headless continuation | packaged checkpoint or latest workflow checkpoint | visual inspection and resumable RSL-RL checkpoints |
+
+### Hands-on current-model workflow
+
+Run these commands from `robot-cad` in order. The first command opens one
+isolated robot with the newest checkpoint produced by this workflow (or the
+current packaged 7.5 cm model before the first training run) and keeps running
+until the Isaac Sim window is closed:
+
+```powershell
+& .\simulation\isaac\rl\parallel_stairs\run_stair_rl_workflow.ps1 `
+  -Mode test
+```
+
+The second command opens the Kit GUI, shows five physics replicas, performs
+five PPO iterations, saves the resulting checkpoint, and exits. Five robots
+use one trajectory minibatch because RSL-RL's persistent-state generator
+requires the environment count to be divisible by the minibatch count.
+
+```powershell
+& .\simulation\isaac\rl\parallel_stairs\run_stair_rl_workflow.ps1 `
+  -Mode train-visible `
+  -Iterations 5 `
+  -NumEnvs 5
+```
+
+The third command automatically resumes the newest checkpoint produced by a
+prior `train-visible` or `train-headless` workflow run, disables visualizers,
+and continues with 128 parallel replicas. Change `-Iterations` for the desired
+training duration.
+
+```powershell
+& .\simulation\isaac\rl\parallel_stairs\run_stair_rl_workflow.ps1 `
+  -Mode train-headless `
+  -Iterations 500 `
+  -NumEnvs 128
+```
+
+All three modes retain the exact 180 mm rise by 250 mm tread, literal 0.30 m
+fully folded yaw-90 reset, 0.8825985 N m effort cap, and 70-value deployable
+IMU/joint/load/depth actor input. `-Checkpoint <path>` explicitly selects a
+different initializer. Training outputs remain under
+`logs/rsl_rl/drobot_pure_stairs_yaw90_fullfold_foot_lift7p5_persistent_bias_cem_robust_hip_180x250_direct/`.
+Parallel replicas may intentionally share display coordinates because
+`replicate_physics=True` isolates their dynamics. The one-robot test hides all
+other render prims, so shared-coordinate replicas cannot clutter that review.
 
 The pure-stairs PPO remains intentionally compact. Its deployable actor is
 `70 -> 256 -> 256 -> 12` with `87,064` trainable parameters including the
@@ -509,6 +555,17 @@ fresh seeds (`1/308` pooled). The 30-second ordinary batch recording at
 success in environment 72, but the third-person camera followed environment 96,
 which did not pass; it is not claimed as visual proof. There is still no
 repeatable 100 or 190 mm lift, tread placement, weight transfer, step, or climb.
+
+A replicated-candidate consolidation then added `1,228,800` transitions. Each
+of 32 candidate biases per generation was evaluated in four independently
+reset physics replicas before ranking. Across 40 generations, eight candidate
+groups produced a strict first-episode pass, but every passing group was only
+`1/4`; neither population center passed. The continuation is rejected and the
+packaged bridge model is unchanged. Isaac Lab intentionally permits isolated
+`replicate_physics=True` environments to share renderer coordinates, which
+made the old many-environment video look like overlapping robots even though
+their dynamics did not interact. New interactive review uses one visible
+robot, and the packaged report records this visual limitation explicitly.
 
 | `simulation/isaac/models/ppo-walk-v1-2m/` | Tracks the frozen flat-walking dependency used by v5 residual control | validated flat PPO ZIP | release dependency |
 | `simulation/isaac/models/ppo-stairs-pure-parallel-v1-lifthold-seed1059/agent.yaml` | Captures the exact RSL-RL PPO configuration for the packaged lift-hold checkpoint | saved training parameters | no generated data |

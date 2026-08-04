@@ -25,7 +25,17 @@ def _consume_viewer_env_index() -> int | None:
     return value
 
 
+def _consume_flag(flag: str) -> bool:
+    """Remove a review-only boolean option before unified CLI parsing."""
+
+    if flag not in sys.argv:
+        return False
+    sys.argv.remove(flag)
+    return True
+
+
 VIEWER_ENV_INDEX = _consume_viewer_env_index()
+HIDE_OTHER_ROBOTS = _consume_flag("--hide_other_robots")
 _launch_simulation = isaaclab_app.launch_simulation
 
 
@@ -52,7 +62,36 @@ def _step_with_selected_success(
     observations, rewards, dones, extras = _rsl_step(self, actions)
     if VIEWER_ENV_INDEX is not None:
         if not getattr(self, "_drobot_camera_aimed", False):
-            origin = self.unwrapped._terrain.env_origins[VIEWER_ENV_INDEX].detach().cpu()
+            origins = self.unwrapped._terrain.env_origins
+            roots = self.unwrapped._robot.data.root_pos_w.torch
+            if HIDE_OTHER_ROBOTS:
+                from pxr import UsdGeom
+
+                for env_index in range(self.num_envs):
+                    if env_index == VIEWER_ENV_INDEX:
+                        continue
+                    prim = self.unwrapped.scene.stage.GetPrimAtPath(
+                        f"/World/envs/env_{env_index}"
+                    )
+                    if prim.IsValid():
+                        UsdGeom.Imageable(prim).MakeInvisible()
+            origin_distances = torch.cdist(origins[:, :2], origins[:, :2])
+            root_distances = torch.cdist(roots[:, :2], roots[:, :2])
+            diagonal = torch.arange(self.num_envs, device=origins.device)
+            origin_distances[diagonal, diagonal] = torch.inf
+            root_distances[diagonal, diagonal] = torch.inf
+            selected_local = roots[VIEWER_ENV_INDEX] - origins[VIEWER_ENV_INDEX]
+            print(
+                "[DROBOT_ENV_SPACING_AUDIT] "
+                f"envs={self.num_envs} "
+                f"min_origin_xy_m={float(origin_distances.min().item()):.6f} "
+                f"min_root_xy_m={float(root_distances.min().item()):.6f} "
+                f"selected_local_root={selected_local.detach().cpu().tolist()} "
+                f"replicate_physics={self.unwrapped.scene.cfg.replicate_physics} "
+                f"other_robots_hidden={HIDE_OTHER_ROBOTS}",
+                flush=True,
+            )
+            origin = origins[VIEWER_ENV_INDEX].detach().cpu()
             eye = (float(origin[0] - 0.75), float(origin[1] - 0.65), 0.68)
             target = (float(origin[0] + 0.05), float(origin[1]), 0.30)
             self.unwrapped.sim.set_camera_view(eye, target)
@@ -65,7 +104,7 @@ def _step_with_selected_success(
                 target=target,
                 camera_prim_path=self.unwrapped.cfg.viewer.cam_prim_path,
             )
-            root = self.unwrapped._robot.data.root_pos_w.torch[VIEWER_ENV_INDEX]
+            root = roots[VIEWER_ENV_INDEX]
             print(
                 f"[DROBOT_REVIEW_CAMERA] origin={origin.tolist()} "
                 f"root={root.detach().cpu().tolist()}",

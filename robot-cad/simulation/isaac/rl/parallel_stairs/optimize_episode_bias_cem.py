@@ -74,6 +74,7 @@ def _update_populations(
     candidates: torch.Tensor,
     scores: torch.Tensor,
     successes: torch.Tensor,
+    success_fractions: torch.Tensor,
     means: torch.Tensor,
     standard_deviations: torch.Tensor,
     elite_count: int,
@@ -94,7 +95,7 @@ def _update_populations(
     for population in range(population_count):
         # Success dominates shaped return; within each class the environment's
         # exact complete-episode return is the only ranking signal.
-        ranked_score = scores[population] + successes[population].to(scores.dtype) * 1.0e6
+        ranked_score = scores[population] + success_fractions[population] * 1.0e6
         order = ranked_score.argsort(descending=True)
         if winner_centered and bool(successes[population].any()):
             successful_indices = torch.nonzero(
@@ -165,6 +166,21 @@ parser.add_argument("--checkpoint", type=Path, required=True)
 parser.add_argument("--output_dir", type=Path, required=True)
 parser.add_argument("--num_envs", type=int, default=128)
 parser.add_argument("--populations", type=int, default=2)
+parser.add_argument(
+    "--replicas_per_candidate",
+    type=int,
+    default=1,
+    help=(
+        "Evaluate each sampled bias in this many independently randomized environments "
+        "and rank its aggregate whole-episode reward."
+    ),
+)
+parser.add_argument(
+    "--minimum_success_replicas",
+    type=int,
+    default=1,
+    help="Replicas that must cross the strict environment gate for a robust candidate success.",
+)
 parser.add_argument("--generations", type=int, default=40)
 parser.add_argument("--elite_fraction", type=float, default=0.125)
 parser.add_argument("--initial_std", type=float, default=0.24)
@@ -204,11 +220,20 @@ def main(env_cfg: object, agent_cfg: object) -> None:
     output_dir = args_cli.output_dir.resolve()
     if not checkpoint.is_file():
         raise FileNotFoundError(checkpoint)
-    if args_cli.num_envs % args_cli.populations:
-        raise ValueError("num_envs must be divisible by populations")
-    population_size = args_cli.num_envs // args_cli.populations
+    if args_cli.replicas_per_candidate < 1:
+        raise ValueError("replicas_per_candidate must be positive")
+    if not 1 <= args_cli.minimum_success_replicas <= args_cli.replicas_per_candidate:
+        raise ValueError(
+            "minimum_success_replicas must fit inside replicas_per_candidate"
+        )
+    evaluation_group_size = args_cli.populations * args_cli.replicas_per_candidate
+    if args_cli.num_envs % evaluation_group_size:
+        raise ValueError(
+            "num_envs must be divisible by populations * replicas_per_candidate"
+        )
+    population_size = args_cli.num_envs // evaluation_group_size
     if population_size % 2:
-        raise ValueError("each population must contain an even number of environments")
+        raise ValueError("each population must contain an even number of candidates")
     elite_count = max(2, round(population_size * args_cli.elite_fraction))
 
     with launch_simulation(env_cfg, args_cli):
@@ -272,6 +297,7 @@ def main(env_cfg: object, agent_cfg: object) -> None:
         global_best_ranked_score = -torch.inf
         global_best_return = -torch.inf
         global_best_success = False
+        global_best_success_replicas = 0
         success_threshold = 0.5 * float(env_cfg.success_completion_reward_scale)
         max_steps = int(env.unwrapped.max_episode_length) + 2
 
@@ -284,7 +310,10 @@ def main(env_cfg: object, agent_cfg: object) -> None:
                 generator,
                 args_cli.max_abs_bias,
             )
-            candidates = candidate_grid.reshape(args_cli.num_envs, 12)
+            replicated_candidate_grid = candidate_grid[:, :, None, :].expand(
+                -1, -1, args_cli.replicas_per_candidate, -1
+            )
+            candidates = replicated_candidate_grid.reshape(args_cli.num_envs, 12)
             obs, _ = env.reset()
             policy.reset(torch.ones(args_cli.num_envs, dtype=torch.long, device=device))
             episode_returns = torch.zeros(args_cli.num_envs, device=device)
@@ -312,16 +341,27 @@ def main(env_cfg: object, agent_cfg: object) -> None:
                     if not bool(active.any()):
                         break
 
-            return_grid = episode_returns.reshape(
-                args_cli.populations, population_size
+            replica_return_grid = episode_returns.reshape(
+                args_cli.populations,
+                population_size,
+                args_cli.replicas_per_candidate,
             )
-            success_grid = successes.reshape(args_cli.populations, population_size)
+            replica_success_grid = successes.reshape(
+                args_cli.populations,
+                population_size,
+                args_cli.replicas_per_candidate,
+            )
+            return_grid = replica_return_grid.mean(dim=-1)
+            success_count_grid = replica_success_grid.sum(dim=-1)
+            success_fraction_grid = replica_success_grid.float().mean(dim=-1)
+            success_grid = success_count_grid >= args_cli.minimum_success_replicas
             old_best_biases = best_biases
             means, standard_deviations, generation_best_biases, generation_scores = (
                 _update_populations(
                     candidate_grid,
                     return_grid,
                     success_grid,
+                    success_fraction_grid,
                     means,
                     standard_deviations,
                     elite_count,
@@ -337,23 +377,35 @@ def main(env_cfg: object, agent_cfg: object) -> None:
             )
             best_ranked_scores = torch.maximum(best_ranked_scores, generation_scores)
 
-            ranked = episode_returns + successes.to(episode_returns.dtype) * 1.0e6
+            ranked = return_grid + success_fraction_grid * 1.0e6
             best_index = int(ranked.argmax().item())
-            best_value = float(ranked[best_index].item())
+            best_value = float(ranked.reshape(-1)[best_index].item())
             if best_value > float(global_best_ranked_score):
                 global_best_ranked_score = best_value
-                global_best_bias = candidates[best_index].clone()
-                global_best_return = float(episode_returns[best_index].item())
-                global_best_success = bool(successes[best_index].item())
+                global_best_bias = candidate_grid.reshape(-1, 12)[best_index].clone()
+                global_best_return = float(return_grid.reshape(-1)[best_index].item())
+                global_best_success = bool(success_grid.reshape(-1)[best_index].item())
+                global_best_success_replicas = int(
+                    success_count_grid.reshape(-1)[best_index].item()
+                )
 
             center_successes = int(success_grid[:, 0].sum().item())
             record = {
                 "generation": generation,
                 "successes": int(successes.sum().item()),
+                "successful_candidates": int(success_grid.sum().item()),
                 "center_successes": center_successes,
+                "center_replica_successes": [
+                    int(value) for value in success_count_grid[:, 0].tolist()
+                ],
                 "return_mean": float(episode_returns.mean().item()),
                 "return_max": float(episode_returns.max().item()),
+                "candidate_return_mean": float(return_grid.mean().item()),
+                "candidate_return_max": float(return_grid.max().item()),
                 "population_successes": [
+                    int(value) for value in replica_success_grid.sum(dim=(1, 2)).tolist()
+                ],
+                "population_successful_candidates": [
                     int(value) for value in success_grid.sum(dim=1).tolist()
                 ],
                 "population_mean_std": [
@@ -366,6 +418,7 @@ def main(env_cfg: object, agent_cfg: object) -> None:
             print(
                 "[CEM] "
                 f"generation={generation:03d} successes={record['successes']} "
+                f"successful_candidates={record['successful_candidates']} "
                 f"center_successes={center_successes} "
                 f"return_mean={record['return_mean']:.5f} "
                 f"return_max={record['return_max']:.5f} "
@@ -376,11 +429,11 @@ def main(env_cfg: object, agent_cfg: object) -> None:
 
         timestamp = datetime.now(UTC).isoformat()
         report = {
-            "schema_version": 1,
+            "schema_version": 2,
             "algorithm": (
-                "winner_centered_multi_population_diagonal_cem"
+                "replicated_winner_centered_multi_population_diagonal_cem"
                 if args_cli.winner_centered
-                else "multi_population_diagonal_cem"
+                else "replicated_multi_population_diagonal_cem"
             ),
             "pure_reward_driven": True,
             "selected_leg_input": False,
@@ -392,6 +445,8 @@ def main(env_cfg: object, agent_cfg: object) -> None:
             "num_envs": args_cli.num_envs,
             "populations": args_cli.populations,
             "population_size": population_size,
+            "replicas_per_candidate": args_cli.replicas_per_candidate,
+            "minimum_success_replicas": args_cli.minimum_success_replicas,
             "generations": args_cli.generations,
             "transitions": args_cli.num_envs * args_cli.generations * int(
                 env.unwrapped.max_episode_length
@@ -407,6 +462,7 @@ def main(env_cfg: object, agent_cfg: object) -> None:
                 str(initial_report_path) if initial_report_path is not None else None
             ),
             "global_best_success": global_best_success,
+            "global_best_success_replicas": global_best_success_replicas,
             "global_best_return": global_best_return,
             "global_best_bias": [float(value) for value in global_best_bias.tolist()],
             "final_means": means.tolist(),
@@ -427,6 +483,8 @@ def main(env_cfg: object, agent_cfg: object) -> None:
             "seed": args_cli.seed,
             "generations": args_cli.generations,
             "num_envs": args_cli.num_envs,
+            "replicas_per_candidate": args_cli.replicas_per_candidate,
+            "minimum_success_replicas": args_cli.minimum_success_replicas,
             "report": str(report_path),
             "created_at": timestamp,
             "optimizer_state_reset": True,

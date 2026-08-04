@@ -916,6 +916,14 @@ def test_episode_bias_cem_is_reward_only_and_bakes_deployable_centers() -> None:
     assert "center_start = 2 + 2 * 12" in source
     assert "output_bias[start : start + 12] += bias" in source
     assert 'parser.add_argument("--num_envs", type=int, default=128)' in source
+    assert '"--replicas_per_candidate"' in source
+    assert '"--minimum_success_replicas"' in source
+    assert "replicated_candidate_grid = candidate_grid[:, :, None, :].expand" in source
+    assert "replica_return_grid.mean(dim=-1)" in source
+    assert "replica_success_grid.float().mean(dim=-1)" in source
+    assert "success_count_grid >= args_cli.minimum_success_replicas" in source
+    assert "success_fraction_grid * 1.0e6" in source
+    assert '"replicas_per_candidate": args_cli.replicas_per_candidate' in source
     assert '"--initial_report"' in source
     assert '"--winner_centered"' in source
 
@@ -923,7 +931,29 @@ def test_episode_bias_cem_is_reward_only_and_bakes_deployable_centers() -> None:
 def test_parallel_play_can_follow_a_reproducible_success_environment() -> None:
     source = _source("play_pure_parallel_stairs.py")
     assert 'flag = "--viewer_env_index"' in source
+    assert 'HIDE_OTHER_ROBOTS = _consume_flag("--hide_other_robots")' in source
+    assert "UsdGeom.Imageable(prim).MakeInvisible()" in source
+    assert "[DROBOT_ENV_SPACING_AUDIT]" in source
+    assert "min_origin_xy_m=" in source
+    assert "min_root_xy_m=" in source
+    assert "replicate_physics=" in source
     assert 'env_cfg.viewer.origin_type = "world"' in source
-    assert "_terrain.env_origins[VIEWER_ENV_INDEX]" in source
+    assert "origin = origins[VIEWER_ENV_INDEX]" in source
     assert "set_kit_renderer_camera_view(" in source
     assert "[DROBOT_RECORDED_SUCCESS]" in source
+
+
+def test_manual_stair_rl_workflow_separates_visual_and_headless_modes() -> None:
+    source = _source("run_stair_rl_workflow.ps1")
+    assert '[ValidateSet("test", "train-visible", "train-headless")]' in source
+    assert '"--num_envs 1"' not in source
+    assert "--viewer_env_index 0" in source
+    assert "--hide_other_robots" in source
+    assert '$visibleEnvs = if ($NumEnvs -gt 0) { $NumEnvs } else { 5 }' in source
+    assert '$headlessEnvs = if ($NumEnvs -gt 0) { $NumEnvs } else { 128 }' in source
+    assert '-Visualizer "kit"' in source
+    assert '-Visualizer "none"' in source
+    assert 'agent.algorithm.num_mini_batches=1' in source
+    assert '-PreferWorkflowRun' in source
+    assert '"--resume"' in source
+    assert '"--max_iterations"' in source

@@ -21,7 +21,18 @@ A population center passed once during search. Fresh screens were 0/165 and
 one strict success in a non-filmed environment; the archived ordinary attempt
 therefore must not be described as a visual success.
 
+A later robustness audit evaluated every candidate bias in four independently
+reset physics replicas before ranking it. The 40-generation run added
+1,228,800 transitions and found eight first-episode strict passes across eight
+candidate groups, but every group was only 1/4 and neither population center
+passed. The continuation is rejected and `model.pt` remains unchanged. Its
+schema-2 report is `replicated_cem_report_seed1471.json`.
+
+Isaac Lab's `replicate_physics=True` isolates the parallel dynamics even when
+several replicas share renderer coordinates. The archived 30-second video drew
+those isolated replicas together and is visually cluttered; it is not evidence
+of robot-to-robot interaction. New interactive review uses one visible robot.
+
 The next work should increase repeatability at 75 mm before returning to the
 rare 100 mm gate, then proceed to 190 mm clearance, 250 mm tread placement,
 weight transfer, and ascent.
-
