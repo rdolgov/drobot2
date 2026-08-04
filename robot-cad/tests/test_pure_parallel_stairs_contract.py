@@ -959,10 +959,12 @@ def test_manual_stair_rl_workflow_separates_visual_and_headless_modes() -> None:
     assert '"--resume"' in source
     assert '"--max_iterations"' in source
     assert (
-        "Drobot-Pure-Stairs-Yaw90-Neutral-Foot-Lift7p5-"
+        "Drobot-Pure-Stairs-Forward-Neutral-Foot-Lift7p5-"
         "PersistentBias-CEM-Robust-Hip-Direct"
     ) in source
-    assert "drobot_pure_stairs_yaw90_neutral_foot_lift7p5" in source
+    assert "drobot_pure_stairs_forward_neutral_foot_lift7p5" in source
+    assert "$legacyExperimentRoot" in source
+    assert "foreach ($searchRoot in @($experimentRoot, $legacyExperimentRoot))" in source
 
 
 def test_manual_stair_rl_workflow_uses_a_neutral_non_crossed_reset() -> None:
@@ -1002,4 +1004,35 @@ def test_manual_stair_rl_workflow_uses_a_neutral_non_crossed_reset() -> None:
     assert "actions = torch.zeros_like(actions)" in play_source
     assert "[DROBOT_NEUTRAL_HOLD]" in play_source
     assert "[DROBOT_NEUTRAL_CONTACT_AUDIT]" in play_source
+    assert "[DROBOT_FORWARD_DEPTH_AUDIT]" in play_source
     assert "self.unwrapped._foot_forces()" in play_source
+    assert "self.unwrapped._depth_observation" in play_source
+
+
+def test_manual_stair_rl_workflow_faces_robot_and_depth_sensor_forward() -> None:
+    cfg_source = _source("pure_stairs_env_cfg.py")
+    runner_source = _source("agents/rsl_rl_ppo_cfg.py")
+    registration = _source("__init__.py")
+    forward = _class_assignments(
+        cfg_source,
+        "DrobotPureStairsForwardNeutralFootLift7p5CemRobustHipEnvCfg",
+    )
+    post_init = _method_source(
+        cfg_source,
+        "DrobotPureStairsForwardNeutralFootLift7p5CemRobustHipEnvCfg",
+        "__post_init__",
+    )
+
+    assert forward["reset_yaw_deg"] == 0.0
+    assert "self.robot.init_state.rot = (0.0, 0.0, 0.0, 1.0)" in post_init
+    assert "self.depth_sensor.offset.pos = (0.1145, 0.0, 0.123)" in post_init
+    assert "self.depth_sensor.offset.rot = (0.0, 0.3420201433, 0.0, 0.9396926208)" in post_init
+    assert "previous negative sign aimed upward" in cfg_source
+    assert (
+        "DrobotPureStairsForwardNeutralFootLift7p5PersistentBiasCemRobustHipPPORunnerCfg"
+        in runner_source
+    )
+    assert (
+        "Drobot-Pure-Stairs-Forward-Neutral-Foot-Lift7p5-"
+        "PersistentBias-CEM-Robust-Hip-Direct"
+    ) in registration

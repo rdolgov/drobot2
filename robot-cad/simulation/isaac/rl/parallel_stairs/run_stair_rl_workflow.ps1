@@ -13,12 +13,13 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..")).Path
 $isaacPython = "C:\isaacsim\python.bat"
-$task = "Drobot-Pure-Stairs-Yaw90-Neutral-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct"
+$task = "Drobot-Pure-Stairs-Forward-Neutral-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct"
 $playScript = Join-Path $PSScriptRoot "play_pure_parallel_stairs.py"
 $trainScript = Join-Path $PSScriptRoot "train_pure_parallel_stairs.py"
 $packagedCheckpoint = Join-Path $repoRoot "simulation\isaac\models\ppo-stairs-pure-cem-7p5cm-seed1441\model.pt"
-$experimentName = "drobot_pure_stairs_yaw90_neutral_foot_lift7p5_persistent_bias_cem_robust_hip_180x250_direct"
+$experimentName = "drobot_pure_stairs_forward_neutral_foot_lift7p5_persistent_bias_cem_robust_hip_180x250_direct"
 $experimentRoot = Join-Path $repoRoot "logs\rsl_rl\$experimentName"
+$legacyExperimentRoot = Join-Path $repoRoot "logs\rsl_rl\drobot_pure_stairs_yaw90_neutral_foot_lift7p5_persistent_bias_cem_robust_hip_180x250_direct"
 $bootstrapRun = Join-Path $experimentRoot "_workflow-bootstrap"
 $bootstrapCheckpoint = Join-Path $bootstrapRun "model_0.pt"
 
@@ -32,16 +33,20 @@ function Resolve-WorkflowCheckpoint {
     if ($Checkpoint) {
         return (Resolve-Path -LiteralPath $Checkpoint).Path
     }
-    if ($PreferWorkflowRun -and (Test-Path -LiteralPath $experimentRoot -PathType Container)) {
-        $workflowRuns = Get-ChildItem -LiteralPath $experimentRoot -Directory |
-            Where-Object { $_.Name -match "_manual-(visible|headless)$" } |
-            Sort-Object LastWriteTime -Descending
-        foreach ($run in $workflowRuns) {
-            $candidate = Get-ChildItem -LiteralPath $run.FullName -Filter "model_*.pt" -File |
-                Sort-Object LastWriteTime -Descending |
-                Select-Object -First 1
-            if ($null -ne $candidate) {
-                return $candidate.FullName
+    if ($PreferWorkflowRun) {
+        foreach ($searchRoot in @($experimentRoot, $legacyExperimentRoot)) {
+            if (Test-Path -LiteralPath $searchRoot -PathType Container) {
+                $workflowRuns = Get-ChildItem -LiteralPath $searchRoot -Directory |
+                    Where-Object { $_.Name -match "_manual-(visible|headless)$" } |
+                    Sort-Object LastWriteTime -Descending
+                foreach ($run in $workflowRuns) {
+                    $candidate = Get-ChildItem -LiteralPath $run.FullName -Filter "model_*.pt" -File |
+                        Sort-Object LastWriteTime -Descending |
+                        Select-Object -First 1
+                    if ($null -ne $candidate) {
+                        return $candidate.FullName
+                    }
+                }
             }
         }
     }

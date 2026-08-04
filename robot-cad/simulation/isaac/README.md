@@ -360,6 +360,7 @@ an underscore are imported helpers and are not launched directly.
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-CEM-Robust-Hip-Direct` | Retests the accepted 50 mm CEM center with 0.02 rad joint and 0.015 m lateral reset variability | same 70 deployable actor inputs and 512-by-512 persistent-bias actor | stronger-reset validation and conservative PPO continuation |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct` | Adds a five-step 75 mm bridge gate under the stronger reset distribution | same pure sensor policy; no selected leg, gait, IK, or reference motion | rare out-of-search 75 mm authority evidence |
 | `Drobot-Pure-Stairs-Yaw90-Neutral-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct` | Starts the compatible 75 mm task in a symmetric 0.3305 m four-foot stance whose URDF-solved front/rear tips are separated and touching flat ground | same yaw-90 sensor policy, reward, limits, and actor architecture | hands-on preview and resumable neutral-start PPO checkpoints |
+| `Drobot-Pure-Stairs-Forward-Neutral-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct` | Rotates the grounded neutral robot to face the stairs and restores the VL53L5CX-style depth rays to the forward body mount | same 70-value deployable actor contract, reward, limits, and checkpoint architecture | current hands-on preview and forward-facing PPO checkpoints |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift10-PersistentBias-CEM-Robust-Hip-Direct` | Tests the same reward-ranked episode-bias search at a six-step 100 mm gate | same pure sensor policy and real-test effort cap | rare search-only 100 mm authority evidence |
 | `Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift10-Hip-Direct` | Applies the same fold-distribution bridge and symmetric unload signal at the 100 mm gate | same 70 deployable actor inputs; no selected leg or reference motion | 10 cm transfer candidates for exact full-fold evaluation |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift14-Hip-Direct` | Defines the 140 mm intermediate force-backed lift stage without prescribing a swing leg | same 70 deployable actor inputs | next-stage PPO checkpoints |
@@ -367,7 +368,7 @@ an underscore are imported helpers and are not launched directly.
 | `Drobot-Pure-Stairs-Sideways-TwoSupport-Rise5-Hip-Direct` | Rotates the robot 90 degrees, aims the existing ToF sensor toward the stair, and expands bounded hip-abduction authority | same 70 deployable actor inputs | lateral hip-leverage telemetry and PPO checkpoints |
 | `simulation/isaac/rl/parallel_stairs/zero_agent_pure_parallel_stairs.py` | Runs a vectorized zero-action task smoke for scene and throughput validation | pure task config | console metrics |
 | `simulation/isaac/rl/parallel_stairs/play_pure_parallel_stairs.py` | Loads a pure-parallel checkpoint for deterministic evaluation and optional short RGB recording | task, agent config, and checkpoint | H.264 MP4 |
-| `simulation/isaac/rl/parallel_stairs/run_stair_rl_workflow.ps1` | Runs the current 7.5 cm checkpoint from a neutral sideways stance as one visible robot, a bounded five-robot GUI fine-tune, or a long 128-robot headless continuation | packaged checkpoint or latest workflow checkpoint | visual inspection and resumable neutral-start RSL-RL checkpoints |
+| `simulation/isaac/rl/parallel_stairs/run_stair_rl_workflow.ps1` | Runs the current 7.5 cm checkpoint from a grounded forward-facing stance as one visible robot, a bounded five-robot GUI fine-tune, or a long 128-robot headless continuation | latest forward checkpoint, prior sideways-neutral checkpoint, or packaged checkpoint | visual inspection and resumable forward-facing RSL-RL checkpoints |
 
 ### Hands-on current-model workflow
 
@@ -407,10 +408,11 @@ training duration.
 ```
 
 All three modes retain the exact 180 mm rise by 250 mm tread, use the symmetric
-grounded 0.3305 m stance at yaw 90, the 0.8825985 N m effort cap, and 70-value deployable
+grounded 0.3305 m stance facing the stairs, keep the depth rays on the forward
+body mount, the 0.8825985 N m effort cap, and 70-value deployable
 IMU/joint/load/depth actor input. `-Checkpoint <path>` explicitly selects a
 different initializer. Training outputs remain under
-`logs/rsl_rl/drobot_pure_stairs_yaw90_neutral_foot_lift7p5_persistent_bias_cem_robust_hip_180x250_direct/`.
+`logs/rsl_rl/drobot_pure_stairs_forward_neutral_foot_lift7p5_persistent_bias_cem_robust_hip_180x250_direct/`.
 Parallel replicas may intentionally share display coordinates because
 `replicate_physics=True` isolates their dynamics. The one-robot test hides all
 other render prims, so shared-coordinate replicas cannot clutter that review.

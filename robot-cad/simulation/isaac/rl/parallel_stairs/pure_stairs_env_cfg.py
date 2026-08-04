@@ -175,7 +175,9 @@ class DrobotPureStairsEnvCfg(DirectRLEnvCfg):
         update_period=1.0 / 15.0,
         offset=RayCasterCfg.OffsetCfg(
             pos=(0.1145, 0.0, 0.123),
-            rot=(0.0, -0.3420201433, 0.0, 0.9396926208),
+            # Positive Y pitches the +X lidar rays downward in Isaac's
+            # quaternion convention; the previous negative sign aimed upward.
+            rot=(0.0, 0.3420201433, 0.0, 0.9396926208),
         ),
         ray_alignment="base",
         pattern_cfg=patterns.LidarPatternCfg(
@@ -794,6 +796,21 @@ class DrobotPureStairsYaw90NeutralFootLift7p5CemRobustHipEnvCfg(
     def __post_init__(self) -> None:
         super().__post_init__()
         _apply_stable_neutral_reset(self)
+
+
+@configclass
+class DrobotPureStairsForwardNeutralFootLift7p5CemRobustHipEnvCfg(
+    DrobotPureStairsYaw90NeutralFootLift7p5CemRobustHipEnvCfg
+):
+    """Face the grounded neutral stance and its depth sensor toward the stairs."""
+
+    reset_yaw_deg = 0.0
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.robot.init_state.rot = (0.0, 0.0, 0.0, 1.0)
+        self.depth_sensor.offset.pos = (0.1145, 0.0, 0.123)
+        self.depth_sensor.offset.rot = (0.0, 0.3420201433, 0.0, 0.9396926208)
 
 
 @configclass

@@ -89,10 +89,18 @@ def _step_with_selected_success(
         forces = self.unwrapped._foot_forces()[selected_index]
         foot_z = self.unwrapped._foot_tip_positions()[selected_index, :, 2]
         origin_z = self.unwrapped._terrain.env_origins[selected_index, 2]
+        depth_m = self.unwrapped._depth_observation[selected_index] * 1.5
         print(
             "[DROBOT_NEUTRAL_CONTACT_AUDIT] "
             f"foot_forces_n={forces.detach().cpu().tolist()} "
             f"foot_z_local_m={(foot_z - origin_z).detach().cpu().tolist()}",
+            flush=True,
+        )
+        print(
+            "[DROBOT_FORWARD_DEPTH_AUDIT] "
+            f"near_bins={int((depth_m < 1.49).sum().item())}/24 "
+            f"min_m={float(depth_m.min().item()):.4f} "
+            f"mean_m={float(depth_m.mean().item()):.4f}",
             flush=True,
         )
     if VIEWER_ENV_INDEX is not None:
