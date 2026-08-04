@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "model_sha256": "4d567a5adcbc2b0fa1243e830801122f127235cbe2ce07e67bdc34daeb2fda55",
+  "cem_report_sha256": "e64a5b575d4a3021c259b95d4ab2399cb7d0981052b006a5e3702a47e7c4d112",
+  "actor_observation_count": 70,
+  "actor_trainable_parameters": 324706,
+  "actor_fp32_bytes_approx": 1298824,
+  "checkpoint_bytes": 2507781,
+  "effort_limit_nm": 0.8825985,
+  "pure_rl": true,
+  "selected_leg_input": false,
+  "reference_motion": false
+}

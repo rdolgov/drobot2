@@ -14,9 +14,11 @@ import sys
 from pathlib import Path
 
 import gymnasium as gym
+import torch
 import warp as wp
 from isaaclab import app as isaaclab_app
 from isaaclab_rl.entrypoints import common as entrypoint_common
+from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
 from rsl_rl.runners import OnPolicyRunner
 
 wp.config.enable_backward = False
@@ -73,6 +75,29 @@ def _skip_policy_export(self: OnPolicyRunner, path: str, filename: str, **_: obj
 
 OnPolicyRunner.export_policy_to_jit = _skip_policy_export
 OnPolicyRunner.export_policy_to_onnx = _skip_policy_export
+
+_rsl_step = RslRlVecEnvWrapper.step
+
+
+def _step_with_success_indices(
+    self: RslRlVecEnvWrapper, actions: torch.Tensor
+) -> tuple[object, torch.Tensor, torch.Tensor, dict]:
+    """Print strict terminal-success indices for reproducible visual review."""
+
+    observations, rewards, dones, extras = _rsl_step(self, actions)
+    step = getattr(self, "_drobot_evaluation_step", 0)
+    self._drobot_evaluation_step = step + 1
+    completion_reward = float(self.unwrapped.cfg.success_completion_reward_scale)
+    successful = torch.nonzero(
+        dones.bool() & (rewards >= 0.5 * completion_reward), as_tuple=False
+    ).flatten()
+    if successful.numel() > 0:
+        indices = ",".join(str(int(index)) for index in successful.tolist())
+        print(f"[DROBOT_SUCCESS_INDICES] step={step} envs={indices}", flush=True)
+    return observations, rewards, dones, extras
+
+
+RslRlVecEnvWrapper.step = _step_with_success_indices
 
 from isaaclab_rl.entrypoints import run_play_cli  # noqa: E402
 

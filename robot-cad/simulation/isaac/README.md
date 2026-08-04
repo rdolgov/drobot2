@@ -334,6 +334,7 @@ an underscore are imported helpers and are not launched directly.
 | `simulation/isaac/rl/parallel_stairs/force_two_mode_checkpoint.py` | Forces either learned mixture component for diagnostic deterministic evaluation | trained two-mode checkpoint | evaluation-only component checkpoint |
 | `simulation/isaac/rl/parallel_stairs/persistent_mode_policy.py` | Implements reward-trained discrete and continuous episode commitments, exact PPO replay likelihoods, and deterministic JIT deployment with commitment reset | unchanged 70-value actor observation | coherent whole-episode exploration and deployable actions |
 | `simulation/isaac/rl/parallel_stairs/transplant_persistent_bias_checkpoint.py` | Expands a two-mode checkpoint with zero-centered learned 12-joint episode biases while preserving its deterministic control outputs | trained two-mode checkpoint | persistent-bias PPO initializer |
+| `simulation/isaac/rl/parallel_stairs/optimize_episode_bias_cem.py` | Runs a reward-ranked multi-population diagonal CEM over one held 12-joint episode bias per parallel environment, with antithetic samples, winner-centered refinement, and optional randomized resets | unchanged deterministic 70-input sensor policy and strict environment reward | baked deterministic checkpoints and a complete JSON search report |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-Stand-Rise10-Hip-Direct` | Tests a symmetric four-support, 10 mm body-rise precursor from lower hardware-representable resets | IMU, depth, joints, previous action, and foot loads | strict body-rise checkpoint telemetry |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-ThreeSupport-Rise10-Hip-Direct` | Relaxes the same pure-PPO body-rise precursor to any three verified supports | same 70 deployable actor inputs | three-support rise telemetry |
 | `Drobot-Pure-Stairs-Low25-To37-HardBias-Upright-Rise10-Hip-Direct` | Uses the literal non-failing upright + held 10 mm body-rise outcome without a contact-pattern gate | same 70 deployable actor inputs | ungated extension checkpoint telemetry |
@@ -463,6 +464,29 @@ sequence. The next controlled experiment should optimize the persistent
 example an elite/CEM-style reward-only update), then fine-tune the resulting
 deterministic center with sensor feedback.
 
+That reward-only search is now implemented and screened. Three successive
+128-environment, two-population CEM runs added `2,457,600` whole-episode search
+transitions: 40 generations from the early persistent-bias checkpoint, 20
+winner-centered nominal refinements, and 20 winner-centered refinements with
+the configured `0.01 rad` joint and `0.01 m` lateral reset variability. The
+three reports contain `204`, `75`, and `47` first-episode strict successes; the
+randomized run also produced the first successful population center. No
+selected leg, gait phase, reference motion, IK, or simulator-only actor input
+was added: every candidate remained the deterministic 70-input sensor policy
+plus one reward-selected 12-joint bias held for its full episode.
+
+Four fresh randomized screens selected robust population 0 at `19/583`
+strict 50 mm held-foot successes (`3.26%`), narrowly ahead of population 1 at
+`18/568` (`3.17%`). This is the first nonzero deterministic-policy result from
+the literal fully folded sideways reset, but it remains fragile and is not a
+stair-climbing result. The accepted 30.00-second third-person recording is
+`reviews/ppo-stairs-robust-cem-pop0-env10-seed1351-30s.mp4`; filmed environment
+10 itself crossed the strict gate, while all rendered environments totaled
+`26/638`. Visual motion is still an unload/lift exploration with occasional
+destabilization: there is no 100 or 190 mm promotion, tread placement, weight
+transfer, step, or climb. The packaged checkpoint and reports are under
+`simulation/isaac/models/ppo-stairs-pure-cem-fullfold-yaw90-seed1341/`.
+
 | `simulation/isaac/models/ppo-walk-v1-2m/` | Tracks the frozen flat-walking dependency used by v5 residual control | validated flat PPO ZIP | release dependency |
 | `simulation/isaac/models/ppo-stairs-pure-parallel-v1-lifthold-seed1059/agent.yaml` | Captures the exact RSL-RL PPO configuration for the packaged lift-hold checkpoint | saved training parameters | no generated data |
 | `simulation/isaac/models/ppo-stairs-pure-parallel-v1-lifthold-seed1059/env.yaml` | Captures the exact Isaac Lab environment configuration for the packaged lift-hold checkpoint | saved training parameters | no generated data |
@@ -471,6 +495,7 @@ deterministic center with sensor feedback.
 | `simulation/isaac/models/ppo-stairs-pure-width105-low25-seed1129/` | Packages the strongest 0.42 m, 25%-fold reset checkpoint, exact configs, hash, and Low25/Low50 metrics | gradual lower-reset pure-PPO curriculum | stochastic four-support landing checkpoint; no deterministic landing or climb |
 | `simulation/isaac/models/ppo-stairs-pure-low25-to37-seed1135/` | Packages the mixed 0.42-to-0.40 m reset winner, exact configs, hash, reset-bin audit, and fixed-Low37 rejection | correlated lower-reset pure-PPO bridge | harder-half deterministic tread success; no fixed-pose repeatability or climb |
 | `simulation/isaac/models/ppo-stairs-pure-low25-to37-hard-bias-seed1145/` | Packages the 75%-hard-half continuation winner, exact configs, hash, paired two-seed comparison, and RGB review | harder-sample pure-PPO continuation | 5/983 pooled deterministic successes; still no repeatable step, transfer, or climb |
+| `simulation/isaac/models/ppo-stairs-pure-cem-fullfold-yaw90-seed1341/` | Packages the robust reward-ranked episode-bias checkpoint, full CEM report, hashes, four-seed screen, and accepted 30-second selected-environment review | exact 180 mm x 250 mm folded-sideways 50 mm held-lift task | 19/583 strict deterministic-policy successes; no tread placement or climb |
 | `simulation/isaac/models/ppo-stairs-v5-10mm-four-step/` | Tracks the source-equivalent shallow-stair policy, schema-2 manifest, and deterministic evaluation | v5 config/world and source policy | evaluable release package |
 | `simulation/isaac/models/ppo-stairs-v6-180mm-25cm-small/` | Tracks the bounded 180 mm x 250 mm evaluation policy, schema-2 manifest, training/evaluation/recording reports, and explicit failure result | v6 config/world and bounded policy | non-deployable evaluation package |
 | `simulation/isaac/models/ppo-stairs-v6-180mm-25cm-balance-small/` | Tracks the 512-step 180 mm x 250 mm stair smoke model initialized from unsupported balance, exact shared-prefix transfer report, 0/5 evaluation, and recording | v6 config/world and v2 balance policy | non-deployable transfer evaluation package |

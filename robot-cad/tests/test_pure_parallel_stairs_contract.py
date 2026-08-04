@@ -851,3 +851,28 @@ def test_hard_bias_stand_precursor_is_pure_four_support_height_rl() -> None:
     assert "max(self.cfg.first_step_min_base_gain_m, 1.0e-6)" in env_source
     assert "DrobotPureStairsLow25To37HardBiasUprightRise10HipPPORunnerCfg" in runner_source
     assert "Drobot-Pure-Stairs-Low25-To37-HardBias-Upright-Rise10-Hip-Direct" in registration
+
+
+def test_episode_bias_cem_is_reward_only_and_bakes_deployable_centers() -> None:
+    source = _source("optimize_episode_bias_cem.py")
+    assert "multi_population_diagonal_cem" in source
+    assert "winner_centered_multi_population_diagonal_cem" in source
+    assert "episode_returns" in source
+    assert "successes" in source
+    assert "policy(obs) + candidates" in source
+    assert '"selected_leg_input": False' in source
+    assert '"reference_motion": False' in source
+    assert "center_start = 2 + 2 * 12" in source
+    assert "output_bias[start : start + 12] += bias" in source
+    assert 'parser.add_argument("--num_envs", type=int, default=128)' in source
+    assert '"--initial_report"' in source
+    assert '"--winner_centered"' in source
+
+
+def test_parallel_play_can_follow_a_reproducible_success_environment() -> None:
+    source = _source("play_pure_parallel_stairs.py")
+    assert 'flag = "--viewer_env_index"' in source
+    assert 'env_cfg.viewer.origin_type = "world"' in source
+    assert "_terrain.env_origins[VIEWER_ENV_INDEX]" in source
+    assert "set_kit_renderer_camera_view(" in source
+    assert "[DROBOT_RECORDED_SUCCESS]" in source
