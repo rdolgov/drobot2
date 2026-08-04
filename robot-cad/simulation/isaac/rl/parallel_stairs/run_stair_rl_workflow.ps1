@@ -98,6 +98,7 @@ try {
             & $isaacPython $playScript `
                 --viewer_env_index 0 `
                 --hide_other_robots `
+                --neutral_hold_steps 30 `
                 --rl_library rsl_rl `
                 --task $task `
                 --checkpoint $source `

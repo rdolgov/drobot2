@@ -24,8 +24,8 @@ LOW_FOLD_HIP_RAD = 0.7382742736
 LOW_FOLD_KNEE_RAD = 1.4765485472
 NORMAL_HIP_RAD = 0.1544915916
 NORMAL_KNEE_RAD = 0.4699252058
-SEPARATED_NEUTRAL_HIP_RAD = 0.3490658504
-SEPARATED_NEUTRAL_KNEE_RAD = 0.6108652382
+STABLE_NEUTRAL_HIP_RAD = 0.0872664626
+STABLE_NEUTRAL_KNEE_RAD = 0.6981317008
 
 
 def _apply_folded_reset(cfg: DrobotPureStairsEnvCfg, fraction: float) -> None:
@@ -42,20 +42,16 @@ def _apply_folded_reset(cfg: DrobotPureStairsEnvCfg, fraction: float) -> None:
     }
 
 
-def _apply_separated_neutral_reset(cfg: DrobotPureStairsEnvCfg) -> None:
-    """Apply the mirrored hardware-review stance with feet directed outward."""
+def _apply_stable_neutral_reset(cfg: DrobotPureStairsEnvCfg) -> None:
+    """Apply a symmetric four-foot stance solved from the URDF kinematics."""
 
     cfg.robot.init_state.pos = (0.0, 0.0, cfg.initial_base_height_m)
     cfg.robot.init_state.joint_pos = {
         ".*_hip_abduction": 0.0,
-        "front_left_hip_flexion": -SEPARATED_NEUTRAL_HIP_RAD,
-        "rear_left_hip_flexion": SEPARATED_NEUTRAL_HIP_RAD,
-        "front_right_hip_flexion": SEPARATED_NEUTRAL_HIP_RAD,
-        "rear_right_hip_flexion": -SEPARATED_NEUTRAL_HIP_RAD,
-        "front_left_knee": -SEPARATED_NEUTRAL_KNEE_RAD,
-        "rear_left_knee": SEPARATED_NEUTRAL_KNEE_RAD,
-        "front_right_knee": SEPARATED_NEUTRAL_KNEE_RAD,
-        "rear_right_knee": -SEPARATED_NEUTRAL_KNEE_RAD,
+        "front_.*_hip_flexion": STABLE_NEUTRAL_HIP_RAD,
+        "rear_.*_hip_flexion": -STABLE_NEUTRAL_HIP_RAD,
+        "front_.*_knee": STABLE_NEUTRAL_KNEE_RAD,
+        "rear_.*_knee": -STABLE_NEUTRAL_KNEE_RAD,
     }
 
 
@@ -785,16 +781,19 @@ class DrobotPureStairsYaw90NeutralFootLift7p5CemRobustHipEnvCfg(
 ):
     """Start the hands-on workflow from the normal, non-crossed stance."""
 
-    initial_base_height_m = 0.46
+    # FK places every 12.5 mm-radius fork-tip contact center 12.5 mm above
+    # flat ground: front x ~= +0.187 m, rear x ~= -0.187 m, z ~= -0.318 m.
+    initial_base_height_m = 0.3305
     reset_fold_fraction = 0.0
     reset_fold_fraction_min = None
     reset_fold_fraction_max = None
     reset_base_height_min_m = None
     reset_base_height_max_m = None
+    reset_joint_position_noise_rad = 0.0
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        _apply_separated_neutral_reset(self)
+        _apply_stable_neutral_reset(self)
 
 
 @configclass

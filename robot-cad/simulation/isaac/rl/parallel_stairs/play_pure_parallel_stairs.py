@@ -34,8 +34,22 @@ def _consume_flag(flag: str) -> bool:
     return True
 
 
+def _consume_integer(flag: str, default: int = 0) -> int:
+    """Remove a local integer option before unified CLI parsing."""
+
+    if flag not in sys.argv:
+        return default
+    index = sys.argv.index(flag)
+    if index + 1 >= len(sys.argv):
+        raise ValueError(f"{flag} requires an integer")
+    value = int(sys.argv[index + 1])
+    del sys.argv[index : index + 2]
+    return value
+
+
 VIEWER_ENV_INDEX = _consume_viewer_env_index()
 HIDE_OTHER_ROBOTS = _consume_flag("--hide_other_robots")
+NEUTRAL_HOLD_STEPS = _consume_integer("--neutral_hold_steps")
 _launch_simulation = isaaclab_app.launch_simulation
 
 
@@ -59,7 +73,28 @@ def _step_with_selected_success(
 ) -> tuple[object, torch.Tensor, torch.Tensor, dict]:
     """Report whether the robot followed by the review camera passed."""
 
+    review_step = int(getattr(self, "_drobot_review_step", 0))
+    if review_step < NEUTRAL_HOLD_STEPS:
+        actions = torch.zeros_like(actions)
+        if review_step == 0:
+            print(
+                f"[DROBOT_NEUTRAL_HOLD] control_steps={NEUTRAL_HOLD_STEPS} ",
+                f"duration_s={NEUTRAL_HOLD_STEPS * self.unwrapped.step_dt:.3f}",
+                flush=True,
+            )
+    self._drobot_review_step = review_step + 1
     observations, rewards, dones, extras = _rsl_step(self, actions)
+    if NEUTRAL_HOLD_STEPS > 0 and review_step == NEUTRAL_HOLD_STEPS - 1:
+        selected_index = VIEWER_ENV_INDEX if VIEWER_ENV_INDEX is not None else 0
+        forces = self.unwrapped._foot_forces()[selected_index]
+        foot_z = self.unwrapped._foot_tip_positions()[selected_index, :, 2]
+        origin_z = self.unwrapped._terrain.env_origins[selected_index, 2]
+        print(
+            "[DROBOT_NEUTRAL_CONTACT_AUDIT] "
+            f"foot_forces_n={forces.detach().cpu().tolist()} "
+            f"foot_z_local_m={(foot_z - origin_z).detach().cpu().tolist()}",
+            flush=True,
+        )
     if VIEWER_ENV_INDEX is not None:
         if not getattr(self, "_drobot_camera_aimed", False):
             origins = self.unwrapped._terrain.env_origins

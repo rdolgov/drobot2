@@ -949,6 +949,7 @@ def test_manual_stair_rl_workflow_separates_visual_and_headless_modes() -> None:
     assert '"--num_envs 1"' not in source
     assert "--viewer_env_index 0" in source
     assert "--hide_other_robots" in source
+    assert "--neutral_hold_steps 30" in source
     assert '$visibleEnvs = if ($NumEnvs -gt 0) { $NumEnvs } else { 5 }' in source
     assert '$headlessEnvs = if ($NumEnvs -gt 0) { $NumEnvs } else { 128 }' in source
     assert '-Visualizer "kit"' in source
@@ -973,21 +974,20 @@ def test_manual_stair_rl_workflow_uses_a_neutral_non_crossed_reset() -> None:
         "DrobotPureStairsYaw90NeutralFootLift7p5CemRobustHipEnvCfg",
     )
 
-    assert neutral["initial_base_height_m"] == 0.46
+    assert neutral["initial_base_height_m"] == 0.3305
     assert neutral["reset_fold_fraction"] == 0.0
     assert neutral["reset_fold_fraction_min"] is None
     assert neutral["reset_fold_fraction_max"] is None
     assert neutral["reset_base_height_min_m"] is None
     assert neutral["reset_base_height_max_m"] is None
-    assert "_apply_separated_neutral_reset(self)" in cfg_source
-    assert '"front_left_hip_flexion": -SEPARATED_NEUTRAL_HIP_RAD' in cfg_source
-    assert '"rear_left_hip_flexion": SEPARATED_NEUTRAL_HIP_RAD' in cfg_source
-    assert '"front_right_hip_flexion": SEPARATED_NEUTRAL_HIP_RAD' in cfg_source
-    assert '"rear_right_hip_flexion": -SEPARATED_NEUTRAL_HIP_RAD' in cfg_source
-    assert '"front_left_knee": -SEPARATED_NEUTRAL_KNEE_RAD' in cfg_source
-    assert '"rear_left_knee": SEPARATED_NEUTRAL_KNEE_RAD' in cfg_source
-    assert '"front_right_knee": SEPARATED_NEUTRAL_KNEE_RAD' in cfg_source
-    assert '"rear_right_knee": -SEPARATED_NEUTRAL_KNEE_RAD' in cfg_source
+    assert neutral["reset_joint_position_noise_rad"] == 0.0
+    assert "STABLE_NEUTRAL_HIP_RAD = 0.0872664626" in cfg_source
+    assert "STABLE_NEUTRAL_KNEE_RAD = 0.6981317008" in cfg_source
+    assert "_apply_stable_neutral_reset(self)" in cfg_source
+    assert '"front_.*_hip_flexion": STABLE_NEUTRAL_HIP_RAD' in cfg_source
+    assert '"rear_.*_hip_flexion": -STABLE_NEUTRAL_HIP_RAD' in cfg_source
+    assert '"front_.*_knee": STABLE_NEUTRAL_KNEE_RAD' in cfg_source
+    assert '"rear_.*_knee": -STABLE_NEUTRAL_KNEE_RAD' in cfg_source
     assert (
         "DrobotPureStairsYaw90NeutralFootLift7p5PersistentBiasCemRobustHipPPORunnerCfg"
         in runner_source
@@ -996,3 +996,10 @@ def test_manual_stair_rl_workflow_uses_a_neutral_non_crossed_reset() -> None:
         "Drobot-Pure-Stairs-Yaw90-Neutral-Foot-Lift7p5-"
         "PersistentBias-CEM-Robust-Hip-Direct"
     ) in registration
+
+    play_source = _source("play_pure_parallel_stairs.py")
+    assert 'NEUTRAL_HOLD_STEPS = _consume_integer("--neutral_hold_steps")' in play_source
+    assert "actions = torch.zeros_like(actions)" in play_source
+    assert "[DROBOT_NEUTRAL_HOLD]" in play_source
+    assert "[DROBOT_NEUTRAL_CONTACT_AUDIT]" in play_source
+    assert "self.unwrapped._foot_forces()" in play_source

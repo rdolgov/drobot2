@@ -359,7 +359,7 @@ an underscore are imported helpers and are not launched directly.
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-Consolidate-Hip-Direct` | Gives the one-time latent choice 32-times policy-gradient/KL credit while removing entropy and reducing learning rate | same sensor-only actor and exact full-fold sideways reset | controlled latent-credit comparison |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-CEM-Robust-Hip-Direct` | Retests the accepted 50 mm CEM center with 0.02 rad joint and 0.015 m lateral reset variability | same 70 deployable actor inputs and 512-by-512 persistent-bias actor | stronger-reset validation and conservative PPO continuation |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct` | Adds a five-step 75 mm bridge gate under the stronger reset distribution | same pure sensor policy; no selected leg, gait, IK, or reference motion | rare out-of-search 75 mm authority evidence |
-| `Drobot-Pure-Stairs-Yaw90-Neutral-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct` | Starts the compatible 75 mm task at the normal 0.46 m stance so front and rear legs do not fold across each other | same yaw-90 sensor policy, reward, limits, and actor architecture | hands-on preview and resumable neutral-start PPO checkpoints |
+| `Drobot-Pure-Stairs-Yaw90-Neutral-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct` | Starts the compatible 75 mm task in a symmetric 0.3305 m four-foot stance whose URDF-solved front/rear tips are separated and touching flat ground | same yaw-90 sensor policy, reward, limits, and actor architecture | hands-on preview and resumable neutral-start PPO checkpoints |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift10-PersistentBias-CEM-Robust-Hip-Direct` | Tests the same reward-ranked episode-bias search at a six-step 100 mm gate | same pure sensor policy and real-test effort cap | rare search-only 100 mm authority evidence |
 | `Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift10-Hip-Direct` | Applies the same fold-distribution bridge and symmetric unload signal at the 100 mm gate | same 70 deployable actor inputs; no selected leg or reference motion | 10 cm transfer candidates for exact full-fold evaluation |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift14-Hip-Direct` | Defines the 140 mm intermediate force-backed lift stage without prescribing a swing leg | same 70 deployable actor inputs | next-stage PPO checkpoints |
@@ -374,7 +374,8 @@ an underscore are imported helpers and are not launched directly.
 Run these commands from `robot-cad` in order. The first command opens one
 isolated robot with the newest checkpoint produced by this workflow (or the
 current packaged 7.5 cm model before the first training run) and keeps running
-until the Isaac Sim window is closed:
+until the Isaac Sim window is closed. Visual test mode holds the grounded
+neutral target for one second before handing control to the policy:
 
 ```powershell
 & .\simulation\isaac\rl\parallel_stairs\run_stair_rl_workflow.ps1 `
@@ -405,8 +406,8 @@ training duration.
   -NumEnvs 128
 ```
 
-All three modes retain the exact 180 mm rise by 250 mm tread, use the normal
-non-crossed 0.46 m stance at yaw 90, the 0.8825985 N m effort cap, and 70-value deployable
+All three modes retain the exact 180 mm rise by 250 mm tread, use the symmetric
+grounded 0.3305 m stance at yaw 90, the 0.8825985 N m effort cap, and 70-value deployable
 IMU/joint/load/depth actor input. `-Checkpoint <path>` explicitly selects a
 different initializer. Training outputs remain under
 `logs/rsl_rl/drobot_pure_stairs_yaw90_neutral_foot_lift7p5_persistent_bias_cem_robust_hip_180x250_direct/`.
