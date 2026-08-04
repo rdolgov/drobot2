@@ -590,6 +590,45 @@ def test_two_mode_policy_preserves_pure_sensor_contract_and_commits_deterministi
         in registration
     )
 
+    cem_robust = _class_assignments(
+        env_cfg,
+        "DrobotPureStairsYaw90FullFoldFootLift5CemRobustHipEnvCfg",
+    )
+    assert cem_robust["reset_joint_position_noise_rad"] == 0.02
+    assert cem_robust["reset_lateral_jitter_m"] == 0.015
+    assert (
+        "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-CEM-Robust-Hip-Direct"
+        in registration
+    )
+
+    cem_robust_lift10 = _class_assignments(
+        env_cfg,
+        "DrobotPureStairsYaw90FullFoldFootLift10CemRobustHipEnvCfg",
+    )
+    assert cem_robust_lift10["foot_lift_height_m"] == 0.10
+    assert cem_robust_lift10["foot_lift_hold_steps"] == 6
+    assert cem_robust_lift10["support_reward_scale"] == 0.0
+    assert cem_robust_lift10["foot_unload_reward_scale"] == 0.75
+    assert cem_robust_lift10["unloaded_lift_reward_scale"] == 4.0
+    assert cem_robust_lift10["success_completion_reward_scale"] == 400.0
+    assert cem_robust_lift10["reset_joint_position_noise_rad"] == 0.02
+    assert cem_robust_lift10["reset_lateral_jitter_m"] == 0.015
+    assert (
+        "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift10-PersistentBias-CEM-Robust-Hip-Direct"
+        in registration
+    )
+
+    cem_robust_lift7p5 = _class_assignments(
+        env_cfg,
+        "DrobotPureStairsYaw90FullFoldFootLift7p5CemRobustHipEnvCfg",
+    )
+    assert cem_robust_lift7p5["foot_lift_height_m"] == 0.075
+    assert cem_robust_lift7p5["foot_lift_hold_steps"] == 5
+    assert (
+        "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct"
+        in registration
+    )
+
 
 def test_persistent_mode_is_sampled_once_and_replayed_by_ppo() -> None:
     policy = _source("persistent_mode_policy.py")
@@ -626,6 +665,18 @@ def test_persistent_mode_is_sampled_once_and_replayed_by_ppo() -> None:
     assert "commitment_credit_scale" in policy
     assert "DrobotPersistentBiasConsolidateDistributionCfg" in runner
     assert "commitment_credit_scale: float = 32.0" in runner
+    assert "DrobotPersistentBiasCemRobustDistributionCfg" in runner
+    assert "init_action_std: float = 0.03" in runner
+    assert "init_bias_std: float = 0.05" in runner
+    assert "DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasCemRobustHipPPORunnerCfg" in runner
+    assert "DrobotPureStairsYaw90FullFoldFootLift10PersistentBiasCemRobustHipPPORunnerCfg" in runner
+    assert (
+        "DrobotPureStairsYaw90FullFoldFootLift7p5PersistentBiasCemRobustHipPPORunnerCfg"
+        in runner
+    )
+    assert 'infos.get("persistent_bias_transplant") or from_cem' in policy
+    assert "CEM_ACTION_STD_MAX = 0.03" in policy
+    assert "CEM_BIAS_STD_MAX = 0.05" in policy
     assert (
         "DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasConsolidateHipPPORunnerCfg"
         in runner

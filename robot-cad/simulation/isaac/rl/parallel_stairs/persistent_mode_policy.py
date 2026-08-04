@@ -700,9 +700,15 @@ class _TorchPersistentBiasActor(nn.Module):
 class PersistentBiasPPO(PersistentModePPO):
     """Persistent-mode PPO with one-time optimizer reset for widened heads."""
 
+    CEM_ACTION_STD_MAX = 0.03
+    CEM_BIAS_STD_MAX = 0.05
+
     def load(self, loaded_dict: dict, load_cfg: dict | None, strict: bool) -> bool:
         infos = loaded_dict.get("infos")
-        if isinstance(infos, dict) and infos.get("persistent_bias_transplant"):
+        from_cem = isinstance(infos, dict) and bool(infos.get("episode_bias_cem"))
+        if isinstance(infos, dict) and (
+            infos.get("persistent_bias_transplant") or from_cem
+        ):
             load_cfg = {
                 "actor": True,
                 "critic": True,
@@ -710,4 +716,16 @@ class PersistentBiasPPO(PersistentModePPO):
                 "iteration": True,
                 "rnd": False,
             }
-        return super().load(loaded_dict, load_cfg, strict)
+        loaded = super().load(loaded_dict, load_cfg, strict)
+        if from_cem:
+            distribution = self.actor.distribution
+            if not isinstance(distribution, PersistentBiasGaussianDistribution):
+                raise TypeError("CEM resume requires PersistentBiasGaussianDistribution")
+            with torch.no_grad():
+                distribution.action_std_param.clamp_(
+                    min=distribution.std_range[0], max=self.CEM_ACTION_STD_MAX
+                )
+                distribution.bias_std_param.clamp_(
+                    min=distribution.std_range[0], max=self.CEM_BIAS_STD_MAX
+                )
+        return loaded

@@ -719,6 +719,48 @@ class DrobotPureStairsYaw90FullFoldFootLift5SensorAsymHipEnvCfg(
 
 
 @configclass
+class DrobotPureStairsYaw90FullFoldFootLift5CemRobustHipEnvCfg(
+    DrobotPureStairsYaw90FullFoldFootLift5SuccessDominantHipEnvCfg
+):
+    """Robustify the CEM lift center with moderate sensor-visible reset spread.
+
+    The selected CEM policy was screened at 0.01 rad joint and 0.01 m lateral
+    variation. This continuation widens those physical reset differences
+    without identifying a swing foot or exposing reset parameters to the actor.
+    Joint positions, loads, IMU, and depth already measure their consequences.
+    """
+
+    reset_joint_position_noise_rad = 0.02
+    reset_lateral_jitter_m = 0.015
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift10CemRobustHipEnvCfg(
+    DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg
+):
+    """Advance the preserved CEM center to a strict 10 cm held-foot gate."""
+
+    foot_lift_height_m = 0.10
+    foot_lift_hold_steps = 6
+    support_reward_scale = 0.0
+    foot_unload_reward_scale = 0.75
+    unloaded_lift_reward_scale = 4.0
+    success_completion_reward_scale = 400.0
+    reset_joint_position_noise_rad = 0.02
+    reset_lateral_jitter_m = 0.015
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift7p5CemRobustHipEnvCfg(
+    DrobotPureStairsYaw90FullFoldFootLift10CemRobustHipEnvCfg
+):
+    """Bridge the verified 5 cm center toward rare 10 cm authority."""
+
+    foot_lift_height_m = 0.075
+    foot_lift_hold_steps = 5
+
+
+@configclass
 class DrobotPureStairsYaw90FoldBridgeFootLift10HipEnvCfg(
     DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg
 ):

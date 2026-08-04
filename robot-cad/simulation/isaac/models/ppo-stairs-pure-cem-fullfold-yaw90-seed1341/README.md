@@ -17,10 +17,13 @@ present. Joint effort remains capped at 0.8825985 Nm.
 two-population winner-centered CEM refinement with configured 0.01 rad joint
 and 0.01 m lateral reset randomization. Four fresh seeded screens scored
 19/583 strict successes (3.26%). The paired population scored 18/568 (3.17%).
+With reset variability increased to 0.02 rad joint noise and 0.015 m lateral
+jitter, three later screens scored 34/509 (6.68%). A conservative PPO
+continuation and a local CEM refinement both regressed against this source, so
+the packaged checkpoint remains unchanged.
 The accepted 30-second third-person rollout is
 `reviews/ppo-stairs-robust-cem-pop0-env10-seed1351-30s.mp4`; telemetry confirms
 that filmed environment 10 crossed the strict gate.
 
 The next promotion gate remains a repeatable 100 mm held lift, followed by
 190 mm clearance, tread placement, weight transfer, and only then ascent.
-

@@ -57,6 +57,16 @@ class DrobotPersistentBiasConsolidateDistributionCfg(
 
 
 @configclass
+class DrobotPersistentBiasCemRobustDistributionCfg(
+    DrobotPersistentBiasGaussianDistributionCfg
+):
+    """Explore locally around a reward-selected deterministic CEM center."""
+
+    init_action_std: float = 0.03
+    init_bias_std: float = 0.05
+
+
+@configclass
 class DrobotPureStairsPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     """PPO with enough capacity for depth plus proprioception, without oversizing."""
 
@@ -564,6 +574,56 @@ class DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasConsolidateHipPPORunne
         self.algorithm.entropy_coef = 0.0
         self.algorithm.learning_rate = 2.0e-5
         self.algorithm.desired_kl = 0.003
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasCemRobustHipPPORunnerCfg(
+    DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasHipPPORunnerCfg
+):
+    """Adapt sensor feedback locally around the verified CEM episode center."""
+
+    experiment_name = (
+        "drobot_pure_stairs_yaw90_fullfold_foot_lift5_persistent_bias_cem_robust_hip_180x250_direct"
+    )
+    num_steps_per_env = 64
+    save_interval = 20
+    actor = RslRlMLPModelCfg(
+        class_name="parallel_stairs.persistent_mode_policy:PersistentBiasActor",
+        hidden_dims=[512, 512],
+        activation="elu",
+        obs_normalization=True,
+        distribution_cfg=DrobotPersistentBiasCemRobustDistributionCfg(),
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.learning_rate = 2.0e-5
+        self.algorithm.desired_kl = 0.002
+        self.algorithm.num_learning_epochs = 10
+        self.algorithm.num_mini_batches = 8
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift10PersistentBiasCemRobustHipPPORunnerCfg(
+    DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasCemRobustHipPPORunnerCfg
+):
+    """Retain the identical policy architecture for the 10 cm reward stage."""
+
+    experiment_name = (
+        "drobot_pure_stairs_yaw90_fullfold_foot_lift10_persistent_bias_cem_robust_hip_180x250_direct"
+    )
+
+
+@configclass
+class DrobotPureStairsYaw90FullFoldFootLift7p5PersistentBiasCemRobustHipPPORunnerCfg(
+    DrobotPureStairsYaw90FullFoldFootLift10PersistentBiasCemRobustHipPPORunnerCfg
+):
+    """Keep the same actor while optimizing the intermediate 7.5 cm gate."""
+
+    experiment_name = (
+        "drobot_pure_stairs_yaw90_fullfold_foot_lift7p5_persistent_bias_cem_robust_hip_180x250_direct"
+    )
 
 
 @configclass

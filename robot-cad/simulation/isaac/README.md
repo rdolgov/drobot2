@@ -357,6 +357,9 @@ an underscore are imported helpers and are not launched directly.
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentMode-Hip-Direct` | Samples one learned discrete whole-action mode per episode and retains it until reset | same 70 deployable inputs and symmetric physical reward | episode-consistent mode PPO checkpoints |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-Hip-Direct` | Samples one learned 12-joint bias per episode plus small per-step action noise | same 70 deployable inputs; no leg identifier, phase, or reference motion | coherent episode-exploration PPO checkpoints |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-Consolidate-Hip-Direct` | Gives the one-time latent choice 32-times policy-gradient/KL credit while removing entropy and reducing learning rate | same sensor-only actor and exact full-fold sideways reset | controlled latent-credit comparison |
+| `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-CEM-Robust-Hip-Direct` | Retests the accepted 50 mm CEM center with 0.02 rad joint and 0.015 m lateral reset variability | same 70 deployable actor inputs and 512-by-512 persistent-bias actor | stronger-reset validation and conservative PPO continuation |
+| `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct` | Adds a five-step 75 mm bridge gate under the stronger reset distribution | same pure sensor policy; no selected leg, gait, IK, or reference motion | rare out-of-search 75 mm authority evidence |
+| `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift10-PersistentBias-CEM-Robust-Hip-Direct` | Tests the same reward-ranked episode-bias search at a six-step 100 mm gate | same pure sensor policy and real-test effort cap | rare search-only 100 mm authority evidence |
 | `Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift10-Hip-Direct` | Applies the same fold-distribution bridge and symmetric unload signal at the 100 mm gate | same 70 deployable actor inputs; no selected leg or reference motion | 10 cm transfer candidates for exact full-fold evaluation |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift14-Hip-Direct` | Defines the 140 mm intermediate force-backed lift stage without prescribing a swing leg | same 70 deployable actor inputs | next-stage PPO checkpoints |
 | `Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift19-Hip-Direct` | Defines the required 190 mm force-backed lift from the fully folded sideways stance | same 70 deployable actor inputs | final lift-stage PPO checkpoints |
@@ -487,6 +490,26 @@ destabilization: there is no 100 or 190 mm promotion, tread placement, weight
 transfer, step, or climb. The packaged checkpoint and reports are under
 `simulation/isaac/models/ppo-stairs-pure-cem-fullfold-yaw90-seed1341/`.
 
+The subsequent robustness and height-bridge round added `2,662,400`
+substantive transitions. Conservative PPO at 50 mm produced `46/3,901`
+training successes, but its screened model 940 scored `27/547` and model 1000
+scored `23/545`, both below the unchanged source at `34/509`; it was rejected.
+A local 50 mm CEM was also rejected after fresh screens of source `14/487`,
+population 1 `10/492`, and best sample `13/515`. Direct 100 mm search found
+only one source screen success (`1/155`) and one search success among `5,339`
+completed episodes; all fresh candidates were zero, proving rare authority but
+not a deployable behavior.
+
+The 75 mm bridge search used 128 environments, two populations, 20 generations,
+and `614,400` transitions. It recorded `15/5,603` strict successes and one
+successful population center during search. Packaged population 1 then achieved
+the first out-of-search bridge success: `0/165` followed by `1/143` across two
+fresh seeds (`1/308` pooled). The 30-second ordinary batch recording at
+`reviews/ppo-stairs-cem-7p5cm-pop1-env96-seed1452-30s.mp4` contains a strict
+success in environment 72, but the third-person camera followed environment 96,
+which did not pass; it is not claimed as visual proof. There is still no
+repeatable 100 or 190 mm lift, tread placement, weight transfer, step, or climb.
+
 | `simulation/isaac/models/ppo-walk-v1-2m/` | Tracks the frozen flat-walking dependency used by v5 residual control | validated flat PPO ZIP | release dependency |
 | `simulation/isaac/models/ppo-stairs-pure-parallel-v1-lifthold-seed1059/agent.yaml` | Captures the exact RSL-RL PPO configuration for the packaged lift-hold checkpoint | saved training parameters | no generated data |
 | `simulation/isaac/models/ppo-stairs-pure-parallel-v1-lifthold-seed1059/env.yaml` | Captures the exact Isaac Lab environment configuration for the packaged lift-hold checkpoint | saved training parameters | no generated data |
@@ -496,6 +519,7 @@ transfer, step, or climb. The packaged checkpoint and reports are under
 | `simulation/isaac/models/ppo-stairs-pure-low25-to37-seed1135/` | Packages the mixed 0.42-to-0.40 m reset winner, exact configs, hash, reset-bin audit, and fixed-Low37 rejection | correlated lower-reset pure-PPO bridge | harder-half deterministic tread success; no fixed-pose repeatability or climb |
 | `simulation/isaac/models/ppo-stairs-pure-low25-to37-hard-bias-seed1145/` | Packages the 75%-hard-half continuation winner, exact configs, hash, paired two-seed comparison, and RGB review | harder-sample pure-PPO continuation | 5/983 pooled deterministic successes; still no repeatable step, transfer, or climb |
 | `simulation/isaac/models/ppo-stairs-pure-cem-fullfold-yaw90-seed1341/` | Packages the robust reward-ranked episode-bias checkpoint, full CEM report, hashes, four-seed screen, and accepted 30-second selected-environment review | exact 180 mm x 250 mm folded-sideways 50 mm held-lift task | 19/583 strict deterministic-policy successes; no tread placement or climb |
+| `simulation/isaac/models/ppo-stairs-pure-cem-7p5cm-seed1441/` | Packages the experimental 75 mm bridge center, full CEM report, hashes, fresh screens, and ordinary 30-second review | exact 180 mm x 250 mm folded-sideways task with stronger reset variability | 1/308 fresh strict successes; no visual pass, tread placement, or climb |
 | `simulation/isaac/models/ppo-stairs-v5-10mm-four-step/` | Tracks the source-equivalent shallow-stair policy, schema-2 manifest, and deterministic evaluation | v5 config/world and source policy | evaluable release package |
 | `simulation/isaac/models/ppo-stairs-v6-180mm-25cm-small/` | Tracks the bounded 180 mm x 250 mm evaluation policy, schema-2 manifest, training/evaluation/recording reports, and explicit failure result | v6 config/world and bounded policy | non-deployable evaluation package |
 | `simulation/isaac/models/ppo-stairs-v6-180mm-25cm-balance-small/` | Tracks the 512-step 180 mm x 250 mm stair smoke model initialized from unsupported balance, exact shared-prefix transfer report, 0/5 evaluation, and recording | v6 config/world and v2 balance policy | non-deployable transfer evaluation package |

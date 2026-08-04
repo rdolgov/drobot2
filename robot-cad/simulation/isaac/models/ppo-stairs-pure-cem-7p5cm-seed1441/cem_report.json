@@ -1,0 +1,443 @@
+{
+  "schema_version": 1,
+  "algorithm": "winner_centered_multi_population_diagonal_cem",
+  "pure_reward_driven": true,
+  "selected_leg_input": false,
+  "reference_motion": false,
+  "task": "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct",
+  "source_checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\models\\ppo-stairs-pure-cem-fullfold-yaw90-seed1341\\model.pt",
+  "source_sha256": "4d567a5adcbc2b0fa1243e830801122f127235cbe2ce07e67bdc34daeb2fda55",
+  "seed": 1441,
+  "num_envs": 128,
+  "populations": 2,
+  "population_size": 64,
+  "generations": 20,
+  "transitions": 614400,
+  "elite_count": 8,
+  "update_rate": 0.55,
+  "initial_std": 0.1,
+  "minimum_std": 0.012,
+  "max_abs_bias": 0.85,
+  "randomized_resets": true,
+  "winner_centered": true,
+  "initial_report": null,
+  "global_best_success": true,
+  "global_best_return": 486.89569091796875,
+  "global_best_bias": [
+    0.0200131107121706,
+    -0.024004820734262466,
+    0.015552198514342308,
+    -0.027411630377173424,
+    -0.04544142633676529,
+    0.012139666825532913,
+    -0.01457350142300129,
+    0.016807042062282562,
+    -0.05983804911375046,
+    0.007534397765994072,
+    -0.018346378579735756,
+    0.0165499746799469
+  ],
+  "final_means": [
+    [
+      -0.05517551302909851,
+      0.03734760358929634,
+      -0.008048812858760357,
+      0.15179602801799774,
+      -0.08089102059602737,
+      -0.06565281003713608,
+      -0.14405624568462372,
+      -0.0716453567147255,
+      -0.00994444452226162,
+      0.005928454454988241,
+      -0.0233567263931036,
+      0.037364888936281204
+    ],
+    [
+      0.026357173919677734,
+      -0.027510978281497955,
+      0.011080527678132057,
+      -0.019563866779208183,
+      -0.03938993066549301,
+      0.013251163996756077,
+      -0.009625560604035854,
+      0.014821226708590984,
+      -0.06780482828617096,
+      0.00034040145692415535,
+      -0.02276424691081047,
+      0.012988555245101452
+    ]
+  ],
+  "final_standard_deviations": [
+    [
+      0.01519775204360485,
+      0.021333543583750725,
+      0.012000000104308128,
+      0.012000000104308128,
+      0.014094359241425991,
+      0.012000000104308128,
+      0.017870156094431877,
+      0.012383774854242802,
+      0.012000000104308128,
+      0.013782142661511898,
+      0.01823335699737072,
+      0.012000000104308128
+    ],
+    [
+      0.012000000104308128,
+      0.01291168387979269,
+      0.015461605042219162,
+      0.012000000104308128,
+      0.013468806631863117,
+      0.012058316729962826,
+      0.012755686417222023,
+      0.012000000104308128,
+      0.012000000104308128,
+      0.012000000104308128,
+      0.012525128200650215,
+      0.012000000104308128
+    ]
+  ],
+  "history": [
+    {
+      "generation": 0,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -31.16283416748047,
+      "return_max": 162.56033325195312,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.09392377734184265,
+        0.09618368744850159
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 232
+    },
+    {
+      "generation": 1,
+      "successes": 1,
+      "center_successes": 0,
+      "return_mean": -32.65110397338867,
+      "return_max": 374.5921325683594,
+      "population_successes": [
+        0,
+        1
+      ],
+      "population_mean_std": [
+        0.08544038236141205,
+        0.043282657861709595
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 235
+    },
+    {
+      "generation": 2,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -36.7474250793457,
+      "return_max": 342.2136535644531,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.07978489249944687,
+        0.04280848428606987
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 238
+    },
+    {
+      "generation": 3,
+      "successes": 1,
+      "center_successes": 0,
+      "return_mean": -41.067413330078125,
+      "return_max": 405.8026428222656,
+      "population_successes": [
+        0,
+        1
+      ],
+      "population_mean_std": [
+        0.07213565707206726,
+        0.019263816997408867
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 227
+    },
+    {
+      "generation": 4,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -42.05767822265625,
+      "return_max": 198.0487518310547,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.06911921501159668,
+        0.017801743000745773
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 239
+    },
+    {
+      "generation": 5,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -33.05906295776367,
+      "return_max": 96.26719665527344,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.06197633966803551,
+        0.015227693133056164
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 233
+    },
+    {
+      "generation": 6,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -40.244815826416016,
+      "return_max": 65.25228881835938,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.058485858142375946,
+        0.01335710659623146
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 229
+    },
+    {
+      "generation": 7,
+      "successes": 1,
+      "center_successes": 0,
+      "return_mean": -30.943023681640625,
+      "return_max": 406.476318359375,
+      "population_successes": [
+        1,
+        0
+      ],
+      "population_mean_std": [
+        0.026318635791540146,
+        0.013578064739704132
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 237
+    },
+    {
+      "generation": 8,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -40.779380798339844,
+      "return_max": 115.30763244628906,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.023119939491152763,
+        0.013505710288882256
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 238
+    },
+    {
+      "generation": 9,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -37.16218566894531,
+      "return_max": 93.28417205810547,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.023575499653816223,
+        0.01388467662036419
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 239
+    },
+    {
+      "generation": 10,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -39.412689208984375,
+      "return_max": 118.72905731201172,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.021314457058906555,
+        0.014088192954659462
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 235
+    },
+    {
+      "generation": 11,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -42.884681701660156,
+      "return_max": 104.62093353271484,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.019903598353266716,
+        0.013146132230758667
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 235
+    },
+    {
+      "generation": 12,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -48.03773498535156,
+      "return_max": 58.389915466308594,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.019144127145409584,
+        0.013401943258941174
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 234
+    },
+    {
+      "generation": 13,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -24.792617797851562,
+      "return_max": 414.1806640625,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.017457593232393265,
+        0.013725887052714825
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 235
+    },
+    {
+      "generation": 14,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -46.32054901123047,
+      "return_max": 110.59468078613281,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.016690297052264214,
+        0.013299795798957348
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 239
+    },
+    {
+      "generation": 15,
+      "successes": 2,
+      "center_successes": 1,
+      "return_mean": -27.186172485351562,
+      "return_max": 412.3569030761719,
+      "population_successes": [
+        1,
+        1
+      ],
+      "population_mean_std": [
+        0.012015638872981071,
+        0.012000000104308128
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 237
+    },
+    {
+      "generation": 16,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -36.931270599365234,
+      "return_max": 370.4573059082031,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.012732774019241333,
+        0.012215724214911461
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 239
+    },
+    {
+      "generation": 17,
+      "successes": 1,
+      "center_successes": 0,
+      "return_mean": -36.92291259765625,
+      "return_max": 486.89569091796875,
+      "population_successes": [
+        0,
+        1
+      ],
+      "population_mean_std": [
+        0.014600228518247604,
+        0.012000000104308128
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 237
+    },
+    {
+      "generation": 18,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -39.53912353515625,
+      "return_max": 172.78536987304688,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.015381893143057823,
+        0.012794340960681438
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 239
+    },
+    {
+      "generation": 19,
+      "successes": 0,
+      "center_successes": 0,
+      "return_mean": -37.206504821777344,
+      "return_max": 120.92909240722656,
+      "population_successes": [
+        0,
+        0
+      ],
+      "population_mean_std": [
+        0.014407924376428127,
+        0.012598435394465923
+      ],
+      "active_after_limit": 0,
+      "max_episode_steps": 239
+    }
+  ],
+  "created_at": "2026-08-04T01:23:51.465896+00:00"
+}

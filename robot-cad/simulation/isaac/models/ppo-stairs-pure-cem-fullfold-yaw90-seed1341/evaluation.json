@@ -21,6 +21,15 @@
   ],
   "population_0_total": {"successful": 19, "completed": 583, "rate": 0.03259005},
   "population_1_total": {"successful": 18, "completed": 568, "rate": 0.03169014},
+  "stronger_reset_validation": {
+    "reset": {"joint_position_noise_rad": 0.02, "lateral_jitter_m": 0.015},
+    "screens": [
+      {"seed": 1381, "successful": 12, "completed": 158},
+      {"seed": 1382, "successful": 13, "completed": 189},
+      {"seed": 1383, "successful": 9, "completed": 162}
+    ],
+    "total": {"successful": 34, "completed": 509, "rate": 0.06679764}
+  },
   "accepted_recording": {
     "seed": 1351,
     "viewer_env_index": 10,
@@ -36,4 +45,3 @@
     "no tread placement, weight transfer, step, or climb"
   ]
 }
-
