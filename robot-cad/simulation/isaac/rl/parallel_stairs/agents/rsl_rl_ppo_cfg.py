@@ -627,6 +627,17 @@ class DrobotPureStairsYaw90FullFoldFootLift7p5PersistentBiasCemRobustHipPPORunne
 
 
 @configclass
+class DrobotPureStairsYaw90NeutralFootLift7p5PersistentBiasCemRobustHipPPORunnerCfg(
+    DrobotPureStairsYaw90FullFoldFootLift7p5PersistentBiasCemRobustHipPPORunnerCfg
+):
+    """Continue the compatible 7.5 cm actor from a neutral sideways reset."""
+
+    experiment_name = (
+        "drobot_pure_stairs_yaw90_neutral_foot_lift7p5_persistent_bias_cem_robust_hip_180x250_direct"
+    )
+
+
+@configclass
 class DrobotPureStairsYaw90FullFoldFootLift5ConsolidateHipPPORunnerCfg(
     DrobotPureStairsYaw90FullFoldFootLift5HipPPORunnerCfg
 ):

@@ -957,3 +957,42 @@ def test_manual_stair_rl_workflow_separates_visual_and_headless_modes() -> None:
     assert '-PreferWorkflowRun' in source
     assert '"--resume"' in source
     assert '"--max_iterations"' in source
+    assert (
+        "Drobot-Pure-Stairs-Yaw90-Neutral-Foot-Lift7p5-"
+        "PersistentBias-CEM-Robust-Hip-Direct"
+    ) in source
+    assert "drobot_pure_stairs_yaw90_neutral_foot_lift7p5" in source
+
+
+def test_manual_stair_rl_workflow_uses_a_neutral_non_crossed_reset() -> None:
+    cfg_source = _source("pure_stairs_env_cfg.py")
+    runner_source = _source("agents/rsl_rl_ppo_cfg.py")
+    registration = _source("__init__.py")
+    neutral = _class_assignments(
+        cfg_source,
+        "DrobotPureStairsYaw90NeutralFootLift7p5CemRobustHipEnvCfg",
+    )
+
+    assert neutral["initial_base_height_m"] == 0.46
+    assert neutral["reset_fold_fraction"] == 0.0
+    assert neutral["reset_fold_fraction_min"] is None
+    assert neutral["reset_fold_fraction_max"] is None
+    assert neutral["reset_base_height_min_m"] is None
+    assert neutral["reset_base_height_max_m"] is None
+    assert "_apply_separated_neutral_reset(self)" in cfg_source
+    assert '"front_left_hip_flexion": -SEPARATED_NEUTRAL_HIP_RAD' in cfg_source
+    assert '"rear_left_hip_flexion": SEPARATED_NEUTRAL_HIP_RAD' in cfg_source
+    assert '"front_right_hip_flexion": SEPARATED_NEUTRAL_HIP_RAD' in cfg_source
+    assert '"rear_right_hip_flexion": -SEPARATED_NEUTRAL_HIP_RAD' in cfg_source
+    assert '"front_left_knee": -SEPARATED_NEUTRAL_KNEE_RAD' in cfg_source
+    assert '"rear_left_knee": SEPARATED_NEUTRAL_KNEE_RAD' in cfg_source
+    assert '"front_right_knee": SEPARATED_NEUTRAL_KNEE_RAD' in cfg_source
+    assert '"rear_right_knee": -SEPARATED_NEUTRAL_KNEE_RAD' in cfg_source
+    assert (
+        "DrobotPureStairsYaw90NeutralFootLift7p5PersistentBiasCemRobustHipPPORunnerCfg"
+        in runner_source
+    )
+    assert (
+        "Drobot-Pure-Stairs-Yaw90-Neutral-Foot-Lift7p5-"
+        "PersistentBias-CEM-Robust-Hip-Direct"
+    ) in registration

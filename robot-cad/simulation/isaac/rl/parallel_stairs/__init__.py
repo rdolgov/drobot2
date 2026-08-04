@@ -250,6 +250,11 @@ _register_variant(
     "DrobotPureStairsYaw90FullFoldFootLift7p5PersistentBiasCemRobustHipPPORunnerCfg",
 )
 _register_variant(
+    "Drobot-Pure-Stairs-Yaw90-Neutral-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct",
+    "DrobotPureStairsYaw90NeutralFootLift7p5CemRobustHipEnvCfg",
+    "DrobotPureStairsYaw90NeutralFootLift7p5PersistentBiasCemRobustHipPPORunnerCfg",
+)
+_register_variant(
     "Drobot-Pure-Stairs-Yaw90-FoldTail75-Foot-Lift5-Wide512-Hip-Direct",
     "DrobotPureStairsYaw90FoldTail75FootLift5HipEnvCfg",
     "DrobotPureStairsYaw90FoldTail75FootLift5Wide512HipPPORunnerCfg",

@@ -13,11 +13,11 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..")).Path
 $isaacPython = "C:\isaacsim\python.bat"
-$task = "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct"
+$task = "Drobot-Pure-Stairs-Yaw90-Neutral-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct"
 $playScript = Join-Path $PSScriptRoot "play_pure_parallel_stairs.py"
 $trainScript = Join-Path $PSScriptRoot "train_pure_parallel_stairs.py"
 $packagedCheckpoint = Join-Path $repoRoot "simulation\isaac\models\ppo-stairs-pure-cem-7p5cm-seed1441\model.pt"
-$experimentName = "drobot_pure_stairs_yaw90_fullfold_foot_lift7p5_persistent_bias_cem_robust_hip_180x250_direct"
+$experimentName = "drobot_pure_stairs_yaw90_neutral_foot_lift7p5_persistent_bias_cem_robust_hip_180x250_direct"
 $experimentRoot = Join-Path $repoRoot "logs\rsl_rl\$experimentName"
 $bootstrapRun = Join-Path $experimentRoot "_workflow-bootstrap"
 $bootstrapCheckpoint = Join-Path $bootstrapRun "model_0.pt"

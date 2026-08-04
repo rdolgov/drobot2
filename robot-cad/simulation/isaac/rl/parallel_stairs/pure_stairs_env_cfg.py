@@ -24,6 +24,8 @@ LOW_FOLD_HIP_RAD = 0.7382742736
 LOW_FOLD_KNEE_RAD = 1.4765485472
 NORMAL_HIP_RAD = 0.1544915916
 NORMAL_KNEE_RAD = 0.4699252058
+SEPARATED_NEUTRAL_HIP_RAD = 0.3490658504
+SEPARATED_NEUTRAL_KNEE_RAD = 0.6108652382
 
 
 def _apply_folded_reset(cfg: DrobotPureStairsEnvCfg, fraction: float) -> None:
@@ -37,6 +39,23 @@ def _apply_folded_reset(cfg: DrobotPureStairsEnvCfg, fraction: float) -> None:
         "rear_.*_hip_flexion": hip,
         "front_.*_knee": knee,
         "rear_.*_knee": -knee,
+    }
+
+
+def _apply_separated_neutral_reset(cfg: DrobotPureStairsEnvCfg) -> None:
+    """Apply the mirrored hardware-review stance with feet directed outward."""
+
+    cfg.robot.init_state.pos = (0.0, 0.0, cfg.initial_base_height_m)
+    cfg.robot.init_state.joint_pos = {
+        ".*_hip_abduction": 0.0,
+        "front_left_hip_flexion": -SEPARATED_NEUTRAL_HIP_RAD,
+        "rear_left_hip_flexion": SEPARATED_NEUTRAL_HIP_RAD,
+        "front_right_hip_flexion": SEPARATED_NEUTRAL_HIP_RAD,
+        "rear_right_hip_flexion": -SEPARATED_NEUTRAL_HIP_RAD,
+        "front_left_knee": -SEPARATED_NEUTRAL_KNEE_RAD,
+        "rear_left_knee": SEPARATED_NEUTRAL_KNEE_RAD,
+        "front_right_knee": SEPARATED_NEUTRAL_KNEE_RAD,
+        "rear_right_knee": -SEPARATED_NEUTRAL_KNEE_RAD,
     }
 
 
@@ -758,6 +777,24 @@ class DrobotPureStairsYaw90FullFoldFootLift7p5CemRobustHipEnvCfg(
 
     foot_lift_height_m = 0.075
     foot_lift_hold_steps = 5
+
+
+@configclass
+class DrobotPureStairsYaw90NeutralFootLift7p5CemRobustHipEnvCfg(
+    DrobotPureStairsYaw90FullFoldFootLift7p5CemRobustHipEnvCfg
+):
+    """Start the hands-on workflow from the normal, non-crossed stance."""
+
+    initial_base_height_m = 0.46
+    reset_fold_fraction = 0.0
+    reset_fold_fraction_min = None
+    reset_fold_fraction_max = None
+    reset_base_height_min_m = None
+    reset_base_height_max_m = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        _apply_separated_neutral_reset(self)
 
 
 @configclass
