@@ -23,9 +23,10 @@ Start a new forward-only policy:
 & .\simulation\isaac\rl\parallel_walking\train_walking_visible.ps1 -Fresh
 ```
 
-The defaults are five visible robots and 20 PPO iterations. Omit `-Fresh` on later runs to
-automatically continue the newest checkpoint. Override the defaults with `-Iterations` and
-`-NumEnvs`.
+The defaults are five visible robots and 20 PPO iterations. The V2 task starts with commands
+between `0.05` and `0.10 m/s`, then reaches `0.10` to `0.18 m/s` over roughly the first 1,000
+PPO iterations. Omit `-Fresh` on later runs to automatically continue the newest V2 checkpoint.
+Override the defaults with `-Iterations` and `-NumEnvs`.
 
 ## 2. Headless parallel training
 
@@ -40,7 +41,10 @@ intentional new random policy is wanted.
 The main improvement signals are:
 
 - `Metrics/mean_velocity_error_m_s`: should decrease
+- `Metrics/mean_commanded_speed_m_s`: should approach the commanded speed range
 - `Metrics/commanded_distance_m`: should increase for the forward curriculum
+- `Metrics/distance_success_rate`: should rise toward one
+- `Metrics/action_saturation_rate`: should stay low rather than approach one
 - `Metrics/fall_rate`: should approach zero
 - `Mean reward`: should rise, but is secondary to the physical metrics above
 
@@ -57,7 +61,9 @@ To record a 30-second review clip:
   -Command forward -RecordSeconds 30
 ```
 
-The preview script selects the newest matching checkpoint unless `-Checkpoint` is supplied.
+The preview script selects the newest matching V2 checkpoint unless `-Checkpoint` is supplied.
+V1 checkpoints are retained in `drobot_commanded_walk_forward_direct`, but should not seed V2:
+their scalar action standard deviation grew far beyond the action range.
 
 ## Later: backward and turns
 
@@ -66,7 +72,7 @@ Once forward walking is stable, initialize the directional curriculum from a for
 ```powershell
 & .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
   -CommandSet directional `
-  -Checkpoint .\logs\rsl_rl\drobot_commanded_walk_forward_direct\RUN\model_N.pt `
+  -Checkpoint .\logs\rsl_rl\drobot_commanded_walk_forward_v2_direct\RUN\model_N.pt `
   -Iterations 500 -NumEnvs 128
 ```
 

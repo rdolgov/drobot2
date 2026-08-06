@@ -61,6 +61,31 @@ def test_forward_and_directional_tasks_share_policy_shape() -> None:
     assert "hidden_dims=[256, 256]" in agent
 
 
+def test_v2_exploration_is_bounded_and_low_entropy() -> None:
+    agent = _source("agents/rsl_rl_ppo_cfg.py")
+    common = _source("walking_workflow_common.ps1")
+    assert "DrobotBoundedGaussianDistributionCfg" in agent
+    assert "std_range: tuple[float, float] = (0.03, 0.60)" in agent
+    assert 'std_type: str = "log"' in agent
+    assert "entropy_coef=0.001" in agent
+    assert 'experiment_name = "drobot_commanded_walk_forward_v2_direct"' in agent
+    assert 'drobot_commanded_walk_${suffix}_v2_direct' in common
+
+
+def test_v2_reward_prioritizes_real_displacement() -> None:
+    cfg = _source("commanded_walking_env_cfg.py")
+    env = _source("commanded_walking_env.py")
+    assert "command_curriculum_steps = 32_000" in cfg
+    assert "distance_success_fraction = 0.60" in cfg
+    assert "distance_success_reward = 75.0" in cfg
+    assert "5.0 * commanded_progress" in env
+    assert "- 0.35 * stationary.float()" in env
+    assert "terminal_progress_reward" in env
+    assert 'log["Metrics/mean_commanded_speed_m_s"]' in env
+    assert 'log["Metrics/distance_success_rate"]' in env
+    assert 'log["Metrics/action_saturation_rate"]' in env
+
+
 def test_directional_distribution_contains_all_requested_motion_classes() -> None:
     env = _source("commanded_walking_env.py")
     assert "50% forward, 15% backward, 15% left, 15% right, 5% stop" in env

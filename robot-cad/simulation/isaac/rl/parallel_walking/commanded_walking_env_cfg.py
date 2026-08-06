@@ -128,8 +128,11 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     )
 
     command_profile = "forward"
-    forward_speed_min_m_s = 0.08
-    forward_speed_max_m_s = 0.22
+    initial_forward_speed_min_m_s = 0.05
+    initial_forward_speed_max_m_s = 0.10
+    forward_speed_min_m_s = 0.10
+    forward_speed_max_m_s = 0.18
+    command_curriculum_steps = 32_000
     backward_speed_min_m_s = 0.06
     backward_speed_max_m_s = 0.16
     turn_forward_speed_max_m_s = 0.10
@@ -146,8 +149,11 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     base_contact_grace_steps = 10
     maximum_distance_from_origin_m = 3.0
     target_base_height_m = 0.3305
-    velocity_tracking_sigma_m_s = 0.10
+    velocity_tracking_sigma_m_s = 0.06
     yaw_tracking_sigma_rad_s = 0.25
+    distance_success_fraction = 0.60
+    terminal_progress_reward_scale = 25.0
+    distance_success_reward = 75.0
 
 
 @configclass

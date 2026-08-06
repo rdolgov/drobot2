@@ -63,6 +63,9 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_velocity_error_sum = torch.zeros(self.num_envs, device=self.device)
         self._episode_yaw_error_sum = torch.zeros(self.num_envs, device=self.device)
         self._episode_commanded_distance = torch.zeros(self.num_envs, device=self.device)
+        self._episode_action_saturation_sum = torch.zeros(
+            self.num_envs, device=self.device
+        )
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
@@ -172,12 +175,42 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             self._steps_since_reset > self.cfg.base_contact_grace_steps
         )
 
+        next_commanded_distance = (
+            self._episode_commanded_distance + commanded_velocity * self.step_dt
+        )
+        expected_distance = command_speed * self.cfg.episode_length_s
+        success_distance = self.cfg.distance_success_fraction * expected_distance
+        active_translation = command_speed > 0.03
+        terminal_progress_fraction = torch.where(
+            active_translation,
+            torch.clamp(
+                next_commanded_distance / torch.clamp(success_distance, min=1.0e-4),
+                0.0,
+                1.0,
+            ),
+            torch.zeros_like(command_speed),
+        )
+        distance_success = (
+            self.reset_time_outs
+            & active_translation
+            & (next_commanded_distance >= success_distance)
+            & ~self._failed
+        )
+        stationary = active_translation & (
+            commanded_velocity < 0.25 * command_speed
+        )
+        terminal_progress_reward = self.reset_time_outs.float() * (~self._failed).float() * (
+            self.cfg.terminal_progress_reward_scale * terminal_progress_fraction
+            + self.cfg.distance_success_reward * distance_success.float()
+        )
+
         reward = (
-            2.5 * velocity_tracking
-            + 0.65 * yaw_tracking
-            + 1.5 * commanded_progress
-            + 0.25 * upright_cosine
-            + 0.03
+            3.0 * velocity_tracking
+            + 0.35 * yaw_tracking
+            + 5.0 * commanded_progress
+            + 0.20 * upright_cosine
+            + 0.01
+            + terminal_progress_reward
             - 0.12 * torch.square(linear_velocity[:, 2])
             - 0.04 * torch.sum(torch.square(angular_velocity[:, :2]), dim=1)
             - 1.5 * torch.square(height_error)
@@ -185,13 +218,17 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             - 0.002 * action_magnitude
             - 0.001 * joint_speed
             - 0.0005 * effort
+            - 0.35 * stationary.float()
             - 2.0 * base_contact.float()
         )
         reward = torch.where(self._failed, reward - 5.0, reward)
 
         self._episode_velocity_error_sum += torch.sqrt(velocity_error_squared)
         self._episode_yaw_error_sum += torch.abs(yaw_error)
-        self._episode_commanded_distance += commanded_velocity * self.step_dt
+        self._episode_commanded_distance.copy_(next_commanded_distance)
+        self._episode_action_saturation_sum += torch.mean(
+            (torch.abs(self._actions) >= 0.98).float(), dim=1
+        )
         return reward
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -229,9 +266,21 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             return
 
         if self.cfg.command_profile == "forward":
-            self._commands[env_ids, 0] = torch.empty(count, device=self.device).uniform_(
-                self.cfg.forward_speed_min_m_s, self.cfg.forward_speed_max_m_s
+            curriculum_fraction = min(
+                float(self.common_step_counter) / self.cfg.command_curriculum_steps,
+                1.0,
             )
+            speed_min = self.cfg.initial_forward_speed_min_m_s + curriculum_fraction * (
+                self.cfg.forward_speed_min_m_s
+                - self.cfg.initial_forward_speed_min_m_s
+            )
+            speed_max = self.cfg.initial_forward_speed_max_m_s + curriculum_fraction * (
+                self.cfg.forward_speed_max_m_s
+                - self.cfg.initial_forward_speed_max_m_s
+            )
+            self._commands[env_ids, 0] = torch.empty(
+                count, device=self.device
+            ).uniform_(speed_min, speed_max)
             return
         if self.cfg.command_profile != "directional":
             raise ValueError(f"Unknown command profile: {self.cfg.command_profile}")
@@ -280,6 +329,32 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             log["Metrics/commanded_distance_m"] = self._episode_commanded_distance[
                 env_ids
             ].mean().item()
+            episode_duration = completed_steps * self.step_dt
+            log["Metrics/mean_commanded_speed_m_s"] = (
+                self._episode_commanded_distance[env_ids] / episode_duration
+            ).mean().item()
+            motion_command = torch.linalg.norm(
+                self._commands[env_ids, :2], dim=1
+            ) > 0.03
+            success_distance = (
+                self.cfg.distance_success_fraction
+                * torch.linalg.norm(self._commands[env_ids, :2], dim=1)
+                * self.cfg.episode_length_s
+            )
+            distance_success = (
+                completed
+                & motion_command
+                & ~self._failed[env_ids]
+                & (self._episode_commanded_distance[env_ids] >= success_distance)
+            )
+            completed_motion = completed & motion_command
+            log["Metrics/distance_success_rate"] = (
+                distance_success.float().sum()
+                / torch.clamp(completed_motion.float().sum(), min=1.0)
+            ).item()
+            log["Metrics/action_saturation_rate"] = (
+                self._episode_action_saturation_sum[env_ids] / completed_steps
+            ).mean().item()
             log["Metrics/fall_rate"] = (
                 (self._failed[env_ids] & completed).float().sum()
                 / torch.clamp(completed.float().sum(), min=1.0)
@@ -325,3 +400,4 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_velocity_error_sum[env_ids] = 0.0
         self._episode_yaw_error_sum[env_ids] = 0.0
         self._episode_commanded_distance[env_ids] = 0.0
+        self._episode_action_saturation_sum[env_ids] = 0.0
