@@ -128,8 +128,8 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     )
 
     command_profile = "forward"
-    initial_forward_speed_min_m_s = 0.05
-    initial_forward_speed_max_m_s = 0.10
+    initial_forward_speed_min_m_s = 0.04
+    initial_forward_speed_max_m_s = 0.08
     forward_speed_min_m_s = 0.10
     forward_speed_max_m_s = 0.18
     command_curriculum_steps = 32_000
@@ -154,6 +154,9 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     distance_success_fraction = 0.60
     terminal_progress_reward_scale = 25.0
     distance_success_reward = 75.0
+    distance_milestone_fractions = (0.10, 0.25, 0.45)
+    distance_milestone_rewards = (5.0, 10.0, 20.0)
+    target_foot_air_time_s = 0.15
 
 
 @configclass

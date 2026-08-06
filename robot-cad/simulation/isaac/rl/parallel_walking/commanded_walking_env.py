@@ -52,8 +52,15 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         if len(self._robot.joint_names) != 12:
             raise RuntimeError(f"Expected 12 joints, got {self._robot.joint_names}")
         self._base_sensor_ids, _ = self._contact_sensor.find_sensors("base_link")
+        self._foot_sensor_ids, self._foot_sensor_names = self._contact_sensor.find_sensors(
+            ".*_distal_link"
+        )
         if len(self._base_sensor_ids) == 0:
             raise RuntimeError("Could not find base_link in the contact sensor")
+        if len(self._foot_sensor_ids) != 4:
+            raise RuntimeError(
+                f"Expected four foot sensors, got {self._foot_sensor_names}"
+            )
 
         self._steps_since_reset = torch.zeros(
             self.num_envs, dtype=torch.long, device=self.device
@@ -65,6 +72,23 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_commanded_distance = torch.zeros(self.num_envs, device=self.device)
         self._episode_action_saturation_sum = torch.zeros(
             self.num_envs, device=self.device
+        )
+        self._episode_swing_step_sum = torch.zeros(self.num_envs, device=self.device)
+        self._episode_touchdown_count = torch.zeros(self.num_envs, device=self.device)
+        self._distance_milestones = torch.zeros(
+            (self.num_envs, len(self.cfg.distance_milestone_fractions)),
+            dtype=torch.bool,
+            device=self.device,
+        )
+        self._milestone_fractions = torch.tensor(
+            self.cfg.distance_milestone_fractions,
+            dtype=torch.float32,
+            device=self.device,
+        )
+        self._milestone_rewards = torch.tensor(
+            self.cfg.distance_milestone_rewards,
+            dtype=torch.float32,
+            device=self.device,
         )
 
     def _setup_scene(self):
@@ -116,6 +140,10 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         force = self._contact_sensor.data.net_forces_w.torch[:, self._base_sensor_ids]
         return torch.linalg.norm(force, dim=-1).amax(dim=1)
 
+    def _foot_forces(self) -> torch.Tensor:
+        force = self._contact_sensor.data.net_forces_w.torch[:, self._foot_sensor_ids]
+        return torch.linalg.norm(force, dim=-1)
+
     def _get_observations(self) -> dict[str, torch.Tensor]:
         observation = torch.cat(
             (
@@ -137,8 +165,9 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         linear_error = linear_velocity[:, :2] - self._commands[:, :2]
         velocity_error_squared = torch.sum(torch.square(linear_error), dim=1)
         yaw_error = angular_velocity[:, 2] - self._commands[:, 2]
-        velocity_tracking = torch.exp(
-            -velocity_error_squared / self.cfg.velocity_tracking_sigma_m_s**2
+        velocity_tracking = 1.0 / (
+            1.0
+            + velocity_error_squared / self.cfg.velocity_tracking_sigma_m_s**2
         )
         yaw_tracking = torch.exp(
             -torch.square(yaw_error / self.cfg.yaw_tracking_sigma_rad_s)
@@ -149,10 +178,19 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             command_speed.unsqueeze(1), min=1.0e-4
         )
         commanded_velocity = torch.sum(linear_velocity[:, :2] * command_direction, dim=1)
-        commanded_progress = torch.where(
+        normalized_commanded_progress = torch.where(
             command_speed > 0.03,
-            torch.clamp(commanded_velocity, -0.25, 0.35),
+            torch.clamp(
+                commanded_velocity / torch.clamp(command_speed, min=0.03),
+                -1.0,
+                1.25,
+            ),
             torch.zeros_like(commanded_velocity),
+        )
+        # Preserve a small discovery bonus for symmetric stepping, but only pay the
+        # full gait reward when those steps translate the base along the command.
+        gait_progress_gate = 0.25 + 0.75 * torch.clamp(
+            normalized_commanded_progress, 0.0, 1.0
         )
         upright_cosine = torch.clamp(
             -self._robot.data.projected_gravity_b.torch[:, 2], 0.0, 1.0
@@ -199,6 +237,54 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         stationary = active_translation & (
             commanded_velocity < 0.25 * command_speed
         )
+        milestone_thresholds = expected_distance.unsqueeze(1) * self._milestone_fractions
+        newly_reached_milestones = (
+            (next_commanded_distance.unsqueeze(1) >= milestone_thresholds)
+            & ~self._distance_milestones
+            & active_translation.unsqueeze(1)
+            & ~self._failed.unsqueeze(1)
+        )
+        milestone_reward = torch.sum(
+            newly_reached_milestones.float() * self._milestone_rewards, dim=1
+        )
+        self._distance_milestones |= newly_reached_milestones
+
+        foot_forces = self._foot_forces()
+        foot_contact = foot_forces > 1.0
+        current_air_time = self._contact_sensor.data.current_air_time.torch[
+            :, self._foot_sensor_ids
+        ]
+        last_air_time = self._contact_sensor.data.last_air_time.torch[
+            :, self._foot_sensor_ids
+        ]
+        first_contact = self._contact_sensor.compute_first_contact(self.step_dt).torch[
+            :, self._foot_sensor_ids
+        ]
+        airborne_count = torch.sum((~foot_contact).float(), dim=1)
+        symmetric_swing = (
+            (airborne_count >= 1.0) & (airborne_count <= 2.0) & active_translation
+        )
+        air_time_fraction = torch.clamp(
+            current_air_time.max(dim=1).values / self.cfg.target_foot_air_time_s,
+            0.0,
+            1.0,
+        )
+        touchdown_quality = torch.sum(
+            first_contact.float()
+            * torch.clamp(
+                (last_air_time - 0.06) / max(self.cfg.target_foot_air_time_s - 0.06, 0.01),
+                0.0,
+                1.0,
+            ),
+            dim=1,
+        )
+        soft_saturation = torch.mean(
+            torch.square(torch.clamp(torch.abs(self._actions) - 0.80, min=0.0) / 0.20),
+            dim=1,
+        )
+        hard_saturation = torch.mean(
+            (torch.abs(self._actions) >= 0.98).float(), dim=1
+        )
         terminal_progress_reward = self.reset_time_outs.float() * (~self._failed).float() * (
             self.cfg.terminal_progress_reward_scale * terminal_progress_fraction
             + self.cfg.distance_success_reward * distance_success.float()
@@ -206,10 +292,19 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
 
         reward = (
             3.0 * velocity_tracking
-            + 0.35 * yaw_tracking
-            + 5.0 * commanded_progress
-            + 0.20 * upright_cosine
-            + 0.01
+            + 0.25 * yaw_tracking
+            + 1.75 * normalized_commanded_progress
+            + 0.10 * upright_cosine
+            + 0.12 * symmetric_swing.float() * gait_progress_gate
+            + 0.10
+            * air_time_fraction
+            * active_translation.float()
+            * gait_progress_gate
+            + 0.40
+            * touchdown_quality
+            * active_translation.float()
+            * gait_progress_gate
+            + milestone_reward
             + terminal_progress_reward
             - 0.12 * torch.square(linear_velocity[:, 2])
             - 0.04 * torch.sum(torch.square(angular_velocity[:, :2]), dim=1)
@@ -218,7 +313,9 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             - 0.002 * action_magnitude
             - 0.001 * joint_speed
             - 0.0005 * effort
-            - 0.35 * stationary.float()
+            - 0.60 * stationary.float()
+            - 0.10 * soft_saturation
+            - 0.50 * hard_saturation
             - 2.0 * base_contact.float()
         )
         reward = torch.where(self._failed, reward - 5.0, reward)
@@ -229,6 +326,8 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_action_saturation_sum += torch.mean(
             (torch.abs(self._actions) >= 0.98).float(), dim=1
         )
+        self._episode_swing_step_sum += symmetric_swing.float()
+        self._episode_touchdown_count += torch.sum(first_contact.float(), dim=1)
         return reward
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -355,6 +454,12 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             log["Metrics/action_saturation_rate"] = (
                 self._episode_action_saturation_sum[env_ids] / completed_steps
             ).mean().item()
+            log["Metrics/swing_step_rate"] = (
+                self._episode_swing_step_sum[env_ids] / completed_steps
+            ).mean().item()
+            log["Metrics/touchdowns_per_episode"] = self._episode_touchdown_count[
+                env_ids
+            ].mean().item()
             log["Metrics/fall_rate"] = (
                 (self._failed[env_ids] & completed).float().sum()
                 / torch.clamp(completed.float().sum(), min=1.0)
@@ -401,3 +506,6 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_yaw_error_sum[env_ids] = 0.0
         self._episode_commanded_distance[env_ids] = 0.0
         self._episode_action_saturation_sum[env_ids] = 0.0
+        self._episode_swing_step_sum[env_ids] = 0.0
+        self._episode_touchdown_count[env_ids] = 0.0
+        self._distance_milestones[env_ids] = False

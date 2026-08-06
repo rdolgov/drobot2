@@ -23,8 +23,8 @@ function Get-WalkingContext {
         RepoRoot = $repoRoot
         IsaacPython = $isaacPython
         Task = $task
-        ExperimentName = "drobot_commanded_walk_${suffix}_v2_direct"
-        ExperimentRoot = Join-Path $repoRoot "logs\rsl_rl\drobot_commanded_walk_${suffix}_v2_direct"
+        ExperimentName = "drobot_commanded_walk_${suffix}_v3_direct"
+        ExperimentRoot = Join-Path $repoRoot "logs\rsl_rl\drobot_commanded_walk_${suffix}_v3_direct"
         TrainScript = Join-Path $PSScriptRoot "train_commanded_walking.py"
         PlayScript = Join-Path $PSScriptRoot "play_commanded_walking.py"
     }

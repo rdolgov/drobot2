@@ -23,10 +23,14 @@ Start a new forward-only policy:
 & .\simulation\isaac\rl\parallel_walking\train_walking_visible.ps1 -Fresh
 ```
 
-The defaults are five visible robots and 20 PPO iterations. The V2 task starts with commands
-between `0.05` and `0.10 m/s`, then reaches `0.10` to `0.18 m/s` over roughly the first 1,000
-PPO iterations. Omit `-Fresh` on later runs to automatically continue the newest V2 checkpoint.
+The defaults are five visible robots and 20 PPO iterations. The V3 task starts with commands
+between `0.04` and `0.08 m/s`, then reaches `0.10` to `0.18 m/s` over roughly the first 1,000
+PPO iterations. Omit `-Fresh` on later runs to automatically continue the newest V3 checkpoint.
 Override the defaults with `-Iterations` and `-NumEnvs`.
+
+V3 uses a native bounded Beta policy, rational (non-vanishing) velocity tracking, progressive
+distance milestones, and symmetric foot air-time/touchdown rewards gated by commanded-direction
+progress. These rewards prescribe neither a gait phase nor a leg order.
 
 ## 2. Headless parallel training
 
@@ -45,6 +49,8 @@ The main improvement signals are:
 - `Metrics/commanded_distance_m`: should increase for the forward curriculum
 - `Metrics/distance_success_rate`: should rise toward one
 - `Metrics/action_saturation_rate`: should stay low rather than approach one
+- `Metrics/swing_step_rate`: should become non-zero without dominating the episode
+- `Metrics/touchdowns_per_episode`: should become non-zero as stepping emerges
 - `Metrics/fall_rate`: should approach zero
 - `Mean reward`: should rise, but is secondary to the physical metrics above
 
@@ -61,9 +67,10 @@ To record a 30-second review clip:
   -Command forward -RecordSeconds 30
 ```
 
-The preview script selects the newest matching V2 checkpoint unless `-Checkpoint` is supplied.
-V1 checkpoints are retained in `drobot_commanded_walk_forward_direct`, but should not seed V2:
-their scalar action standard deviation grew far beyond the action range.
+The preview script selects the newest matching V3 checkpoint unless `-Checkpoint` is supplied.
+V1 and V2 checkpoints are retained, but should not seed V3. V1 had exploding Gaussian noise;
+V2 remained bounded but learned saturated action means and zero distance successes. V3's Beta
+policy has a different output head and must start fresh.
 
 ## Later: backward and turns
 
@@ -72,7 +79,7 @@ Once forward walking is stable, initialize the directional curriculum from a for
 ```powershell
 & .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
   -CommandSet directional `
-  -Checkpoint .\logs\rsl_rl\drobot_commanded_walk_forward_v2_direct\RUN\model_N.pt `
+  -Checkpoint .\logs\rsl_rl\drobot_commanded_walk_forward_v3_direct\RUN\model_N.pt `
   -Iterations 500 -NumEnvs 128
 ```
 
