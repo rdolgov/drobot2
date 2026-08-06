@@ -40,13 +40,13 @@ if ($RecordSeconds -gt 0) {
 }
 if ($NoTimeLimit) {
     # Keep fall termination active, but do not reset a healthy robot merely
-    # because the standard eight-second training horizon elapsed.
+    # because the training horizon elapsed.
     $arguments += "env.disable_time_limit=true"
 }
 
 Push-Location $context.RepoRoot
 try {
-    $horizon = if ($NoTimeLimit) { "until fall or window close" } else { "8-second episodes" }
+    $horizon = if ($NoTimeLimit) { "until fall or window close" } else { "curriculum episode horizon" }
     Write-Host "Previewing command '$Command' ($horizon) with: $source"
     & $context.IsaacPython @arguments
     if ($LASTEXITCODE -ne 0) {

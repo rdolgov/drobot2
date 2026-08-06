@@ -9,11 +9,11 @@ from isaaclab_rl.rsl_rl import (
 
 
 @configclass
-class DrobotGaussianDistributionCfg(RslRlMLPModelCfg.GaussianDistributionCfg):
-    """Exploration distribution matching the successful SB3 PPO baseline."""
+class DrobotBoundedBetaDistributionCfg(RslRlMLPModelCfg.DistributionCfg):
+    """Native bounded distribution: sampled and deployed actions stay usable."""
 
-    init_std: float = 0.1
-    std_type: str = "log"
+    class_name: str = "BetaDistribution"
+    action_range: tuple[float, float] = (-1.0, 1.0)
 
 
 @configclass
@@ -23,7 +23,7 @@ class DrobotCommandedWalkingForwardPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 64
     max_iterations = 500
     save_interval = 25
-    experiment_name = "drobot_commanded_walk_forward_v15_rl_transfer_direct"
+    experiment_name = "drobot_commanded_walk_forward_v16_sustained_beta_direct"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
     clip_actions = 1.0
     actor = RslRlMLPModelCfg(
@@ -32,7 +32,7 @@ class DrobotCommandedWalkingForwardPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         # Keep the exact raw 48-value hardware observation contract used by the
         # proven SB3 actor.  The privileged critic remains normalized.
         obs_normalization=False,
-        distribution_cfg=DrobotGaussianDistributionCfg(),
+        distribution_cfg=DrobotBoundedBetaDistributionCfg(),
     )
     critic = RslRlMLPModelCfg(
         hidden_dims=[256, 256],
@@ -61,4 +61,4 @@ class DrobotCommandedWalkingDirectionalPPORunnerCfg(
 ):
     """Same network shape, expanded to forward/backward/turn commands."""
 
-    experiment_name = "drobot_commanded_walk_directional_v15_rl_transfer_direct"
+    experiment_name = "drobot_commanded_walk_directional_v16_sustained_beta_direct"

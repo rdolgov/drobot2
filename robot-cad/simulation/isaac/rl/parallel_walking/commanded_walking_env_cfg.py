@@ -32,10 +32,16 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     # The validated single-environment walking policy used a 60 Hz controller.
     # Thirty hertz made the parallel policy learn discrete foot stamping instead.
     decimation = 2
-    episode_length_s = 8.0
+    # Allocate the final horizon up front. Training timeouts ramp from 8 to 32
+    # seconds; preview may disable them entirely.
+    episode_length_s = 32.0
     # Preview may override this through Hydra. Training leaves it false so PPO
     # continues to receive fixed-horizon episode boundaries.
     disable_time_limit = False
+    initial_training_horizon_s = 8.0
+    final_training_horizon_s = 32.0
+    # 64 controller steps per PPO iteration -> 1,000 iterations to full horizon.
+    episode_horizon_curriculum_steps = 64_000
     action_space = 12
     # command 3 + IMU 9 + joint position error 12 + velocity 12 + last action 12
     observation_space = 48
@@ -43,8 +49,11 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     state_space = 56
 
     viewer: ViewerCfg = ViewerCfg(
-        eye=(-1.35, -1.20, 0.75),
-        lookat=(0.30, 0.0, 0.28),
+        eye=(-1.40, -1.25, 0.65),
+        lookat=(0.0, 0.0, -0.15),
+        origin_type="asset_root",
+        env_index=0,
+        asset_name="robot",
     )
     sim: SimulationCfg = SimulationCfg(
         dt=1.0 / 120.0,
@@ -60,7 +69,8 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     )
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
         num_envs=128,
-        env_spacing=3.0,
+        # A 32-second target-speed rollout covers 4.8 m.
+        env_spacing=8.0,
         replicate_physics=True,
         clone_in_fabric=True,
     )
@@ -164,7 +174,7 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     minimum_base_height_m = 0.22
     minimum_upright_cosine = 0.78
     base_contact_grace_steps = 10
-    maximum_distance_from_origin_m = 3.0
+    maximum_distance_from_origin_m = 6.5
     target_base_height_m = 0.3730
     velocity_tracking_sigma_m_s = 0.10
     distance_success_fraction = 0.65
@@ -173,6 +183,12 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     # of continuing to tune a novel objective.  Net displacement remains a hard
     # evaluation metric, but adding it to the reward caused unsafe lunge exploits.
     reward_forward_velocity_tracking = 2.0
+    # A two-second trailing speed window prevents a reset-dependent burst from
+    # being mistaken for sustained walking.
+    sustained_speed_window_s = 2.0
+    minimum_sustained_speed_m_s = 0.04
+    reward_sustained_progress = 0.75
+    penalty_sustained_stall = 0.50
     reward_upright = 0.50
     # In 128-env PPO, the old 0.05 survival term let a 0.3 m lunge outscore a
     # full stable episode.  At 0.50, standing beats an early fall while sustained

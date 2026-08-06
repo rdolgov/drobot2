@@ -22,6 +22,7 @@ def test_python_entrypoints_and_environment_parse() -> None:
         "play_commanded_walking.py",
         "preview_control.py",
         "bootstrap_walking_from_sb3.py",
+        "evaluate_sustained_walking.py",
         "agents/rsl_rl_ppo_cfg.py",
     ):
         ast.parse(_source(relative), filename=relative)
@@ -66,38 +67,42 @@ def test_forward_and_directional_tasks_share_policy_shape() -> None:
     assert "hidden_dims=[256, 256]" in agent
 
 
-def test_v15_policy_uses_rl_transfer_shape_and_low_noise_exploration() -> None:
+def test_v16_policy_is_bounded_and_keeps_the_transfer_shape() -> None:
     agent = _source("agents/rsl_rl_ppo_cfg.py")
     common = _source("walking_workflow_common.ps1")
-    assert "DrobotGaussianDistributionCfg" in agent
+    assert "DrobotBoundedBetaDistributionCfg" in agent
+    assert 'class_name: str = "BetaDistribution"' in agent
+    assert "action_range: tuple[float, float] = (-1.0, 1.0)" in agent
+    assert "DrobotGaussianDistributionCfg" not in agent
     assert "RslRlRNNModelCfg" not in agent
-    assert "init_std: float = 0.1" in agent
-    assert 'std_type: str = "log"' in agent
     assert 'activation="elu"' in agent
     assert 'obs_groups = {"actor": ["policy"], "critic": ["critic"]}' in agent
     assert "entropy_coef=0.001" in agent
     assert "value_loss_coef=0.5" in agent
     assert "max_grad_norm=0.5" in agent
     assert (
-        'experiment_name = "drobot_commanded_walk_forward_v15_rl_transfer_direct"'
+        'experiment_name = "drobot_commanded_walk_forward_v16_sustained_beta_direct"'
         in agent
     )
     assert "gamma=0.995" in agent
     assert "obs_normalization=False" in agent
-    assert 'drobot_commanded_walk_${suffix}_v15_rl_transfer_direct' in common
+    assert 'drobot_commanded_walk_${suffix}_v16_sustained_beta_direct' in common
 
 
 def test_rl_transfer_bootstrap_maps_actor_and_resets_optimizer() -> None:
     bootstrap = _source("bootstrap_walking_from_sb3.py")
-    assert '"mlp.0.weight": "mlp_extractor.policy_net.0.weight"' in bootstrap
-    assert '"mlp.2.weight": "mlp_extractor.policy_net.2.weight"' in bootstrap
-    assert '"mlp.4.weight": "action_net.weight"' in bootstrap
+    assert 'source_policy["mlp_extractor.policy_net.0.weight"]' in bootstrap
+    assert 'source_policy["mlp_extractor.policy_net.2.weight"]' in bootstrap
+    assert 'source_policy["action_net.weight"]' in bootstrap
+    assert '"--rsl-source"' in bootstrap
+    assert "target_weight.shape[0] == 24" in bootstrap
+    assert 'target_distribution = "bounded_beta"' in bootstrap
     assert 'actor["distribution.log_std_param"]' in bootstrap
     assert 'optimizer["state"] = {}' in bootstrap
     assert '"--actor-output-scale"' in bootstrap
 
 
-def test_v14_reward_makes_early_fall_worse_than_stable_episode() -> None:
+def test_v16_reward_requires_sustained_forward_motion() -> None:
     cfg = _source("commanded_walking_env_cfg.py")
     env = _source("commanded_walking_env.py")
     assert "initial_forward_speed_min_m_s = 0.15" in cfg
@@ -109,6 +114,14 @@ def test_v14_reward_makes_early_fall_worse_than_stable_episode() -> None:
     assert "velocity_tracking_sigma_m_s = 0.10" in cfg
     assert "reward_signed_command_progress" not in cfg
     assert "reward_forward_velocity_tracking = 2.0" in cfg
+    assert "episode_length_s = 32.0" in cfg
+    assert "initial_training_horizon_s = 8.0" in cfg
+    assert "final_training_horizon_s = 32.0" in cfg
+    assert "episode_horizon_curriculum_steps = 64_000" in cfg
+    assert "sustained_speed_window_s = 2.0" in cfg
+    assert "minimum_sustained_speed_m_s = 0.04" in cfg
+    assert "reward_sustained_progress = 0.75" in cfg
+    assert "penalty_sustained_stall = 0.50" in cfg
     assert "penalty_normalized_forward_velocity_error" not in cfg
     assert "reward_body_height_tracking" not in cfg
     assert "reward_upright = 0.50" in cfg
@@ -123,6 +136,8 @@ def test_v14_reward_makes_early_fall_worse_than_stable_episode() -> None:
     assert '"forward_velocity_error"' not in env
     assert '"body_height_tracking"' not in env
     assert '"forward_velocity_tracking"' in env
+    assert '"sustained_progress"' in env
+    assert '"sustained_stall"' in env
     assert '"lateral_velocity"' in env
     assert '"termination"' in env
     assert "* self.cfg.reward_scale" in env
@@ -133,6 +148,9 @@ def test_v14_reward_makes_early_fall_worse_than_stable_episode() -> None:
     assert 'log["Metrics/mean_commanded_speed_m_s"]' in env
     assert 'log["Metrics/net_forward_displacement_m"]' in env
     assert 'log["Metrics/mean_base_height_m"]' in env
+    assert 'log["Metrics/min_rolling_forward_speed_m_s"]' in env
+    assert 'log["Metrics/sustained_stall_rate"]' in env
+    assert 'log["Metrics/current_episode_horizon_s"]' in env
     assert 'log["Metrics/distance_success_rate"]' in env
     assert 'log[f"Metrics/failure_{label}_rate"]' in env
     assert 'log["Metrics/action_saturation_rate"]' in env
@@ -141,6 +159,7 @@ def test_v14_reward_makes_early_fall_worse_than_stable_episode() -> None:
     assert 'log[f"Reward/{name}"]' in env
     assert "if self.cfg.disable_time_limit:" in env
     assert "time_out = torch.zeros_like(self._failed)" in env
+    assert "self._current_episode_horizon_steps() - 1" in env
 
 
 def test_actor_observation_is_deployable_and_critic_gets_simulation_state() -> None:
@@ -176,7 +195,7 @@ def test_user_scripts_are_separate_and_resume_by_default() -> None:
     assert '[int]$NumEnvs = 128' in headless
     assert "Find-LatestWalkingCheckpoint" in common
     assert 'Where-Object { $_.Name -notlike "_*" }' in common
-    assert r"models\parallel-walking-v15\model_125.pt" in common
+    assert r"models\parallel-walking-v16\model_250.pt" in common
     assert "env.command_curriculum_offset_steps=$curriculumOffsetSteps" in common
     assert "([int64]$Matches[1] + 1) * 64" in common
     assert '"--resume"' in common

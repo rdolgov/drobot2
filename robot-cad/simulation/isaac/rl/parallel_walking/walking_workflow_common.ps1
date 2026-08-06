@@ -23,10 +23,10 @@ function Get-WalkingContext {
         RepoRoot = $repoRoot
         IsaacPython = $isaacPython
         Task = $task
-        ExperimentName = "drobot_commanded_walk_${suffix}_v15_rl_transfer_direct"
-        ExperimentRoot = Join-Path $repoRoot "logs\rsl_rl\drobot_commanded_walk_${suffix}_v15_rl_transfer_direct"
+        ExperimentName = "drobot_commanded_walk_${suffix}_v16_sustained_beta_direct"
+        ExperimentRoot = Join-Path $repoRoot "logs\rsl_rl\drobot_commanded_walk_${suffix}_v16_sustained_beta_direct"
         BundledCheckpoint = if ($CommandSet -eq "forward") {
-            Join-Path $repoRoot "simulation\isaac\models\parallel-walking-v15\model_125.pt"
+            Join-Path $repoRoot "simulation\isaac\models\parallel-walking-v16\model_250.pt"
         }
         else {
             $null

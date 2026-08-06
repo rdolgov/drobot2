@@ -85,8 +85,21 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         )
         self._episode_command_speed_sum = torch.zeros(self.num_envs, device=self.device)
         self._episode_base_height_sum = torch.zeros(self.num_envs, device=self.device)
+        self._sustained_window_steps = max(
+            1, int(round(self.cfg.sustained_speed_window_s / self.step_dt))
+        )
+        self._rolling_command_speed = torch.zeros(
+            (self.num_envs, self._sustained_window_steps), device=self.device
+        )
+        self._env_indices = torch.arange(self.num_envs, device=self.device)
+        self._episode_min_rolling_speed = torch.full(
+            (self.num_envs,), torch.inf, device=self.device
+        )
+        self._episode_stall_step_sum = torch.zeros(self.num_envs, device=self.device)
         reward_term_names = (
             "forward_velocity_tracking",
+            "sustained_progress",
+            "sustained_stall",
             "upright",
             "alive",
             "lateral_velocity",
@@ -103,6 +116,20 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             name: torch.zeros(self.num_envs, device=self.device)
             for name in reward_term_names
         }
+
+    def _current_episode_horizon_steps(self) -> int:
+        curriculum_step = (
+            self.common_step_counter + self.cfg.command_curriculum_offset_steps
+        )
+        fraction = min(
+            float(curriculum_step) / self.cfg.episode_horizon_curriculum_steps,
+            1.0,
+        )
+        horizon_s = self.cfg.initial_training_horizon_s + fraction * (
+            self.cfg.final_training_horizon_s
+            - self.cfg.initial_training_horizon_s
+        )
+        return max(1, int(round(horizon_s / self.step_dt)))
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
@@ -202,11 +229,47 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         command_direction = self._commands[:, :2] / torch.clamp(
             command_speed.unsqueeze(1), min=1.0e-4
         )
+        commanded_velocity = torch.sum(
+            linear_velocity[:, :2] * command_direction, dim=1
+        )
+        rolling_slots = torch.remainder(
+            self._steps_since_reset, self._sustained_window_steps
+        )
+        self._rolling_command_speed[self._env_indices, rolling_slots] = (
+            commanded_velocity
+        )
+        rolling_counts = torch.clamp(
+            self._steps_since_reset + 1,
+            min=1,
+            max=self._sustained_window_steps,
+        ).float()
+        rolling_speed = torch.sum(self._rolling_command_speed, dim=1) / rolling_counts
+        rolling_window_ready = (
+            self._steps_since_reset + 1 >= self._sustained_window_steps
+        )
         displacement = self._robot.data.root_pos_w.torch - self._episode_start_position
         net_commanded_distance = torch.sum(
             displacement[:, :2] * command_direction, dim=1
         )
         active_translation = command_speed > 0.03
+        sustained_progress = torch.where(
+            active_translation,
+            torch.clamp(
+                rolling_speed / torch.clamp(command_speed, min=1.0e-4),
+                min=-1.0,
+                max=1.0,
+            ),
+            torch.zeros_like(rolling_speed),
+        )
+        normalized_stall_deficit = torch.clamp(
+            (self.cfg.minimum_sustained_speed_m_s - rolling_speed)
+            / self.cfg.minimum_sustained_speed_m_s,
+            min=0.0,
+            max=2.0,
+        )
+        sustained_stall = rolling_window_ready & active_translation & (
+            rolling_speed < self.cfg.minimum_sustained_speed_m_s
+        )
         net_commanded_distance = torch.where(
             active_translation,
             net_commanded_distance,
@@ -243,12 +306,21 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             last_air_time >= self.cfg.qualified_foot_air_time_s
         )
 
-        # This is intentionally the same compact objective that produced the
-        # independently evaluated 1.16 m / 8 s walker.  Actual displacement and
-        # falls are logged separately so reward exploits remain visible.
+        # Preserve the validated short-horizon objective, then explicitly reward
+        # rolling forward progress so a policy cannot collect its return with an
+        # initial burst followed by a fixed saturated stance.  Physical
+        # displacement and falls remain separate metrics so exploits stay visible.
         reward_terms = {
             "forward_velocity_tracking": (
                 self.cfg.reward_forward_velocity_tracking * velocity_tracking
+            ),
+            "sustained_progress": (
+                self.cfg.reward_sustained_progress * sustained_progress
+            ),
+            "sustained_stall": (
+                -self.cfg.penalty_sustained_stall
+                * torch.square(normalized_stall_deficit)
+                * (rolling_window_ready & active_translation).float()
             ),
             "upright": self.cfg.reward_upright * upright_cosine,
             "alive": torch.full_like(upright_cosine, self.cfg.reward_alive),
@@ -287,6 +359,12 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         )
         self._episode_command_speed_sum += command_speed
         self._episode_base_height_sum += base_height
+        self._episode_stall_step_sum += sustained_stall.float()
+        self._episode_min_rolling_speed = torch.where(
+            rolling_window_ready & active_translation,
+            torch.minimum(self._episode_min_rolling_speed, rolling_speed),
+            self._episode_min_rolling_speed,
+        )
         for name, term in reward_terms.items():
             self._episode_reward_term_sums[name] += term
         return reward
@@ -307,10 +385,13 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             local_position[:, 2] < self.cfg.minimum_base_height_m
         )
         self._failure_tilt = upright_cosine < self.cfg.minimum_upright_cosine
-        self._failure_out_of_bounds = (
-            torch.linalg.norm(local_position[:, :2], dim=1)
-            > self.cfg.maximum_distance_from_origin_m
-        )
+        if self.cfg.disable_time_limit:
+            self._failure_out_of_bounds = torch.zeros_like(self._failed)
+        else:
+            self._failure_out_of_bounds = (
+                torch.linalg.norm(local_position[:, :2], dim=1)
+                > self.cfg.maximum_distance_from_origin_m
+            )
         self._failure_base_contact = base_contact
         self._failed = (
             self._failure_nonfinite
@@ -322,7 +403,10 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         if self.cfg.disable_time_limit:
             time_out = torch.zeros_like(self._failed)
         else:
-            time_out = self.episode_length_buf >= self.max_episode_length - 1
+            time_out = (
+                self.episode_length_buf
+                >= self._current_episode_horizon_steps() - 1
+            )
         return self._failed, time_out
 
     def _sample_commands(self, env_ids: torch.Tensor) -> None:
@@ -419,6 +503,23 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             log["Metrics/mean_base_height_m"] = (
                 self._episode_base_height_sum[env_ids] / completed_steps
             ).mean().item()
+            valid_minimum_speed = torch.where(
+                torch.isfinite(self._episode_min_rolling_speed[env_ids]),
+                self._episode_min_rolling_speed[env_ids],
+                torch.zeros_like(self._episode_min_rolling_speed[env_ids]),
+            )
+            log["Metrics/min_rolling_forward_speed_m_s"] = (
+                valid_minimum_speed.mean().item()
+            )
+            mature_steps = torch.clamp(
+                completed_steps - self._sustained_window_steps + 1, min=1.0
+            )
+            log["Metrics/sustained_stall_rate"] = (
+                self._episode_stall_step_sum[env_ids] / mature_steps
+            ).mean().item()
+            log["Metrics/current_episode_horizon_s"] = (
+                self._current_episode_horizon_steps() * self.step_dt
+            )
             motion_command = torch.linalg.norm(
                 self._commands[env_ids, :2], dim=1
             ) > 0.03
@@ -473,9 +574,13 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._robot.reset(env_ids)
         super()._reset_idx(env_ids)
         if len(env_ids) == self.num_envs:
-            self.episode_length_buf[:] = torch.randint_like(
-                self.episode_length_buf, high=int(self.max_episode_length)
-            )
+            if self.cfg.disable_time_limit:
+                self.episode_length_buf.zero_()
+            else:
+                self.episode_length_buf[:] = torch.randint_like(
+                    self.episode_length_buf,
+                    high=self._current_episode_horizon_steps(),
+                )
 
         joint_position = self._robot.data.default_joint_pos.torch[env_ids].clone()
         joint_position += self.cfg.reset_joint_position_noise_rad * (
@@ -521,5 +626,8 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_qualified_touchdown_count[env_ids] = 0.0
         self._episode_command_speed_sum[env_ids] = 0.0
         self._episode_base_height_sum[env_ids] = 0.0
+        self._rolling_command_speed[env_ids] = 0.0
+        self._episode_min_rolling_speed[env_ids] = torch.inf
+        self._episode_stall_step_sum[env_ids] = 0.0
         for term_sum in self._episode_reward_term_sums.values():
             term_sum[env_ids] = 0.0
