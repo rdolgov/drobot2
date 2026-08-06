@@ -319,7 +319,10 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             | self._failure_out_of_bounds
             | self._failure_base_contact
         )
-        time_out = self.episode_length_buf >= self.max_episode_length - 1
+        if self.cfg.disable_time_limit:
+            time_out = torch.zeros_like(self._failed)
+        else:
+            time_out = self.episode_length_buf >= self.max_episode_length - 1
         return self._failed, time_out
 
     def _sample_commands(self, env_ids: torch.Tensor) -> None:

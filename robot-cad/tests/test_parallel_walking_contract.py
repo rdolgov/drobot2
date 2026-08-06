@@ -139,6 +139,8 @@ def test_v14_reward_makes_early_fall_worse_than_stable_episode() -> None:
     assert 'log["Metrics/swing_step_rate"]' in env
     assert 'log["Metrics/touchdowns_per_episode"]' in env
     assert 'log[f"Reward/{name}"]' in env
+    assert "if self.cfg.disable_time_limit:" in env
+    assert "time_out = torch.zeros_like(self._failed)" in env
 
 
 def test_actor_observation_is_deployable_and_critic_gets_simulation_state() -> None:
@@ -168,6 +170,8 @@ def test_user_scripts_are_separate_and_resume_by_default() -> None:
     common = _source("walking_workflow_common.ps1")
     assert 'ValidateSet("forward", "backward", "left", "right", "stop")' in preview
     assert '$RecordSeconds * 60' in preview
+    assert "[switch]$NoTimeLimit" in preview
+    assert 'env.disable_time_limit=true' in preview
     assert '[int]$NumEnvs = 5' in visible
     assert '[int]$NumEnvs = 128' in headless
     assert "Find-LatestWalkingCheckpoint" in common

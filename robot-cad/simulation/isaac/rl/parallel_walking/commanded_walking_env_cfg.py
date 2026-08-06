@@ -33,6 +33,9 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     # Thirty hertz made the parallel policy learn discrete foot stamping instead.
     decimation = 2
     episode_length_s = 8.0
+    # Preview may override this through Hydra. Training leaves it false so PPO
+    # continues to receive fixed-horizon episode boundaries.
+    disable_time_limit = False
     action_space = 12
     # command 3 + IMU 9 + joint position error 12 + velocity 12 + last action 12
     observation_space = 48

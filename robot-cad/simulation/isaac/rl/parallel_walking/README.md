@@ -98,6 +98,17 @@ The preview script selects the newest matching V15 checkpoint unless `-Checkpoin
 On a clean checkout it uses the bundled selected model. Underscore-prefixed calibration and
 workflow directories are deliberately ignored during automatic checkpoint selection.
 
+To let a healthy robot continue beyond the eight-second training horizon, while still resetting
+it if it falls, use:
+
+```powershell
+& .\simulation\isaac\rl\parallel_walking\preview_walking.ps1 `
+  -Command forward -NoTimeLimit
+```
+
+Close Isaac Sim to stop an unlimited preview. This option affects preview only; PPO training
+retains fixed eight-second episodes.
+
 ## Later: backward and turns
 
 Once forward walking is stable, initialize the directional curriculum from a forward model:

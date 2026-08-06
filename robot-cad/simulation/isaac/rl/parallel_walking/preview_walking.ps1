@@ -7,7 +7,8 @@ param(
     [string]$Checkpoint = "",
     [int]$Seed = 1701,
     [ValidateRange(0, 600)]
-    [int]$RecordSeconds = 0
+    [int]$RecordSeconds = 0,
+    [switch]$NoTimeLimit
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,10 +38,16 @@ if ($RecordSeconds -gt 0) {
     # requested 30-second review clip contain only 15 seconds of footage.
     $arguments += @("--video", "--video_length", "$($RecordSeconds * 60)")
 }
+if ($NoTimeLimit) {
+    # Keep fall termination active, but do not reset a healthy robot merely
+    # because the standard eight-second training horizon elapsed.
+    $arguments += "env.disable_time_limit=true"
+}
 
 Push-Location $context.RepoRoot
 try {
-    Write-Host "Previewing command '$Command' with: $source"
+    $horizon = if ($NoTimeLimit) { "until fall or window close" } else { "8-second episodes" }
+    Write-Host "Previewing command '$Command' ($horizon) with: $source"
     & $context.IsaacPython @arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Isaac Lab playback exited with code $LASTEXITCODE"
