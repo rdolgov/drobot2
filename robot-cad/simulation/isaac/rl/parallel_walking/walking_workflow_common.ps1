@@ -23,8 +23,14 @@ function Get-WalkingContext {
         RepoRoot = $repoRoot
         IsaacPython = $isaacPython
         Task = $task
-        ExperimentName = "drobot_commanded_walk_${suffix}_v3_direct"
-        ExperimentRoot = Join-Path $repoRoot "logs\rsl_rl\drobot_commanded_walk_${suffix}_v3_direct"
+        ExperimentName = "drobot_commanded_walk_${suffix}_v15_rl_transfer_direct"
+        ExperimentRoot = Join-Path $repoRoot "logs\rsl_rl\drobot_commanded_walk_${suffix}_v15_rl_transfer_direct"
+        BundledCheckpoint = if ($CommandSet -eq "forward") {
+            Join-Path $repoRoot "simulation\isaac\models\parallel-walking-v15\model_125.pt"
+        }
+        else {
+            $null
+        }
         TrainScript = Join-Path $PSScriptRoot "train_commanded_walking.py"
         PlayScript = Join-Path $PSScriptRoot "play_commanded_walking.py"
     }
@@ -37,7 +43,9 @@ function Find-LatestWalkingCheckpoint {
         return $null
     }
     return Get-ChildItem -LiteralPath $ExperimentRoot -Directory |
-        Where-Object { $_.Name -ne "_workflow-bootstrap" } |
+        # Underscore-prefixed directories are workflow or rejected diagnostic
+        # checkpoints and must never silently become the user's next model.
+        Where-Object { $_.Name -notlike "_*" } |
         ForEach-Object {
             Get-ChildItem -LiteralPath $_.FullName -Filter "model_*.pt" -File |
                 Sort-Object LastWriteTime -Descending |
@@ -57,10 +65,13 @@ function Resolve-WalkingCheckpoint {
         return (Resolve-Path -LiteralPath $Checkpoint).Path
     }
     $latest = Find-LatestWalkingCheckpoint -ExperimentRoot $Context.ExperimentRoot
-    if ($null -eq $latest) {
-        return $null
+    if ($null -ne $latest) {
+        return $latest.FullName
     }
-    return $latest.FullName
+    if ($Context.BundledCheckpoint -and (Test-Path -LiteralPath $Context.BundledCheckpoint -PathType Leaf)) {
+        return $Context.BundledCheckpoint
+    }
+    return $null
 }
 
 function Invoke-WalkingTraining {
@@ -88,7 +99,13 @@ function Invoke-WalkingTraining {
         "--run_name", $RunName,
         "--visualizer", $Visualizer
     )
+    $curriculumOffsetSteps = 0
     if ($null -ne $source) {
+        $checkpointStem = [System.IO.Path]::GetFileNameWithoutExtension($source)
+        if ($checkpointStem -match '^model_(\d+)$') {
+            # Each saved iteration represents one 64-step rollout per environment.
+            $curriculumOffsetSteps = ([int64]$Matches[1] + 1) * 64
+        }
         $bootstrapRun = Join-Path $Context.ExperimentRoot "_workflow-bootstrap"
         $bootstrapCheckpoint = Join-Path $bootstrapRun "model_0.pt"
         New-Item -ItemType Directory -Force -Path $bootstrapRun | Out-Null
@@ -103,6 +120,8 @@ function Invoke-WalkingTraining {
     else {
         Write-Host "Starting a fresh $($Context.Task) policy."
     }
+    $arguments += "env.command_curriculum_offset_steps=$curriculumOffsetSteps"
+    Write-Host "Command curriculum offset: $curriculumOffsetSteps policy steps"
     if ($Visualizer -eq "kit") {
         $arguments += @(
             "--max_visible_envs", "$EnvironmentCount",

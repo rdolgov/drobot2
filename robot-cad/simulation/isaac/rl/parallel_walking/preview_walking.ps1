@@ -33,7 +33,9 @@ $arguments = @(
     "--max_visible_envs", "1"
 )
 if ($RecordSeconds -gt 0) {
-    $arguments += @("--video", "--video_length", "$($RecordSeconds * 30)")
+    # Playback renders at the 60 Hz policy/control rate.  Using 30 here made a
+    # requested 30-second review clip contain only 15 seconds of footage.
+    $arguments += @("--video", "--video_length", "$($RecordSeconds * 60)")
 }
 
 Push-Location $context.RepoRoot

@@ -7,6 +7,7 @@ ignored under `simulation/isaac/output/`.
 | Directory | Purpose | SHA-256 |
 | --- | --- | --- |
 | `ppo-walk-v1-2m/` | Frozen flat-walking base used by the v5 residual stair environment | `eac4fd89066bf9483900188f8a5b8c047e848dfa2b3845f90c148967fdea56be` |
+| `parallel-walking-v15/` | Selected stable 128-environment RSL-RL transfer checkpoint for the corrected implicit servo task | `995dc00e4603da91386f80976fcec3da9df0b50cff73798a056c86deade0a887` |
 | `ppo-stairs-v5-10mm-four-step/` | Source-equivalent residual stair policy, current schema-2 manifest, packaging report, and 10-episode deterministic evaluation | `a61ebec6b02b366b48928cacf8aab70bba39cf660fc3a8f4ac0d39db0374fcfc` |
 | `ppo-stairs-v6-180mm-25cm-small/` | Bounded full-size stair evaluation policy, schema-2 manifest, packaging/training/evaluation/recording reports; objective failed | `c29cb71ab596392c36292a57ca98473e7c4807a9de700bc7824bf2e0d73f91bc` |
 | `ppo-stairs-v12-front-right-190mm-lift-small/` | Support-only mixed-height lift residual, manifest, training/evaluation/recording reports; strict 190 mm objective failed | `e0147f16ea942d751c8cec49616fa3aed62fc6b5f6a263aa0625600ee75e5f62` |

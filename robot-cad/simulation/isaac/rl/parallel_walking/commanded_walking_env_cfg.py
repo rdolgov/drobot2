@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import IdealPDActuatorCfg
+from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
 from isaaclab.envs import DirectRLEnvCfg, ViewerCfg
 from isaaclab.scene import InteractiveSceneCfg
@@ -19,20 +19,25 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 ROBOT_USD = PROJECT_ROOT / "exports" / "isaac" / "quadruped_robot_floating.usdc"
 EFFORT_CAP_NM = 0.8825985
 SERVO_VELOCITY_LIMIT_RAD_S = 4.5836625
-STABLE_NEUTRAL_HIP_RAD = 0.0872664626
-STABLE_NEUTRAL_KNEE_RAD = 0.6981317008
+STABLE_NEUTRAL_FRONT_HIP_RAD = -0.1544915885
+STABLE_NEUTRAL_REAR_HIP_RAD = 0.1544915885
+STABLE_NEUTRAL_FRONT_KNEE_RAD = 0.4699251950
+STABLE_NEUTRAL_REAR_KNEE_RAD = -0.4699251950
 
 
 @configclass
 class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     """Flat-ground, forward-first walking with hardware-reproducible inputs."""
 
-    decimation = 4
+    # The validated single-environment walking policy used a 60 Hz controller.
+    # Thirty hertz made the parallel policy learn discrete foot stamping instead.
+    decimation = 2
     episode_length_s = 8.0
     action_space = 12
     # command 3 + IMU 9 + joint position error 12 + velocity 12 + last action 12
     observation_space = 48
-    state_space = 0
+    # policy observation 48 + privileged base velocity 3 + height 1 + contacts 4
+    state_space = 56
 
     viewer: ViewerCfg = ViewerCfg(
         eye=(-1.35, -1.20, 0.75),
@@ -91,23 +96,27 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
             ),
         ),
         init_state=ArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 0.3305),
+            pos=(0.0, 0.0, 0.3730),
             joint_pos={
                 ".*_hip_abduction": 0.0,
-                "front_.*_hip_flexion": STABLE_NEUTRAL_HIP_RAD,
-                "rear_.*_hip_flexion": -STABLE_NEUTRAL_HIP_RAD,
-                "front_.*_knee": STABLE_NEUTRAL_KNEE_RAD,
-                "rear_.*_knee": -STABLE_NEUTRAL_KNEE_RAD,
+                "front_.*_hip_flexion": STABLE_NEUTRAL_FRONT_HIP_RAD,
+                "rear_.*_hip_flexion": STABLE_NEUTRAL_REAR_HIP_RAD,
+                "front_.*_knee": STABLE_NEUTRAL_FRONT_KNEE_RAD,
+                "rear_.*_knee": STABLE_NEUTRAL_REAR_KNEE_RAD,
             },
             joint_vel={".*": 0.0},
         ),
         soft_joint_pos_limit_factor=0.95,
         actuators={
-            "legs": IdealPDActuatorCfg(
+            # Use PhysX's implicit drive, matching the validated manual world.
+            # The equivalent explicit PD controller bang-banged at the velocity
+            # limit under the measured 0.8826 N*m effort cap, even at zero action.
+            "legs": ImplicitActuatorCfg(
                 joint_names_expr=[".*"],
                 effort_limit=EFFORT_CAP_NM,
                 effort_limit_sim=EFFORT_CAP_NM,
                 velocity_limit=SERVO_VELOCITY_LIMIT_RAD_S,
+                velocity_limit_sim=SERVO_VELOCITY_LIMIT_RAD_S,
                 stiffness=30.0,
                 damping=SERVO_VELOCITY_LIMIT_RAD_S,
                 friction=0.0,
@@ -128,11 +137,14 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     )
 
     command_profile = "forward"
-    initial_forward_speed_min_m_s = 0.04
-    initial_forward_speed_max_m_s = 0.08
-    forward_speed_min_m_s = 0.10
-    forward_speed_max_m_s = 0.18
-    command_curriculum_steps = 32_000
+    # Match the command used by the independently validated 1.16 m / 8 s policy.
+    # V6-V9's slow command curriculum converged to standing and foot chatter.
+    initial_forward_speed_min_m_s = 0.15
+    initial_forward_speed_max_m_s = 0.15
+    forward_speed_min_m_s = 0.15
+    forward_speed_max_m_s = 0.15
+    command_curriculum_steps = 1
+    command_curriculum_offset_steps = 0
     backward_speed_min_m_s = 0.06
     backward_speed_max_m_s = 0.16
     turn_forward_speed_max_m_s = 0.10
@@ -143,20 +155,38 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     action_scale_hip_rad = 0.30
     action_scale_knee_rad = 0.40
     reset_joint_position_noise_rad = 0.015
-    reset_xy_jitter_m = 0.04
-    minimum_base_height_m = 0.18
-    minimum_upright_cosine = 0.35
+    reset_xy_jitter_m = 0.02
+    # These are the validated walking termination limits.  V9's 0.28 m height
+    # cutoff and 100-point failure cost made safe standing a strong local optimum.
+    minimum_base_height_m = 0.22
+    minimum_upright_cosine = 0.78
     base_contact_grace_steps = 10
     maximum_distance_from_origin_m = 3.0
-    target_base_height_m = 0.3305
-    velocity_tracking_sigma_m_s = 0.06
-    yaw_tracking_sigma_rad_s = 0.25
-    distance_success_fraction = 0.60
-    terminal_progress_reward_scale = 25.0
-    distance_success_reward = 75.0
-    distance_milestone_fractions = (0.10, 0.25, 0.45)
-    distance_milestone_rewards = (5.0, 10.0, 20.0)
-    target_foot_air_time_s = 0.15
+    target_base_height_m = 0.3730
+    velocity_tracking_sigma_m_s = 0.10
+    distance_success_fraction = 0.65
+
+    # Deliberately reproduce quadruped_walk_v1.yaml's successful reward instead
+    # of continuing to tune a novel objective.  Net displacement remains a hard
+    # evaluation metric, but adding it to the reward caused unsafe lunge exploits.
+    reward_forward_velocity_tracking = 2.0
+    reward_upright = 0.50
+    # In 128-env PPO, the old 0.05 survival term let a 0.3 m lunge outscore a
+    # full stable episode.  At 0.50, standing beats an early fall while sustained
+    # velocity tracking still pays roughly 2.5x more than standing.
+    reward_alive = 0.50
+    penalty_lateral_velocity = 0.50
+    penalty_vertical_velocity = 0.20
+    penalty_roll_pitch_rate = 0.05
+    penalty_yaw_rate = 0.10
+    penalty_body_height = 2.0
+    penalty_action_rate = 0.02
+    penalty_action_magnitude = 0.002
+    penalty_joint_velocity = 0.005
+    penalty_termination = 100.0
+    # Keep value targets conditioned while preserving all reward ratios.
+    reward_scale = 0.10
+    qualified_foot_air_time_s = 0.10
 
 
 @configclass
