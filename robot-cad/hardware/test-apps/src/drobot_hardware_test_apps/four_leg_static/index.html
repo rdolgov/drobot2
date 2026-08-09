@@ -40,20 +40,55 @@
             <p class="eyebrow">ARMING INTERLOCK</p>
             <h2 id="safetyTitle">Robot supported and sweep clear?</h2>
             <p>
-              Keep every leg off the floor for first motion. Physical power cutoff
-              must stay within reach.
+              Use blocks for first gait motion. Keep the physical power cutoff
+              within reach and verify the corner map shown below.
             </p>
           </div>
           <div class="safety-actions">
             <label class="safety-check">
               <input id="safetyAck" type="checkbox">
               <span class="check-box" aria-hidden="true"></span>
-              <span>I confirm support, clearance, and cutoff</span>
+              <span>I confirm support, clearance, corner map, and cutoff</span>
             </label>
             <button class="calibration-button" id="captureZeroAll" type="button">
               CAPTURE ZERO ALL
             </button>
             <small>Torque must be OFF on all 12 motors</small>
+          </div>
+        </section>
+
+        <section class="gait-panel" aria-labelledby="gaitTitle">
+          <div class="gait-copy">
+            <p class="eyebrow">SCRIPTED MOTION / TWO CYCLES</p>
+            <h2 id="gaitTitle">Slow crawl forward</h2>
+            <p>
+              A deterministic 40-second sequence shifts weight and advances one
+              foot at a time. It finishes holding the crawl stance.
+            </p>
+            <div class="corner-map" aria-label="Configured body corner map">
+              <span><b>1</b> FRONT LEFT</span>
+              <span><b>2</b> FRONT RIGHT</span>
+              <span><b>3</b> REAR LEFT</span>
+              <span><b>4</b> REAR RIGHT</span>
+            </div>
+          </div>
+          <div class="gait-control">
+            <div class="gait-state">
+              <span id="gaitStage">READY / DISARMED</span>
+              <strong id="gaitPhase">Waiting for command</strong>
+            </div>
+            <div class="gait-progress" aria-label="Crawl progress">
+              <i id="gaitProgress"></i>
+            </div>
+            <div class="gait-buttons">
+              <button class="walk-button" id="walkForward" type="button">
+                WALK FORWARD
+              </button>
+              <button class="gait-stop-button" id="stopWalk" type="button">
+                STOP + DISARM
+              </button>
+            </div>
+            <small id="gaitDetail">15 mm stride / 10 mm lift / rear-right first</small>
           </div>
         </section>
 

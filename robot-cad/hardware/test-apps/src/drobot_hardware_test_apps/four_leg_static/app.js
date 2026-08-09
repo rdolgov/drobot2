@@ -12,6 +12,13 @@ const disarmAll = document.querySelector("#disarmAll");
 const zeroAll = document.querySelector("#zeroAll");
 const centerAll = document.querySelector("#centerAll");
 const captureZeroAll = document.querySelector("#captureZeroAll");
+const gaitPanel = document.querySelector(".gait-panel");
+const walkForward = document.querySelector("#walkForward");
+const stopWalk = document.querySelector("#stopWalk");
+const gaitStage = document.querySelector("#gaitStage");
+const gaitPhase = document.querySelector("#gaitPhase");
+const gaitProgress = document.querySelector("#gaitProgress");
+const gaitDetail = document.querySelector("#gaitDetail");
 const legNodes = new Map();
 const motorNodes = new Map();
 const sliderTimers = new Map();
@@ -263,8 +270,9 @@ function updateMotor(leg, motor) {
   row.querySelectorAll(
     ".slider, .angle-input, .set-button, .quick-row button",
   ).forEach((control) => {
-    control.disabled = !motor.armed;
+    control.disabled = !motor.armed || latestState?.crawl?.active;
   });
+  row.querySelector(".arm-button").disabled = latestState?.crawl?.active;
 
   const value = motor.desired_deg ?? motor.measured_deg;
   const slider = row.querySelector(".slider");
@@ -282,11 +290,13 @@ function updateLeg(leg) {
   panel.classList.toggle("active", leg.armed_count > 0);
   panel.querySelector(".leg-current").textContent = formatCurrent(leg.current_ma);
   panel.querySelector(".leg-armed").textContent = leg.armed_count;
+  panel.querySelector(".arm-leg").disabled = latestState?.crawl?.active;
+  panel.querySelector(".zero-leg").disabled = latestState?.crawl?.active;
   leg.motors.forEach((motor) => updateMotor(leg, motor));
 }
 
 function updateSummary(state) {
-  const { summary, settings } = state;
+  const { summary, settings, crawl } = state;
   document.querySelector("#onlineCount").textContent = `${summary.online_count} / 12`;
   document.querySelector("#healthLabel").textContent =
     summary.health === "nominal" ? "All telemetry nominal" : "Attention required";
@@ -321,6 +331,32 @@ function updateSummary(state) {
 
   document.body.classList.toggle("has-warning", summary.health === "warning");
   document.body.classList.toggle("has-armed", state.any_armed);
+
+  const phaseText = crawl.phase.replaceAll("_", " ").toUpperCase();
+  const swingText = crawl.swing_corner
+    ? ` / ${crawl.swing_corner.replaceAll("_", " ").toUpperCase()}`
+    : "";
+  gaitPanel.classList.toggle("active", crawl.active);
+  gaitStage.textContent = crawl.active
+    ? `${crawl.stage.toUpperCase()} / ${(crawl.progress * 100).toFixed(0)}%`
+    : crawl.stage === "complete"
+      ? "COMPLETE / HOLDING"
+      : "READY / DISARMED";
+  gaitPhase.textContent = `${phaseText}${swingText}`;
+  gaitProgress.style.width = `${Math.max(0, Math.min(100, crawl.progress * 100))}%`;
+  gaitDetail.textContent =
+    `${crawl.stride_mm.toFixed(0)} mm stride / ` +
+    `${crawl.lift_mm.toFixed(0)} mm lift / ${crawl.duration_s.toFixed(0)} s`;
+
+  walkForward.disabled =
+    crawl.active ||
+    state.any_armed ||
+    summary.health !== "nominal" ||
+    !safetyAck.checked;
+  stopWalk.disabled = !state.any_armed;
+  zeroAll.disabled = crawl.active;
+  centerAll.disabled = crawl.active;
+  captureZeroAll.disabled = crawl.active || state.any_armed;
 }
 
 async function refresh() {
@@ -331,10 +367,14 @@ async function refresh() {
     latestState.legs.forEach(updateLeg);
     updateSummary(latestState);
     connected = true;
-    connection.className = latestState.any_armed
+    connection.className = latestState.crawl.active
+      ? "connection armed"
+      : latestState.any_armed
       ? "connection armed"
       : "connection online";
-    connectionText.textContent = latestState.any_armed
+    connectionText.textContent = latestState.crawl.active
+      ? "LIVE / CRAWL ACTIVE"
+      : latestState.any_armed
       ? "LIVE · TORQUE ARMED"
       : "LIVE · ALL DISARMED";
   } catch (error) {
@@ -395,6 +435,41 @@ captureZeroAll.addEventListener("click", () => {
     { safety_ack: true, confirmation: "CAPTURE ZERO ALL" },
     "Current pose saved as calibrated zero for all 12 motors",
   );
+});
+
+walkForward.addEventListener("click", () => {
+  if (!safetyAck.checked) {
+    showNotice(
+      "Confirm support, clearance, corner map, and cutoff before walking",
+      true,
+    );
+    return;
+  }
+  if (latestState?.any_armed) {
+    showNotice("Disarm all 12 motors before starting the crawl", true);
+    return;
+  }
+  const accepted = window.confirm(
+    "WALK FORWARD will arm all 12 motors and run two slow crawl cycles " +
+      "using the displayed corner map. Start on blocks for the first test, " +
+      "keep the physical cutoff ready, and stop on slip or unexpected motion. Continue?",
+  );
+  if (!accepted) {
+    return;
+  }
+  postAction(
+    "/api/crawl-forward",
+    { safety_ack: true, confirmation: "WALK FORWARD" },
+    "Moving to crawl stance; rear-right foot will move first",
+  );
+});
+
+stopWalk.addEventListener("click", () => {
+  postAction("/api/crawl-stop", {}, "Crawl stopped; all 12 motors disarmed");
+});
+
+safetyAck.addEventListener("change", () => {
+  if (latestState) updateSummary(latestState);
 });
 
 setInterval(() => {
