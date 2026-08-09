@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Drobot · Four-leg commissioning</title>
+    <link rel="stylesheet" href="/app.css">
+  </head>
+  <body data-control-token="__CONTROL_TOKEN__">
+    <div class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <div>
+            <p class="eyebrow">12-SERVO COMMISSIONING</p>
+            <h1>Drobot Four-Leg Control</h1>
+          </div>
+        </div>
+        <div class="top-actions">
+          <div class="connection" id="connection">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="connectionText">Connecting…</span>
+          </div>
+          <button class="secondary-button" id="zeroAll" type="button">
+            ZERO ARMED
+          </button>
+          <button class="center-button" id="centerAll" type="button">
+            CENTER ALL 12
+          </button>
+          <button class="stop-button" id="disarmAll" type="button">
+            DISARM ALL 12
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <section class="safety-panel" aria-labelledby="safetyTitle">
+          <div class="safety-copy">
+            <p class="eyebrow">ARMING INTERLOCK</p>
+            <h2 id="safetyTitle">Robot supported and sweep clear?</h2>
+            <p>
+              Keep every leg off the floor for first motion. Physical power cutoff
+              must stay within reach.
+            </p>
+          </div>
+          <div class="safety-actions">
+            <label class="safety-check">
+              <input id="safetyAck" type="checkbox">
+              <span class="check-box" aria-hidden="true"></span>
+              <span>I confirm support, clearance, and cutoff</span>
+            </label>
+            <button class="calibration-button" id="captureZeroAll" type="button">
+              CAPTURE ZERO ALL
+            </button>
+            <small>Torque must be OFF on all 12 motors</small>
+          </div>
+        </section>
+
+        <section class="alert-panel" id="alertPanel" aria-live="assertive" hidden>
+          <strong>CHECK HARDWARE</strong>
+          <ul id="alertList"></ul>
+        </section>
+
+        <section class="metrics" aria-label="Robot telemetry summary">
+          <article class="metric">
+            <span>Bus</span>
+            <strong id="onlineCount">—</strong>
+            <small id="healthLabel">Waiting for telemetry</small>
+          </article>
+          <article class="metric">
+            <span>Servo voltage</span>
+            <strong id="voltageRange">—</strong>
+            <small id="voltageSpread">Across all 12 IDs</small>
+          </article>
+          <article class="metric">
+            <span>Diagnostic current</span>
+            <strong id="totalCurrent">—</strong>
+            <small>Summed servo feedback</small>
+          </article>
+          <article class="metric">
+            <span>Hottest servo</span>
+            <strong id="maxTemperature">—</strong>
+            <small id="temperatureLimit">Warning threshold —</small>
+          </article>
+          <article class="metric armed-metric">
+            <span>Torque armed</span>
+            <strong id="armedCount">0 / 12</strong>
+            <small id="watchdog">Watchdog —</small>
+          </article>
+        </section>
+
+        <section class="settings-strip" aria-label="Active safety settings">
+          <div><span>Torque cap</span><strong id="torqueLimit">—</strong></div>
+          <div><span>Servo speed</span><strong id="servoSpeed">—</strong></div>
+          <div><span>Acceleration</span><strong id="acceleration">—</strong></div>
+          <div><span>Motion ramp</span><strong id="rampRate">—</strong></div>
+          <div class="event"><span>Last event</span><strong id="lastEvent">Starting…</strong></div>
+        </section>
+
+        <section class="leg-grid" id="legGrid" aria-live="polite"></section>
+        <div class="notice" id="notice" role="status" aria-live="polite"></div>
+      </main>
+
+      <footer>
+        <span>Local machine only · one shared ST3215 bus</span>
+        <span>Telemetry is diagnostic · physical cutoff is the emergency stop</span>
+      </footer>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>

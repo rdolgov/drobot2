@@ -1,0 +1,1026 @@
+"""Localhost-only control dashboard for all four Drobot legs."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import secrets
+import shutil
+import threading
+import time
+import tomllib
+import webbrowser
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
+
+from drobot_leg_testbed.controller import LegController
+from drobot_leg_testbed.model import (
+    BusConfig,
+    Calibration,
+    LegConfig,
+    MotorConfig,
+    calibration_from_centers,
+    degrees_to_raw,
+    load_calibration,
+    load_config,
+    raw_to_degrees,
+    save_calibration,
+)
+from drobot_leg_testbed.ports import resolve_port
+from drobot_leg_testbed.transport import MotorStatus, STSBus
+
+LOCAL_HOST = "127.0.0.1"
+APP_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_MANIFEST = APP_ROOT / "config" / "four-leg.toml"
+STATIC_DIR = Path(__file__).with_name("four_leg_static")
+
+
+@dataclass(frozen=True)
+class MonitoringConfig:
+    voltage_warning_low_v: float
+    voltage_warning_high_v: float
+    voltage_spread_warning_v: float
+    temperature_warning_c: int
+    leg_current_warning_ma: float
+
+
+@dataclass(frozen=True)
+class ServerConfig:
+    http_port: int
+    ramp_rate_deg_s: float
+    heartbeat_timeout_s: float
+
+
+@dataclass(frozen=True)
+class LegProfile:
+    number: int
+    label: str
+    config: LegConfig
+    calibration: Calibration
+    config_path: Path
+    calibration_path: Path
+
+
+@dataclass(frozen=True)
+class DashboardConfig:
+    server: ServerConfig
+    monitoring: MonitoringConfig
+    legs: tuple[LegProfile, ...]
+
+    @property
+    def bus(self) -> BusConfig:
+        return self.legs[0].config.bus
+
+
+def _finite_float(value: Any, name: str) -> float:
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError(f"{name} must be finite")
+    return result
+
+
+def load_dashboard_config(path: str | Path) -> DashboardConfig:
+    manifest_path = Path(path).resolve()
+    with manifest_path.open("rb") as stream:
+        data = tomllib.load(stream)
+
+    server_data = data.get("server")
+    monitoring_data = data.get("monitoring")
+    leg_data = data.get("legs")
+    if not isinstance(server_data, dict):
+        raise ValueError("Manifest requires a [server] table")
+    if not isinstance(monitoring_data, dict):
+        raise ValueError("Manifest requires a [monitoring] table")
+    if not isinstance(leg_data, list) or len(leg_data) != 4:
+        raise ValueError("Manifest requires exactly four [[legs]] tables")
+
+    server = ServerConfig(
+        http_port=int(server_data.get("http_port", 8766)),
+        ramp_rate_deg_s=_finite_float(
+            server_data.get("ramp_rate_deg_s", 30.0),
+            "server.ramp_rate_deg_s",
+        ),
+        heartbeat_timeout_s=_finite_float(
+            server_data.get("heartbeat_timeout_s", 3.0),
+            "server.heartbeat_timeout_s",
+        ),
+    )
+    if not 1 <= server.http_port <= 65_535:
+        raise ValueError("server.http_port must be in [1, 65535]")
+    if not 1.0 <= server.ramp_rate_deg_s <= 90.0:
+        raise ValueError("server.ramp_rate_deg_s must be in [1, 90]")
+    if not 1.0 <= server.heartbeat_timeout_s <= 10.0:
+        raise ValueError("server.heartbeat_timeout_s must be in [1, 10]")
+
+    monitoring = MonitoringConfig(
+        voltage_warning_low_v=_finite_float(
+            monitoring_data.get("voltage_warning_low_v", 10.5),
+            "monitoring.voltage_warning_low_v",
+        ),
+        voltage_warning_high_v=_finite_float(
+            monitoring_data.get("voltage_warning_high_v", 12.6),
+            "monitoring.voltage_warning_high_v",
+        ),
+        voltage_spread_warning_v=_finite_float(
+            monitoring_data.get("voltage_spread_warning_v", 0.5),
+            "monitoring.voltage_spread_warning_v",
+        ),
+        temperature_warning_c=int(monitoring_data.get("temperature_warning_c", 60)),
+        leg_current_warning_ma=_finite_float(
+            monitoring_data.get("leg_current_warning_ma", 3000.0),
+            "monitoring.leg_current_warning_ma",
+        ),
+    )
+    if not 0 < monitoring.voltage_warning_low_v:
+        raise ValueError("Low-voltage warning must be positive")
+    if not (
+        monitoring.voltage_warning_low_v < monitoring.voltage_warning_high_v <= 15.0
+    ):
+        raise ValueError("Voltage warning range is invalid")
+    if not 0 < monitoring.voltage_spread_warning_v <= 3.0:
+        raise ValueError("Voltage-spread warning must be in (0, 3]")
+    if not 30 <= monitoring.temperature_warning_c <= 90:
+        raise ValueError("Temperature warning must be in [30, 90] C")
+    if not 100 <= monitoring.leg_current_warning_ma <= 10_000:
+        raise ValueError("Leg-current warning must be in [100, 10000] mA")
+
+    profiles: list[LegProfile] = []
+    for index, entry in enumerate(leg_data, start=1):
+        if not isinstance(entry, dict):
+            raise ValueError(f"legs[{index}] must be a table")
+        number = int(entry.get("number", index))
+        label = str(entry.get("label", f"Leg {number}")).strip()
+        if not label:
+            raise ValueError(f"legs[{index}].label must not be empty")
+        config_path = (manifest_path.parent / str(entry["profile"])).resolve()
+        calibration_path = (manifest_path.parent / str(entry["calibration"])).resolve()
+        config = load_config(config_path)
+        calibration = load_calibration(calibration_path, config)
+        profiles.append(
+            LegProfile(
+                number=number,
+                label=label,
+                config=config,
+                calibration=calibration,
+                config_path=config_path,
+                calibration_path=calibration_path,
+            )
+        )
+
+    if {profile.number for profile in profiles} != {1, 2, 3, 4}:
+        raise ValueError("Leg numbers must be exactly 1, 2, 3, and 4")
+    profiles.sort(key=lambda profile: profile.number)
+    first_bus = profiles[0].config.bus
+    if any(profile.config.bus != first_bus for profile in profiles[1:]):
+        raise ValueError("All four leg profiles must use identical bus settings")
+    ids = [motor.servo_id for profile in profiles for motor in profile.config.motors]
+    if sorted(ids) != list(range(1, 13)):
+        raise ValueError("Four-leg dashboard requires unique servo IDs 1 through 12")
+
+    return DashboardConfig(server, monitoring, tuple(profiles))
+
+
+class FourLegDemoBus:
+    """In-memory twelve-motor bus for UI and safety testing."""
+
+    def __init__(self, dashboard: DashboardConfig):
+        self.positions: dict[int, int] = {}
+        for profile in dashboard.legs:
+            for motor in profile.config.motors:
+                self.positions[motor.servo_id] = profile.calibration.motor(
+                    motor
+                ).center_tick
+        self.torque: set[int] = set()
+        self.voltage_v: dict[int, float] = {
+            servo_id: 12.2 for servo_id in self.positions
+        }
+        self.temperature_c: dict[int, int] = {
+            servo_id: 31 for servo_id in self.positions
+        }
+        self.current_ma: dict[int, float] = {
+            servo_id: 0.0 for servo_id in self.positions
+        }
+
+    def open(self) -> None:
+        return
+
+    def close(self) -> None:
+        return
+
+    def require_motor(self, motor: MotorConfig) -> int:
+        if motor.servo_id not in self.positions:
+            raise RuntimeError(f"Demo motor ID {motor.servo_id} is missing")
+        return 777
+
+    def read_position(self, servo_id: int) -> int:
+        return self.positions[servo_id]
+
+    def write_position(
+        self,
+        servo_id: int,
+        raw_position: int,
+        _bus_config: BusConfig,
+    ) -> None:
+        self.positions[servo_id] = raw_position
+
+    def enable_torque(self, servo_id: int) -> None:
+        self.torque.add(servo_id)
+        self.current_ma[servo_id] = 6.5
+
+    def disable_torque(self, servo_id: int) -> None:
+        self.torque.discard(servo_id)
+        self.current_ma[servo_id] = 0.0
+
+    def status(self, motor: MotorConfig) -> MotorStatus:
+        return MotorStatus(
+            servo_id=motor.servo_id,
+            model_number=777,
+            raw_position=self.positions[motor.servo_id],
+            raw_speed=0,
+            voltage_v=self.voltage_v[motor.servo_id],
+            temperature_c=self.temperature_c[motor.servo_id],
+            current_ma=self.current_ma[motor.servo_id],
+            torque_enabled=motor.servo_id in self.torque,
+        )
+
+
+class FourLegSession:
+    """Serialize twelve-motor access and enforce bounded, explicit motion."""
+
+    def __init__(
+        self,
+        dashboard: DashboardConfig,
+        bus: Any,
+        *,
+        ramp_rate_deg_s: float | None = None,
+        tick_interval_s: float = 0.05,
+        heartbeat_timeout_s: float | None = None,
+        clock: Any = time.monotonic,
+        persist_calibration: bool = True,
+    ):
+        self.dashboard = dashboard
+        self.bus = bus
+        self.ramp_rate_deg_s = (
+            dashboard.server.ramp_rate_deg_s
+            if ramp_rate_deg_s is None
+            else ramp_rate_deg_s
+        )
+        self.heartbeat_timeout_s = (
+            dashboard.server.heartbeat_timeout_s
+            if heartbeat_timeout_s is None
+            else heartbeat_timeout_s
+        )
+        if not 1.0 <= self.ramp_rate_deg_s <= 90.0:
+            raise ValueError("ramp rate must be in [1, 90] deg/s")
+        if not 1.0 <= self.heartbeat_timeout_s <= 10.0:
+            raise ValueError("heartbeat timeout must be in [1, 10] seconds")
+        self.tick_interval_s = tick_interval_s
+        self.clock = clock
+        self.persist_calibration = persist_calibration
+        self.controllers = {
+            profile.number: LegController(
+                profile.config,
+                profile.calibration,
+                bus,
+            )
+            for profile in dashboard.legs
+        }
+        self.desired_deg: dict[tuple[int, str], float] = {}
+        self.last_heartbeat = clock()
+        self.last_event = "Starting"
+        self.fault: str | None = None
+        self.lock = threading.RLock()
+        self.stop_event = threading.Event()
+        self.worker: threading.Thread | None = None
+
+    @property
+    def profiles(self) -> tuple[LegProfile, ...]:
+        return self.dashboard.legs
+
+    def _profile(self, leg_number: int | str) -> LegProfile:
+        number = int(leg_number)
+        for profile in self.profiles:
+            if profile.number == number:
+                return profile
+        raise KeyError(f"Unknown leg {leg_number}; expected 1, 2, 3, or 4")
+
+    def _selection(
+        self,
+        leg_number: int | str,
+        motor_selector: int | str,
+    ) -> tuple[LegProfile, MotorConfig, LegController]:
+        profile = self._profile(leg_number)
+        motor = profile.config.motor(motor_selector)
+        return profile, motor, self.controllers[profile.number]
+
+    def start(self, *, start_worker: bool = True) -> None:
+        self.bus.open()
+        try:
+            for profile in self.profiles:
+                for motor in profile.config.motors:
+                    self.bus.require_motor(motor)
+            with self.lock:
+                self._disarm_all_locked(raise_errors=True)
+                self.last_event = "All 12 motors online and disarmed"
+        except Exception:
+            with self.lock:
+                self._disarm_all_locked(raise_errors=False)
+            self.bus.close()
+            raise
+        if start_worker:
+            self.worker = threading.Thread(
+                target=self._worker_loop,
+                name="drobot-four-leg-motion",
+                daemon=True,
+            )
+            self.worker.start()
+
+    def close(self) -> None:
+        self.stop_event.set()
+        if self.worker is not None:
+            self.worker.join(timeout=2.0)
+        try:
+            with self.lock:
+                self._disarm_all_locked(raise_errors=False)
+        finally:
+            self.bus.close()
+
+    def _worker_loop(self) -> None:
+        while not self.stop_event.wait(self.tick_interval_s):
+            try:
+                self.advance_once()
+            except Exception as exc:
+                with self.lock:
+                    self.fault = str(exc)
+                    self.last_event = "Motion fault; all motors disarmed"
+                    self._disarm_all_locked(raise_errors=False)
+
+    def advance_once(self) -> None:
+        with self.lock:
+            if self._armed_count_locked():
+                elapsed = self.clock() - self.last_heartbeat
+                if elapsed > self.heartbeat_timeout_s:
+                    self._disarm_all_locked(raise_errors=False)
+                    self.last_event = "Browser heartbeat lost; all motors disarmed"
+                    return
+
+            step_limit = min(
+                self.dashboard.bus.max_command_step_deg,
+                self.ramp_rate_deg_s * self.tick_interval_s,
+            )
+            for profile in self.profiles:
+                controller = self.controllers[profile.number]
+                for motor in profile.config.motors:
+                    if motor.servo_id not in controller.armed_ids:
+                        continue
+                    current = controller.targets_deg[motor.name]
+                    desired = self.desired_deg.get(
+                        (profile.number, motor.name),
+                        current,
+                    )
+                    delta = desired - current
+                    if abs(delta) < 0.01:
+                        continue
+                    step = max(-step_limit, min(step_limit, delta))
+                    controller.command(motor, current + step)
+
+    def heartbeat(self) -> None:
+        with self.lock:
+            self.last_heartbeat = self.clock()
+
+    def arm(
+        self,
+        leg_number: int | str,
+        motor_selector: int | str,
+        *,
+        safety_ack: bool,
+    ) -> None:
+        if not safety_ack:
+            raise ValueError("Confirm support, clearance, and cutoff before arming")
+        profile, motor, controller = self._selection(leg_number, motor_selector)
+        with self.lock:
+            state = controller.arm(motor)
+            self.desired_deg[(profile.number, motor.name)] = state.degrees
+            self.last_heartbeat = self.clock()
+            self.fault = None
+            self.last_event = (
+                f"{profile.label} / {motor.name.replace('_', ' ')} armed "
+                f"at {state.degrees:+.2f} deg"
+            )
+
+    def arm_leg(self, leg_number: int | str, *, safety_ack: bool) -> None:
+        if not safety_ack:
+            raise ValueError("Confirm support, clearance, and cutoff before arming")
+        profile = self._profile(leg_number)
+        controller = self.controllers[profile.number]
+        newly_armed: list[MotorConfig] = []
+        with self.lock:
+            try:
+                for motor in profile.config.motors:
+                    if motor.servo_id in controller.armed_ids:
+                        continue
+                    state = controller.arm(motor)
+                    newly_armed.append(motor)
+                    self.desired_deg[(profile.number, motor.name)] = state.degrees
+            except Exception:
+                for motor in newly_armed:
+                    try:
+                        controller.disarm(motor)
+                    except Exception:
+                        pass
+                    self.desired_deg.pop((profile.number, motor.name), None)
+                raise
+            self.last_heartbeat = self.clock()
+            self.fault = None
+            self.last_event = f"{profile.label} armed at measured positions"
+
+    def set_target(
+        self,
+        leg_number: int | str,
+        motor_selector: int | str,
+        degrees: float,
+    ) -> None:
+        if not math.isfinite(degrees):
+            raise ValueError("Target angle must be finite")
+        profile, motor, controller = self._selection(leg_number, motor_selector)
+        with self.lock:
+            if motor.servo_id not in controller.armed_ids:
+                raise RuntimeError(f"{profile.label} / {motor.name} is disarmed")
+            degrees_to_raw(
+                degrees,
+                motor,
+                profile.calibration.motor(motor),
+            )
+            self.desired_deg[(profile.number, motor.name)] = degrees
+            self.last_heartbeat = self.clock()
+            self.last_event = (
+                f"{profile.label} / {motor.name.replace('_', ' ')} "
+                f"destination {degrees:+.2f} deg"
+            )
+
+    def zero_armed_leg(self, leg_number: int | str) -> None:
+        profile = self._profile(leg_number)
+        controller = self.controllers[profile.number]
+        with self.lock:
+            armed = 0
+            for motor in profile.config.motors:
+                if motor.servo_id not in controller.armed_ids:
+                    continue
+                degrees_to_raw(0.0, motor, profile.calibration.motor(motor))
+                self.desired_deg[(profile.number, motor.name)] = 0.0
+                armed += 1
+            if not armed:
+                raise RuntimeError(f"{profile.label} has no armed motors")
+            self.last_heartbeat = self.clock()
+            self.last_event = f"{profile.label} armed motors returning to zero"
+
+    def zero_all_armed(self) -> None:
+        with self.lock:
+            armed = 0
+            for profile in self.profiles:
+                controller = self.controllers[profile.number]
+                for motor in profile.config.motors:
+                    if motor.servo_id not in controller.armed_ids:
+                        continue
+                    degrees_to_raw(0.0, motor, profile.calibration.motor(motor))
+                    self.desired_deg[(profile.number, motor.name)] = 0.0
+                    armed += 1
+            if not armed:
+                raise RuntimeError("No motors are armed")
+            self.last_heartbeat = self.clock()
+            self.last_event = "All armed motors returning to zero"
+
+    def center_all(
+        self,
+        *,
+        safety_ack: bool,
+        confirmation: str,
+    ) -> None:
+        if not safety_ack:
+            raise ValueError("Confirm support, clearance, and cutoff before centering")
+        if confirmation != "CENTER ALL 12":
+            raise ValueError("CENTER ALL 12 confirmation is required")
+
+        with self.lock:
+            try:
+                for profile in self.profiles:
+                    controller = self.controllers[profile.number]
+                    for motor in profile.config.motors:
+                        degrees_to_raw(
+                            0.0,
+                            motor,
+                            profile.calibration.motor(motor),
+                        )
+                        if motor.servo_id not in controller.armed_ids:
+                            state = controller.arm(motor)
+                            self.desired_deg[(profile.number, motor.name)] = (
+                                state.degrees
+                            )
+                for profile in self.profiles:
+                    for motor in profile.config.motors:
+                        self.desired_deg[(profile.number, motor.name)] = 0.0
+            except Exception:
+                self._disarm_all_locked(raise_errors=False)
+                self.last_event = "Center-all failed; all motors disarmed"
+                raise
+
+            self.last_heartbeat = self.clock()
+            self.fault = None
+            self.last_event = "All 12 motors returning to calibrated zero"
+
+    def capture_zero_all(
+        self,
+        *,
+        safety_ack: bool,
+        confirmation: str,
+    ) -> None:
+        if not safety_ack:
+            raise ValueError("Confirm support, clearance, and cutoff before capture")
+        if confirmation != "CAPTURE ZERO ALL":
+            raise ValueError("CAPTURE ZERO ALL confirmation is required")
+
+        with self.lock:
+            if self._armed_count_locked():
+                raise RuntimeError("Disarm all motors before capturing zero")
+
+            centers_by_leg: dict[int, dict[str, int]] = {}
+            for profile in self.profiles:
+                centers: dict[str, int] = {}
+                for motor in profile.config.motors:
+                    status = self.bus.status(motor)
+                    if status.torque_enabled:
+                        raise RuntimeError(
+                            f"Motor ID {motor.servo_id} still reports torque enabled"
+                        )
+                    centers[motor.name] = status.raw_position
+                centers_by_leg[profile.number] = centers
+
+            calibrations = {
+                profile.number: calibration_from_centers(
+                    profile.config,
+                    centers_by_leg[profile.number],
+                )
+                for profile in self.profiles
+            }
+
+            if self.persist_calibration:
+                stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
+                backup_dir = (
+                    self.profiles[0].calibration_path.parent / "backups" / stamp
+                )
+                backup_dir.mkdir(parents=True, exist_ok=False)
+                backups: dict[Path, Path] = {}
+                try:
+                    for profile in self.profiles:
+                        backup_path = backup_dir / profile.calibration_path.name
+                        shutil.copy2(profile.calibration_path, backup_path)
+                        backups[profile.calibration_path] = backup_path
+                    for profile in self.profiles:
+                        save_calibration(
+                            calibrations[profile.number],
+                            profile.calibration_path,
+                        )
+                        load_calibration(profile.calibration_path, profile.config)
+                except Exception:
+                    for calibration_path, backup_path in backups.items():
+                        shutil.copy2(backup_path, calibration_path)
+                    raise
+
+            new_profiles = tuple(
+                replace(profile, calibration=calibrations[profile.number])
+                for profile in self.profiles
+            )
+            self.dashboard = replace(self.dashboard, legs=new_profiles)
+            for profile in new_profiles:
+                self.controllers[profile.number].calibration = profile.calibration
+            self.desired_deg.clear()
+            self.fault = None
+            mode = "Demo captured" if not self.persist_calibration else "Saved"
+            self.last_event = f"{mode} current pose as calibrated zero for all 12"
+
+    def disarm(
+        self,
+        leg_number: int | str,
+        motor_selector: int | str,
+    ) -> None:
+        profile, motor, controller = self._selection(leg_number, motor_selector)
+        with self.lock:
+            if motor.servo_id in controller.armed_ids:
+                controller.disarm(motor)
+            else:
+                self.bus.disable_torque(motor.servo_id)
+            self.desired_deg.pop((profile.number, motor.name), None)
+            self.last_event = (
+                f"{profile.label} / {motor.name.replace('_', ' ')} disarmed"
+            )
+
+    def disarm_leg(self, leg_number: int | str) -> None:
+        profile = self._profile(leg_number)
+        controller = self.controllers[profile.number]
+        with self.lock:
+            errors: list[Exception] = []
+            for motor in profile.config.motors:
+                try:
+                    self.bus.disable_torque(motor.servo_id)
+                except Exception as exc:
+                    errors.append(exc)
+                controller.armed_ids.discard(motor.servo_id)
+                controller.targets_deg.pop(motor.name, None)
+                self.desired_deg.pop((profile.number, motor.name), None)
+            self.last_event = f"{profile.label} disarmed"
+            if errors:
+                raise RuntimeError(
+                    "One or more motors could not be disarmed: "
+                    + "; ".join(str(error) for error in errors)
+                )
+
+    def disarm_all(self) -> None:
+        with self.lock:
+            self._disarm_all_locked(raise_errors=True)
+            self.last_event = "All 12 motors disarmed"
+
+    def _disarm_all_locked(self, *, raise_errors: bool) -> None:
+        errors: list[Exception] = []
+        for profile in self.profiles:
+            controller = self.controllers[profile.number]
+            for motor in profile.config.motors:
+                try:
+                    self.bus.disable_torque(motor.servo_id)
+                except Exception as exc:
+                    errors.append(exc)
+            controller.armed_ids.clear()
+            controller.targets_deg.clear()
+        self.desired_deg.clear()
+        if errors and raise_errors:
+            raise RuntimeError(
+                "One or more motors could not be disarmed: "
+                + "; ".join(str(error) for error in errors)
+            )
+
+    def _armed_count_locked(self) -> int:
+        return sum(
+            len(controller.armed_ids) for controller in self.controllers.values()
+        )
+
+    def _snapshot_locked(self) -> dict[str, Any]:
+        leg_payloads: list[dict[str, Any]] = []
+        all_statuses: list[MotorStatus] = []
+        unexpected_torque: list[int] = []
+        current_by_leg: dict[int, float] = {}
+
+        for profile in self.profiles:
+            controller = self.controllers[profile.number]
+            motors: list[dict[str, Any]] = []
+            leg_current = 0.0
+            for motor in profile.config.motors:
+                status = self.bus.status(motor)
+                all_statuses.append(status)
+                measured = raw_to_degrees(
+                    status.raw_position,
+                    motor,
+                    profile.calibration.motor(motor),
+                )
+                commanded = controller.targets_deg.get(motor.name)
+                desired = self.desired_deg.get((profile.number, motor.name))
+                armed = motor.servo_id in controller.armed_ids
+                if status.torque_enabled and not armed:
+                    unexpected_torque.append(motor.servo_id)
+                leg_current += status.current_ma
+                motors.append(
+                    {
+                        "number": motor.number,
+                        "name": motor.name,
+                        "label": motor.name.replace("_", " "),
+                        "positive_motion": (
+                            "outward" if motor.name == "hip_abduction" else "forward"
+                        ),
+                        "id": motor.servo_id,
+                        "direction": motor.direction,
+                        "min_deg": motor.min_deg,
+                        "max_deg": motor.max_deg,
+                        "measured_deg": measured,
+                        "commanded_deg": commanded,
+                        "desired_deg": desired,
+                        "raw_position": status.raw_position,
+                        "speed": status.raw_speed,
+                        "voltage_v": status.voltage_v,
+                        "temperature_c": status.temperature_c,
+                        "current_ma": status.current_ma,
+                        "torque_enabled": status.torque_enabled,
+                        "armed": armed,
+                        "model": status.model_number,
+                    }
+                )
+            current_by_leg[profile.number] = leg_current
+            leg_payloads.append(
+                {
+                    "number": profile.number,
+                    "label": profile.label,
+                    "current_ma": leg_current,
+                    "armed_count": sum(motor["armed"] for motor in motors),
+                    "motors": motors,
+                }
+            )
+
+        monitoring = self.dashboard.monitoring
+        voltages = [status.voltage_v for status in all_statuses]
+        temperatures = [status.temperature_c for status in all_statuses]
+        voltage_min = min(voltages)
+        voltage_max = max(voltages)
+        voltage_spread = voltage_max - voltage_min
+        maximum_temperature = max(temperatures)
+        total_current = sum(status.current_ma for status in all_statuses)
+        warnings: list[str] = []
+        if voltage_min < monitoring.voltage_warning_low_v:
+            warnings.append(
+                f"Low servo voltage: {voltage_min:.1f} V is below "
+                f"{monitoring.voltage_warning_low_v:.1f} V"
+            )
+        if voltage_max > monitoring.voltage_warning_high_v:
+            warnings.append(
+                f"High servo voltage: {voltage_max:.1f} V is above "
+                f"{monitoring.voltage_warning_high_v:.1f} V"
+            )
+        if voltage_spread > monitoring.voltage_spread_warning_v:
+            warnings.append(
+                f"Servo voltage spread is {voltage_spread:.1f} V; inspect wiring"
+            )
+        if maximum_temperature >= monitoring.temperature_warning_c:
+            warnings.append(
+                f"Servo temperature reached {maximum_temperature} C; pause testing"
+            )
+        for profile in self.profiles:
+            current = current_by_leg[profile.number]
+            if current >= monitoring.leg_current_warning_ma:
+                warnings.append(
+                    f"{profile.label} diagnostic current is {current:.0f} mA"
+                )
+        if unexpected_torque:
+            warnings.append(
+                "Unexpected torque-enable state on ID(s) "
+                + ", ".join(str(value) for value in unexpected_torque)
+            )
+
+        return {
+            "legs": leg_payloads,
+            "summary": {
+                "online_count": len(all_statuses),
+                "armed_count": self._armed_count_locked(),
+                "voltage_min_v": voltage_min,
+                "voltage_max_v": voltage_max,
+                "voltage_spread_v": voltage_spread,
+                "total_current_ma": total_current,
+                "max_temperature_c": maximum_temperature,
+                "health": "warning" if warnings else "nominal",
+                "warnings": warnings,
+            },
+            "settings": {
+                "baudrate": self.dashboard.bus.baudrate,
+                "torque_limit": self.dashboard.bus.torque_limit,
+                "speed": self.dashboard.bus.speed,
+                "acceleration": self.dashboard.bus.acceleration,
+                "max_command_step_deg": self.dashboard.bus.max_command_step_deg,
+                "ramp_rate_deg_s": self.ramp_rate_deg_s,
+                "heartbeat_timeout_s": self.heartbeat_timeout_s,
+                "voltage_warning_low_v": monitoring.voltage_warning_low_v,
+                "voltage_warning_high_v": monitoring.voltage_warning_high_v,
+                "temperature_warning_c": monitoring.temperature_warning_c,
+                "leg_current_warning_ma": monitoring.leg_current_warning_ma,
+            },
+            "any_armed": bool(self._armed_count_locked()),
+            "last_event": self.last_event,
+            "fault": self.fault,
+        }
+
+    def snapshot(self) -> dict[str, Any]:
+        with self.lock:
+            try:
+                return self._snapshot_locked()
+            except Exception as exc:
+                self.fault = str(exc)
+                self.last_event = "Telemetry fault; all motors disarmed"
+                self._disarm_all_locked(raise_errors=False)
+                raise
+
+
+class FourLegHTTPServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(
+        self,
+        server_address: tuple[str, int],
+        session: FourLegSession,
+        token: str,
+    ):
+        super().__init__(server_address, FourLegRequestHandler)
+        self.session = session
+        self.token = token
+
+
+class FourLegRequestHandler(BaseHTTPRequestHandler):
+    server: FourLegHTTPServer
+
+    def log_message(self, format: str, *args: Any) -> None:
+        if args and str(args[1]).startswith(("4", "5")):
+            super().log_message(format, *args)
+
+    def _local_host(self) -> bool:
+        host = self.headers.get("Host", "").split(":", 1)[0].lower()
+        return host in {"127.0.0.1", "localhost"}
+
+    def _authorized(self) -> bool:
+        return secrets.compare_digest(
+            self.headers.get("X-Control-Token", ""),
+            self.server.token,
+        )
+
+    def _security_headers(self, content_type: str) -> None:
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self'; style-src 'self'; "
+            "connect-src 'self'; img-src 'none'; frame-ancestors 'none'",
+        )
+
+    def _send_bytes(
+        self,
+        payload: bytes,
+        *,
+        status: HTTPStatus = HTTPStatus.OK,
+        content_type: str,
+    ) -> None:
+        self.send_response(status)
+        self._security_headers(content_type)
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def _send_json(
+        self,
+        payload: Any,
+        *,
+        status: HTTPStatus = HTTPStatus.OK,
+    ) -> None:
+        data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        self._send_bytes(data, status=status, content_type="application/json")
+
+    def _error(self, status: HTTPStatus, message: str) -> None:
+        self._send_json({"error": message}, status=status)
+
+    def do_GET(self) -> None:
+        if not self._local_host():
+            self._error(HTTPStatus.FORBIDDEN, "Localhost access only")
+            return
+        if self.path == "/":
+            html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+            html = html.replace("__CONTROL_TOKEN__", self.server.token)
+            self._send_bytes(
+                html.encode("utf-8"),
+                content_type="text/html; charset=utf-8",
+            )
+            return
+        if self.path == "/app.css":
+            self._send_bytes(
+                (STATIC_DIR / "app.css").read_bytes(),
+                content_type="text/css; charset=utf-8",
+            )
+            return
+        if self.path == "/app.js":
+            self._send_bytes(
+                (STATIC_DIR / "app.js").read_bytes(),
+                content_type="text/javascript; charset=utf-8",
+            )
+            return
+        if self.path == "/api/state":
+            if not self._authorized():
+                self._error(HTTPStatus.FORBIDDEN, "Invalid control token")
+                return
+            try:
+                self._send_json(self.server.session.snapshot())
+            except Exception as exc:
+                self._error(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
+            return
+        self._error(HTTPStatus.NOT_FOUND, "Not found")
+
+    def do_POST(self) -> None:
+        if not self._local_host() or not self._authorized():
+            self._error(HTTPStatus.FORBIDDEN, "Local control authorization failed")
+            return
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if size > 4096:
+                raise ValueError("Request is too large")
+            payload = json.loads(self.rfile.read(size) or b"{}")
+            if not isinstance(payload, dict):
+                raise ValueError("Request body must be a JSON object")
+            if self.path == "/api/heartbeat":
+                self.server.session.heartbeat()
+            elif self.path == "/api/arm":
+                self.server.session.arm(
+                    payload["leg"],
+                    payload["motor"],
+                    safety_ack=payload.get("safety_ack") is True,
+                )
+            elif self.path == "/api/arm-leg":
+                self.server.session.arm_leg(
+                    payload["leg"],
+                    safety_ack=payload.get("safety_ack") is True,
+                )
+            elif self.path == "/api/target":
+                self.server.session.set_target(
+                    payload["leg"],
+                    payload["motor"],
+                    float(payload["degrees"]),
+                )
+            elif self.path == "/api/zero-leg":
+                self.server.session.zero_armed_leg(payload["leg"])
+            elif self.path == "/api/zero-all":
+                self.server.session.zero_all_armed()
+            elif self.path == "/api/center-all":
+                self.server.session.center_all(
+                    safety_ack=payload.get("safety_ack") is True,
+                    confirmation=str(payload.get("confirmation", "")),
+                )
+            elif self.path == "/api/capture-zero-all":
+                self.server.session.capture_zero_all(
+                    safety_ack=payload.get("safety_ack") is True,
+                    confirmation=str(payload.get("confirmation", "")),
+                )
+            elif self.path == "/api/disarm":
+                self.server.session.disarm(payload["leg"], payload["motor"])
+            elif self.path == "/api/disarm-leg":
+                self.server.session.disarm_leg(payload["leg"])
+            elif self.path == "/api/disarm-all":
+                self.server.session.disarm_all()
+            else:
+                self._error(HTTPStatus.NOT_FOUND, "Not found")
+                return
+            self._send_json({"ok": True})
+        except (KeyError, TypeError, ValueError, RuntimeError) as exc:
+            self._error(HTTPStatus.BAD_REQUEST, str(exc))
+        except Exception as exc:
+            self._error(HTTPStatus.SERVICE_UNAVAILABLE, str(exc))
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Run the localhost-only Drobot four-leg dashboard.",
+    )
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--port", default="auto", help="Servo serial port")
+    parser.add_argument("--http-port", type=int)
+    parser.add_argument("--ramp-rate", type=float)
+    parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Use simulated motors and do not open a serial port",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    dashboard = load_dashboard_config(args.manifest)
+    bus: Any
+    if args.demo:
+        bus = FourLegDemoBus(dashboard)
+    else:
+        bus = STSBus(resolve_port(args.port), dashboard.bus.baudrate)
+    session = FourLegSession(
+        dashboard,
+        bus,
+        ramp_rate_deg_s=args.ramp_rate,
+        persist_calibration=not args.demo,
+    )
+    session.start()
+    token = secrets.token_urlsafe(24)
+    http_port = dashboard.server.http_port if args.http_port is None else args.http_port
+    server = FourLegHTTPServer((LOCAL_HOST, http_port), session, token)
+    url = f"http://{LOCAL_HOST}:{server.server_port}/"
+    mode = "demo" if args.demo else f"hardware on {args.port}"
+    print(f"Drobot four-leg control ({mode}): {url}")
+    print("Local machine only. Ctrl+C disarms all motors and closes the bus.")
+    if not args.no_browser:
+        threading.Timer(0.4, webbrowser.open, args=(url,)).start()
+    try:
+        server.serve_forever(poll_interval=0.2)
+    except KeyboardInterrupt:
+        print("\nStopping four-leg controller...")
+    finally:
+        server.server_close()
+        session.close()
+        print("All 12 motors disarmed; bus closed.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

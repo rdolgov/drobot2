@@ -1,0 +1,26 @@
+{
+  "status": "RUNNING",
+  "timesteps": 512,
+  "curriculum_mode": "timesteps",
+  "active_step_count": 1,
+  "pending_active_step_count": 1,
+  "placement_curriculum_mode": "mastery",
+  "placement_mastery_level_id": "left-center-tread-load",
+  "placement_mastery_successes": 0,
+  "placement_mastery_successes_required": 2,
+  "fixed_placement_level": "left-center-tread-load",
+  "completed_episodes": 2,
+  "successful_episodes": 0,
+  "first_step_climb_episodes": 0,
+  "first_step_climb_rate": 0.0,
+  "maximum_step_reached": 0,
+  "maximum_base_elevation_gain_m": 0.0,
+  "last_progress_step": 0,
+  "initial_gate_evaluated": false,
+  "initial_gate_passed": false,
+  "abort_reason": null,
+  "watchdog_config": {
+    "enabled": false
+  },
+  "curriculum_transitions": []
+}

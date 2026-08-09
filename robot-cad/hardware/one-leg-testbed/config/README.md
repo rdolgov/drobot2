@@ -4,23 +4,29 @@ This directory is the tracked source of truth for the four assembled Drobot
 leg profiles. Each profile controls one three-servo leg at a time with the
 one-leg testbed CLI or localhost browser tool.
 
-The files record the hardware setup verified on 2026-08-02 local time
-(2026-08-03 UTC). They are hardware-specific snapshots, not universal values
-for another robot or a leg whose horns have been reinstalled.
+The files record the hardware setup initially verified on 2026-08-02 local
+time and updated after the four-leg rewire on 2026-08-08. The center ticks were
+recaptured from the manually positioned whole-robot neutral pose at
+2026-08-09 00:04:22 UTC. They are hardware-specific snapshots, not universal
+values for another robot or a leg whose horns have been reinstalled.
 
 ## Verified motor map
 
 | Leg | Hip abduction | Hip flexion | Knee | Directions | Center ticks |
 | ---: | ---: | ---: | ---: | --- | --- |
-| 1 | ID 1 | ID 2 | ID 3 | `+1, -1, -1` | `2048, 2048, 2048` |
-| 2 | ID 4 | ID 5 | ID 6 | `+1, +1, +1` | `2048, 2047, 2047` |
-| 3 | ID 7 | ID 8 | ID 9 | `+1, +1, +1` | `2048, 2048, 2047` |
-| 4 | ID 10 | ID 11 | ID 12 | `+1, +1, +1` | `2048, 2047, 2047` |
+| 1 | ID 1 | ID 2 | ID 3 | `-1, +1, +1` | `2131, 2183, 1005` |
+| 2 | ID 4 | ID 5 | ID 6 | `+1, +1, +1` | `2022, 2162, 2052` |
+| 3 | ID 7 | ID 8 | ID 9 | `-1, -1, -1` | `2020, 2052, 2046` |
+| 4 | ID 10 | ID 11 | ID 12 | `+1, +1, +1` | `1998, 2049, 2048` |
 
 The intended positive joint directions are hip abduction outward, hip flexion
-forward, and knee forward. Legs 2-4 were each checked unloaded with a guarded
-15-degree ramp and returned near zero. The responding motors reported model
-777, approximately 12.2-12.3 V, 30-37 C during setup, and torque OFF after
+forward, and knee forward. After the 2026-08-08 rewire, the left-side Leg 1
+and Leg 3 profiles were reversed in software so movement in those intended
+directions increases the reported angle. Recheck all six affected joints with
+a guarded 15-degree ramp before using leg-level commands. The 2026-08-09
+software capture updated all twelve centers without writing servo EEPROM;
+Leg 1 knee ID 3 moved from center tick 2048 to 1005. Earlier unloaded checks
+reported model 777, approximately 12.2-12.3 V, 30-37 C, and torque OFF after
 each test. This is not a payload, stall, endurance, thermal, cable-wear, or
 complete-robot collision qualification.
 
@@ -142,6 +148,10 @@ profile.
 The controller binds only to `127.0.0.1:8765`, starts disarmed, and uses a
 three-second browser-heartbeat timeout. The page can show current position and
 ramp to any destination inside the selected joint's configured range.
+
+To connect all four configured legs on one bus and see IDs 1-12 together, use
+the separate [`../../test-apps/`](../../test-apps/README.md) four-leg
+commissioning dashboard.
 
 Preview the UI without opening COM4 or communicating with motors:
 

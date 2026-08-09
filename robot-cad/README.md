@@ -25,9 +25,9 @@ assemblies.
 | `exports/step/upper_arm_st3215_fit_preview.step` | `robot_cad/assembly/upper_arm_st3215_fit_preview.py` | Complete upper arm and installed servo |
 | `exports/step/robot_arm.step` | `robot_cad/assembly/robot_arm.py` | Two complete upper arms joined by the elbow ST3215 |
 | `exports/step/robot_leg.step` | `robot_cad/assembly/robot_leg.py` | Body hip mount, perpendicular hip, three exact ST3215 servos, and two linked upper arms |
-| `exports/step/quadruped_body_base.step` | `robot_cad/parts/quadruped_body.py` | One-piece X2D-safe body tub with hip reinforcement and battery bay |
-| `exports/step/quadruped_body_lid.step` | `robot_cad/parts/quadruped_body_lid.py` | Removable ventilated body lid with direct LeKiwi camera-mount pattern |
-| `exports/step/quadruped_electronics_tray.step` | `robot_cad/parts/quadruped_electronics_tray.py` | Removable electronics tray above the battery |
+| `exports/step/quadruped_body_base.step` | `robot_cad/parts/quadruped_body.py` | One-piece X2D-safe body tub with hip reinforcement, protected battery rail, four-wall M3 grid, full floor grid, and paired wire ports |
+| `exports/step/quadruped_body_lid.step` | `robot_cad/parts/quadruped_body_lid.py` | Removable ventilated body lid with a 10 mm-pitch universal M3 grid and direct LeKiwi camera pattern |
+| `exports/step/quadruped_electronics_tray.step` | `robot_cad/parts/quadruped_electronics_tray.py` | Optional electronics tray with four floor-grid-aligned M3 mounting locations |
 | `exports/step/lekiwi_12v_battery_reference.step` | `robot_cad/parts/lekiwi_12v_battery_reference.py` | Measured 70 x 66 x 40 mm LeKiwi 12 V pack fit proxy |
 | `exports/step/waveshare_bus_servo_adapter_a.step` | `robot_cad/parts/waveshare_bus_servo_adapter_a.py` | Exact Waveshare USB/UART serial-bus controller reference |
 | `exports/step/adafruit_bno085_stemma_qt.step` | `robot_cad/parts/adafruit_bno085.py` | Exact Adafruit BNO085 reference centred on its sensing package |
@@ -44,12 +44,172 @@ The front lid interface accepts the unchanged LeKiwi
 Arducam 5 MP wide-angle USB option (ASIN `B0972KK7BC`), retained under
 `vendor/references/lekiwi/` with upstream license and checksums.
 
+### Universal body-wall mounting grid and wire ports
+
+The one-piece body base now provides M3 clearance holes on all four vertical
+walls. The front and rear faces each expose 83 usable locations on a 10 x
+10 mm grid after ventilation keep-outs. The left and right walls each expose
+12 locations in the protected 36 mm center strip between the hip backing
+plates, for 190 body-wall mounting locations in total. These are 3.4 mm
+through-holes for bolts, washers, nuts, and standoffs; they are not printed
+threads.
+
+Both rounded side wire ports were enlarged from 24 x 14 mm to 32 x 20 mm.
+Their centered position is unchanged, and each port retains 2 mm of material
+before the neighboring hip reinforcement field. The wall-local hole cutters
+do not pass into the battery rail, hip plates, ventilation slots, or lid
+interface.
+
+Editable inputs are `robot_cad/parts/quadruped_body.py` and
+`specs/quadruped-body.yaml`. Regenerate every affected committed artifact and
+run the focused checks from `robot-cad/` with:
+
+```powershell
+.\scripts\generate_cad.ps1 -Force
+
+$cadSkillRoot = Get-ChildItem `
+  "$env:USERPROFILE\.codex\plugins\cache\text-to-cad\cad" `
+  -Directory | Sort-Object Name -Descending | Select-Object -First 1
+$cadSkill = Join-Path $cadSkillRoot.FullName "skills\cad"
+$cadpy = Join-Path $cadSkill "scripts\packages\cadpy\src"
+$env:PYTHONPATH = ((Resolve-Path ".").Path, $cadpy) -join `
+  [IO.Path]::PathSeparator
+
+.\.venv\Scripts\python.exe -m pytest -q `
+  tests/test_quadruped_body.py `
+  tests/test_quadruped_body_hardware_fit_preview.py `
+  tests/test_quadruped_robot_assembly.py `
+  tests/test_quadruped_urdf.py `
+  tests/test_lekiwi_camera_body_fit_preview.py
+.\.venv\Scripts\python.exe -m ruff check `
+  robot_cad/parts/quadruped_body.py `
+  tests/test_quadruped_body.py
+.\.venv\Scripts\python.exe "$cadSkill\scripts\inspect" refs `
+  exports/step/quadruped_body_base.step `
+  --facts --planes --positioning --format text
+```
+
+The current combined enclosure regression is documented with the body-floor
+grid below. Wall-specific inspection still confirms 190 wall-grid cylinders
+at 1.7 mm radius, 10.0 mm pitch in each local grid direction, and a 32 x 20 mm
+rounded-slot envelope for each side wire port.
+
+### Universal body-floor mounting grid
+
+The four 56 mm-tall molded electronics-tray posts have been removed from the
+body. The body floor now provides 255 new M3 clearance holes on a 10 x 10 mm
+grid: 119 through the center inside the battery-retaining rail and 136 in the
+outer floor bands. Together with four existing M3 and four existing M2 floor
+openings, the body has 263 floor mounting locations. A 2 mm minimum web keeps
+the raised battery-retaining rail itself solid and uncut.
+
+The optional electronics tray's four M3 holes now align with floor-grid points
+at `(+/-80, +/-60) mm`. Its current `Z = 56 mm` assembly placement is only a
+clearance reference: no integrated supports, detachable standoff height, or
+specific fasteners are selected or modeled. Choose the final tray height with
+removable standoffs after the electronics stack and wire bend radii are known.
+
+The new 3.4 mm openings are through-holes, not printed threads. Use bolts,
+washers, nuts, or detachable standoffs. Because holes now pass under the
+battery envelope, use a nonconductive liner and keep all bolt ends below the
+battery. The grid improves mounting flexibility but reduces dust and splash
+resistance; floor strength, vibration, fastener retention, and real component
+fit still require a physical prototype.
+
+Editable inputs are `robot_cad/parts/quadruped_body.py`,
+`robot_cad/parts/quadruped_electronics_tray.py`, and
+`specs/quadruped-body.yaml`. The focused regression command now covers:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q `
+  tests/test_quadruped_body.py `
+  tests/test_quadruped_body_hardware_fit_preview.py `
+  tests/test_quadruped_robot_assembly.py `
+  tests/test_quadruped_urdf.py `
+  tests/test_lekiwi_body_hardware.py `
+  tests/test_quadruped_imu_cover.py `
+  tests/test_lekiwi_camera_body_fit_preview.py
+.\.venv\Scripts\python.exe -m ruff check `
+  robot_cad/parts/quadruped_body.py `
+  robot_cad/parts/quadruped_electronics_tray.py `
+  tests/test_quadruped_body.py
+```
+
+Validated on 2026-08-01: all 61 focused tests passed and Ruff passed. STEP
+inspection returned one valid body part with 610 faces, 1,795 edges, and the
+unchanged 220 x 170 x 96 mm envelope. Baseline comparison confirmed geometry
+and topology changed while the envelope did not. The export contains 259 M3
+floor cylinders at 1.7 mm radius: 255 grid locations plus four legacy M3
+holes. The center hole is open, representative X and Y measurements both
+returned 10.0 mm pitch, and the four tray coordinates remain members of the
+floor grid. The hardware preview inspected at 2,416 faces and 6,585 edges; the
+full robot inspected at 22,128 faces and 60,541 edges with its previous bounds
+unchanged. Opposed isometric, top, and installed hardware snapshots were
+reviewed successfully. The 107 MB full-robot review mesh closed the snapshot
+page during load, so its successful STEP inspection and the lighter
+exact-placement hardware preview were used for final enclosure review.
+
+### Universal lid mounting grid
+
+The removable lid now provides 215 usable M3 clearance locations on a 10 x
+10 mm pitch across the central 180 x 120 mm mounting field. Of those, 212 are
+new holes and the three existing LeKiwi camera holes also land on grid points.
+The generator omits local points where a hole would leave less than 2 mm of
+material around ventilation slots, cable ports, legacy M2/M3 utility holes, or
+the four lid fasteners. The exterior 220 x 170 mm footprint, 4 mm top-plate
+thickness, locator lip, camera interface, and body fit are unchanged.
+
+These are 3.4 mm through-holes, not printed threads. Mount a Raspberry Pi,
+fuse block, power-distribution board, sensors, or other hardware with M3 bolts,
+washers, nuts, and suitable standoffs or with a small adapter plate that picks
+up convenient grid points. Hole density and geometric clearance were checked;
+payload strength, vibration endurance, component-specific footprints, thermal
+behavior, and cable routing still require hardware-level validation.
+
+Editable inputs are `robot_cad/parts/quadruped_body_lid.py` and
+`specs/quadruped-body.yaml`. Regenerate every affected committed artifact and
+run the focused checks from `robot-cad/` with:
+
+```powershell
+.\scripts\generate_cad.ps1 -Force
+
+.\.venv\Scripts\python.exe -m pytest tests/test_quadruped_body.py -q
+.\.venv\Scripts\python.exe -m ruff check `
+  robot_cad/parts/quadruped_body_lid.py `
+  tests/test_quadruped_body.py
+
+$cadSkill = "$env:USERPROFILE\.codex\plugins\cache\text-to-cad\cad\0.3.9\skills\cad"
+.\.venv\Scripts\python.exe "$cadSkill\scripts\inspect" refs `
+  exports/step/quadruped_body_lid.step --facts --planes --positioning --format text
+```
+
+Validated on 2026-07-31: the focused body suite passed all 16 tests, a 61-test
+body/camera/full-assembly/URDF regression set passed, and Ruff passed. STEP
+inspection returned one labeled part shape, 311 faces, 915 edges,
+and unchanged 220 x 170 x 7 mm total bounds including the 3 mm underside lip.
+The exported topology contains 221 cylindrical M3 faces at 1.7 mm radius (the
+215 grid locations plus four lid-fastener and two rear utility holes), and
+representative X/Y grid measurements both returned 10.0 mm. Lid, camera-fit,
+and installed-body snapshots were reviewed successfully. The full-robot STEP
+generated and inspected, but its 80 MB review mesh again closed the snapshot
+page during load; the lighter exact-placement body preview remains the visual
+review artifact for the enclosure. The full repository test suite was also
+attempted but retains unrelated pre-existing failures in the Isaac script-map
+documentation and Windows pytest temporary-directory permissions.
+
+Generated outputs are the lid STEP/STL/3MF, the LeKiwi camera fit preview, the
+body-hardware fit preview, and the Fusion/compatibility full-robot STEP files
+listed above.
+
 The body fit assembly includes the LeKiwi 12 V battery reference and a measured
 envelope of the Waveshare Bus Servo Adapter (A). The exact 117-solid controller
 is also exported as its own STEP. The battery proxy is 70 x 66 x 40 mm and
-sits on the body floor with 1 mm side clearance and 12 mm below the electronics
-tray. The adapter sits on four M2 tray standoffs at the official 37 x 28 mm
-pattern. LeKiwi calls this a motor control board; electrically it is a USB/UART
+sits on the body floor with 1 mm side clearance and 12 mm below the tray's
+current reference placement. The body no longer has molded tray supports; the
+optional tray requires removable standoffs of a height selected for the final
+electronics stack. The adapter sits on four separate M2 board-to-tray
+standoffs at the official 37 x 28 mm pattern. LeKiwi calls this a motor control
+board; electrically it is a USB/UART
 half-duplex serial-bus adapter, not a CAN controller. Pack discharge current,
 BMS behavior, connector bend radii, and twelve-servo electrical suitability
 remain unvalidated. The proposed fused power, Raspberry Pi, and four-leg data
