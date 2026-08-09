@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from drobot_leg_testbed.model import load_calibration, save_calibration
 
-from drobot_hardware_test_apps.crawl_gait import quasistatic_crawl_degrees
+from drobot_hardware_test_apps.crawl_gait import distributed_push_crawl_degrees
 from drobot_hardware_test_apps.four_leg_control import (
     FourLegDemoBus,
     FourLegHTTPServer,
@@ -70,12 +70,12 @@ def test_manifest_loads_verified_ids_and_directions() -> None:
     ]
     assert dashboard.server.ramp_rate_deg_s == 45.0
     assert dashboard.crawl.period_s == 20.0
-    assert dashboard.crawl.cycles == 4
-    assert dashboard.crawl.stride_m == pytest.approx(0.025)
-    assert dashboard.crawl.lift_m == pytest.approx(0.013)
+    assert dashboard.crawl.cycles == 1
+    assert dashboard.crawl.stride_m == pytest.approx(0.028)
+    assert dashboard.crawl.lift_m == pytest.approx(0.014)
     assert dashboard.crawl.stance_down_m == pytest.approx(0.305)
-    assert dashboard.crawl.stance_fore_aft_m == pytest.approx(0.035)
-    assert dashboard.crawl.weight_shift_forward_m == pytest.approx(0.020)
+    assert dashboard.crawl.stance_fore_aft_m == pytest.approx(0.025)
+    assert dashboard.crawl.weight_shift_forward_m == pytest.approx(0.016)
 
 
 def test_dashboard_crawl_matches_isaac_reference_and_motor_limits(
@@ -88,7 +88,7 @@ def test_dashboard_crawl_matches_isaac_reference_and_motor_limits(
 
     for sample in range(81):
         gait_time_s = config.period_s * sample / 80
-        dashboard_pose, _state = quasistatic_crawl_degrees(
+        dashboard_pose, _state = distributed_push_crawl_degrees(
             gait_time_s,
             period_s=config.period_s,
             stride_m=config.stride_m,
@@ -99,7 +99,7 @@ def test_dashboard_crawl_matches_isaac_reference_and_motor_limits(
             fore_aft_m=config.stance_fore_aft_m,
             abduction_deg=config.abduction_deg,
         )
-        isaac_pose, _isaac_state = runtime.quasistatic_crawl_by_name(
+        isaac_pose, _isaac_state = runtime.distributed_push_crawl_by_name(
             gait_time_s,
             period_s=config.period_s,
             stride_m=config.stride_m,
@@ -117,6 +117,81 @@ def test_dashboard_crawl_matches_isaac_reference_and_motor_limits(
                     math.degrees(isaac_pose[f"{profile.corner}_{motor.name}"])
                 )
                 assert motor.min_deg <= degrees <= motor.max_deg
+
+
+def test_distributed_push_is_periodic_and_pushes_every_planted_foot() -> None:
+    config = load_dashboard_config(MANIFEST).crawl
+    expected_order = ("rear_right", "front_right", "rear_left", "front_left")
+
+    start_pose, _start_state = distributed_push_crawl_degrees(
+        0.0,
+        period_s=config.period_s,
+        stride_m=config.stride_m,
+        lift_m=config.lift_m,
+        weight_shift_forward_m=config.weight_shift_forward_m,
+        weight_shift_lateral_m=config.weight_shift_lateral_m,
+        down_m=config.stance_down_m,
+        fore_aft_m=config.stance_fore_aft_m,
+        abduction_deg=config.abduction_deg,
+    )
+    end_pose, _end_state = distributed_push_crawl_degrees(
+        config.period_s,
+        period_s=config.period_s,
+        stride_m=config.stride_m,
+        lift_m=config.lift_m,
+        weight_shift_forward_m=config.weight_shift_forward_m,
+        weight_shift_lateral_m=config.weight_shift_lateral_m,
+        down_m=config.stance_down_m,
+        fore_aft_m=config.stance_fore_aft_m,
+        abduction_deg=config.abduction_deg,
+    )
+    assert end_pose == pytest.approx(start_pose)
+
+    for step_index, expected_swing in enumerate(expected_order):
+        step_start = step_index / len(expected_order)
+        _pose, state = distributed_push_crawl_degrees(
+            config.period_s * (step_start + 0.25 * 0.30),
+            period_s=config.period_s,
+            stride_m=config.stride_m,
+            lift_m=config.lift_m,
+            weight_shift_forward_m=config.weight_shift_forward_m,
+            weight_shift_lateral_m=config.weight_shift_lateral_m,
+            down_m=config.stance_down_m,
+            fore_aft_m=config.stance_fore_aft_m,
+            abduction_deg=config.abduction_deg,
+        )
+        assert state["swing_corner"] == expected_swing
+
+    push_start_u = 0.74
+    push_end_u = 0.98
+    _pose, push_start = distributed_push_crawl_degrees(
+        config.period_s * 0.25 * push_start_u,
+        period_s=config.period_s,
+        stride_m=config.stride_m,
+        lift_m=config.lift_m,
+        weight_shift_forward_m=config.weight_shift_forward_m,
+        weight_shift_lateral_m=config.weight_shift_lateral_m,
+        down_m=config.stance_down_m,
+        fore_aft_m=config.stance_fore_aft_m,
+        abduction_deg=config.abduction_deg,
+    )
+    _pose, push_end = distributed_push_crawl_degrees(
+        config.period_s * 0.25 * push_end_u,
+        period_s=config.period_s,
+        stride_m=config.stride_m,
+        lift_m=config.lift_m,
+        weight_shift_forward_m=config.weight_shift_forward_m,
+        weight_shift_lateral_m=config.weight_shift_lateral_m,
+        down_m=config.stance_down_m,
+        fore_aft_m=config.stance_fore_aft_m,
+        abduction_deg=config.abduction_deg,
+    )
+    assert push_start["phase"] == "all_feet_push"
+    assert push_end["phase"] == "step_settle"
+    for corner in expected_order:
+        assert push_end["foot_offsets_m"][corner] == pytest.approx(
+            push_start["foot_offsets_m"][corner] - config.stride_m / 4.0
+        )
 
 
 def test_start_requires_all_motors_and_disarms_every_id() -> None:
@@ -261,12 +336,13 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
             "3": "rear_left",
             "4": "rear_right",
         }
-        assert state["crawl"]["duration_s"] == 80.0
-        assert state["crawl"]["stride_mm"] == pytest.approx(25.0)
-        assert state["crawl"]["lift_mm"] == pytest.approx(13.0)
+        assert state["crawl"]["duration_s"] == 20.0
+        assert state["crawl"]["pattern"] == "distributed_push"
+        assert state["crawl"]["stride_mm"] == pytest.approx(28.0)
+        assert state["crawl"]["lift_mm"] == pytest.approx(14.0)
         assert state["crawl"]["stance_down_mm"] == pytest.approx(305.0)
-        assert state["crawl"]["stance_fore_aft_mm"] == pytest.approx(35.0)
-        assert state["crawl"]["weight_shift_forward_mm"] == pytest.approx(20.0)
+        assert state["crawl"]["stance_fore_aft_mm"] == pytest.approx(25.0)
+        assert state["crawl"]["weight_shift_forward_mm"] == pytest.approx(16.0)
         assert state["summary"]["armed_count"] == 12
         assert bus.torque == set(range(1, 13))
         with pytest.raises(RuntimeError, match="Stop the active crawl"):

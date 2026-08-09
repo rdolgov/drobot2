@@ -460,7 +460,7 @@ walkForward.addEventListener("click", () => {
   }
   const accepted = window.confirm(
     `WALK FORWARD will arm all 12 motors and run ${latestState.crawl.cycles} ` +
-      `long crawl cycles (${latestState.crawl.duration_s.toFixed(0)} seconds) ` +
+      `distributed-push crawl cycles (${latestState.crawl.duration_s.toFixed(0)} seconds) ` +
       "using the displayed corner map. Start on blocks for the first test, " +
       "keep the physical cutoff ready, and stop on slip or unexpected motion. Continue?",
   );
@@ -470,7 +470,7 @@ walkForward.addEventListener("click", () => {
   postAction(
     "/api/crawl-forward",
     { safety_ack: true, confirmation: "WALK FORWARD" },
-    "Moving to lower long-crawl stance; rear-right foot will move first",
+    "Moving to distributed-push stance; rear-right foot will move first",
   );
 });
 

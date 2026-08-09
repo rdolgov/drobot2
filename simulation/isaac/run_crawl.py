@@ -24,6 +24,7 @@ from _quadruped_runtime import (
     DEFAULT_ABDUCTION_DEG,
     DEFAULT_STANCE_DOWN_M,
     DEFAULT_STANCE_FORE_AFT_M,
+    DISTRIBUTED_PUSH_SWING_ORDER,
     EXPECTED_DOF_NAMES,
     LEGS,
     LINK_LENGTH_M,
@@ -32,6 +33,7 @@ from _quadruped_runtime import (
     add_robot_reference,
     body_tilt_deg,
     crawl_by_name,
+    distributed_push_crawl_by_name,
     quasistatic_crawl_by_name,
     smoothstep,
     stance_by_name,
@@ -49,7 +51,11 @@ parser.add_argument("--screenshot", required=True, help="Output review PNG")
 parser.add_argument("--headless", action="store_true")
 parser.add_argument(
     "--gait-mode",
-    choices=("crawl", "quasi-static"),
+    choices=(
+        "crawl",
+        "quasi-static",
+        "distributed-push",
+    ),
     default="crawl",
 )
 parser.add_argument("--cycles", type=float, default=4.0)
@@ -100,8 +106,15 @@ args, _ = parser.parse_known_args()
 
 if args.cycles <= 0.0 or args.period <= 0.5:
     parser.error("Cycles must be positive and period must exceed 0.5 seconds")
-if args.gait_mode == "quasi-static" and args.period < 8.0:
-    parser.error("Quasi-static period must be at least 8 seconds")
+if (
+    args.gait_mode
+    in (
+        "quasi-static",
+        "distributed-push",
+    )
+    and args.period < 8.0
+):
+    parser.error("Guarded crawl periods must be at least 8 seconds")
 if not 0.005 <= args.stride <= 0.060:
     parser.error("Stride must be between 0.005 and 0.060 meters")
 if not 0.003 <= args.lift <= 0.025:
@@ -195,7 +208,9 @@ def _configure_physics() -> dict:
     magnitude = float(scene.GetGravityMagnitudeAttr().Get())
     vector = direction * magnitude
     meters_per_unit = float(UsdGeom.GetStageMetersPerUnit(stage))
-    steps_per_second = int(scene.GetPrim().GetAttribute("physxScene:timeStepsPerSecond").Get())
+    steps_per_second = int(
+        scene.GetPrim().GetAttribute("physxScene:timeStepsPerSecond").Get()
+    )
     if not np.allclose(
         vector,
         [0.0, 0.0, -EARTH_GRAVITY_M_S2],
@@ -272,7 +287,9 @@ def _set_drives(robot: Articulation) -> dict:
         robot.get_dof_max_efforts(),
     ).reshape(-1)
     if not np.allclose(applied_cap, effort_cap_nm, atol=1e-4):
-        raise AssertionError(f"Could not apply {effort_cap_nm} N*m torque cap: {applied_cap}")
+        raise AssertionError(
+            f"Could not apply {effort_cap_nm} N*m torque cap: {applied_cap}"
+        )
     return {
         "profile": torque_profile,
         "per_joint_cap_nm": effort_cap_nm,
@@ -311,6 +328,18 @@ def _gait_pose_and_state(gait_time_s: float) -> tuple[dict[str, float], dict]:
             fore_aft_m=args.stance_fore_aft,
             abduction_deg=args.abduction_deg,
         )
+    if args.gait_mode == "distributed-push":
+        return distributed_push_crawl_by_name(
+            gait_time_s,
+            period_s=args.period,
+            stride_m=args.stride,
+            lift_m=args.lift,
+            weight_shift_forward_m=args.weight_shift_forward,
+            weight_shift_lateral_m=args.weight_shift_lateral,
+            down_m=args.stance_down,
+            fore_aft_m=args.stance_fore_aft,
+            abduction_deg=args.abduction_deg,
+        )
     pose = crawl_by_name(
         gait_time_s,
         period_s=args.period,
@@ -336,7 +365,8 @@ def _rotate_wxyz(quaternion: np.ndarray, vector: np.ndarray) -> np.ndarray:
     return (
         vector
         + 2.0 * w * np.cross(quaternion_vector, vector)
-        + 2.0 * np.cross(
+        + 2.0
+        * np.cross(
             quaternion_vector,
             np.cross(quaternion_vector, vector),
         )
@@ -347,9 +377,7 @@ def _sample_feet(feet: RigidPrim) -> dict[str, np.ndarray]:
     positions, orientations = feet.get_world_poses()
     positions = _finite("distal link positions", positions).reshape(-1, 3).copy()
     orientations = (
-        _finite("distal link orientations", orientations)
-        .reshape(-1, 4)
-        .copy()
+        _finite("distal link orientations", orientations).reshape(-1, 4).copy()
     )
     force_matrix = (
         _finite(
@@ -416,7 +444,9 @@ def _sample_state(
         .reshape(-1)
         .copy()
     )
-    requested_pd = args.drive_stiffness * (target - positions) - args.drive_damping * velocities
+    requested_pd = (
+        args.drive_stiffness * (target - positions) - args.drive_damping * velocities
+    )
     sample: dict[str, object] = {
         "base_position_m": base_position,
         "base_orientation_wxyz": base_orientation,
@@ -483,16 +513,21 @@ def _summarize_samples(
         "rms_joint_error_rad": float(np.sqrt(np.mean(errors * errors))),
         "maximum_abs_joint_velocity_rad_s": float(np.max(np.abs(velocities))),
         "commanded_range_by_joint_rad": {
-            name: float(np.ptp(targets[:, index])) for index, name in enumerate(dof_names)
+            name: float(np.ptp(targets[:, index]))
+            for index, name in enumerate(dof_names)
         },
         "actual_range_by_joint_rad": {
-            name: float(np.ptp(positions[:, index])) for index, name in enumerate(dof_names)
+            name: float(np.ptp(positions[:, index]))
+            for index, name in enumerate(dof_names)
         },
         "peak_abs_requested_pd_nm_by_joint": {
-            name: float(np.max(np.abs(requested[:, index]))) for index, name in enumerate(dof_names)
+            name: float(np.max(np.abs(requested[:, index])))
+            for index, name in enumerate(dof_names)
         },
         "peak_requested_to_cap_ratio": float(np.max(np.abs(requested)) / effort_cap_nm),
-        "pd_saturation_sample_fraction": float(np.mean(np.abs(requested) >= effort_cap_nm)),
+        "pd_saturation_sample_fraction": float(
+            np.mean(np.abs(requested) >= effort_cap_nm)
+        ),
     }
     for key in (
         "reported_drive_effort_nm",
@@ -603,10 +638,7 @@ try:
             strict=True,
         )
     )
-    distal_link_paths = [
-        link_path_by_name[f"{leg}_distal_link"]
-        for leg in LEGS
-    ]
+    distal_link_paths = [link_path_by_name[f"{leg}_distal_link"] for leg in LEGS]
     feet = RigidPrim(
         distal_link_paths,
         contact_filter_paths=ground.planes.paths[0],
@@ -658,14 +690,19 @@ try:
     report["total_articulated_mass_kg"] = float(np.sum(link_masses))
     report["servo_drive"] = _set_drives(robot)
 
+    initial_pose = (
+        _gait_pose_and_state(0.0)[0]
+        if args.gait_mode == "distributed-push"
+        else stance_by_name(
+            down_m=args.stance_down,
+            fore_aft_m=args.stance_fore_aft,
+            abduction_deg=args.abduction_deg,
+        )
+    )
     stand = np.asarray(
         targets_for_order(
             dof_names,
-            stance_by_name(
-                down_m=args.stance_down,
-                fore_aft_m=args.stance_fore_aft,
-                abduction_deg=args.abduction_deg,
-            ),
+            initial_pose,
         ),
         dtype=np.float32,
     )
@@ -694,9 +731,13 @@ try:
     )
     settled_tilt = float(settled_sample["body_tilt_deg"])
     if settled_position[2] < args.min_base_z:
-        raise AssertionError(f"Robot collapsed before gait: base z={settled_position[2]:.6f} m")
+        raise AssertionError(
+            f"Robot collapsed before gait: base z={settled_position[2]:.6f} m"
+        )
     if settled_tilt >= args.max_tilt_deg:
-        raise AssertionError(f"Robot tipped before gait: tilt={settled_tilt:.3f} degrees")
+        raise AssertionError(
+            f"Robot tipped before gait: tilt={settled_tilt:.3f} degrees"
+        )
     settled_feet = _sample_feet(feet)
     if not np.isfinite(settled_feet["normal_load_n"]).all():
         raise AssertionError("Invalid settled foot-contact loads")
@@ -704,9 +745,7 @@ try:
     gait_steps = int(math.ceil(args.cycles * args.period * CONTROL_HZ))
     samples: list[dict[str, object]] = []
     contact_samples: list[dict[str, object]] = []
-    contact_state = (
-        settled_feet["normal_load_n"] >= args.contact_on_threshold_n
-    )
+    contact_state = settled_feet["normal_load_n"] >= args.contact_on_threshold_n
     support_anchors: list[np.ndarray | None] = [
         settled_feet["tip_center_position_m"][index, :2].copy()
         if contact_state[index]
@@ -727,7 +766,10 @@ try:
             ),
             dtype=np.float32,
         )
-        if args.gait_mode == "quasi-static":
+        if args.gait_mode in (
+            "quasi-static",
+            "distributed-push",
+        ):
             target = gait.copy()
         else:
             blend = smoothstep(gait_time_s / args.startup_blend_seconds)
@@ -759,9 +801,7 @@ try:
             foot_xy = foot_sample["tip_center_position_m"][leg_index, :2]
             if support_anchors[leg_index] is None:
                 support_anchors[leg_index] = foot_xy.copy()
-            slip = float(
-                np.linalg.norm(foot_xy - support_anchors[leg_index])
-            )
+            slip = float(np.linalg.norm(foot_xy - support_anchors[leg_index]))
             per_leg_slip[leg] = slip
             maximum_support_slip_m = max(maximum_support_slip_m, slip)
             maximum_support_slip_by_leg[leg] = max(
@@ -775,12 +815,10 @@ try:
             "swing_leg": gait_state["swing_leg"],
             "expected_support_legs": list(gait_state["expected_support_legs"]),
             "normal_load_n_by_leg": {
-                leg: float(normal_loads[index])
-                for index, leg in enumerate(LEGS)
+                leg: float(normal_loads[index]) for index, leg in enumerate(LEGS)
             },
             "contact_by_leg": {
-                leg: bool(contact_state[index])
-                for index, leg in enumerate(LEGS)
+                leg: bool(contact_state[index]) for index, leg in enumerate(LEGS)
             },
             "tip_bottom_height_m_by_leg": {
                 leg: float(foot_sample["tip_bottom_height_m"][index])
@@ -794,9 +832,7 @@ try:
 
     final_target = target.copy()
     post_settle_positions = []
-    post_settle_steps = int(
-        math.ceil(args.post_gait_settle_seconds * CONTROL_HZ)
-    )
+    post_settle_steps = int(math.ceil(args.post_gait_settle_seconds * CONTROL_HZ))
     for post_step in range(post_settle_steps):
         robot.set_dof_position_targets(final_target)
         _update(1)
@@ -851,8 +887,14 @@ try:
 
     foot_step_evidence: dict[str, dict[str, object]] = {}
     completed_foot_steps: list[str] = []
-    if args.gait_mode == "quasi-static":
-        for leg in QUASISTATIC_SWING_ORDER:
+    contact_verified_mode = args.gait_mode in ("quasi-static", "distributed-push")
+    contact_verified_order = (
+        DISTRIBUTED_PUSH_SWING_ORDER
+        if args.gait_mode == "distributed-push"
+        else QUASISTATIC_SWING_ORDER
+    )
+    if contact_verified_mode:
+        for leg in contact_verified_order:
             swing_records = [
                 record
                 for record in contact_samples
@@ -865,9 +907,7 @@ try:
                 and record["phase"] in ("lift", "swing", "lower")
             ]
             airborne_records = [
-                record
-                for record in swing_records
-                if not record["contact_by_leg"][leg]
+                record for record in swing_records if not record["contact_by_leg"][leg]
             ]
             three_support_fraction = (
                 sum(
@@ -886,7 +926,8 @@ try:
                 record
                 for record in contact_samples
                 if record["swing_leg"] == leg
-                and record["phase"] in ("touchdown", "weight_return")
+                and record["phase"]
+                in ("touchdown", "weight_return", "all_feet_push", "step_settle")
             ]
             longest_unload_s = (
                 _longest_contact_run(swing_records, leg, False) / CONTROL_HZ
@@ -895,24 +936,17 @@ try:
                 _longest_contact_run(touchdown_records, leg, True) / CONTROL_HZ
             )
             maximum_clearance_m = max(
-                (
-                    record["tip_bottom_height_m_by_leg"][leg]
-                    for record in swing_records
-                ),
+                (record["tip_bottom_height_m_by_leg"][leg] for record in swing_records),
                 default=float("-inf"),
             )
             minimum_swing_load_n = min(
-                (
-                    record["normal_load_n_by_leg"][leg]
-                    for record in swing_records
-                ),
+                (record["normal_load_n_by_leg"][leg] for record in swing_records),
                 default=float("inf"),
             )
             completed = (
                 longest_unload_s >= args.minimum_swing_unload_seconds
                 and longest_touchdown_s >= args.minimum_touchdown_seconds
-                and three_support_fraction
-                >= args.minimum_support_contact_fraction
+                and three_support_fraction >= args.minimum_support_contact_fraction
                 and maximum_clearance_m >= args.minimum_swing_clearance
             )
             if completed:
@@ -933,9 +967,7 @@ try:
             leg: float(settled_feet["normal_load_n"][index])
             for index, leg in enumerate(LEGS)
         },
-        "settled_total_normal_load_n": float(
-            np.sum(settled_feet["normal_load_n"])
-        ),
+        "settled_total_normal_load_n": float(np.sum(settled_feet["normal_load_n"])),
         "expected_support_contact_fraction": expected_support_contact_fraction,
         "maximum_support_tip_slip_m": maximum_support_slip_m,
         "maximum_support_tip_slip_m_by_leg": maximum_support_slip_by_leg,
@@ -950,9 +982,7 @@ try:
 
     # Hold a clearly lifted-leg phase for the review image after all scored
     # motion metrics are frozen.
-    review_pose, review_state = _gait_pose_and_state(
-        args.review_phase * args.period
-    )
+    review_pose, review_state = _gait_pose_and_state(args.review_phase * args.period)
     review_target = np.asarray(
         targets_for_order(dof_names, review_pose),
         dtype=np.float32,
@@ -980,7 +1010,11 @@ try:
                 "name": (
                     "contact_verified_quasi_static_crawl"
                     if args.gait_mode == "quasi-static"
-                    else "slow_four_beat_crawl"
+                    else (
+                        "distributed_four_foot_push_crawl"
+                        if args.gait_mode == "distributed-push"
+                        else "slow_four_beat_crawl"
+                    )
                 ),
                 "mode": args.gait_mode,
                 "cycles_requested": args.cycles,
@@ -989,27 +1023,41 @@ try:
                 "stride_m": args.stride,
                 "lift_m": args.lift,
                 "duty_factor": (
-                    CRAWL_DUTY_FACTOR
-                    if args.gait_mode == "crawl"
-                    else None
+                    CRAWL_DUTY_FACTOR if args.gait_mode == "crawl" else None
                 ),
-                "swing_order": list(QUASISTATIC_SWING_ORDER),
+                "swing_order": list(
+                    DISTRIBUTED_PUSH_SWING_ORDER
+                    if args.gait_mode == "distributed-push"
+                    else QUASISTATIC_SWING_ORDER
+                ),
                 "stance_down_m": args.stance_down,
                 "stance_fore_aft_m": args.stance_fore_aft,
                 "hip_abduction_deg": args.abduction_deg,
                 "weight_shift_forward_m": (
                     args.weight_shift_forward
-                    if args.gait_mode == "quasi-static"
+                    if args.gait_mode
+                    in (
+                        "quasi-static",
+                        "distributed-push",
+                    )
                     else 0.0
                 ),
                 "weight_shift_lateral_m": (
                     args.weight_shift_lateral
-                    if args.gait_mode == "quasi-static"
+                    if args.gait_mode
+                    in (
+                        "quasi-static",
+                        "distributed-push",
+                    )
                     else 0.0
                 ),
                 "startup_blend_seconds": (
                     0.0
-                    if args.gait_mode == "quasi-static"
+                    if args.gait_mode
+                    in (
+                        "quasi-static",
+                        "distributed-push",
+                    )
                     else args.startup_blend_seconds
                 ),
                 "ik": "analytic mirrored two-link sagittal IK",
@@ -1041,9 +1089,7 @@ try:
                 "minimum_support_contact_fraction": (
                     args.minimum_support_contact_fraction
                 ),
-                "minimum_swing_unload_seconds": (
-                    args.minimum_swing_unload_seconds
-                ),
+                "minimum_swing_unload_seconds": (args.minimum_swing_unload_seconds),
                 "minimum_touchdown_seconds": args.minimum_touchdown_seconds,
                 "minimum_swing_clearance_m": args.minimum_swing_clearance,
                 "maximum_support_tip_slip_m": args.maximum_support_slip,
@@ -1061,39 +1107,26 @@ try:
             f"unstable body: max tilt={maximum_tilt:.3f} degrees"
         )
     if abs(lateral_drift) >= args.max_lateral_drift:
-        acceptance_failures.append(
-            f"lateral drift={lateral_drift:.6f} m"
-        )
+        acceptance_failures.append(f"lateral drift={lateral_drift:.6f} m")
     if forward_displacement < args.min_forward_displacement:
-        acceptance_failures.append(
-            f"forward motion={forward_displacement:.6f} m"
-        )
+        acceptance_failures.append(f"forward motion={forward_displacement:.6f} m")
     if maximum_error >= args.max_joint_error_rad:
-        acceptance_failures.append(
-            f"joint tracking error={maximum_error:.6f} rad"
-        )
+        acceptance_failures.append(f"joint tracking error={maximum_error:.6f} rad")
     if maximum_velocity > MAX_NO_LOAD_VELOCITY_RAD_S + 0.05:
-        acceptance_failures.append(
-            f"joint speed={maximum_velocity:.6f} rad/s"
-        )
+        acceptance_failures.append(f"joint speed={maximum_velocity:.6f} rad/s")
     if insufficient_flexion:
-        acceptance_failures.append(
-            f"unresponsive leg joints={insufficient_flexion}"
-        )
-    if args.gait_mode == "quasi-static":
+        acceptance_failures.append(f"unresponsive leg joints={insufficient_flexion}")
+    if contact_verified_mode:
         if expected_support_contact_fraction < args.minimum_support_contact_fraction:
             acceptance_failures.append(
-                "support contact fraction="
-                f"{expected_support_contact_fraction:.6f}"
+                f"support contact fraction={expected_support_contact_fraction:.6f}"
             )
         if maximum_support_slip_m >= args.maximum_support_slip:
             acceptance_failures.append(
                 f"support foot slip={maximum_support_slip_m:.6f} m"
             )
         incomplete_steps = [
-            leg
-            for leg in QUASISTATIC_SWING_ORDER
-            if leg not in completed_foot_steps
+            leg for leg in contact_verified_order if leg not in completed_foot_steps
         ]
         if incomplete_steps:
             acceptance_failures.append(

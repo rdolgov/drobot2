@@ -13,7 +13,9 @@ from collections.abc import Iterable, Mapping
 
 LEGS = ("front_left", "front_right", "rear_left", "rear_right")
 JOINT_KINDS = ("hip_abduction", "hip_flexion", "knee")
-EXPECTED_DOF_NAMES = frozenset(f"{leg}_{joint_kind}" for leg in LEGS for joint_kind in JOINT_KINDS)
+EXPECTED_DOF_NAMES = frozenset(
+    f"{leg}_{joint_kind}" for leg in LEGS for joint_kind in JOINT_KINDS
+)
 
 # Verified Feetech ST-3215-C018 / Waveshare ST3215, 12 V variant.
 RATED_TORQUE_NM = 0.980665
@@ -40,6 +42,23 @@ CRAWL_PHASE_OFFSETS = {
     "rear_left": 0.25,
     "front_left": 0.00,
 }
+
+DISTRIBUTED_PUSH_PHASES = (
+    ("weight_transfer", 0.16),
+    ("lift", 0.10),
+    ("swing", 0.20),
+    ("lower", 0.10),
+    ("touchdown", 0.08),
+    ("weight_return", 0.10),
+    ("all_feet_push", 0.24),
+    ("step_settle", 0.02),
+)
+DISTRIBUTED_PUSH_SWING_ORDER = (
+    "rear_right",
+    "front_right",
+    "rear_left",
+    "front_left",
+)
 
 QUASISTATIC_SWING_ORDER = (
     "rear_right",
@@ -77,9 +96,7 @@ def add_robot_reference(stage_utils, usd_path: str, path: str) -> dict:
     )
     physics_variants = []
     if "Physics" in variant_sets:
-        physics_variants = list(
-            default_prim.GetVariantSet("Physics").GetVariantNames()
-        )
+        physics_variants = list(default_prim.GetVariantSet("Physics").GetVariantNames())
     asset_stage = None
 
     if "physx" in physics_variants:
@@ -140,9 +157,9 @@ def leg_ik(leg: str, down_m: float, world_forward_m: float) -> tuple[float, floa
     """Solve one leg in the URDF joint frame.
 
     At zero, each printable arm points down along its local +X.  The generated
-    URDF mirrors the physical joint axes: left flexion/knee axes are local -Z
-    and right axes are local +Z.  Consequently, the same positive command
-    rotates either side toward world +X and both sides share one sagittal IK.
+    URDF mirrors the physical joint axes left-to-right.  The front and rear
+    pairs select opposite IK branches so the feet and knees open away from the
+    center of the chassis, preserving the four-point support polygon.
     """
     if down_m <= 0.0:
         raise ValueError("Leg down target must be positive")
@@ -252,6 +269,131 @@ def crawl_by_name(
     )
 
 
+def distributed_push_crawl_by_name(
+    gait_time_s: float,
+    *,
+    period_s: float,
+    stride_m: float,
+    lift_m: float,
+    weight_shift_forward_m: float,
+    weight_shift_lateral_m: float,
+    down_m: float = DEFAULT_STANCE_DOWN_M,
+    fore_aft_m: float = DEFAULT_STANCE_FORE_AFT_M,
+    abduction_deg: float = DEFAULT_ABDUCTION_DEG,
+) -> tuple[dict[str, float], dict[str, object]]:
+    """Return a four-beat crawl with a four-foot push after every step."""
+    if period_s <= 0.0:
+        raise ValueError("Distributed-push period must be positive")
+    if stride_m <= 0.0 or lift_m <= 0.0:
+        raise ValueError("Distributed-push stride and lift must be positive")
+    if weight_shift_forward_m < 0.0 or weight_shift_lateral_m < 0.0:
+        raise ValueError("Distributed-push weight shifts must be non-negative")
+    if not math.isclose(sum(value for _name, value in DISTRIBUTED_PUSH_PHASES), 1.0):
+        raise AssertionError("Distributed-push phase fractions do not total one step")
+
+    cycle_phase = (max(0.0, gait_time_s) / period_s) % 1.0
+    step_count = len(DISTRIBUTED_PUSH_SWING_ORDER)
+    step_fraction = 1.0 / step_count
+    step_index = min(int(cycle_phase / step_fraction), step_count - 1)
+    step_u = (cycle_phase - step_index * step_fraction) / step_fraction
+    swing_leg = DISTRIBUTED_PUSH_SWING_ORDER[step_index]
+
+    phase_name = DISTRIBUTED_PUSH_PHASES[-1][0]
+    phase_u = 1.0
+    phase_start = 0.0
+    for candidate_name, candidate_fraction in DISTRIBUTED_PUSH_PHASES:
+        phase_end = phase_start + candidate_fraction
+        if step_u < phase_end or candidate_name == DISTRIBUTED_PUSH_PHASES[-1][0]:
+            phase_name = candidate_name
+            phase_u = min(
+                max((step_u - phase_start) / candidate_fraction, 0.0),
+                1.0,
+            )
+            break
+        phase_start = phase_end
+
+    half_stride = stride_m / 2.0
+    push_increment = stride_m / step_count
+    offsets = {
+        leg: half_stride - (step_count - index) * push_increment
+        for index, leg in enumerate(DISTRIBUTED_PUSH_SWING_ORDER)
+    }
+    for completed_index in range(step_index):
+        completed_swing = DISTRIBUTED_PUSH_SWING_ORDER[completed_index]
+        offsets[completed_swing] += stride_m
+        for leg in LEGS:
+            offsets[leg] -= push_increment
+
+    if phase_name == "swing":
+        offsets[swing_leg] += stride_m * smoothstep(phase_u)
+    elif phase_name in (
+        "lower",
+        "touchdown",
+        "weight_return",
+        "all_feet_push",
+        "step_settle",
+    ):
+        offsets[swing_leg] += stride_m
+    if phase_name == "all_feet_push":
+        push = push_increment * smoothstep(phase_u)
+        offsets = {leg: offset - push for leg, offset in offsets.items()}
+    elif phase_name == "step_settle":
+        offsets = {leg: offset - push_increment for leg, offset in offsets.items()}
+
+    down_by_leg = {leg: down_m for leg in LEGS}
+    if phase_name == "lift":
+        down_by_leg[swing_leg] = down_m - lift_m * smoothstep(phase_u)
+    elif phase_name == "swing":
+        down_by_leg[swing_leg] = down_m - lift_m
+    elif phase_name == "lower":
+        down_by_leg[swing_leg] = down_m - lift_m * (1.0 - smoothstep(phase_u))
+
+    if phase_name == "weight_transfer":
+        transfer = smoothstep(phase_u)
+    elif phase_name == "weight_return":
+        transfer = 1.0 - smoothstep(phase_u)
+    elif phase_name in ("all_feet_push", "step_settle"):
+        transfer = 0.0
+    else:
+        transfer = 1.0
+    body_shift_forward_m = -_front_sign(swing_leg) * weight_shift_forward_m * transfer
+    body_shift_lateral_m = -_side_sign(swing_leg) * weight_shift_lateral_m * transfer
+
+    forward_by_leg = {
+        leg: _front_sign(leg) * fore_aft_m + offsets[leg] - body_shift_forward_m
+        for leg in LEGS
+    }
+    nominal_abduction = math.radians(abduction_deg)
+    foot_delta_lateral_m = -body_shift_lateral_m
+    abduction_by_leg: dict[str, float] = {}
+    for leg in LEGS:
+        nominal_leg_down = down_by_leg[leg]
+        vertical = nominal_leg_down * math.cos(nominal_abduction)
+        outward = nominal_leg_down * math.sin(nominal_abduction)
+        shifted_outward = outward + _side_sign(leg) * foot_delta_lateral_m
+        down_by_leg[leg] = math.hypot(vertical, shifted_outward)
+        abduction_by_leg[leg] = math.degrees(math.atan2(shifted_outward, vertical))
+
+    pose = pose_by_name(
+        down_by_leg_m=down_by_leg,
+        forward_by_leg_m=forward_by_leg,
+        abduction_by_leg_deg=abduction_by_leg,
+    )
+    expected_support_legs = (
+        [leg for leg in LEGS if leg != swing_leg]
+        if phase_name in ("lift", "swing", "lower")
+        else list(LEGS)
+    )
+    return pose, {
+        "cycle_phase": cycle_phase,
+        "phase": phase_name,
+        "phase_progress": phase_u,
+        "swing_leg": swing_leg,
+        "expected_support_legs": expected_support_legs,
+        "foot_offsets_m": dict(offsets),
+    }
+
+
 def quasistatic_crawl_by_name(
     gait_time_s: float,
     *,
@@ -349,9 +491,7 @@ def quasistatic_crawl_by_name(
             expected_support_legs = [leg for leg in LEGS if leg != swing_leg]
     elif cycle_phase < step_region + QUASISTATIC_ADVANCE_FRACTION:
         phase_name = "all_feet_advance"
-        phase_progress = (
-            cycle_phase - step_region
-        ) / QUASISTATIC_ADVANCE_FRACTION
+        phase_progress = (cycle_phase - step_region) / QUASISTATIC_ADVANCE_FRACTION
         remaining = 1.0 - smoothstep(phase_progress)
         offsets = {leg: stride_m * remaining for leg in LEGS}
     else:
@@ -360,9 +500,7 @@ def quasistatic_crawl_by_name(
         ) / QUASISTATIC_SETTLE_FRACTION
 
     forward_by_leg = {
-        leg: _front_sign(leg) * fore_aft_m
-        + offsets[leg]
-        - body_shift_forward_m
+        leg: _front_sign(leg) * fore_aft_m + offsets[leg] - body_shift_forward_m
         for leg in LEGS
     }
     nominal_abduction = math.radians(abduction_deg)
@@ -374,9 +512,7 @@ def quasistatic_crawl_by_name(
         outward = nominal_leg_down * math.sin(nominal_abduction)
         shifted_outward = outward + _side_sign(leg) * foot_delta_lateral_m
         down_by_leg[leg] = math.hypot(vertical, shifted_outward)
-        abduction_by_leg[leg] = math.degrees(
-            math.atan2(shifted_outward, vertical)
-        )
+        abduction_by_leg[leg] = math.degrees(math.atan2(shifted_outward, vertical))
     pose = pose_by_name(
         down_by_leg_m=down_by_leg,
         forward_by_leg_m=forward_by_leg,

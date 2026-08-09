@@ -7,6 +7,10 @@ The hardware test applications are peer packages:
 - [`four-leg-dashboard/`](four-leg-dashboard/README.md) — twelve-servo
   commissioning dashboard and deterministic crawl controls.
 
+The current walking controller design, analytic leg IK, rejected alternatives,
+Isaac results, and supported hardware test ladder are documented in the
+[`crawl walk V2 spec`](four-leg-dashboard/specs/crawl-walk-v2.md).
+
 Both applications read shared physical-robot state from
 [`../robot-runtime/`](../robot-runtime/README.md).
 

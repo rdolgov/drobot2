@@ -1,4 +1,4 @@
-"""Deterministic quasi-static crawl targets for the four-leg dashboard.
+"""Deterministic foot-space crawl targets for the four-leg dashboard.
 
 The equations intentionally mirror ``simulation.isaac._quadruped_runtime`` so
 the exact browser-driven gait can be checked against the Isaac robot.  Values
@@ -25,6 +25,22 @@ STEP_PHASES = (
     ("touchdown", 0.10),
     ("weight_return", 0.10),
 )
+DISTRIBUTED_PUSH_PHASES = (
+    ("weight_transfer", 0.16),
+    ("lift", 0.10),
+    ("swing", 0.20),
+    ("lower", 0.10),
+    ("touchdown", 0.08),
+    ("weight_return", 0.10),
+    ("all_feet_push", 0.24),
+    ("step_settle", 0.02),
+)
+DISTRIBUTED_PUSH_SWING_ORDER = (
+    "rear_right",
+    "front_right",
+    "rear_left",
+    "front_left",
+)
 
 
 def _front_sign(corner: str) -> float:
@@ -48,6 +64,8 @@ def _leg_ik(corner: str, down_m: float, forward_m: float) -> tuple[float, float]
             f"Unreachable crawl target for {corner}: "
             f"down={down_m:.4f} m, forward={forward_m:.4f} m"
         )
+    # Equal bend magnitudes use mirrored front/rear IK branches so all four
+    # feet remain outside the chassis support polygon.
     knee = _front_sign(corner) * math.acos(cosine_knee)
     hip_flexion = math.atan2(forward_m, down_m) - math.atan2(
         LINK_LENGTH_M * math.sin(knee),
@@ -72,6 +90,131 @@ def _pose_degrees(
         pose[(corner, "hip_flexion")] = math.degrees(hip_flexion)
         pose[(corner, "knee")] = math.degrees(knee)
     return pose
+
+
+def distributed_push_crawl_degrees(
+    gait_time_s: float,
+    *,
+    period_s: float,
+    stride_m: float,
+    lift_m: float,
+    weight_shift_forward_m: float,
+    weight_shift_lateral_m: float,
+    down_m: float,
+    fore_aft_m: float,
+    abduction_deg: float,
+) -> tuple[dict[tuple[str, str], float], dict[str, object]]:
+    """Return a crawl with a smaller four-foot push after every footfall."""
+    if period_s <= 0.0:
+        raise ValueError("Distributed-push period must be positive")
+    if stride_m <= 0.0 or lift_m <= 0.0:
+        raise ValueError("Distributed-push stride and lift must be positive")
+    if weight_shift_forward_m < 0.0 or weight_shift_lateral_m < 0.0:
+        raise ValueError("Distributed-push weight shifts must be non-negative")
+
+    cycle_phase = (max(0.0, gait_time_s) / period_s) % 1.0
+    step_count = len(DISTRIBUTED_PUSH_SWING_ORDER)
+    step_fraction = 1.0 / step_count
+    step_index = min(int(cycle_phase / step_fraction), step_count - 1)
+    step_u = (cycle_phase - step_index * step_fraction) / step_fraction
+    swing_corner = DISTRIBUTED_PUSH_SWING_ORDER[step_index]
+
+    phase_name = DISTRIBUTED_PUSH_PHASES[-1][0]
+    phase_u = 1.0
+    phase_start = 0.0
+    for candidate_name, candidate_fraction in DISTRIBUTED_PUSH_PHASES:
+        phase_end = phase_start + candidate_fraction
+        if step_u < phase_end or candidate_name == DISTRIBUTED_PUSH_PHASES[-1][0]:
+            phase_name = candidate_name
+            phase_u = min(
+                max((step_u - phase_start) / candidate_fraction, 0.0),
+                1.0,
+            )
+            break
+        phase_start = phase_end
+
+    half_stride = stride_m / 2.0
+    push_increment = stride_m / step_count
+    offsets = {
+        corner: half_stride - (step_count - index) * push_increment
+        for index, corner in enumerate(DISTRIBUTED_PUSH_SWING_ORDER)
+    }
+    for completed_index in range(step_index):
+        completed_swing = DISTRIBUTED_PUSH_SWING_ORDER[completed_index]
+        offsets[completed_swing] += stride_m
+        for corner in LEG_CORNERS:
+            offsets[corner] -= push_increment
+
+    if phase_name == "swing":
+        offsets[swing_corner] += stride_m * _smoothstep(phase_u)
+    elif phase_name in (
+        "lower",
+        "touchdown",
+        "weight_return",
+        "all_feet_push",
+        "step_settle",
+    ):
+        offsets[swing_corner] += stride_m
+    if phase_name == "all_feet_push":
+        push = push_increment * _smoothstep(phase_u)
+        offsets = {corner: offset - push for corner, offset in offsets.items()}
+    elif phase_name == "step_settle":
+        offsets = {
+            corner: offset - push_increment for corner, offset in offsets.items()
+        }
+
+    down_by_corner = {corner: down_m for corner in LEG_CORNERS}
+    if phase_name == "lift":
+        down_by_corner[swing_corner] = down_m - lift_m * _smoothstep(phase_u)
+    elif phase_name == "swing":
+        down_by_corner[swing_corner] = down_m - lift_m
+    elif phase_name == "lower":
+        down_by_corner[swing_corner] = down_m - lift_m * (1.0 - _smoothstep(phase_u))
+
+    if phase_name == "weight_transfer":
+        transfer = _smoothstep(phase_u)
+    elif phase_name == "weight_return":
+        transfer = 1.0 - _smoothstep(phase_u)
+    elif phase_name in ("all_feet_push", "step_settle"):
+        transfer = 0.0
+    else:
+        transfer = 1.0
+    body_shift_forward_m = (
+        -_front_sign(swing_corner) * weight_shift_forward_m * transfer
+    )
+    body_shift_lateral_m = -_side_sign(swing_corner) * weight_shift_lateral_m * transfer
+
+    forward_by_corner = {
+        corner: _front_sign(corner) * fore_aft_m
+        + offsets[corner]
+        - body_shift_forward_m
+        for corner in LEG_CORNERS
+    }
+    nominal_abduction = math.radians(abduction_deg)
+    foot_delta_lateral_m = -body_shift_lateral_m
+    abduction_by_corner: dict[str, float] = {}
+    for corner in LEG_CORNERS:
+        nominal_leg_down = down_by_corner[corner]
+        vertical = nominal_leg_down * math.cos(nominal_abduction)
+        outward = nominal_leg_down * math.sin(nominal_abduction)
+        shifted_outward = outward + _side_sign(corner) * foot_delta_lateral_m
+        down_by_corner[corner] = math.hypot(vertical, shifted_outward)
+        abduction_by_corner[corner] = math.degrees(
+            math.atan2(shifted_outward, vertical)
+        )
+
+    pose = _pose_degrees(
+        down_by_corner,
+        forward_by_corner,
+        abduction_by_corner,
+    )
+    return pose, {
+        "cycle_phase": cycle_phase,
+        "phase": phase_name,
+        "phase_progress": phase_u,
+        "swing_corner": swing_corner,
+        "foot_offsets_m": dict(offsets),
+    }
 
 
 def quasistatic_crawl_degrees(

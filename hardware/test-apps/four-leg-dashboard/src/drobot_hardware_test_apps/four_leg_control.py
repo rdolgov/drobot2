@@ -37,7 +37,7 @@ from drobot_leg_testbed.transport import MotorStatus, STSBus
 
 from drobot_hardware_test_apps.crawl_gait import (
     LEG_CORNERS,
-    quasistatic_crawl_degrees,
+    distributed_push_crawl_degrees,
 )
 
 LOCAL_HOST = "127.0.0.1"
@@ -216,10 +216,10 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("crawl.cycles must be in [1, 4]")
     if not 0.5 <= crawl.stance_settle_s <= 5.0:
         raise ValueError("crawl.stance_settle_s must be in [0.5, 5]")
-    if not 0.005 <= crawl.stride_m <= 0.030:
-        raise ValueError("crawl.stride_m must be in [0.005, 0.030]")
-    if not 0.005 <= crawl.lift_m <= 0.020:
-        raise ValueError("crawl.lift_m must be in [0.005, 0.020]")
+    if not 0.005 <= crawl.stride_m <= 0.050:
+        raise ValueError("crawl.stride_m must be in [0.005, 0.050]")
+    if not 0.005 <= crawl.lift_m <= 0.025:
+        raise ValueError("crawl.lift_m must be in [0.005, 0.025]")
     if not 0.0 <= crawl.weight_shift_forward_m <= 0.040:
         raise ValueError("crawl.weight_shift_forward_m must be in [0, 0.040]")
     if not 0.0 <= crawl.weight_shift_lateral_m <= 0.030:
@@ -498,7 +498,7 @@ class FourLegSession:
         gait_time_s: float,
     ) -> tuple[dict[tuple[int, str], float], dict[str, object]]:
         config = self.dashboard.crawl
-        pose, state = quasistatic_crawl_degrees(
+        pose, state = distributed_push_crawl_degrees(
             gait_time_s,
             period_s=config.period_s,
             stride_m=config.stride_m,
@@ -560,7 +560,9 @@ class FourLegSession:
             self.crawl_started_at = now
             self.crawl_target_reached_at = None
             self.crawl_progress = 0.0
-            self.last_event = "Long crawl started; rear-right foot moves first"
+            self.last_event = (
+                "Distributed-push crawl started; rear-right foot moves first"
+            )
             return
 
         duration_s = config.period_s * config.cycles
@@ -676,7 +678,9 @@ class FourLegSession:
 
             self.last_heartbeat = self.clock()
             self.fault = None
-            self.last_event = "All 12 motors moving to the lower long-crawl stance"
+            self.last_event = (
+                "All 12 motors moving to the distributed-push crawl stance"
+            )
 
     def stop_crawl(self) -> None:
         with self.lock:
@@ -1110,6 +1114,7 @@ class FourLegSession:
                 "port": getattr(self.bus, "port_name", None),
             },
             "crawl": {
+                "pattern": "distributed_push",
                 "active": self.crawl_active,
                 "stage": self.crawl_stage,
                 "phase": self.crawl_phase,
