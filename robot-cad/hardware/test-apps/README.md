@@ -95,7 +95,9 @@ communicate with motors.
 
 The demo opens `http://127.0.0.1:8766/`, uses the real profiles/calibrations,
 and exercises the same arming, ramping, target, watchdog, and UI code without
-serial hardware.
+serial hardware. The header must show **DEMO / NO MOTOR OUTPUT**. Stop the demo
+before starting a COM-port session; the launcher now refuses to share its HTTP
+port with another dashboard process.
 
 ## First complete-robot test
 
@@ -111,8 +113,10 @@ serial hardware.
 
 5. Type `CONNECT-12`. Startup requires all twelve configured IDs to respond
    and then writes torque OFF to every ID before opening the dashboard.
-6. Before arming, confirm the page shows `12 / 12`, `0 / 12` armed, no
-   unexpected-torque warning, plausible voltage, and reasonable temperatures.
+6. Before arming, confirm the header shows **HARDWARE / COM4**, then confirm
+   the page shows `12 / 12`, `0 / 12` armed, no unexpected-torque warning,
+   plausible voltage, and reasonable temperatures. Never test physical motion
+   from a page marked **DEMO / NO MOTOR OUTPUT**.
 7. Check the arming interlock. Arm only one joint. Use `+15°`, observe the
    intended physical direction, return with `ZERO`, and disarm it.
 8. Repeat the three joints on one leg, then the other legs. Stop immediately on

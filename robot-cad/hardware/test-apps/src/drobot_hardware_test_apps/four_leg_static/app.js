@@ -6,6 +6,7 @@ const legGrid = document.querySelector("#legGrid");
 const notice = document.querySelector("#notice");
 const connection = document.querySelector("#connection");
 const connectionText = document.querySelector("#connectionText");
+const modeBadge = document.querySelector("#modeBadge");
 const alertPanel = document.querySelector("#alertPanel");
 const alertList = document.querySelector("#alertList");
 const disarmAll = document.querySelector("#disarmAll");
@@ -296,7 +297,13 @@ function updateLeg(leg) {
 }
 
 function updateSummary(state) {
-  const { summary, settings, crawl } = state;
+  const { summary, settings, crawl, runtime } = state;
+  const demoMode = runtime?.mode === "demo";
+  modeBadge.textContent = demoMode
+    ? "DEMO / NO MOTOR OUTPUT"
+    : `HARDWARE / ${(runtime?.port || "SERIAL").toUpperCase()}`;
+  modeBadge.className = `mode-badge ${demoMode ? "demo" : "hardware"}`;
+  document.body.classList.toggle("demo-mode", demoMode);
   document.querySelector("#onlineCount").textContent = `${summary.online_count} / 12`;
   document.querySelector("#healthLabel").textContent =
     summary.health === "nominal" ? "All telemetry nominal" : "Attention required";
