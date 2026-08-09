@@ -1,5 +1,7 @@
 # drobot2
 
+![Drobot2 robot in motion](docs/RobotMove1.jpg)
+
 Monorepo for the Drobot2 robot. Engineering areas are separated at the
 repository root so CAD, simulation, hardware control, and electrical design
 can evolve without sharing one package boundary.
