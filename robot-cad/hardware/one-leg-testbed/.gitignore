@@ -4,8 +4,11 @@
 build/
 dist/
 *.egg-info/
-leg.toml
-calibration.json
+/leg.toml
+/calibration.json
+/leg-*.toml
+/calibration-leg-*.json
+/config/backups/
 *.log
 __pycache__/
 .pytest_cache/

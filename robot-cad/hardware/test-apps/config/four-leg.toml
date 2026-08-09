@@ -1,0 +1,35 @@
+[server]
+http_port = 8766
+ramp_rate_deg_s = 30.0
+heartbeat_timeout_s = 3.0
+
+[monitoring]
+voltage_warning_low_v = 10.5
+voltage_warning_high_v = 12.6
+voltage_spread_warning_v = 0.5
+temperature_warning_c = 60
+leg_current_warning_ma = 3000.0
+
+[[legs]]
+number = 1
+label = "Leg 1"
+profile = "../../one-leg-testbed/config/leg-1.toml"
+calibration = "../../one-leg-testbed/config/calibration-leg-1.json"
+
+[[legs]]
+number = 2
+label = "Leg 2"
+profile = "../../one-leg-testbed/config/leg-2.toml"
+calibration = "../../one-leg-testbed/config/calibration-leg-2.json"
+
+[[legs]]
+number = 3
+label = "Leg 3"
+profile = "../../one-leg-testbed/config/leg-3.toml"
+calibration = "../../one-leg-testbed/config/calibration-leg-3.json"
+
+[[legs]]
+number = 4
+label = "Leg 4"
+profile = "../../one-leg-testbed/config/leg-4.toml"
+calibration = "../../one-leg-testbed/config/calibration-leg-4.json"
