@@ -1,0 +1,68 @@
+schema_version: 1
+part_id: st3215_servo_output_fork
+source: drobot_cad/parts/st3215_servo_output_fork.py
+reference: vendor/references/so101/Upper_arm_SO101.step
+units: mm
+
+coordinate_system:
+  origin: legacy perpendicular split-plane center and fusion-cap diameter center
+  positive_x: global positive X, normal to the virtual YZ split datum
+  positive_y: original upper-arm positive Y
+
+legacy_split_datum:
+  plane_x_at_z0_mm: 12.0
+  plane_center_y_mm: 12.0
+  slope_x_per_z: 0.0
+  minimum_centerline_root_ligament_mm: 3.0
+  source_view: front XZ, looking along positive Y
+
+root_extension:
+  type: half_elliptical_prism_with_rounded_rims
+  intent: intentional_boolean_fusion_envelope
+  center_xyz_mm: [0.0, 0.0, 0.0]
+  radius_x_mm: 30.0
+  radius_z_mm: 31.7
+  width_y_mm: 24.0
+  edge_fillet_mm: 3.0
+  extent_x_mm: [-30.0, 0.0]
+  note: covers the complete legacy X=0 root edge and is not a clearance-fit attachment
+
+configurations:
+  extended_fork:
+    generator: gen_step
+    includes_root_extension: true
+  legacy_core:
+    generator: gen_core_step
+    includes_root_extension: false
+    use: retained only for previously approved integrations such as st3215_hip
+
+frames:
+  frame_attachment_datum:
+    xyz_mm: [0.0, 0.0, 0.0]
+    axis: [1.0, 0.0, 0.0]
+    role: virtual legacy split and fusion-cap diameter datum
+  frame_st3215_output_axis:
+    xyz_mm: [53.084989, 0.0, 0.0]
+    axis: [0.0, 0.0, 1.0]
+
+generated_baseline:
+  solid_count: 1
+  bounds:
+    min_xyz_mm: [-30.0, -12.0, -35.6]
+    max_xyz_mm: [65.084989, 12.0, 31.7]
+    size_xyz_mm: [95.084989, 24.0, 67.3]
+  volume_mm3: 84203.18991346893
+  kernel_tolerance_mm: 0.05
+  volume_relative_tolerance: 1.0e-5
+
+acceptance_tests:
+  - geometry is valid
+  - model contains one connected solid
+  - negative-X fusion cap reaches exactly 30.0 mm from the legacy split datum
+  - half-oval diameter covers the complete 63.4 mm legacy root edge
+  - extension spans the complete 24.0 mm fork width
+  - exposed elliptical side rims use a 3.0 mm smooth fillet
+  - legacy core is geometrically unchanged and fully contained by the extended fork
+  - local split datum remains at the origin and perpendicular to global X
+  - preserved distal fork axis matches the ST3215 output-joint datum
+  - integrations opt into either the extended fork or the documented legacy core

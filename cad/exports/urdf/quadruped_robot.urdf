@@ -1,0 +1,720 @@
+<?xml version="1.0"?>
+<!-- cadpy:sourcePath=../../drobot_cad/urdf/quadruped_robot.py -->
+<!-- cadpy:sourceHash=0e4369948b92be4592ed9dbcf138cd2bc5c019d33c205b8a062658f3b1be1944 -->
+<robot name="st3215_quadruped">
+  <!--Mass model: solid PLA, 0.45 kg battery, 0.15 kg electronics; the 2.5 g BNO085 is separate; magenta fork-tip contacts are simulation-only.-->
+  <material name="body_dark">
+    <color rgba="0.08 0.13 0.2 1" />
+  </material>
+  <material name="lid_blue">
+    <color rgba="0.22 0.36 0.5 1" />
+  </material>
+  <material name="tray_gold">
+    <color rgba="0.95 0.65 0.12 1" />
+  </material>
+  <material name="mount_light">
+    <color rgba="0.65 0.68 0.74 1" />
+  </material>
+  <material name="camera_mount_green">
+    <color rgba="0.25 0.72 0.38 1" />
+  </material>
+  <material name="camera_body_purple">
+    <color rgba="0.62 0.28 0.78 1" />
+  </material>
+  <material name="imu_board_blue">
+    <color rgba="0.12 0.3 0.62 1" />
+  </material>
+  <material name="servo_black">
+    <color rgba="0.025 0.03 0.04 1" />
+  </material>
+  <material name="virtual_contact_magenta">
+    <color rgba="0.95 0.05 0.48 1" />
+  </material>
+  <material name="front_left_plastic">
+    <color rgba="0.95 0.38 0.08 1" />
+  </material>
+  <material name="rear_left_plastic">
+    <color rgba="0.2 0.62 0.92 1" />
+  </material>
+  <material name="front_right_plastic">
+    <color rgba="0.18 0.72 0.48 1" />
+  </material>
+  <material name="rear_right_plastic">
+    <color rgba="0.5 0.28 0.82 1" />
+  </material>
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0.046485537" rpy="0 0 0" />
+      <mass value="2.049119" />
+      <inertia ixx="0.0132456004" ixy="1.10328e-05" ixz="0" iyy="0.009744204" iyz="0" izz="0.0196972212" />
+    </inertial>
+    <visual name="printable_body_tub">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/quadruped_body_base.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="body_dark" />
+    </visual>
+    <visual name="printable_body_lid">
+      <origin xyz="0 0 0.096" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/quadruped_body_lid.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="lid_blue" />
+    </visual>
+    <visual name="printable_electronics_tray">
+      <origin xyz="0 0 0.056" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/quadruped_electronics_tray.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="tray_gold" />
+    </visual>
+    <visual name="front_left_body_side_mount">
+      <origin xyz="0.06 0.117 0.05" rpy="1.570796327 0 1.570796327" />
+      <geometry>
+        <mesh filename="../stl/st3215_hip_body_mount.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="mount_light" />
+    </visual>
+    <visual name="rear_left_body_side_mount">
+      <origin xyz="-0.06 0.117 0.05" rpy="1.570796327 0 1.570796327" />
+      <geometry>
+        <mesh filename="../stl/st3215_hip_body_mount.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="mount_light" />
+    </visual>
+    <visual name="front_right_body_side_mount">
+      <origin xyz="0.06 -0.117 0.05" rpy="1.570796327 0 -1.570796327" />
+      <geometry>
+        <mesh filename="../stl/st3215_hip_body_mount.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="mount_light" />
+    </visual>
+    <visual name="rear_right_body_side_mount">
+      <origin xyz="-0.06 -0.117 0.05" rpy="1.570796327 0 -1.570796327" />
+      <geometry>
+        <mesh filename="../stl/st3215_hip_body_mount.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="mount_light" />
+    </visual>
+    <collision name="body_enclosure_collision">
+      <origin xyz="0 0 0.05" rpy="0 0 0" />
+      <geometry>
+        <box size="0.22 0.17 0.1" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="imu_link">
+    <inertial>
+      <origin xyz="-3e-06 -0.000805 0.000105" rpy="0 0 0" />
+      <mass value="0.0025" />
+      <inertia ixx="1.131459375e-07" ixy="0" ixz="0" iyy="1.386835208e-07" iyz="0" izz="2.432790833e-07" />
+    </inertial>
+    <visual name="exact_adafruit_bno085_stemma_qt">
+      <origin xyz="0 0 -0.00216" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/adafruit_bno085_stemma_qt.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="imu_board_blue" />
+    </visual>
+    <collision name="bno085_board_envelope">
+      <origin xyz="-3e-06 -0.000805 0.000105" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0254 0.02286 0.00453" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="base_to_imu" type="fixed">
+    <parent link="base_link" />
+    <child link="imu_link" />
+    <origin xyz="0 0 0.06516" rpy="0 0 0" />
+  </joint>
+  <link name="camera_link">
+    <inertial>
+      <origin xyz="0.009261819 -2.1765e-05 0.022460669" rpy="0 0 0" />
+      <mass value="0.074635989" />
+      <inertia ixx="1.9829381e-05" ixy="-9.911e-09" ixz="-2.45577e-07" iyy="1.3126569e-05" iyz="-3.592e-09" izz="1.3357698e-05" />
+    </inertial>
+    <visual name="lekiwi_base_camera_mount">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../../vendor/references/lekiwi/base_camera_mount.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="camera_mount_green" />
+    </visual>
+    <visual name="arducam_5mp_camera">
+      <origin xyz="0 0 0.023" rpy="0 1.570796327 0" />
+      <geometry>
+        <mesh filename="../../vendor/references/lekiwi/arducam_5mp_camera_model.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="camera_body_purple" />
+    </visual>
+    <collision name="camera_mount_proxy">
+      <origin xyz="0.003330537 0 0.022592295" rpy="0 0 0" />
+      <geometry>
+        <box size="0.016661073 0.048 0.045184589" />
+      </geometry>
+    </collision>
+    <collision name="camera_body_proxy">
+      <origin xyz="0.01075 0 0.023" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0215 0.038 0.038" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="camera_optical_frame" />
+  <joint name="base_to_camera_mount" type="fixed">
+    <parent link="base_link" />
+    <child link="camera_link" />
+    <origin xyz="0.09 0 0.1" rpy="0 0 0" />
+  </joint>
+  <joint name="camera_to_optical" type="fixed">
+    <parent link="camera_link" />
+    <child link="camera_optical_frame" />
+    <origin xyz="0.0245 0 0.023" rpy="-1.570796327 0 -1.570796327" />
+  </joint>
+  <link name="front_left_hip_link">
+    <inertial>
+      <origin xyz="0.023744808 -0.031777881 -0.001911095" rpy="0 0 0" />
+      <mass value="0.169697" />
+      <inertia ixx="0.0001832517" ixy="2.4855e-05" ixz="2.392e-07" iyy="7.18098e-05" iyz="-2.529e-07" izz="0.0002314034" />
+    </inertial>
+    <visual name="printable_hip">
+      <origin xyz="0.0286117 -0.0426117 -0.00195" rpy="-1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_hip.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="front_left_plastic" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="hip_printable_proxy">
+      <origin xyz="0.0266617 -0.0460425 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0713 0.127308 0.04805" />
+      </geometry>
+    </collision>
+    <collision name="hip_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="front_left_proximal_link">
+    <inertial>
+      <origin xyz="0.07301168 -2.1551e-05 -0.000924466" rpy="0 0 0" />
+      <mass value="0.215137" />
+      <inertia ixx="7.47088e-05" ixy="5.653e-07" ixz="-6.9897e-06" iyy="0.0005598933" iyz="3.56e-08" izz="0.0005075793" />
+    </inertial>
+    <visual name="printable_proximal_upper_arm">
+      <origin xyz="0.0948117 -0.012 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/upper_arm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="front_left_plastic" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="proximal_arm_printable_proxy">
+      <origin xyz="0.096254 0 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.155285 0.035229 0.0713" />
+      </geometry>
+    </collision>
+    <collision name="st3215_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="front_left_distal_link">
+    <inertial>
+      <origin xyz="0.07301168 -2.1551e-05 -0.000924466" rpy="0 0 0" />
+      <mass value="0.215137" />
+      <inertia ixx="7.47088e-05" ixy="5.653e-07" ixz="-6.9897e-06" iyy="0.0005598933" iyz="3.56e-08" izz="0.0005075793" />
+    </inertial>
+    <visual name="printable_distal_upper_arm">
+      <origin xyz="0.0948117 -0.012 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/upper_arm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="front_left_plastic" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="distal_arm_printable_proxy">
+      <origin xyz="0.096254 0 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.155285 0.035229 0.0713" />
+      </geometry>
+    </collision>
+    <collision name="st3215_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+    <visual name="simulation_only_fork_tip_contact_proxy">
+      <origin xyz="0.159896689 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0125" />
+      </geometry>
+      <material name="virtual_contact_magenta" />
+    </visual>
+    <collision name="simulation_only_fork_tip_contact_proxy">
+      <origin xyz="0.159896689 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0125" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="front_left_hip_abduction" type="revolute">
+    <parent link="base_link" />
+    <child link="front_left_hip_link" />
+    <origin xyz="0.06 0.170084989 0.05" rpy="1.570796327 0 1.570796327" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.436332313" upper="0.436332313" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+  <joint name="front_left_hip_flexion" type="revolute">
+    <parent link="front_left_hip_link" />
+    <child link="front_left_proximal_link" />
+    <origin xyz="0.0286117 -0.095696689 -0.00195" rpy="-1.570796327 0 -1.570796327" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-1.047197551" upper="1.047197551" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+  <joint name="front_left_knee" type="revolute">
+    <parent link="front_left_proximal_link" />
+    <child link="front_left_distal_link" />
+    <origin xyz="0.159896689 0 0" rpy="0 0 0" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-1.570796327" upper="1.570796327" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+  <link name="rear_left_hip_link">
+    <inertial>
+      <origin xyz="0.023744808 -0.031777881 -0.001911095" rpy="0 0 0" />
+      <mass value="0.169697" />
+      <inertia ixx="0.0001832517" ixy="2.4855e-05" ixz="2.392e-07" iyy="7.18098e-05" iyz="-2.529e-07" izz="0.0002314034" />
+    </inertial>
+    <visual name="printable_hip">
+      <origin xyz="0.0286117 -0.0426117 -0.00195" rpy="-1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_hip.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="rear_left_plastic" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="hip_printable_proxy">
+      <origin xyz="0.0266617 -0.0460425 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0713 0.127308 0.04805" />
+      </geometry>
+    </collision>
+    <collision name="hip_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="rear_left_proximal_link">
+    <inertial>
+      <origin xyz="0.07301168 -2.1551e-05 -0.000924466" rpy="0 0 0" />
+      <mass value="0.215137" />
+      <inertia ixx="7.47088e-05" ixy="5.653e-07" ixz="-6.9897e-06" iyy="0.0005598933" iyz="3.56e-08" izz="0.0005075793" />
+    </inertial>
+    <visual name="printable_proximal_upper_arm">
+      <origin xyz="0.0948117 -0.012 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/upper_arm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="rear_left_plastic" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="proximal_arm_printable_proxy">
+      <origin xyz="0.096254 0 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.155285 0.035229 0.0713" />
+      </geometry>
+    </collision>
+    <collision name="st3215_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="rear_left_distal_link">
+    <inertial>
+      <origin xyz="0.07301168 -2.1551e-05 -0.000924466" rpy="0 0 0" />
+      <mass value="0.215137" />
+      <inertia ixx="7.47088e-05" ixy="5.653e-07" ixz="-6.9897e-06" iyy="0.0005598933" iyz="3.56e-08" izz="0.0005075793" />
+    </inertial>
+    <visual name="printable_distal_upper_arm">
+      <origin xyz="0.0948117 -0.012 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/upper_arm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="rear_left_plastic" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="distal_arm_printable_proxy">
+      <origin xyz="0.096254 0 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.155285 0.035229 0.0713" />
+      </geometry>
+    </collision>
+    <collision name="st3215_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+    <visual name="simulation_only_fork_tip_contact_proxy">
+      <origin xyz="0.159896689 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0125" />
+      </geometry>
+      <material name="virtual_contact_magenta" />
+    </visual>
+    <collision name="simulation_only_fork_tip_contact_proxy">
+      <origin xyz="0.159896689 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0125" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="rear_left_hip_abduction" type="revolute">
+    <parent link="base_link" />
+    <child link="rear_left_hip_link" />
+    <origin xyz="-0.06 0.170084989 0.05" rpy="1.570796327 0 1.570796327" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.436332313" upper="0.436332313" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+  <joint name="rear_left_hip_flexion" type="revolute">
+    <parent link="rear_left_hip_link" />
+    <child link="rear_left_proximal_link" />
+    <origin xyz="0.0286117 -0.095696689 -0.00195" rpy="-1.570796327 0 -1.570796327" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-1.047197551" upper="1.047197551" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+  <joint name="rear_left_knee" type="revolute">
+    <parent link="rear_left_proximal_link" />
+    <child link="rear_left_distal_link" />
+    <origin xyz="0.159896689 0 0" rpy="0 0 0" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-1.570796327" upper="1.570796327" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+  <link name="front_right_hip_link">
+    <inertial>
+      <origin xyz="0.023744808 -0.031777881 -0.001911095" rpy="0 0 0" />
+      <mass value="0.169697" />
+      <inertia ixx="0.0001832517" ixy="2.4855e-05" ixz="2.392e-07" iyy="7.18098e-05" iyz="-2.529e-07" izz="0.0002314034" />
+    </inertial>
+    <visual name="printable_hip">
+      <origin xyz="0.0286117 -0.0426117 -0.00195" rpy="-1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_hip.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="front_right_plastic" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="hip_printable_proxy">
+      <origin xyz="0.0266617 -0.0460425 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0713 0.127308 0.04805" />
+      </geometry>
+    </collision>
+    <collision name="hip_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="front_right_proximal_link">
+    <inertial>
+      <origin xyz="0.07301168 -2.1551e-05 -0.000924466" rpy="0 0 0" />
+      <mass value="0.215137" />
+      <inertia ixx="7.47088e-05" ixy="5.653e-07" ixz="-6.9897e-06" iyy="0.0005598933" iyz="3.56e-08" izz="0.0005075793" />
+    </inertial>
+    <visual name="printable_proximal_upper_arm">
+      <origin xyz="0.0948117 -0.012 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/upper_arm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="front_right_plastic" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="proximal_arm_printable_proxy">
+      <origin xyz="0.096254 0 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.155285 0.035229 0.0713" />
+      </geometry>
+    </collision>
+    <collision name="st3215_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="front_right_distal_link">
+    <inertial>
+      <origin xyz="0.07301168 -2.1551e-05 -0.000924466" rpy="0 0 0" />
+      <mass value="0.215137" />
+      <inertia ixx="7.47088e-05" ixy="5.653e-07" ixz="-6.9897e-06" iyy="0.0005598933" iyz="3.56e-08" izz="0.0005075793" />
+    </inertial>
+    <visual name="printable_distal_upper_arm">
+      <origin xyz="0.0948117 -0.012 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/upper_arm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="front_right_plastic" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="distal_arm_printable_proxy">
+      <origin xyz="0.096254 0 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.155285 0.035229 0.0713" />
+      </geometry>
+    </collision>
+    <collision name="st3215_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+    <visual name="simulation_only_fork_tip_contact_proxy">
+      <origin xyz="0.159896689 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0125" />
+      </geometry>
+      <material name="virtual_contact_magenta" />
+    </visual>
+    <collision name="simulation_only_fork_tip_contact_proxy">
+      <origin xyz="0.159896689 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0125" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="front_right_hip_abduction" type="revolute">
+    <parent link="base_link" />
+    <child link="front_right_hip_link" />
+    <origin xyz="0.06 -0.170084989 0.05" rpy="1.570796327 0 -1.570796327" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.436332313" upper="0.436332313" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+  <joint name="front_right_hip_flexion" type="revolute">
+    <parent link="front_right_hip_link" />
+    <child link="front_right_proximal_link" />
+    <origin xyz="0.0286117 -0.095696689 -0.00195" rpy="-1.570796327 0 -1.570796327" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.047197551" upper="1.047197551" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+  <joint name="front_right_knee" type="revolute">
+    <parent link="front_right_proximal_link" />
+    <child link="front_right_distal_link" />
+    <origin xyz="0.159896689 0 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.570796327" upper="1.570796327" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+  <link name="rear_right_hip_link">
+    <inertial>
+      <origin xyz="0.023744808 -0.031777881 -0.001911095" rpy="0 0 0" />
+      <mass value="0.169697" />
+      <inertia ixx="0.0001832517" ixy="2.4855e-05" ixz="2.392e-07" iyy="7.18098e-05" iyz="-2.529e-07" izz="0.0002314034" />
+    </inertial>
+    <visual name="printable_hip">
+      <origin xyz="0.0286117 -0.0426117 -0.00195" rpy="-1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_hip.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="rear_right_plastic" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="hip_printable_proxy">
+      <origin xyz="0.0266617 -0.0460425 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0713 0.127308 0.04805" />
+      </geometry>
+    </collision>
+    <collision name="hip_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="rear_right_proximal_link">
+    <inertial>
+      <origin xyz="0.07301168 -2.1551e-05 -0.000924466" rpy="0 0 0" />
+      <mass value="0.215137" />
+      <inertia ixx="7.47088e-05" ixy="5.653e-07" ixz="-6.9897e-06" iyy="0.0005598933" iyz="3.56e-08" izz="0.0005075793" />
+    </inertial>
+    <visual name="printable_proximal_upper_arm">
+      <origin xyz="0.0948117 -0.012 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/upper_arm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="rear_right_plastic" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="proximal_arm_printable_proxy">
+      <origin xyz="0.096254 0 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.155285 0.035229 0.0713" />
+      </geometry>
+    </collision>
+    <collision name="st3215_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="rear_right_distal_link">
+    <inertial>
+      <origin xyz="0.07301168 -2.1551e-05 -0.000924466" rpy="0 0 0" />
+      <mass value="0.215137" />
+      <inertia ixx="7.47088e-05" ixy="5.653e-07" ixz="-6.9897e-06" iyy="0.0005598933" iyz="3.56e-08" izz="0.0005075793" />
+    </inertial>
+    <visual name="printable_distal_upper_arm">
+      <origin xyz="0.0948117 -0.012 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/upper_arm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="rear_right_plastic" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="distal_arm_printable_proxy">
+      <origin xyz="0.096254 0 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.155285 0.035229 0.0713" />
+      </geometry>
+    </collision>
+    <collision name="st3215_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+    <visual name="simulation_only_fork_tip_contact_proxy">
+      <origin xyz="0.159896689 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0125" />
+      </geometry>
+      <material name="virtual_contact_magenta" />
+    </visual>
+    <collision name="simulation_only_fork_tip_contact_proxy">
+      <origin xyz="0.159896689 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0125" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="rear_right_hip_abduction" type="revolute">
+    <parent link="base_link" />
+    <child link="rear_right_hip_link" />
+    <origin xyz="-0.06 -0.170084989 0.05" rpy="1.570796327 0 -1.570796327" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.436332313" upper="0.436332313" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+  <joint name="rear_right_hip_flexion" type="revolute">
+    <parent link="rear_right_hip_link" />
+    <child link="rear_right_proximal_link" />
+    <origin xyz="0.0286117 -0.095696689 -0.00195" rpy="-1.570796327 0 -1.570796327" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.047197551" upper="1.047197551" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+  <joint name="rear_right_knee" type="revolute">
+    <parent link="rear_right_proximal_link" />
+    <child link="rear_right_distal_link" />
+    <origin xyz="0.159896689 0 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.570796327" upper="1.570796327" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+</robot>

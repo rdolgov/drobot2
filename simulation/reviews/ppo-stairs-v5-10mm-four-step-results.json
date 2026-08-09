@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-07-31",
+  "status": "PASS_WITH_LIMITATIONS",
+  "task_id": "Drobot-Quadruped-Stairs-v5-10mm",
+  "scope": "Isaac Sim 6.0.1 stochastic-policy four-step evaluation",
+  "staircase": {
+    "step_count": 4,
+    "rise_m": 0.01,
+    "total_rise_m": 0.04,
+    "tread_depth_m": 0.23,
+    "width_m": 1.0
+  },
+  "hardware_profile": {
+    "id": "one-leg-real-test-2026-07-28",
+    "effort_cap_nm": 0.8825985,
+    "joint_limits_deg": {
+      "hip_abduction": [-45.0, 45.0],
+      "hip_flexion": [-90.0, 90.0],
+      "knee": [-120.0, 120.0]
+    },
+    "control_hz": 120
+  },
+  "training": {
+    "four_step_ppo_timesteps": 20480,
+    "four_step_training_successes": 0,
+    "success_search_episodes": 81,
+    "success_search_successes": 1,
+    "success_search_rate": 0.012345679012345678,
+    "success_conditioned_distillation_demonstrations": 1,
+    "distilled_deterministic_successes": 0,
+    "distilled_deterministic_episodes": 10
+  },
+  "release_model_deterministic_evaluation": {
+    "episodes": 10,
+    "successes": 0,
+    "success_rate": 0.0,
+    "mean_highest_step_reached": 0.5,
+    "mean_forward_displacement_m": 0.2944670394062996,
+    "maximum_observed_base_elevation_gain_m": 0.0255587995052338
+  },
+  "recorded_success": {
+    "deterministic": false,
+    "policy_seed": 314,
+    "precursor_episodes_replayed": 80,
+    "episode_seed": 394,
+    "length_steps": 1872,
+    "duration_s": 15.6,
+    "stairs_completed": true,
+    "highest_step_reached": 4,
+    "highest_foot_step_by_leg": {
+      "front_left": 4,
+      "front_right": 4,
+      "rear_left": 4,
+      "rear_right": 4
+    },
+    "forward_displacement_m": 1.3926935195922852,
+    "maximum_base_elevation_gain_m": 0.04358285665512085,
+    "maximum_body_tilt_deg": 12.85194165413752,
+    "minimum_base_clearance_m": 0.34352239966392517,
+    "goal_hold_duration_s": 0.5,
+    "failure_reasons": []
+  },
+  "artifacts": {
+    "video": {
+      "path": "reviews/ppo-stairs-v5-10mm-four-step-success.mp4",
+      "sha256": "5226c7f46b4a93b7f9958615d499fa7fa7bfb04c2ccd65b97eba66102967c6aa",
+      "bytes": 10716982
+    },
+    "thumbnail": {
+      "path": "reviews/ppo-stairs-v5-10mm-four-step-success.png",
+      "sha256": "f254770c0acab6972612097e774e4a3f5ede87ea6642380dd99c3053216b2b36",
+      "bytes": 163145
+    },
+    "stair_model": {
+      "path": "simulation/isaac/models/ppo-stairs-v5-10mm-four-step/drobot_stairs_ppo_initialized.zip",
+      "sha256": "a61ebec6b02b366b48928cacf8aab70bba39cf660fc3a8f4ac0d39db0374fcfc",
+      "policy_state_max_abs_difference_from_recorded_source": 0.0
+    },
+    "frozen_flat_base_model": {
+      "path": "simulation/isaac/models/ppo-walk-v1-2m/drobot_walk_ppo_final.zip",
+      "sha256": "eac4fd89066bf9483900188f8a5b8c047e848dfa2b3845f90c148967fdea56be"
+    },
+    "config": {
+      "path": "simulation/isaac/rl/stairs/quadruped_stairs_v5.yaml",
+      "sha256": "51af4c3d638a2e1ab135f653219b46789006ca031078ebcce3bfb9c27038b139"
+    },
+    "world": {
+      "path": "simulation/exports/isaac/quadruped_robot_stairs_v5_10mm_world.usda",
+      "sha256": "13ae22c91e4ea8913aa0b41d9090aba3e53cdcfdacc103b23e669a852e9c21ab"
+    }
+  },
+  "limitations": [
+    "The completed climb is one rare stochastic simulator episode, not a robust or converged policy.",
+    "The current policy mean completed 0 of 10 deterministic evaluation episodes.",
+    "No validated completion was obtained on the 20 mm, 30 mm, or 40 mm stair stages.",
+    "Terrain heights are analytic simulator observations, not camera or depth estimates.",
+    "The policy has not been deployed to or validated on the physical quadruped."
+  ]
+}

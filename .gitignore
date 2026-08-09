@@ -33,6 +33,9 @@ node_modules/
 /*.tar.gz
 
 # Large reproducible runtime scratch output
-/robot-cad/.pytest_tmp*/
-/robot-cad/.tmp/
-/robot-cad/logs/
+**/.pytest-tmp*/
+**/.pytest_tmp*/
+/cad/.tmp/
+/cad/logs/
+/simulation/isaac/output/
+/simulation/logs/

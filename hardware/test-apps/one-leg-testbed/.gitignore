@@ -1,0 +1,13 @@
+.venv/
+.pytest-tmp*/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+/leg.toml
+/calibration.json
+/leg-*.toml
+/calibration-leg-*.json
+*.log
+__pycache__/
+.pytest_cache/

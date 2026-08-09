@@ -1,0 +1,39 @@
+{
+  "status": "PASS",
+  "isaac_sim_version": "6.0.1",
+  "source_usd": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\exports\\isaac\\quadruped_robot_floating.usdc",
+  "output_world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\exports\\isaac\\quadruped_robot_manual_world.usda",
+  "world_bytes": 18789,
+  "source_reference": "./quadruped_robot_floating.usdc",
+  "stage_facts": {
+    "articulation_roots": 1,
+    "rigid_bodies": 13,
+    "revolute_joints": 12,
+    "angular_drives": 12,
+    "fixed_joints": 0,
+    "physics_scenes": 1,
+    "cameras": 1,
+    "imu_sensors": 1,
+    "self_collision_enabled_roots": 1,
+    "filtered_pair_targets": 12
+  },
+  "rated_effort_cap_nm": 0.980665,
+  "standing_targets_deg_by_joint": {
+    "front_left_hip_abduction": 0.0,
+    "front_left_hip_flexion": -8.8517161698667,
+    "front_left_knee": 26.924730977054622,
+    "rear_left_hip_abduction": 0.0,
+    "rear_left_hip_flexion": 8.8517161698667,
+    "rear_left_knee": -26.924730977054622,
+    "front_right_hip_abduction": 0.0,
+    "front_right_hip_flexion": -8.8517161698667,
+    "front_right_knee": 26.924730977054622,
+    "rear_right_hip_abduction": 0.0,
+    "rear_right_hip_flexion": 8.8517161698667,
+    "rear_right_knee": -26.924730977054622
+  },
+  "bound_robot_collision_count": 32,
+  "camera_prim_path": "/World/Robot/Geometry/base_link/lekiwi_camera",
+  "imu_prim_path": "/World/Robot/Geometry/base_link/body_imu",
+  "instructions": "Open the world in Isaac Sim, press Play, then open Physics > Articulation Inspector and select /World/Robot. Select /World/Robot/Geometry/base_link/lekiwi_camera from the viewport camera menu for the onboard RGB view. Read /World/Robot/Geometry/base_link/body_imu with isaacsim.sensors.experimental.physics.IMUSensor."
+}

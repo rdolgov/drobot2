@@ -1,15 +1,23 @@
 # drobot2
 
-Monorepo for the Drobot2 robot. Each major engineering area lives in its own
-top-level folder so CAD, simulation, control, firmware, and related work can
-evolve together without becoming separate repositories.
+Monorepo for the Drobot2 robot. Engineering areas are separated at the
+repository root so CAD, simulation, hardware control, and electrical design
+can evolve without sharing one package boundary.
 
 ## Project areas
 
-- `robot-cad/` — Build123d models, mechanical specifications, validation,
-  generated-artifact workflows, and CAD review tooling.
-- `sim/` — reserved for future simulation work.
+- [`cad/`](cad/README.md) — parametric mechanical design,
+  CAD-derived URDF generation, manufacturing exports, vendor geometry, and CAD
+  review tooling.
+- [`simulation/`](simulation/README.md) — Isaac Sim integration, reinforcement
+  learning, trained policies, simulator exports, evaluation media, and
+  simulation documentation.
+- [`hardware/`](hardware/README.md) — one-leg commissioning and four-leg
+  hardware control/test applications.
+- [`electrical/`](electrical/README.md) — power distribution, fusing, wiring,
+  schematics, BOM, and power-budget planning.
 
-Generated outputs and local virtual environments are intentionally ignored.
-See `robot-cad/README.md` for CAD setup, generation, validation, and preview
-instructions.
+Run domain-specific commands from the repository root unless that area's
+README says otherwise. Shared architecture and repository conventions are
+indexed under [`docs/`](docs/README.md). Generated caches and local
+environments remain ignored.

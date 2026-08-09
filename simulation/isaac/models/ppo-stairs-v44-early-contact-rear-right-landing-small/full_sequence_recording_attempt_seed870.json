@@ -1,0 +1,72 @@
+{
+  "status": "FAIL",
+  "task_id": "Drobot-Quadruped-Stairs-v44-Early-Contact-Rear-Right-Landing",
+  "model": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-stairs-v17-single-foot-190mm-small\\drobot_stairs_ppo_final.zip",
+  "leg_models": {
+    "front_right": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-stairs-v10-180mm-25cm-front-right-placement-small\\drobot_stairs_ppo_final.zip",
+    "front_left": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-stairs-v17-single-foot-190mm-small\\drobot_stairs_ppo_final.zip",
+    "rear_right": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-stairs-v44-early-contact-rear-right-landing-small\\drobot_stairs_ppo_final.zip"
+  },
+  "transfer_models": {},
+  "post_transfer_models": {},
+  "transfer_policy_post_hold_seconds": 0.0,
+  "transfer_policy_post_hold_steps": 0,
+  "leg_base_models": {
+    "rear_right": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-stairs-v17-single-foot-190mm-small\\drobot_stairs_ppo_final.zip"
+  },
+  "leg_base_swing_only": [
+    "rear_right"
+  ],
+  "leg_base_residual_models": {
+    "rear_right": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-stairs-v35-rear-right-190mm-lift-small\\drobot_stairs_ppo_final.zip"
+  },
+  "leg_base_residual_scales": {
+    "rear_right": 0.5
+  },
+  "leg_base_residual_swing_only": [
+    "rear_right"
+  ],
+  "leg_base_residual_compact_actions": [
+    "rear_right"
+  ],
+  "leg_residual_scales": {
+    "rear_right": 1.0
+  },
+  "leg_residual_support_only": [
+    "rear_right"
+  ],
+  "leg_residual_swing_only": [],
+  "leg_residual_support_abduction_only": [],
+  "leg_residual_swing_support_abduction": [],
+  "zero_action_legs": [],
+  "leg_compact_actions": [
+    "rear_right"
+  ],
+  "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\exports\\isaac\\quadruped_robot_stairs_v6_180mm_world.usda",
+  "seed": 870,
+  "deterministic": true,
+  "policy_seed": 870,
+  "skip_policy_samples": 0,
+  "skip_episodes": 0,
+  "reset_seed_mode": "seed_once_then_continue",
+  "search_success_episodes": 0,
+  "search_placement_success_episodes": 4,
+  "device": "cpu",
+  "active_steps": 1,
+  "placement_level": "left-center-tread-load",
+  "maximum_lateral_deviation_override_m": null,
+  "height_stage": null,
+  "camera_view": "external",
+  "video": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ppo-stairs-v44-rear-right-landing-seed870.mp4",
+  "thumbnail": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ppo-stairs-v44-rear-right-landing-seed870.png",
+  "trajectory": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ppo-stairs-v44-rear-right-landing-seed870-trajectory.npz",
+  "fps": 30,
+  "resolution_wh": [
+    960,
+    540
+  ],
+  "isaac_sim_version": "6.0.1",
+  "torch_version": "2.10.0+cu128",
+  "error": "RuntimeError('No physically successful placement sequence found within 4 attempts')",
+  "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\rl\\stairs\\record_stairs_ppo.py\", line 1308, in <module>\n    raise RuntimeError(\nRuntimeError: No physically successful placement sequence found within 4 attempts\n"
+}

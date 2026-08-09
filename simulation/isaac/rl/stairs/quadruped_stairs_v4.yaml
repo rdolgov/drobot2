@@ -1,0 +1,152 @@
+schema_version: 1
+task:
+  id: Drobot-Quadruped-Stairs-v4
+  world: simulation/exports/isaac/quadruped_robot_stairs_v2_world.usda
+  world_dependencies:
+    - simulation/exports/isaac/quadruped_robot_manual_world.usda
+    - simulation/exports/isaac/quadruped_robot_floating.usdc
+  robot_prim: /World/Robot
+  imu_prim: /World/Robot/Geometry/base_link/body_imu
+  camera_prim: /World/Robot/Geometry/base_link/lekiwi_camera
+  # Match the transferred flat policy's command at initialization. PPO may
+  # then adapt the gait using the appended terrain/navigation observations.
+  target_velocity_body_m_s: [0.15, 0.0, 0.0]
+  physics_hz: 120
+  # The source flat policy was trained with one 120 Hz physics update per
+  # action. Match that effective control cadence for a faithful warm start.
+  control_hz: 120
+  episode_seconds: 18.0
+  success_hold_seconds: 0.50
+  reset_settle_seconds: 0.75
+  reset_start_z_m: 0.46
+  reset_start_x_range_m: [0.18, 0.24]
+  reset_start_y_range_m: [-0.01, 0.01]
+  reset_start_yaw_range_deg: [-0.75, 0.75]
+  reset_joint_noise_rad: 0.015
+  include_navigation_observation: true
+  foot_placement_tolerance_m: 0.0125
+  success_minimum_base_elevation_fraction: 0.65
+  stall_termination:
+    enabled: true
+    after_seconds: 5.0
+    minimum_forward_progress_m: 0.12
+  robot_hardware_profile:
+    id: one-leg-real-test-2026-07-28
+    evidence:
+      - hardware/robot-runtime/servos/leg-1.toml
+      - hardware/robot-runtime/servos/calibration-leg-1.json
+      - conversations/2026-07-28-one-leg-wall-isaac-revisit.md
+    center_tick: 2048
+    encoder_directions:
+      hip_abduction: 1
+      hip_flexion: -1
+      knee: -1
+    joint_limits_deg:
+      hip_abduction: [-45.0, 45.0]
+      hip_flexion: [-90.0, 90.0]
+      knee: [-120.0, 120.0]
+    torque_limit_register: 300
+    torque_limit_register_full_scale: 1000
+    torque_limit_fraction: 0.30
+    stall_torque_nm: 2.941995
+    effort_cap_nm: 0.8825985
+    speed_register: 350
+    speed_register_applied_as_rad_s: false
+  nominal_stance:
+    down_m: 0.310
+    fore_aft_m: 0.025
+    abduction_deg: 0.0
+  action_scale_rad:
+    # Preserve the flat controller's clipped-action semantics exactly. The
+    # larger measured joint limits remain available to a later staged task,
+    # but are not exposed during this stability-first stair curriculum.
+    hip_abduction: 0.12
+    hip_flexion: 0.30
+    knee: 0.40
+  flat_policy_transfer:
+    preserve_physical_action_mean: true
+    source_task_id: Drobot-Quadruped-Walk-v1
+    source_target_velocity_body_m_s: [0.15, 0.0, 0.0]
+    source_action_scale_rad:
+      hip_abduction: 0.12
+      hip_flexion: 0.30
+      knee: 0.40
+  staircase:
+    start_x_m: 0.55
+    step_count: 4
+    tread_depth_m: 0.23
+    rise_m: 0.04
+    width_m: 1.00
+    top_platform_depth_m: 0.50
+    terrain_sample_offsets_m: [-0.10, 0.0, 0.08, 0.16, 0.24, 0.32, 0.45, 0.60]
+    terrain_height_normalization_m: 0.12
+    goal_distance_normalization_m: 1.60
+    goal_margin_m: 0.10
+  curriculum:
+    mode: mastery
+    mastery_window_episodes: 30
+    mastery_minimum_episodes: 12
+    mastery_success_rate: 0.60
+    levels:
+      - start_fraction: 0.00
+        active_steps: 1
+      - start_fraction: 0.25
+        active_steps: 2
+      - start_fraction: 0.50
+        active_steps: 3
+      - start_fraction: 0.75
+        active_steps: 4
+  progress_watchdog:
+    enabled: true
+    report_interval_steps: 5000
+    initial_gate_steps: 50000
+    minimum_completed_episodes: 30
+    minimum_first_step_climb_episodes: 3
+    minimum_first_step_climb_rate: 0.02
+    minimum_base_elevation_gain_m: 0.02
+    stagnation_abort_steps: 200000
+  termination:
+    minimum_base_clearance_m: 0.25
+    minimum_upright_cosine: 0.78
+    maximum_lateral_deviation_m: 0.30
+    minimum_world_x_m: -0.30
+  reward:
+    velocity_tracking_sigma_m_s: 0.10
+    subtract_zero_velocity_tracking: true
+    forward_velocity_tracking: 1.00
+    forward_progress: 120.0
+    base_height_gain: 250.0
+    terrain_height_gain: 40.0
+    upright: 0.10
+    alive: -0.05
+    centerline: -8.0
+    lateral_velocity: -0.50
+    heading_error: -0.60
+    vertical_velocity: -0.04
+    roll_pitch_rate: -0.04
+    yaw_rate: -0.08
+    body_clearance: -4.0
+    action_rate: -0.02
+    action_magnitude: -0.002
+    joint_velocity: -0.004
+    foot_lift_progress: 300.0
+    foot_step_placement: 100.0
+    failure: -100.0
+    success: 1000.0
+    target_body_clearance_m: 0.373
+ppo:
+  total_timesteps: 3000000
+  learning_rate: 0.00003
+  target_kl: 0.02
+  rollout_steps: 2048
+  batch_size: 256
+  epochs: 10
+  gamma: 0.9975
+  gae_lambda: 0.95
+  clip_range: 0.15
+  entropy_coefficient: 0.0005
+  value_coefficient: 0.50
+  max_gradient_norm: 0.50
+  policy_hidden_layers: [256, 256]
+  initial_log_std: -2.30
+  checkpoint_frequency_steps: 25000

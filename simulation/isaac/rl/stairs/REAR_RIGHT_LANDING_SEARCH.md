@@ -1,0 +1,1255 @@
+# Rear-right first-tread landing search (V39-V45)
+
+> **Superseded contact interpretation (2026-08-02):** V44-V49 used a
+> `RigidPrim` contact sensor attached to the entire distal leg link. The
+> reported `StepLayer_01` force could therefore come from the shin, distal arm,
+> riser, or tread edge rather than the foot sole on the tread top. V53's
+> geometry-qualified tread-top gate gives every completed foot in the V48
+> snapshot `0 N` qualified load, so all earlier "force-backed tread" claims in
+> this document are historical false positives. The flat-ground 190 mm lift
+> result remains valid. See V53-V54 below for the corrected result and next
+> action.
+
+## Scope and immutable inputs
+
+This bounded follow-up starts from the accepted V38 mixed-height state: the
+front-right and front-left feet are force-backed on the first tread and the
+rear-right foot has completed the positive-margin transfer. It tests only the
+rear-right advance/lower/contact phase. It does not move rear-left or claim a
+completed stair.
+
+- Stair rise: exactly `0.180 m`
+- Stair tread depth: exactly `0.250 m`
+- Applied joint-effort cap: `0.8825985 N m` from the real leg test
+- Rear-right clearance gate: measured foot-tip rise `>= 0.190 m`
+- Transfer/placement margin gate: `>= 0.015 m`
+- Upright gate: body tilt `<= 12 deg`
+- Policy input: IMU/proprioception, joint state, contact/load, composite COM,
+  support state, phase, previous action, and analytic stair geometry
+- Camera: recording only; no RGB pixels enter training or inference
+
+The cached-state search composes frozen V17 swing, `0.5 * V35` compact swing,
+and `1.0 * V38` compact support policies. Each candidate restores the same
+rear-right phase snapshot.
+
+## Small training runs
+
+V39 trains only a compact nine-action support residual around the accepted
+swing composition:
+
+```powershell
+& simulation\isaac\rl\stairs\train_stairs_v39_rear_right_landing_small.ps1 `
+  -OutputDir simulation\isaac\output\rl\ppo-stairs-v39-rear-right-landing-512-seed851 `
+  -Seed 851
+```
+
+The run completed `512` PPO steps in `76.27 s`; model SHA-256 is
+`1174ed3b5ce6991f4a48f878d32031354bd6f93d02e2ec6a9da3331742e4db9f`.
+Independent seed-848 replay preserved the V38 handoff and reached
+`218.095 mm`, but rear-right struck the tread edge at `351.313 N` and the body
+tipped to `19.9904 deg`. V39 is rejected.
+
+V40 freezes V38 support and trains only a compact three-action rear-right swing
+residual:
+
+```powershell
+& simulation\isaac\rl\stairs\train_stairs_v40_rear_right_swing_landing_small.ps1 `
+  -OutputDir simulation\isaac\output\rl\ppo-stairs-v40-rear-right-swing-landing-1024-seed856 `
+  -Seed 856
+```
+
+The run completed `1,024` PPO steps in `89.25 s`; model SHA-256 is
+`74369c0f9a465c5e1394836632acbcbc7b0a92130e669dc5c76cee5967227c08`.
+Cached seed-857 evaluation stayed upright at `10.7597 deg`, held
+`37.939 mm` support margin, and raised `223.978 mm`, but the foot stopped at
+world X `0.318371 m` with zero tread load. V40 is rejected.
+
+## Bounded geometry and controller search
+
+The deterministic harness is:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\search_rear_right_landing.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v41_staged_rear_right_landing.yaml `
+  --seed 849 --candidate-start 0 --candidate-limit 16 `
+  --report simulation\isaac\output\rl\rear-right-landing-search.json
+```
+
+Run additional candidate slices by changing `--candidate-start` and
+`--candidate-limit`. The search keeps the physical gate, positive margin,
+effort cap, and camera-blind contract unchanged.
+
+Measured negative evidence:
+
+- Direct `0.380-0.400 m` swing references reached only about
+  `0.543-0.545 m` world X; the tread begins at `0.550 m`.
+- Staged world-anchor release plus a `70 mm` lift-forward waypoint reached
+  `0.557554 m`, but only `7.554 mm` of the `12.5 mm` foot radius cleared the
+  riser. Contact peaked at `330.772 N` and tilt reached `20.6903 deg`.
+- Slower lowering and higher touchdown targets did not help because the corner
+  collision occurred during forward advance.
+- Stronger IMU pitch correction reduced one run to `17.0625 deg`, but pulled
+  reach back to `0.542627 m`; the strongest setting also violated the strict
+  support-margin gate.
+- A `+10 mm` post-clearance body command produced up to `+20.103 mm` base and
+  `+34.102 mm` COM motion, proving the frame sign. When sequenced before swing,
+  the robot stayed at `10.3434 deg` with `39.244 mm` margin and raised
+  `223.833 mm`, but the torque-capped rear hip tracked only about `0.68 rad` of
+  a `1.83 rad` reference and the foot did not advance onto the tread.
+
+Local reports are written below `simulation/isaac/output/rl/` and intentionally
+remain ignored build artifacts. Key reports include
+`ppo-stairs-v39-rear-right-landing-search-seed849.json`,
+`ppo-stairs-v41-lift-forward-search-seed849.json`,
+`ppo-stairs-v41-pitch-feedback-search-seed849.json`, and
+`ppo-stairs-v41-split-body-shift-8s-replay-seed849.json`.
+
+## Conclusion and next gate
+
+The accepted V38 policy already proves the requested simplified skill:
+rear-right clears `0.190 m` and holds without falling. V39-V41 do not prove
+landing. The dominant first-tread landing limitation is rear-leg motion under
+three-foot support at the measured effort cap, followed by real/sim traction
+calibration. Fixed-stair vision is not the present bottleneck.
+
+V42-V44 supersede that negative conclusion with a force-backed landing; the
+remaining warning about torque, traction calibration, and full-staircase proof
+still applies.
+
+## V42 support-margin and V43 touchdown ablations
+
+V42 clips the analytic COM target into the current support polygon at the
+configured positive margin and adds separate front-foot reach corrections.
+Its bounded support-residual run is reproducible with:
+
+```powershell
+& simulation\isaac\rl\stairs\train_stairs_v42_com_margin_rear_right_landing_small.ps1 `
+  -OutputDir simulation\isaac\output\rl\ppo-stairs-v42-com-margin-rear-right-landing-1024-seed865 `
+  -Seed 865
+```
+
+That seed did not complete the landing. V43 added a tread-load feedback
+correction targeting `15 N`, with `0.0005 m/N` gain and `40 mm` cap. Same-seed
+replays showed that correction was reactive by one physics frame: at seed 862,
+V42 lost both front contacts at step 556 and hit the tread at step 560 with
+`65.12 N` and `15.657 deg` tilt. V43 applied `25.06 mm` correction only after
+that initial impulse and did not change the failure.
+
+The extended deterministic search therefore varied support reach and pitch
+feedback before contact. Front-left `30 mm` plus front-right `90 mm` support
+reach restored all stance contacts. A `0.255` pitch gain with `0.080 m` maximum
+correction reduced the first seed-862 rear-right contact to `1.496 N` at
+`11.026 deg`. These distances are commanded support references, not CAD or
+link-length edits.
+
+## Accepted V44 landing
+
+V44 allows a physical tread contact after the clearance gate to become the
+placement contact. It latches the reference at first valid contact instead of
+continuing to advance the swing reference while the live environment verifies
+contact, upright, support, slip, and margin gates for the full `0.75 s` hold.
+
+Candidate 91 at seed 862 completed all `45/45` contact-hold frames:
+
+- physical rear-right lift: `218.873 mm`
+- minimum support margin: `39.660 mm`
+- minimum support-contact fraction: `1.0`
+- maximum rear-right tread load: `18.485 N`
+- maximum support slip: `13.809 mm`
+
+The bounded PPO job is:
+
+```powershell
+& simulation\isaac\rl\stairs\train_stairs_v44_early_contact_rear_right_landing_small.ps1 `
+  -OutputDir simulation\isaac\output\rl\ppo-stairs-v44-early-contact-rear-right-landing-512-seed869 `
+  -Seed 869
+```
+
+It completed exactly `512` steps in `77.254 s`. The horizon ends before the
+rear-right contact phase, so its zero completed episodes are not landing
+evidence. A separate fresh evaluation at seed 870 composed the trained V44
+support policy with the verified V10/V17/V35 policies and completed `45/45`
+hold frames with `217.990 mm` lift, `39.443 mm` margin, all three support
+contacts, `14.000 mm` slip, and `10.238 N` maximum tread load. The first
+accepted contact was `6.789 N` at `10.681 deg` body tilt.
+
+The tracked package is
+`simulation/isaac/models/ppo-stairs-v44-early-contact-rear-right-landing-small/`.
+Local raw search/training outputs remain ignored. The external camera is used
+only by the recording paths in `record_stairs_ppo.py` and
+`search_rear_right_landing.py`; RGB remains absent from the 95-value policy
+observation.
+
+The accepted phase-local seed-870 camera replay records candidate 91 for 331
+frames at 30 fps and completes the same `45/45` hold at step 662. The strict
+reset-to-contact recorder separately rejected four prefix attempts
+(`body_tipped`, two `body_transfer_failed`, then `body_tipped`). The published
+video is therefore labeled phase-local and is not evidence that the complete
+three-foot prefix is robust from reset.
+
+## V45 rear-left transfer probe
+
+V45 adds `rear_left` to the placement sequence only to expose and search the
+rear-right-to-rear-left transfer. It does not claim a rear-left lift. The
+bounded probe is:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\search_rear_left_transfer_com.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v45_rear_left_transfer.yaml `
+  --seed 870 --forward-deltas-m 0.000,0.020 `
+  --lateral-deltas-m=-0.020,0.000 `
+  --minimum-support-margin-m 0.015 --maximum-body-tilt-deg 12 `
+  --report simulation\isaac\output\rl\ppo-stairs-v45-rear-left-transfer-grid-retry-seed870.json
+```
+
+All four prefix attempts terminated with `body_tipped` before the rear-left
+inter-leg-transfer snapshot became trainable. This is negative next-stage
+evidence, not a V44 landing failure. The next controller should explicitly
+regulate pitch/body rate and COM during the newly loaded rear-right transition,
+then search rear-left unloading. Longer end-to-end PPO or RGB vision is not yet
+justified; hardware traction/compliance measurements remain useful for
+sim-to-real calibration, but the immediate simulated failure is transfer
+attitude rather than unseen geometry.
+
+## V45 exact-snapshot transfer training
+
+V45 now waits for a low-rate rear-right landing state, allows per-next-leg
+transfer residual authority, supports per-leg pitch feedback, and can ramp a
+bounded body-relative outward foothold offset during swing advance. The source
+also supports an exact phase snapshot and clipped potential-difference COM
+progress reward, so every short PPO episode starts from the same verified
+physical boundary without replaying the fragile prefix.
+
+The fine rear-right offset search used candidate 91 with offsets `5, 10, 15,
+20, 25, 30 mm`. Only `5 mm` retained the complete landing: `217.990 mm` lift,
+all `45/45` hold frames, `39.443 mm` minimum support margin, `14.000 mm`
+maximum support slip, and `13.819 N` maximum tread load. Offsets at or above
+`10 mm` tipped before contact. The selected 5 mm reference did not materially
+widen the physical foothold, so it is not presented as a transfer fix.
+
+The exact boundary snapshot has SHA-256
+`587ffc5e447e8f36f877490dae7525848529480304565cc7cc1c04e7a1143f85`.
+Its COM starts at `[0.487750, 0.067301, 0.337153] m` and the analytic target is
+`[0.567750, -0.033200, 0.337153] m`: an `80.0 mm` forward and `100.5 mm`
+lateral move. Zero action still tipped, and all 27 constant loaded-support
+hip-abduction combinations worsened the final COM error.
+
+The bounded dynamic policy was trained with:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v45_rear_left_transfer.yaml `
+  --output-dir simulation\isaac\models\ppo-stairs-v45-rear-left-dynamic-transfer-4096 `
+  --seed 875 --total-timesteps 4096 `
+  --phase-train-leg rear_left --phase-train-transfer `
+  --phase-snapshot simulation\isaac\models\ppo-stairs-v45-rear-left-dynamic-transfer-4096\phase_snapshot_seed870.json `
+  --fixed-placement-level left-center-tread-load `
+  --ppo-learning-rate 0.0001 --ppo-initial-log-std -0.3 `
+  --ppo-entropy-coefficient 0.001 --device cuda
+```
+
+It completed 4,096 steps in `135.744 s`, with `0` successful transfers and
+only `15.136 mm` maximum rear-left lift. The deterministic seed-876 replay
+tipped after 215 control steps; COM-target error increased from `128.454 mm`
+to `153.372 mm` and maximum tilt reached `20.790 deg`. The external-camera
+clip has 107 frames at 30 fps, but RGB remains absent from the policy.
+
+This rejects longer training on the same boundary/controller geometry. The
+next justified stage is a post-landing rear-right sidestep-and-settle controller
+that creates a physically wider support polygon before asking rear-left to
+unload. Validate positive margin and COM capture first, then train the 190 mm
+rear-left lift. Better traction remains a sim-to-real calibration item; better
+vision is not needed for this known fixed 180 x 250 mm stair failure.
+
+## V46 rear-right sidestep and fresh lift-capability split
+
+V46 rewinds only the placement state machine after the accepted V44/V45
+rear-right landing, preserving the exact physical articulation state. It then
+re-lifts rear-right from the tread and searches a small outward/deeper
+replacement before caching the rear-left transfer boundary. The selected
+seed-937 command was `10 mm` outward, `15 mm` forward, and `60 mm` relative
+apex. It completed in `438` steps with:
+
+- `9.215 mm` physical outward displacement;
+- `7.033 mm` measured re-clearance from the already elevated tread pose;
+- `65.201 mm` minimum replacement support margin;
+- `2.301 N` final force-backed rear-right tread load;
+- `15.999 mm` maximum support slip and `11.461 deg` maximum tilt.
+
+The report SHA-256 is
+`f1d3622add4f020caaec7c26fea75e1eb20cf1c4c67e91aa7c87c1193cb8c67d`.
+The saved rear-left transfer snapshot SHA-256 is
+`7545b2c0370e6c58f753487409b3f9a27c1876dbcf4e114b33872823623d1be7`.
+Its requested COM move remains `80.0 mm` forward and about `98.1 mm` lateral.
+
+The exact 4,096-step phase PPO command is recorded in
+`simulation/isaac/models/ppo-stairs-v46-rear-right-sidestep-transfer-4096/README.md`.
+Seed 939 completed the pipeline in `129.338 s`, but achieved `0` transfers and
+only `13.425 mm` rear-left motion. Deterministic seed 940 tipped after `93`
+steps; COM-target error grew from `126.584` to `133.259 mm`, final support
+margin was `-101.073 mm`, and maximum tilt was `20.144 deg`. The external
+camera recorded 46 frames at 30 FPS; RGB was not a policy input.
+
+To separate raw leg ability from this mixed-height failure, a fresh `512`-step
+flat-ground rear-right policy was trained at seed 941. Independent seed-942
+evaluation passed `5/5` with `201.006-204.345 mm` lift and `2.218 deg` worst
+tilt. Therefore the modeled robot can raise the foot above the 180 mm riser;
+the unresolved stair problem is the loaded mixed-height COM transfer and
+controller sequence. The next stage should add an all-four-feet settle/preload
+phase before rear-left unload. More RGB vision is not the immediate need.
+
+## V47 progressive four-foot preload
+
+V47 implements that next gate without changing the exact `180 mm` rise,
+`250 mm` tread, or measured `0.8825985 Nm` effort cap. It preserves the active
+load-bearing PD targets, re-anchors each analytic COM increment at measured
+base/joint/composite-COM state, and optionally applies bounded zero-sum
+four-foot load sharing before rear-left unload.
+
+The strict `12 deg` seed-946 search tested 24 combinations of `5-10 mm`
+increments, `5/8 s` timing, and off/front-only/all pitch feedback. None passed.
+The apparent best margin gains lost rear-right tread load or exceeded the slip
+and attitude gates, so they are negative evidence rather than PPO
+initialization states.
+
+With four-foot load sharing at `0.060 m` proportional gain, `0.020 m` maximum
+correction, and `0.50` smoothing, seed 950 ended with measured total loads
+`[38.331, 19.342, 27.564, 1.462] N` in simulator foot order, `11.742 mm`
+maximum slip, `0.0185 m/s` base speed, and `0.0630 rad/s` body rate. Support
+margin improved only from `-103.083` to `-95.425 mm`, and tilt reached
+`14.989 deg`; the strict 12-degree gate correctly rejected it.
+
+An explicitly relaxed `15.5 deg` seed-952 diagnostic held that first increment
+for `0.40 s` without a simulator failure, but a fresh seed-953 search from its
+saved state rejected all 12 second-increment candidates. The best second-stage
+margin remained `-88.998 mm` and the least candidate tilt was `17.771 deg`.
+Therefore the first increment is a short-horizon diagnostic, not a stable
+transfer or training boundary. No additional transfer PPO was trained because
+the analytic safety prerequisite did not pass. See
+`PROGRESSIVE_PRELOAD_SEARCH.md` for exact commands and hashes.
+
+## V48 force-backed rear-right settle
+
+The V46 outward candidate preserved geometry but ended at only `2.301 N` rear-
+right load. V48 therefore reuses the exact landing snapshot and searches for a
+deeper force-backed settle, while reporting physical displacement honestly.
+Seed 964 accepted a `5 mm` nominal outward, `15 mm` forward, and `60 mm`
+relative-apex command under a relaxed `-6 mm` displacement floor and a strict
+`15 N` final-load floor.
+
+The foot physically settled `5.203 mm` inward, so this result is not called a
+sidestep. It completed in `418` steps with `33.739 N` final rear-right tread
+load, `12.048 mm` maximum support slip, `11.457 deg` maximum tilt, all stance
+contacts retained, and `65.390 mm` minimum replacement support margin. The
+cached next-transfer margin remains negative at `-94.730 mm`, so rear-left PPO
+is still gated. Exact command, hashes, preload response, and the higher-
+traction V49 sensitivity are recorded in `PROGRESSIVE_PRELOAD_SEARCH.md`.
+
+## V53-V54 true tread-top gate and first-foot reset
+
+V53 keeps the raw per-step-layer contact force for diagnosis but qualifies a
+load as tread support only when the sampled foot bottom is horizontally inside
+the exposed `250 mm` tread top (with a `5 mm` inset) and vertically within
+`15 mm` of its `180 mm` top surface. Snapshot restore, placement completion,
+and transfer gates now consume only this qualified load. This is still a
+camera-blind policy: RGB is used only for external evidence recording.
+
+The V48 snapshot was audited with:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\search_rear_left_progressive_preload.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v46_rear_right_sidestep.yaml `
+  --phase-snapshot simulation\isaac\output\rl\rear-left-transfer-snapshot-v48-force-backed-seed964.json `
+  --seed 994 --candidate-target-deltas-m 0.0025,-0.0025 `
+  --candidate-durations-seconds 1.0 --candidate-pitch-feedback-modes off `
+  --candidate-pitch-feedback-gains-m 0.08 --candidate-roll-feedback-gains-m 0.0 `
+  --candidate-load-sharing-gains-m 0.0001 --maximum-stages 1 `
+  --report simulation\isaac\output\rl\rear-left-tread-top-restore-audit-v53-seed994.json
+```
+
+Restore correctly failed: the three formerly completed feet had qualified
+tread-top loads `[0, 0, 0] N` while the whole-distal-link sensor still reported
+raw step-layer loads `[13.152, 29.781, 35.391] N`. The report SHA-256 is
+`16eea4613acc2d9f3d311b93fa34e58cb0898468f6a21bc6d5d954360c73d05a`.
+A fresh full-prefix seed-995 audit also rejected all four precursor attempts
+before rear-right with `phase_training_precursor_timeout`; report SHA-256 is
+`64d3d5a8b989aa2ad7dc398ab3d5dd36a80f23730681a37f84d129366cd0412a`.
+
+The corrected task was reset to only front-right placement and trained for
+four bounded PPO trials. The fixed-level command for the final trial was:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v10_front_right_single_tread_placement.yaml `
+  --output-dir simulation\isaac\output\rl\ppo-stairs-v54-true-tread-top-quarter-front-right-1024-seed1000 `
+  --total-timesteps 1024 --curriculum-total-timesteps 1024 `
+  --fixed-placement-level quarter-tread-load --seed 1000 --device cpu `
+  --ppo-learning-rate 0.00003 --ppo-initial-log-std -3.5 `
+  --ppo-entropy-coefficient 0.0005
+```
+
+The seed-1000 run completed 1,024 PPO steps in `30.09 s`. It remained upright
+(`2.775 deg` maximum tilt), raised front-right `199.719 mm`, kept support slip
+to `3.450 mm`, and retained all three support contacts. The final foot was at
+`x=0.598395 m`, `z=0.195517 m`, but qualified tread-top load remained `0 N`;
+therefore placement success was `0`. The report SHA-256 is
+`c05f7bf5b66d3b3c2b31f0eb3557c90ced4a01ab24775930df0f341c403bd4b2`.
+
+The bounded placement sweep is consistent:
+
+- seed 996, near edge: `192.165 mm` lift, `3.073 deg` tilt, `4.015 mm`
+  slip, final `x=0.530991 m` (19 mm short of the riser), `0 N` top load;
+- seed 998, center: `200.445 mm` lift, `3.470 deg` tilt, `3.410 mm` slip,
+  final `x=0.616453 m`, `z=0.195723 m`, `0 N` top load;
+- seed 999, center with `120 mm` landing request: `205.254 mm` lift,
+  `3.223 deg` tilt, `3.528 mm` slip, final `x=0.628114 m`,
+  `z=0.197053 m`, `0 N` top load;
+- seed 1000, quarter tread: `199.719 mm` lift, `2.775 deg` tilt,
+  `3.450 mm` slip, final `x=0.598395 m`, `z=0.195517 m`, `0 N` top load.
+
+The archived training-report SHA-256 values for seeds 996, 998, 999, and 1000
+are respectively `07f485f7c2e3043d21778fe8c6941d63aedb461295bba0e18416cb49c9ece73d`,
+`383f0b1cabdd8afc60c494f3ae66048557f200703c9df2ffff0dd56f98378396`,
+`e1ab4907b4ef73959716f8eb1453ba2bb2c613380ba3e5de0a0ace87d8c9d552`,
+and `c05f7bf5b66d3b3c2b31f0eb3557c90ced4a01ab24775930df0f341c403bd4b2`.
+
+This corrected evidence rules out traction and vision as the immediate first-
+plant bottleneck: the support feet barely slip, the body stays upright, stair
+geometry is known, and the swing sole never reaches the tread top. The next
+training stage must first move the torso/support polygon forward to create a
+reachable descend-and-load pose, then train the first-foot plant. Hardware
+should add a dedicated sole load sensor or isolated foot rigid body so shin or
+riser force cannot satisfy a foothold gate. Vision becomes important later for
+unknown stair localization; friction tuning becomes important only after a
+true top contact begins to slip. No V54 success video is published because no
+strict tread-top placement passed; the existing seed-943 external-camera video
+remains evidence only for the independently reproduced 190 mm lift capability.
+
+## V55-V62 stance, hip, body-position, and loaded-contact sweep
+
+The next bounded sweep keeps the exact `180 mm` rise, `250 mm` tread, measured
+`0.8825985 Nm` effort cap, and camera-blind 81-value policy observation. A new
+`--first-tread-profile` selector applies reproducible posture/approach variants
+to training, evaluation, and recording. `probe_first_tread_profiles.py` runs
+the same analytic placement reference with a zero PPO residual and reports the
+strict geometry-qualified top load separately from raw distal-link contact.
+
+The representative probe command was:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\probe_first_tread_profiles.py `
+  --profile forward-preposition-load `
+  --placement-level quarter-tread-load --seed 1012 `
+  --report simulation\isaac\output\rl\first-tread-profile-v61-forward-preposition-load-seed1012.json
+```
+
+The profile findings were:
+
+- fully folded at a measured-limit-safe `119 deg` knee: only `75.128 mm`
+  front-right lift, `-81.709 mm` support margin, and `41.693 deg` tilt;
+- `220 mm` low crouch: no measurable lift, `-53.813 mm` support margin, and
+  `1.127 rad` swing tracking error under the hardware effort cap;
+- sideways `90 deg`: `9.465 mm` lift, `-50.880 mm` margin, `46.460 mm` slip;
+- diagonal `45 deg`: `2.254 mm` lift, `-77.140 mm` margin, `39.130 deg` tilt;
+- angled `20 deg`: `216.304 mm` lift but `-171.098 mm` margin and `272.626 mm`
+  backward motion;
+- forward baseline: stable `199.850 mm` lift, `-2.249 mm` margin, `3.411 mm`
+  slip, and `0 N` qualified top load;
+- forward pre-position (`30 mm` closer with the same world foothold): stable
+  `198.628 mm` lift, `-1.566 mm` margin, `3.415 mm` slip, and `0 N` top load;
+- a `130 mm` landing-lift command ended at `z=195.180 mm`, preserved a
+  `+1.648 mm` minimum margin, but still carried `0 N`;
+- a `110 mm` landing-lift command produced the first true top contact at
+  `8.870 N`, but the abrupt load transfer slid the body backward and tipped;
+- doubling the lower phase to `3.0 s` still tipped and is rejected.
+
+Thus the low/folded and sideways/hip-first hypotheses are negative evidence.
+Moving the torso closer is useful because it keeps the lift stable and improves
+the support boundary, while a deeper landing proves the foot can physically
+load the tread. The current problem is retaining three-foot support during the
+first 10-12 N load transient.
+
+Two 1,024-step CPU PPO smoke trainings were run. The loaded-contact command was:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v10_front_right_single_tread_placement.yaml `
+  --first-tread-profile forward-preposition-load `
+  --output-dir simulation\isaac\output\rl\ppo-stairs-v61-forward-preposition-load-1024-seed1013 `
+  --total-timesteps 1024 --curriculum-total-timesteps 1024 `
+  --fixed-placement-level quarter-tread-load --seed 1013 --device cpu `
+  --ppo-learning-rate 0.00003 --ppo-initial-log-std -3.5 `
+  --ppo-entropy-coefficient 0.0005
+```
+
+Training completed in `32.123 s` and observed `10.302 N` qualified load, but
+its rollout tipped and the optimizer hit the `0.03` target-KL stop. Independent
+seed-1022 evaluation used three episodes: all reached `11.464-12.559 N` true
+top load and `197.914-198.932 mm` lift, but strict placement remained `0/3`.
+One episode ran the full `14 s` with `4.991 deg` maximum tilt, `18.182 mm`
+maximum slip, and `-1.481 mm` minimum support margin; two moved about
+`305-311 mm` backward and tipped. This is a contact-capable training boundary,
+not a reliable stair policy and not a completed climb.
+
+The exact stable-contact replay was recorded with:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\record_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v10_front_right_single_tread_placement.yaml `
+  --first-tread-profile forward-preposition-load `
+  --model simulation\isaac\output\rl\ppo-stairs-v61-forward-preposition-load-1024-seed1013\drobot_stairs_ppo_final.zip `
+  --seed 1022 --device cpu --active-steps 1 `
+  --placement-level quarter-tread-load --camera-view external `
+  --fps 30 --width 960 --height 540 `
+  --video reviews\ppo-stairs-v61-forward-preposition-load-contact-eval-seed1022.mp4 `
+  --thumbnail reviews\ppo-stairs-v61-forward-preposition-load-contact-eval-seed1022.png `
+  --report simulation\isaac\output\rl\ppo-stairs-v61-forward-preposition-load-record-seed1022.json
+```
+
+The 420-frame H.264 MP4 is `16,602,005` bytes with SHA-256
+`38954f339916d29bd8c80efc2b07734b61641c45df0f1c2580c0106d407792a1`.
+The three-episode evaluation report SHA-256 is
+`4f6c23b2a5a98dfcb7beac1f62fa4637c9d2c30cf18444cefafb710fbfeb9275`.
+RGB remains recording-only. The next run should train a short, contact-triggered
+support/COM residual that acts only around touchdown; neither additional vision
+nor higher friction addresses the observed first-load instability yet.
+
+## V63-V75 contact-triggered support release and first strict foothold
+
+V63-V73 tested the touchdown transient directly. Releasing only half of the
+forward stance bias still tipped at `12.268 N`; releasing the full forward bias
+could remain upright, but seed sensitivity exposed a front-left support-foot
+unload. Centered, forward-only, faster-release, and front-left-preload variants
+did not remove that failure. The decisive change starts forward support release
+during the `advance` phase, before contact, while leaving lateral support bias
+in place. This keeps the three stance feet loaded as the swing foot descends.
+
+The zero-residual V74 acceptance probe used:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\probe_first_tread_profiles.py `
+  --profile forward-preposition-load-advance-forward-floor `
+  --placement-level quarter-tread-load --seed 1018 `
+  --report simulation\isaac\output\rl\first-tread-profile-v74-advance-forward-floor-seed1018.json
+```
+
+It completed the first strict, geometry-qualified front-right foothold in
+`741` control steps (`12.35 s`): `207.154 mm` maximum lift, `11.472 N` maximum
+true tread-top load, `19.919 mm` maximum support slip, `8.677 deg` maximum
+tilt, and no failure reason. Minimum post-touchdown loads were `10.315 N`
+front-left, `32.921 N` rear-left, and `32.352 N` rear-right. The report SHA-256
+is `e9582511ba9c871ac48c239d166aa602c896f42f38c05e09b261e24040fefaab`.
+
+A deliberately small all-joint residual PPO was then trained from the same
+reference:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v10_front_right_single_tread_placement.yaml `
+  --first-tread-profile forward-preposition-load-advance-forward-floor `
+  --output-dir simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025 `
+  --total-timesteps 2048 --curriculum-total-timesteps 2048 `
+  --fixed-placement-level quarter-tread-load --seed 1025 --device cpu `
+  --ppo-learning-rate 0.000001 --ppo-initial-log-std -5.5 `
+  --ppo-entropy-coefficient 0.0
+```
+
+Training completed `2,048` steps in `60.550 s`. Fresh evaluation used:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\evaluate_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v10_front_right_single_tread_placement.yaml `
+  --first-tread-profile forward-preposition-load-advance-forward-floor `
+  --model simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025\drobot_stairs_ppo_final.zip `
+  --episodes 5 --seed 1026 --device cpu --active-steps 1 `
+  --placement-level quarter-tread-load `
+  --report simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-eval-5ep-seed1026.json
+```
+
+Four of five deterministic fresh episodes completed the required foothold.
+Those four lifted `209.003-211.115 mm`, carried `12.608-16.531 N` qualified
+tread load, and stayed below `10.047 deg` tilt. One episode tipped before true
+contact. Successful episodes showed `28.178-33.478 mm` maximum whole-episode
+support-foot motion, above the `25 mm` measurable-slip diagnostic, so V75 is a
+useful first-foot policy but not yet the robust boundary for adding another
+leg. The V74 zero-residual controller remains the cleaner strict boundary. The
+five-episode report SHA-256 is
+`0bb46699886e05e06ba2cbead862fc162aca199e3bdaa172abadde293597f351`.
+
+The accepted seed-1026 policy replay was recorded with:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\record_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v10_front_right_single_tread_placement.yaml `
+  --first-tread-profile forward-preposition-load-advance-forward-floor `
+  --model simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025\drobot_stairs_ppo_final.zip `
+  --seed 1026 --device cpu --active-steps 1 `
+  --placement-level quarter-tread-load `
+  --search-placement-success-episodes 5 --camera-view external `
+  --fps 30 --width 960 --height 540 `
+  --video reviews\ppo-stairs-v75-first-strict-foothold-eval-seed1026.mp4 `
+  --thumbnail reviews\ppo-stairs-v75-first-strict-foothold-eval-seed1026.png `
+  --report simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-record-seed1026.json
+```
+
+The 337-frame H.264 MP4 is `14,783,668` bytes with SHA-256
+`87e4578c2198abaf74151cd736e9ebd08f465989ef4e4ee5340af02c23b6c06f`.
+The recording reaches `211.115 mm` lift and `12.728 N` tread load without a
+failure. It uses an external camera only for evidence; the policy remains
+camera-blind and consumes IMU, joint/proprioceptive, contact/load, prior-action,
+and known analytic stair-geometry values. The stair stays exactly `180 mm`
+rise by `250 mm` tread and the applied joint effort stays capped at
+`0.8825985 N m`. This is one-foot placement, not a completed stair climb. The
+next bounded task should restore the cleaner V74 boundary and train front-left
+placement while explicitly penalizing any loss of front-right tread load.
+
+## V80 simplified single-foot 190 mm lift
+
+Before adding a second stair foothold, V80 isolates the user's hardware-level
+reach question: raise front-left at least `190 mm`, hold it for `0.50 s`, keep
+the three support feet loaded, and do not tip. The task reuses the V15
+single-foot environment and current real-test hardware profile. The staircase
+remains exactly `180 mm` rise by `250 mm` tread, and applied effort remains
+capped at `0.8825985 N m`.
+
+The fresh 2,048-step fine-tune used:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation\isaac\rl\stairs\train_stairs_v80_single_foot_190mm_ppo.py
+```
+
+The wrapper resumes the verified V17 isolated-lift policy, starts directly at
+`front-left-stabilized-190mm-lift-hold`, and preserves the saved PPO algorithm
+contract. All six recent training episodes passed. Their lift range was
+`203.626-208.060 mm`, maximum tilt was `2.758 deg`, and maximum support slip
+was `3.382 mm`.
+
+Independent deterministic evaluation used a fresh seed:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\evaluate_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v15_front_left_stabilized_lift.yaml `
+  --model simulation\isaac\output\rl\ppo-stairs-v80-single-foot-190mm-2048-seed1030\drobot_stairs_ppo_final.zip `
+  --episodes 5 --seed 1031 --device cpu --active-steps 1 `
+  --placement-level front-left-stabilized-190mm-lift-hold `
+  --maximum-lateral-deviation-m 0.20 `
+  --report simulation\isaac\output\rl\ppo-stairs-v80-single-foot-190mm-eval-5ep-seed1031.json
+```
+
+All `5/5` episodes passed with `204.900-208.077 mm` lift, no failure reasons,
+`2.324 deg` maximum tilt, `3.337 mm` maximum support slip, and at least
+`10.386 N` on every support foot. The accepted replay was recorded with:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\record_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v15_front_left_stabilized_lift.yaml `
+  --model simulation\isaac\output\rl\ppo-stairs-v80-single-foot-190mm-2048-seed1030\drobot_stairs_ppo_final.zip `
+  --seed 1031 --device cpu --active-steps 1 `
+  --placement-level front-left-stabilized-190mm-lift-hold `
+  --camera-view external --fps 30 --width 960 --height 540 `
+  --video reviews\ppo-stairs-v80-single-foot-190mm-eval-seed1031.mp4 `
+  --thumbnail reviews\ppo-stairs-v80-single-foot-190mm-eval-seed1031.png `
+  --report simulation\isaac\output\rl\ppo-stairs-v80-single-foot-190mm-record-seed1031.json
+```
+
+The 166-frame H.264 MP4 is `7,221,002` bytes with SHA-256
+`1f7800f75b7c38f93e545692d7da45d45f84c01c9d06874d91a8447b71e658ef`.
+It reaches `207.761 mm` lift with `2.130 deg` tilt and `3.174 mm` support
+slip. RGB is recording-only; the policy remains camera-blind and consumes IMU,
+joint/proprioceptive state, previous action, contact/load, and known analytic
+stair geometry. This validates isolated foot lift and balance only. It does
+not validate a second-foot transfer or complete stair climbing.
+
+## V81-V82 retained first-foot load and hip-assisted transfer
+
+The next composition experiment starts with the V75 front-right foothold,
+requires that completed foot to retain at least `5 N` of geometry-qualified
+tread load, caps whole-support slip at `35 mm`, then trains a compact six-output
+front-left transfer policy. The six outputs control front-left hip abduction,
+hip flexion, and knee plus the three support-leg hip-abduction joints. This is
+the smallest action space that can both use the swing hip and shift lateral
+support. It keeps the exact `180 mm` rise by `250 mm` tread, the measured
+`0.8825985 N m` applied effort cap, and camera-blind policy input.
+
+The first 2,048-step V81 run used:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --output-dir simulation\isaac\output\rl\ppo-stairs-v81-front-left-transfer-2048-seed1032 `
+  --total-timesteps 2048 --curriculum-total-timesteps 2048 `
+  --fixed-placement-level left-quarter-tread-load `
+  --phase-train-leg front_left --phase-train-transfer `
+  --precursor-leg-model front_right=simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025\drobot_stairs_ppo_final.zip `
+  --phase-residual-swing-support-abduction --phase-compact-residual-action `
+  --seed 1032 --device cpu --ppo-learning-rate 0.00005 `
+  --ppo-initial-log-std -4.0 --ppo-entropy-coefficient 0
+```
+
+V81 retained about `20 N` on the placed foot but reached only `7.232 N`
+minimum front-left load and completed zero transfers. Fresh seed 1033 became
+heavier at `26.623 N`, lifted only `6.510 mm`, and exceeded the slip limit at
+`35.578 mm`. Inspection found that the phase wrapper rewarded balance and
+support-margin progress but did not directly reward unloading the designated
+swing foot.
+
+V82 adds a measured swing-load-reduction term (`50` reward per newton, clipped
+to `1 N` progress per control step) while retaining balance and support-margin
+progress terms. The 4,096-step rerun was:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\train_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --output-dir simulation\isaac\output\rl\ppo-stairs-v82-front-left-unload-reward-4096-seed1034 `
+  --total-timesteps 4096 --curriculum-total-timesteps 4096 `
+  --fixed-placement-level left-quarter-tread-load `
+  --phase-train-leg front_left --phase-train-transfer `
+  --precursor-leg-model front_right=simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025\drobot_stairs_ppo_final.zip `
+  --phase-residual-swing-support-abduction --phase-compact-residual-action `
+  --seed 1034 --device cpu --ppo-learning-rate 0.00003 `
+  --ppo-initial-log-std -2.5 --ppo-entropy-coefficient 0
+```
+
+Training improved minimum swing load to `5.145 N`, kept maximum support slip
+at `34.951 mm`, and accumulated `95.679 N` of clipped load-reduction progress,
+but still completed zero transfers. Fresh evaluation used three episodes:
+
+```powershell
+& C:\isaacsim\python.bat simulation\isaac\rl\stairs\evaluate_stairs_ppo.py `
+  --config simulation\isaac\rl\stairs\quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --model simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025\drobot_stairs_ppo_final.zip `
+  --leg-model front_right=simulation\isaac\output\rl\ppo-stairs-v75-first-strict-foothold-2048-seed1025\drobot_stairs_ppo_final.zip `
+  --zero-action-leg front_left `
+  --transfer-model front_left=simulation\isaac\output\rl\ppo-stairs-v82-front-left-unload-reward-4096-seed1034\drobot_stairs_ppo_final.zip `
+  --transfer-residual-swing-support-abduction front_left `
+  --episodes 3 --seed 1036 --device cpu --active-steps 1 `
+  --placement-level left-quarter-tread-load `
+  --maximum-lateral-deviation-m 0.20 --episode-seconds 45 `
+  --allow-unverified-model `
+  --report simulation\isaac\output\rl\ppo-stairs-v82-front-left-unload-reward-4096-seed1034\evaluation_seed1036_3ep.json
+```
+
+One of three episodes reached transfer. It retained `20.010 N` on the first
+tread with `31.576 mm` maximum support slip, but the left foot remained at
+`7.979 N` and lifted only `6.707 mm`; the other two exceeded the `35 mm` slip
+cap before the first foothold completed. V82 is therefore an improved training
+signal but not a generalizing transfer policy. The representative failure was
+recorded with the same composition plus `--skip-episodes 1` to
+`reviews/ppo-stairs-v82-front-left-transfer-eval-seed1036-ep2.mp4`. The MP4 is
+The web-review H.264 transcode preserves all 633 frames and is `309,237`
+bytes with SHA-256
+`48c3d7b09919da355a510e3791163dc50c494cc7f15e8413e95526be33ff1a98`.
+
+The V82 model SHA-256 is
+`5069f46744036cc92b52a3dcf21af3cab7fa0ebc0d33b747c47a8dfabdb5eeea`;
+the three-episode report SHA-256 is
+`729faccd40ccfe899182660d40d3db56a240b275bfb60853f6cc21a1f65da7ad`.
+The next bounded experiment should train from a deterministic retained-foot
+snapshot and expose measured swing-foot total load directly in the policy
+observation; additional vision or friction is not yet the limiting factor.
+
+## V83-V85 observed-load and staged-upright transfer curriculum
+
+V83 implements the next bounded experiment. The front-pair profile now opts
+into one append-only observation,
+`placement_active_swing_total_load_normalized`, so the transfer PPO directly
+sees the normal load used by its unload gate. Existing 81-field precursor
+models remain valid prefixes. `PlacementPhaseTrainingEnv` also accepts a
+descending unload curriculum, changes the live gate only at accepted-transfer
+boundaries, and requires the last stage to equal the configured `1 N`
+deployment gate. The cached physical snapshot was already deterministic; V83
+confirmed one precursor replay followed by 13 snapshot restores.
+
+The implementation was validated with:
+
+```powershell
+& .\.venv\Scripts\python.exe -m ruff check `
+  simulation/isaac/rl/stairs/_stair_rl_contract.py `
+  simulation/isaac/rl/stairs/_quadruped_stairs_env.py `
+  simulation/isaac/rl/stairs/_placement_phase_training.py `
+  simulation/isaac/rl/stairs/train_stairs_ppo.py `
+  tests/test_quadruped_stairs_rl_contract.py
+& .\.venv\Scripts\python.exe -m pytest `
+  tests/test_quadruped_stairs_rl_contract.py -q `
+  --basetemp=.pytest-tmp-v84-contract
+```
+
+Ruff passed and the stair contract suite completed with six expected skips and
+no failures. The profile contract still declares `180 mm` rise, `250 mm`
+tread, `0.8825985 N m` applied effort, and no RGB policy input.
+
+V83 continued the V82 six-output transfer policy for 8,192 steps with `8`,
+`4`, and `1 N` stages. It preserved the learned 81-field prefix exactly and
+zero-initialized the new input column:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/train_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --world simulation/exports/isaac/quadruped_robot_stairs_v6_180mm_world.usda `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --output-dir simulation/isaac/output/rl/ppo-stairs-v83-load-observed-curriculum-8192-seed1034 `
+  --total-timesteps 8192 --seed 1034 --device cpu `
+  --fixed-placement-level left-quarter-tread-load `
+  --phase-train-leg front_left --phase-train-transfer `
+  --precursor-leg-model front_right=simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --phase-residual-swing-support-abduction --phase-compact-residual-action `
+  --phase-reset-attempts 32 `
+  --phase-transfer-unload-threshold-n 8 `
+  --phase-transfer-unload-threshold-n 4 `
+  --phase-transfer-unload-threshold-n 1 `
+  --phase-transfer-unload-successes-per-level 2 `
+  --initialize-from-stairs simulation/isaac/models/ppo-stairs-v82-front-left-unload-reward-4096-seed1034/drobot_stairs_ppo_final.zip `
+  --ppo-learning-rate 0.00003 --ppo-initial-log-std -2.5 `
+  --ppo-entropy-coefficient 0
+```
+
+V83 reached a `5.145 N` sampled minimum but completed zero 8 N transfers. Its
+end states showed the load gate was often satisfied while upright cosine was
+about `0.9764`, narrowly below the strict `0.9781476` gate. V84 therefore
+paired the same unload stages with increasing upright gates `0.975`, `0.977`,
+and `0.9781476`; the final gate is validated against the deployment config.
+The V84 command was the V83 command with output
+`ppo-stairs-v84-load-upright-curriculum-8192-seed1034`, initializer V83, and:
+
+```text
+--phase-transfer-upright-cosine 0.975
+--phase-transfer-upright-cosine 0.977
+--phase-transfer-upright-cosine 0.9781476
+```
+
+V84 completed two accepted 8 N transfers and automatically advanced to the
+4 N / `0.977` stage. Across 8,192 target steps it kept the sampled minimum load
+at `5.145 N`, minimum support margin at `40.842 mm`, and maximum support slip
+at `34.951 mm`. It did not pass 4 N. A final V85 bridge starting at `6 N /
+0.976` for 8,192 steps completed zero transfers, confirming that the current
+six-output swing-plus-support-abduction scope cannot reliably cross the next
+force band.
+
+Fresh strict-gate evaluation used:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --model simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --leg-model front_right=simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --zero-action-leg front_left `
+  --transfer-model front_left=simulation/isaac/output/rl/ppo-stairs-v84-load-upright-curriculum-8192-seed1034/drobot_stairs_ppo_final.zip `
+  --transfer-residual-swing-support-abduction front_left `
+  --episodes 3 --seed 1038 --device cpu --active-steps 1 `
+  --placement-level left-quarter-tread-load `
+  --maximum-lateral-deviation-m 0.20 --episode-seconds 45 `
+  --allow-unverified-model `
+  --report simulation/isaac/output/rl/ppo-stairs-v84-load-upright-curriculum-8192-seed1034/evaluation_seed1038_3ep.json
+```
+
+The strict result was `0/3`; all runs exceeded `35 mm` slip, and only one
+completed the front-right foothold. The V84 model SHA-256 is
+`24a86f8ef4a1744032651ef6e18f3786e78564d1157acf2e1d7fcb5552510616`;
+the evaluation-report SHA-256 is
+`b41d84939d2d2e09fd05c975e7dbe93e53a119b6cd5644362f0740c5a0dd3607`.
+The strict diagnostic recording is
+`reviews/ppo-stairs-v84-strict-eval-seed1038-ep3.mp4` (544 frames,
+11,643,347 bytes, SHA-256
+`311bf970284db37a58ef689d7bd6349c73df24eb36c6cc72a6ec7c207e9fc876`).
+
+This is meaningful curriculum progress, not a deployable stair climb. The next
+change should expose support-leg hip flexion as well as abduction and add
+explicit pitch/upright shaping. Better traction and camera vision remain lower
+priority: the policy already sees the relevant load and IMU state, while the
+limiting transfer states retain high support margin and fail force/upright
+coordination before perception becomes the bottleneck.
+
+## V86-V88 support-hip flexion and pitch shaping
+
+The V84 recommendation was tested by adding support-leg hip flexion to the
+compact transfer policy and adding potential-difference reward for reducing
+absolute body pitch. The new `swing_plus_support_hips` action mode maps nine
+compact outputs to all three front-left joints plus hip abduction and flexion
+on each support leg; support knees remain fixed. Exact policy transfer expands
+V84's six outputs into the corresponding nine-output rows, initializes the
+three new hip-flexion action means to zero, and records the mapping in the
+training report. A freeze mode preserves the inherited actor and six output
+rows while allowing only the three new action rows and value network to train.
+
+Validation used:
+
+```powershell
+& .\.venv\Scripts\python.exe -m ruff check `
+  simulation/isaac/rl/stairs/_policy_transfer.py `
+  simulation/isaac/rl/stairs/_stair_rl_contract.py `
+  simulation/isaac/rl/stairs/_quadruped_stairs_env.py `
+  simulation/isaac/rl/stairs/_placement_phase_training.py `
+  simulation/isaac/rl/stairs/train_stairs_ppo.py `
+  simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  simulation/isaac/rl/stairs/record_stairs_ppo.py `
+  tests/test_quadruped_stairs_rl_contract.py
+& .\.venv\Scripts\python.exe -m pytest `
+  tests/test_quadruped_stairs_rl_contract.py -q `
+  --basetemp=.pytest-tmp-v88-freeze
+```
+
+The focused contract suite passed with its expected simulator-dependent skips.
+It covers the exact six-to-nine row mapping, neutral new action means, frozen
+inherited gradients, the nine-joint mask, and pitch-progress reward. The
+physical contract is unchanged: `180 mm` rise, `250 mm` tread,
+`0.8825985 N m` applied effort, and no RGB policy observation.
+
+V86 expanded V84 and trained every actor row for 8,192 steps at learning rate
+`3e-5`, seed 1040. Six precursor attempts failed before a usable retained-foot
+snapshot. It completed zero 8 N transfers, with `9.367 N` minimum swing load,
+`0.952500` minimum upright cosine, and `35.370 mm` maximum slip. V87 repeated
+the experiment on V84's seed 1034 to control the snapshot: it exactly repeated
+the V84 floor, completing two 8 N transfers but none at 4 N, with `5.145 N`
+minimum load, `0.975542` minimum upright cosine, and `34.951 mm` maximum slip.
+
+V88 is the isolation test. It uses the same seed-1034 snapshot, learning rate
+`5e-5`, and `--freeze-inherited-stairs-policy-actions`, so only the new support
+hip-flexion output rows can alter the actor:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/train_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --output-dir simulation/isaac/output/rl/ppo-stairs-v88-frozen-v84-support-flexion-8192-seed1034 `
+  --total-timesteps 8192 --seed 1034 --device cpu `
+  --fixed-placement-level left-quarter-tread-load `
+  --phase-train-leg front_left --phase-train-transfer `
+  --precursor-leg-model front_right=simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --phase-residual-swing-support-hips --phase-compact-residual-action `
+  --phase-transfer-unload-threshold-n 8 `
+  --phase-transfer-unload-threshold-n 4 `
+  --phase-transfer-unload-threshold-n 1 `
+  --phase-transfer-upright-cosine 0.975 `
+  --phase-transfer-upright-cosine 0.977 `
+  --phase-transfer-upright-cosine 0.9781476 `
+  --phase-transfer-unload-successes-per-level 2 `
+  --initialize-from-stairs simulation/isaac/models/ppo-stairs-v84-load-upright-curriculum-8192-seed1034/drobot_stairs_ppo_final.zip `
+  --initialize-stairs-source-action-mode swing_plus_support_abduction `
+  --freeze-inherited-stairs-policy-actions `
+  --ppo-learning-rate 0.00005 --ppo-initial-log-std -2.5 `
+  --ppo-entropy-coefficient 0
+```
+
+V88 again completed two 8 N transfers and zero at 4 N. Its minimum load,
+upright score, and maximum slip exactly matched V87. The later V94-V95 audit
+found that the transfer residual scale was zero, so these matching results do
+not rule out hip flexion: the learned outputs had no physical authority.
+
+Fresh deterministic strict evaluation used V75 for the first front-right
+foothold and V88 for the front-left transfer:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --model simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --leg-model front_right=simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --zero-action-leg front_left `
+  --transfer-model front_left=simulation/isaac/output/rl/ppo-stairs-v88-frozen-v84-support-flexion-8192-seed1034/drobot_stairs_ppo_final.zip `
+  --transfer-residual-swing-support-hips front_left `
+  --episodes 3 --seed 1041 --device cpu --active-steps 1 `
+  --placement-level left-quarter-tread-load `
+  --maximum-lateral-deviation-m 0.20 --episode-seconds 45 `
+  --allow-unverified-model
+```
+
+The result was `0/3`; all episodes exceeded the support-slip gate at
+`35.010-42.692 mm`, maximum tilt reached `11.279 deg`, mean forward motion was
+`-7.725 mm`, and mean elevation change was `-11.758 mm`. The recorded seed-1041
+episode lifted front-right `198.085 mm` but rear-left slipped `42.692 mm` before
+the front-left transfer. Its H.264 MP4 is `17,679,034` bytes with SHA-256
+`942e16482ab25e8cf3aed57460fc80349cd00beb8476bfc05763eeaa4c3f1f31`.
+The V88 model SHA-256 is
+`6a02ec152836c832147dc56dc696d9fe463becf8484988d7601abbce51fbf8cf`.
+
+V88 is not a stair climb. The next bounded experiment should expose support
+knee extension and train an explicit pre-unload or vertical-COM phase while
+keeping the inherited V84 actor frozen. Better traction and camera vision stay
+lower priority: the policy already measures swing-foot load and body attitude,
+and the failure occurs in coordinated load sharing before terrain perception.
+
+## V89-V90 frozen support-knee and sustained-unload isolation
+
+V88 showed that support-hip flexion alone did not cross the `5.145 N` load
+floor. V89 expands the compact action from nine to twelve outputs so that the
+three new rows command the support knees. Exact transfer maps V88 raw rows
+`0-8` to target rows `0-8`, initializes support-knee rows `9-11` neutrally, and
+freezes every inherited actor parameter and row. The value network and only the
+three new support-knee rows train. Evaluation and recording accept the same
+explicit `swing_plus_support_all` mapping, avoiding an ambiguous 12-output
+interpretation.
+
+The transfer environment now reports signed vertical balance-target error.
+Training first added potential-difference shaping for reducing its magnitude.
+After the small V89 control showed that transient unloading still canceled on
+reload, V90 added persistent per-step costs of `2` reward per newton of active
+swing load and `500` reward per meter of absolute vertical balance error. This
+makes sustained unloading without collapse the objective, rather than rewarding
+only momentary progress.
+
+Validation used:
+
+```powershell
+& .\.venv\Scripts\python.exe -m ruff check `
+  simulation/isaac/rl/stairs/_stair_rl_contract.py `
+  simulation/isaac/rl/stairs/_quadruped_stairs_env.py `
+  simulation/isaac/rl/stairs/_placement_phase_training.py `
+  simulation/isaac/rl/stairs/train_stairs_ppo.py `
+  simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  simulation/isaac/rl/stairs/record_stairs_ppo.py `
+  tests/test_quadruped_stairs_rl_contract.py
+& .\.venv\Scripts\python.exe -m pytest `
+  tests/test_quadruped_stairs_rl_contract.py -q `
+  --basetemp=.pytest-tmp-v90-sustained-unload
+```
+
+Ruff passed and the focused contract suite passed with its expected
+simulator-dependent skips. Tests cover neutral nine-to-twelve expansion,
+frozen inherited gradients, support-knee mask indices, vertical progress, and
+persistent state cost. The contract remains `180 mm` rise, `250 mm` tread,
+`0.8825985 N m` applied effort, and no RGB policy observation.
+
+The 4,096-step V89 control used:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/train_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --output-dir simulation/isaac/output/rl/ppo-stairs-v89-frozen-v88-support-knees-4096-seed1034 `
+  --total-timesteps 4096 --curriculum-total-timesteps 4096 `
+  --seed 1034 --device cpu --fixed-placement-level left-quarter-tread-load `
+  --phase-train-leg front_left --phase-train-transfer `
+  --precursor-leg-model front_right=simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --phase-residual-swing-support-all --phase-compact-residual-action `
+  --phase-reset-attempts 32 `
+  --phase-transfer-unload-threshold-n 8 `
+  --phase-transfer-unload-threshold-n 4 `
+  --phase-transfer-unload-threshold-n 1 `
+  --phase-transfer-upright-cosine 0.975 `
+  --phase-transfer-upright-cosine 0.977 `
+  --phase-transfer-upright-cosine 0.9781476 `
+  --phase-transfer-unload-successes-per-level 2 `
+  --initialize-from-stairs simulation/isaac/models/ppo-stairs-v88-frozen-v84-support-flexion-8192-seed1034/drobot_stairs_ppo_final.zip `
+  --initialize-stairs-source-action-mode swing_plus_support_hips `
+  --freeze-inherited-stairs-policy-actions `
+  --ppo-learning-rate 0.00005 --ppo-initial-log-std -2.5 `
+  --ppo-entropy-coefficient 0
+```
+
+V89 completed two 8 N transfers and zero at 4 N. Its minimum load
+`5.145 N`, minimum upright cosine `0.975542`, and maximum slip `34.951 mm`
+exactly matched V88. The new support-knee rows were active: their final weight
+norms were `0.00257`, `0.00848`, and `0.00652`, so this was not a missing action
+mapping.
+
+V90 reran the same command for 8,192 steps to a new output directory after
+adding persistent state cost. It again completed only two 8 N transfers and
+none at 4 N, with the same `5.145 N` floor and `34.951 mm` slip ceiling. Its
+cumulative state-cost reward was `-405,039.928`, confirming that the sustained
+objective dominated the learning signal but did not change the physical
+boundary.
+
+Fresh strict evaluation used:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v14_front_pair_right_then_left.yaml `
+  --first-tread-profile front-pair-preposition-load-advance-forward-floor `
+  --model simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --leg-model front_right=simulation/isaac/output/rl/ppo-stairs-v75-first-strict-foothold-2048-seed1025/drobot_stairs_ppo_final.zip `
+  --zero-action-leg front_left `
+  --transfer-model front_left=simulation/isaac/output/rl/ppo-stairs-v90-frozen-v88-support-knees-sustained-unload-8192-seed1034/drobot_stairs_ppo_final.zip `
+  --transfer-residual-swing-support-all front_left `
+  --episodes 3 --seed 1042 --device cpu --active-steps 1 `
+  --placement-level left-quarter-tread-load `
+  --maximum-lateral-deviation-m 0.20 --episode-seconds 45 `
+  --allow-unverified-model
+```
+
+V90 failed `0/3`, all by support slip. Slip was `35.093-38.372 mm`, maximum
+tilt was `11.029 deg`, front-left lift was only `4.668-5.828 mm`, mean forward
+motion was `-12.703 mm`, and mean elevation change was `-10.836 mm`. The
+seed-1042 recording contains 293 frames and is `17,157,178` bytes with SHA-256
+`c773fc1a1965e3c138b6384b9088da11620b440e6727f470517346a371a203fc`.
+It reaches `198.213 mm` front-right lift but `38.372 mm` support slip before
+front-left transfer. The V90 model SHA-256 is
+`c78b50a516fd013a1f22da1ecfaca61dfc59f596d0d33c8558cb4e43983ec4d5`.
+
+V90 is not a stair climb. The later V94-V95 audit found that V88-V90's learned
+transfer outputs were multiplied by a zero residual scale. Those runs therefore
+do not rule out hip or knee authority. The next bounded experiment should
+replace that phase with a stationary pre-unload
+hold: require front-left below `4 N` for at least `0.5 s`, all three support
+feet loaded, bounded pitch and slip, then freeze that checkpoint and compose
+the independently verified V80 190 mm lift. Additional traction or camera
+vision remains lower priority than this phase decomposition.
+
+## V91 isolated 190 mm raise-and-hold confirmation
+
+Before changing the difficult inter-leg transfer again, V91 rechecked the
+simpler hardware question directly: can the robot raise one front foot above a
+`190 mm` clearance gate and remain on the other three feet? The new
+`train_stairs_v91_front_left_190mm_hold_ppo.py` wrapper fixes the task at the
+`front-left-stabilized-190mm-lift-hold` level, resumes the verified V80 policy,
+and performs only 1,024 additional PPO steps. Stair approach, tread contact,
+and inter-leg transfer are outside this experiment.
+
+The first launch was rejected before physics or training because a proposed
+`2e-5` learning rate did not match the resumed checkpoint's verified PPO
+contract. V91 was relaunched at the checkpoint's `5e-5` rate. All three
+completed training episodes then passed: lift was `203.058-207.323 mm`, body
+tilt stayed at or below `3.064 deg`, support slip stayed at or below
+`3.509 mm`, and every stance foot retained contact.
+
+Fresh evaluation used:
+
+```powershell
+& C:\isaacsim\python.bat simulation/isaac/rl/stairs/evaluate_stairs_ppo.py `
+  --config simulation/isaac/rl/stairs/quadruped_stairs_v15_front_left_stabilized_lift.yaml `
+  --model simulation/isaac/output/rl/ppo-stairs-v91-front-left-190mm-hold-1024-seed1043/drobot_stairs_ppo_final.zip `
+  --episodes 5 --seed 1044 --device cpu --active-steps 1 `
+  --placement-level front-left-stabilized-190mm-lift-hold `
+  --maximum-lateral-deviation-m 0.20 `
+  --report simulation/isaac/output/rl/ppo-stairs-v91-front-left-190mm-hold-1024-seed1043/evaluation_seed1044_5ep.json
+```
+
+It passed `5/5`: front-left lift was `205.004-208.036 mm`, the `0.50 s`
+clearance hold completed in every episode, maximum body tilt was `2.333 deg`,
+maximum support slip was `3.308 mm`, and the minimum support-foot load was
+`10.324 N`. The selected recorded episode reached `207.755 mm` lift with
+`2.133 deg` tilt and `3.208 mm` slip. Its 166-frame H.264 video is
+`reviews/ppo-stairs-v91-front-left-190mm-hold-seed1044.mp4`.
+
+The environment still uses the exact `180 mm` rise and `250 mm` tread, the
+real-test `0.8825985 N m` applied effort cap, and no RGB policy observation.
+The camera is recording-only; control uses IMU, joint/proprioceptive state,
+previous action, support contact/load, and the analytic stair profile. The V91
+result confirms that foot height is not the stair bottleneck. The remaining
+problem is acquiring and holding a safe three-foot support state after the
+first foot lands, then composing this already-successful lift policy.
+
+## V92-V93 continuous unload-hold isolation
+
+The next experiments made the inter-leg criterion stateful: the front-left
+foot must remain below the active load threshold continuously for `0.50 s`.
+The per-leg override is explicit in `_stair_rl_contract.py`, and the contract
+test asserts the value. This prevents a single noisy force sample from being
+accepted as a transferable three-foot stance.
+
+V92 tested whether the V90 boundary was caused by its frozen actor rows. The
+new `train_stairs_v92_front_left_held_unload_ppo.py` wrapper initialized all 12
+transfer actions from V90, unfroze them, and trained an `8 -> 6 -> 4 -> 1 N`
+curriculum for 8,192 steps at a `3e-5` learning rate. It used the verified V75
+front-right foothold as the precursor and retained the exact `180 mm` rise,
+`250 mm` tread, `0.8825985 N m` effort cap, and camera-blind policy inputs.
+
+V92 completed no transfer at any threshold. Minimum front-left load regressed
+to `8.921 N`, minimum upright cosine fell to `0.953835`, and support slip rose
+to `36.247 mm`. Unfreezing the complete inherited actor therefore destroyed,
+rather than extended, the best unload behavior. Its packaged checkpoint
+SHA-256 is
+`aac1a7b1bb80fe64fcecd670910425492134a07cdc906353abef3c554b2a04e9`.
+
+V93 tested the conservative alternative with
+`train_stairs_v93_front_left_frozen_base_held_unload_ppo.py`. It kept V90
+deterministic and frozen, zero-initialized a trainable 12-joint residual, and
+limited that correction to a `0.10` residual scale. Its curriculum started at
+`6 N`, then requested `4 N` and `1 N`, each with the same continuous `0.50 s`
+hold. The run is reproducible with:
+
+```powershell
+& C:\isaacsim\python.bat `
+  simulation/isaac/rl/stairs/train_stairs_v93_front_left_frozen_base_held_unload_ppo.py
+```
+
+V93 completed 8,192 steps in `268.338 s`. Snapshot replay was reliable: one
+precursor rollout was cached and restored 21 times without a failed restore.
+Nevertheless, it completed zero `6 N` holds and never advanced the curriculum.
+Minimum front-left load was `8.792 N`, minimum upright cosine was `0.953237`,
+maximum pitch magnitude was `9.708 deg`, and maximum support slip was
+`35.217 mm`. The residual remained bounded: maximum learned action magnitude
+was `0.169960`, and maximum composed action magnitude was `0.057256`. The
+packaged checkpoint SHA-256 is
+`d7a8b499fae8a71d9ab82898cd0991f82dc53a93a4f1027ab717a6b81887b099`.
+
+Validation for the source and contract changes used:
+
+```powershell
+& .\.venv\Scripts\python.exe -m ruff check `
+  simulation/isaac/rl/stairs/_stair_rl_contract.py `
+  simulation/isaac/rl/stairs/train_stairs_v92_front_left_held_unload_ppo.py `
+  simulation/isaac/rl/stairs/train_stairs_v93_front_left_frozen_base_held_unload_ppo.py `
+  tests/test_quadruped_stairs_rl_contract.py
+& .\.venv\Scripts\python.exe -m pytest `
+  tests/test_quadruped_stairs_rl_contract.py -q `
+  --basetemp=.pytest-tmp-v93-held-unload
+```
+
+The later V94-V95 audit found that V92-V93 also inherited a zero physical
+transfer-residual scale. They test snapshot reliability and reward bookkeeping,
+but do not rule out either unrestricted actor fine-tuning or small frozen-base
+corrections. They do not
+invalidate V91: the isolated front-left policy still raises the foot more than
+`205 mm` and holds it for `0.50 s` in `5/5` fresh episodes. The next training
+change should capture the best stable in-transfer state and train a stationary
+unload/hold phase from that snapshot, before composing the verified V91 lift.
+Traction and RGB vision are still secondary: the observed failure is loss of
+load-sharing posture on known geometry, not failure to see the stair.
+
+## V94-V97 stationary transfer audit and corrected active control
+
+V94 added a verified simulator snapshot at the best stable front-left transfer
+boundary. The candidate was selected at transfer step 292 after a continuous
+`0.10 s` stable window: front-left load `9.435354 N`, completed-tread minimum
+load `19.115591 N`, upright cosine `0.985547`, support margin `104.497 mm`,
+support slip `21.117 mm`, base speed `0.020033 m/s`, and body rate
+`0.043351 rad/s`. The snapshot reanchors the COM target to the measured pose and
+has SHA-256
+`83b57f09a5059b34fcbd54a44584bb204977f37d3207bb79d278fab1a7d63c7c`.
+
+The first stationary V94 run restored the snapshot `23/23` times, but exposed a
+decisive implementation error: `inter_leg_transfer.residual_action_scale` was
+`0.0`. PPO produced nonzero hip and knee actions, but the environment multiplied
+them by zero. V95 explicitly set the scale to `1.0`, making all 12 residual
+actions physically active for the first time. Its best transient front-left
+load was `7.769737 N`, but it never held the 8 N gate; the repeated analytic
+unload after snapshot restore drove tilt to `18.109 deg` and support slip to
+`35.029 mm`.
+
+V96 fixed that snapshot-specific double-lift by adding
+`--phase-transfer-swing-unload-lift-m 0`. This froze the already-achieved
+analytic pose and extended every episode from about `6.2 s` to the full `10 s`.
+It also reduced maximum slip to `2.465 mm` and kept upright cosine at or above
+`0.984699`. However, zero lift previously changed the gate semantics from
+"unload below threshold" to "remain in contact," and the already-placed
+front-right tread foot decayed to `0 N` without any reward penalty.
+
+V97 makes the objective explicit with
+`--phase-transfer-require-swing-unload` and adds a configurable cost for load
+deficit on an already-placed tread foot. The 8,192-step seed-1051 run used a
+`20 -> 12 -> 8 -> 4 -> 1 N` curriculum, full 12-joint residual authority, zero
+additional analytic lift, and a `100` reward/N completed-tread deficit cost. It
+remained stable (`2.666 mm` maximum slip, `0.984620` minimum upright cosine,
+`103.692 mm` minimum support margin) but completed no gate. Best transient
+front-left load was `18.279501 N`; the front-right tread load still decayed to
+`0 N`. Model SHA-256 is
+`e0e7dd3810782cb4cb6cd6e3148425d5d6cf5921386b78984d5bae45bef18fca`.
+
+This is negative transfer evidence, not a stair climb and not a replacement for
+the successful V91 video. It narrows the next experiment: preserve the placed
+front-right contact mechanically/control-wise while changing the diagonal
+stance geometry or body-height target, then train only the front-left unload.
+More traction is not indicated by the `2.666 mm` slip result, and better vision
+cannot fix a stationary known-geometry load-retention failure. Camera remains
+recording-only; policy inputs remain IMU, joints/proprioception, previous action,
+contact/load, and analytic `180 mm` rise by `250 mm` tread geometry.

@@ -1,0 +1,115 @@
+{
+  "status": "PASS",
+  "task_id": "Drobot-Quadruped-Stairs-v46-Rear-Right-Sidestep",
+  "scope": "Exact-snapshot rear-left transfer stance-action authority audit",
+  "config": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\rl\\stairs\\quadruped_stairs_v46_rear_right_sidestep.yaml",
+  "phase_snapshot": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\output\\rl\\rear-left-transfer-snapshot-v46-seed937.json",
+  "seed": 938,
+  "stair_rise_m": 0.18,
+  "stair_tread_depth_m": 0.25,
+  "effort_cap_nm": 0.8825985,
+  "amplitudes": [
+    0.0
+  ],
+  "candidate_count": 1,
+  "maximum_seconds": 10.0,
+  "policy_model": null,
+  "record_video": null,
+  "record_thumbnail": null,
+  "camera_policy_input": false,
+  "support_action_indices": [
+    0,
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+    10,
+    11
+  ],
+  "support_dof_names": [
+    "front_left_hip_abduction",
+    "front_right_hip_abduction",
+    "rear_right_hip_abduction",
+    "front_left_hip_flexion",
+    "front_right_hip_flexion",
+    "rear_right_hip_flexion",
+    "front_left_knee",
+    "front_right_knee",
+    "rear_right_knee"
+  ],
+  "probed_abduction_action_positions": [
+    0,
+    1,
+    2
+  ],
+  "completed_count": 0,
+  "task_success": false,
+  "best": {
+    "id": "+0.0-+0.0-+0.0",
+    "action_by_joint": {
+      "front_left_hip_abduction": 0.0,
+      "front_right_hip_abduction": 0.0,
+      "rear_right_hip_abduction": 0.0
+    },
+    "maximum_policy_action_abs": null,
+    "steps": 87,
+    "completed": false,
+    "terminated": true,
+    "truncated": false,
+    "failure_reasons": [
+      "body_tipped"
+    ],
+    "initial_balance_target_error_m": 0.12658413225581258,
+    "minimum_balance_target_error_m": 0.12658413225581258,
+    "final_balance_target_error_m": 0.13355640034333993,
+    "balance_target_error_reduction_m": -0.00697226808752735,
+    "maximum_support_margin_m": -0.10080820974192825,
+    "final_support_margin_m": -0.10293871121239662,
+    "maximum_body_tilt_deg": 20.296822642544523,
+    "final_balance_position_m": [
+      0.46287777409831005,
+      0.05411332091277844,
+      0.3174501778125234
+    ],
+    "final_target_error_xy_m": [
+      -0.0941266119480133,
+      0.09474963322281837
+    ]
+  },
+  "ranked_candidates": [
+    {
+      "id": "+0.0-+0.0-+0.0",
+      "action_by_joint": {
+        "front_left_hip_abduction": 0.0,
+        "front_right_hip_abduction": 0.0,
+        "rear_right_hip_abduction": 0.0
+      },
+      "maximum_policy_action_abs": null,
+      "steps": 87,
+      "completed": false,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ],
+      "initial_balance_target_error_m": 0.12658413225581258,
+      "minimum_balance_target_error_m": 0.12658413225581258,
+      "final_balance_target_error_m": 0.13355640034333993,
+      "balance_target_error_reduction_m": -0.00697226808752735,
+      "maximum_support_margin_m": -0.10080820974192825,
+      "final_support_margin_m": -0.10293871121239662,
+      "maximum_body_tilt_deg": 20.296822642544523,
+      "final_balance_position_m": [
+        0.46287777409831005,
+        0.05411332091277844,
+        0.3174501778125234
+      ],
+      "final_target_error_xy_m": [
+        -0.0941266119480133,
+        0.09474963322281837
+      ]
+    }
+  ]
+}

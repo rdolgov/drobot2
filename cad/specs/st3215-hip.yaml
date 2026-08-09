@@ -1,0 +1,70 @@
+schema_version: 1
+part_id: st3215_hip
+units:
+  length: mm
+  angle: deg
+
+status: approved_printable_part
+printable: true
+
+coordinate_system:
+  origin: fork attachment-datum center
+  positive_x: right
+  positive_y: shared transverse centerline
+  positive_z: up
+
+source_components:
+  fork: drobot_cad/parts/st3215_servo_output_fork.py
+  fork_configuration: full_fork_with_negative_x_half_oval_extension
+  motor_bay: drobot_cad/parts/st3215_motor_bay.py
+  geometry_policy: reuse the complete new fork and unchanged motor-bay solid
+
+placement:
+  fork:
+    xyz_mm: [0.0, 0.0, 0.0]
+    rotation_xyz_deg: [0.0, 90.0, 0.0]
+    intent: local positive X points down along global negative Z
+  motor_bay:
+    approved_final_origin_xyz_mm: [8.0, 0.0, 45.6117]
+    printable_final_origin_xyz_mm: [8.0, 0.0, 42.6117]
+    transform_sequence:
+      - rotation_deg: 90.0
+        axis: motor_bay_local_positive_x
+        pivot: centerline_between_two_screw_holes
+        result: diamond face points upward
+      - rotation_deg: 90.0
+        direction: left_counterclockwise_in_top_view
+        axis: global_positive_z
+        pivot: center_of_upward_facing_diamond_surface
+        result: motor_bay local negative X points along global negative Y
+      - rotation_deg: 90.0
+        direction: clockwise_in_top_view
+        axis: vertical_axis_through_motor_bay_middle
+        pivot: motor_bay_center
+        result: motor_bay opening at local negative X faces global negative X
+    final_local_axis_mapping:
+      negative_x: [-1.0, 0.0, 0.0]
+      positive_y: [0.0, 0.0, 1.0]
+      positive_z: [0.0, -1.0, 0.0]
+
+join:
+  method: boolean_union
+  seating_overlap_mm: 3.0
+  oval_tip_tangent_z_mm: 30.0
+  motor_bay_center_x_mm: 0.0
+  shared_centerline_y_mm: 0.0
+
+output:
+  source: drobot_cad/parts/st3215_hip.py
+  step: exports/step/st3215_hip.step
+  stl: exports/stl/st3215_hip.stl
+
+acceptance_tests:
+  - fused result is one valid connected solid
+  - fork local positive X maps to global negative Z
+  - bay local negative X maps to global negative X after the final clockwise rotation
+  - bay local positive Y maps to global positive Z
+  - fork and bay longitudinal directions are perpendicular
+  - bay is centered at global X=0 over the oval tip
+  - source parts overlap through the 3 mm lower bay wall
+  - exact installed ST3215 does not collide with the fork

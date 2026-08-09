@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drobot-cad"
+version = "0.1.0"
+description = "Parametric build123d CAD source and mechanical specifications for a robot."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "build123d>=0.9,<1",
+    "PyYAML>=6,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ocp_vscode>=4,<5",
+    "pytest>=8,<9",
+    "ruff>=0.9,<1",
+]
+
+[tool.setuptools.packages.find]
+include = ["drobot_cad*"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

@@ -1,0 +1,174 @@
+<?xml version="1.0"?>
+<!-- cadpy:sourcePath=../../drobot_cad/urdf/one_leg_wall_testbed.py -->
+<!-- cadpy:sourceHash=8d64afcd35c7637d691ead915a456d2df7fdc99c720dae08dc377fbae8630d3c -->
+<robot name="st3215_one_leg_wall_testbed">
+  <!--Fixed wall fixture with physically exercised 2026-07-28 one-leg limits; moving-link geometry is shared with the quadruped URDF.-->
+  <material name="fixture_gray">
+    <color rgba="0.36 0.39 0.43 1" />
+  </material>
+  <material name="mount_light">
+    <color rgba="0.65 0.68 0.74 1" />
+  </material>
+  <material name="servo_black">
+    <color rgba="0.025 0.03 0.04 1" />
+  </material>
+  <material name="hip_orange">
+    <color rgba="0.95 0.38 0.08 1" />
+  </material>
+  <material name="proximal_blue">
+    <color rgba="0.2 0.62 0.92 1" />
+  </material>
+  <material name="distal_green">
+    <color rgba="0.18 0.72 0.48 1" />
+  </material>
+  <link name="wall_link">
+    <inertial>
+      <origin xyz="0 -0.095084989 -0.12" rpy="0 0 0" />
+      <mass value="5" />
+      <inertia ixx="0.1501666667" ixy="0" ixz="0" iyy="0.2541666667" iyz="0" izz="0.1043333333" />
+    </inertial>
+    <visual name="fixed_vertical_wall">
+      <origin xyz="0 -0.095084989 -0.12" rpy="0 0 0" />
+      <geometry>
+        <box size="0.5 0.02 0.6" />
+      </geometry>
+      <material name="fixture_gray" />
+    </visual>
+    <visual name="exact_printable_hip_body_mount">
+      <origin xyz="0 -0.053084989 0" rpy="1.570796327 0 1.570796327" />
+      <geometry>
+        <mesh filename="../stl/st3215_hip_body_mount.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="mount_light" />
+    </visual>
+    <collision name="vertical_wall_collision">
+      <origin xyz="0 -0.095084989 -0.12" rpy="0 0 0" />
+      <geometry>
+        <box size="0.5 0.02 0.6" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="hip_link">
+    <inertial>
+      <origin xyz="0.023744808 -0.031777881 -0.001911095" rpy="0 0 0" />
+      <mass value="0.169697" />
+      <inertia ixx="0.0001832517" ixy="2.4855e-05" ixz="2.392e-07" iyy="7.18098e-05" iyz="-2.529e-07" izz="0.0002314034" />
+    </inertial>
+    <visual name="printable_hip">
+      <origin xyz="0.0286117 -0.0426117 -0.00195" rpy="-1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_hip.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="hip_orange" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="hip_printable_proxy">
+      <origin xyz="0.0266617 -0.0460425 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.0713 0.127308 0.04805" />
+      </geometry>
+    </collision>
+    <collision name="hip_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="proximal_link">
+    <inertial>
+      <origin xyz="0.07301168 -2.1551e-05 -0.000924466" rpy="0 0 0" />
+      <mass value="0.215137" />
+      <inertia ixx="7.47088e-05" ixy="5.653e-07" ixz="-6.9897e-06" iyy="0.0005598933" iyz="3.56e-08" izz="0.0005075793" />
+    </inertial>
+    <visual name="printable_proximal_upper_arm">
+      <origin xyz="0.0948117 -0.012 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/upper_arm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="proximal_blue" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="proximal_arm_printable_proxy">
+      <origin xyz="0.096254 0 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.155285 0.035229 0.0713" />
+      </geometry>
+    </collision>
+    <collision name="st3215_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="distal_link">
+    <inertial>
+      <origin xyz="0.07301168 -2.1551e-05 -0.000924466" rpy="0 0 0" />
+      <mass value="0.215137" />
+      <inertia ixx="7.47088e-05" ixy="5.653e-07" ixz="-6.9897e-06" iyy="0.0005598933" iyz="3.56e-08" izz="0.0005075793" />
+    </inertial>
+    <visual name="printable_distal_upper_arm">
+      <origin xyz="0.0948117 -0.012 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../stl/upper_arm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="distal_green" />
+    </visual>
+    <visual name="exact_st3215_servo">
+      <origin xyz="0.0255 0 0.007475" rpy="1.570796327 0 0" />
+      <geometry>
+        <mesh filename="../stl/st3215_servo_visual.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="servo_black" />
+    </visual>
+    <collision name="distal_arm_printable_proxy">
+      <origin xyz="0.096254 0 -0.00195" rpy="0 0 0" />
+      <geometry>
+        <box size="0.155285 0.035229 0.0713" />
+      </geometry>
+    </collision>
+    <collision name="st3215_servo_case_collision">
+      <origin xyz="0.0125 0 -0.001825" rpy="1.570796327 0 0" />
+      <geometry>
+        <box size="0.045223408 0.0378 0.024723408" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="hip_abduction" type="revolute">
+    <parent link="wall_link" />
+    <child link="hip_link" />
+    <origin xyz="0 0 0" rpy="1.570796327 0 1.570796327" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.7853981634" upper="0.7853981634" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+  <joint name="hip_flexion" type="revolute">
+    <parent link="hip_link" />
+    <child link="proximal_link" />
+    <origin xyz="0.0286117 -0.095696689 -0.00195" rpy="-1.570796327 0 -1.570796327" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-1.570796327" upper="1.570796327" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+  <joint name="knee" type="revolute">
+    <parent link="proximal_link" />
+    <child link="distal_link" />
+    <origin xyz="0.159896689 0 0" rpy="0 0 0" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-2.094395102" upper="2.094395102" effort="2.941995" velocity="4.712389" />
+    <dynamics damping="0.08" friction="0.02" />
+  </joint>
+</robot>

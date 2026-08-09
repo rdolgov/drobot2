@@ -1,0 +1,736 @@
+{
+  "status": "PASS",
+  "task_id": "Drobot-Quadruped-Stairs-v5-10mm",
+  "model": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-stairs-v5-10mm-four-step\\drobot_stairs_ppo_initialized.zip",
+  "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\exports\\isaac\\quadruped_robot_stairs_v5_10mm_world.usda",
+  "episodes_requested": 10,
+  "seed": 143,
+  "device": "cpu",
+  "active_steps": 4,
+  "height_stage": "10mm",
+  "camera_view": "external",
+  "screenshot": null,
+  "isaac_sim_version": "6.0.1",
+  "torch_version": "2.10.0+cu128",
+  "model_contract_verification": {
+    "status": "PASS",
+    "manifest": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-stairs-v5-10mm-four-step\\drobot_stairs_ppo_initialized.zip.contract.json",
+    "verified_fields": [
+      "schema_version",
+      "task_id",
+      "model_sha256",
+      "config_sha256",
+      "world_sha256",
+      "world_dependencies",
+      "dof_names",
+      "observation_fields",
+      "observation_size",
+      "action_size",
+      "physics_steps_per_control",
+      "staircase"
+    ],
+    "algorithm_contract": {
+      "algorithm": "stable_baselines3.PPO",
+      "policy_class": "ActorCriticPolicy",
+      "training_mode": "full",
+      "observation_shape": [
+        60
+      ],
+      "action_shape": [
+        12
+      ],
+      "policy_hidden_layers": [
+        256,
+        256
+      ],
+      "activation": "ELU",
+      "rollout_steps": 2048,
+      "batch_size": 256,
+      "epochs": 10,
+      "learning_rate": 3e-05,
+      "gamma": 0.9975,
+      "gae_lambda": 0.95,
+      "clip_range": 0.2,
+      "entropy_coefficient": 0.001,
+      "value_coefficient": 0.5,
+      "maximum_gradient_norm": 0.5,
+      "normalize_advantage": true,
+      "target_kl": 0.03
+    },
+    "training_seed": 142,
+    "transferred_from": {
+      "model": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\output\\rl\\ppo-stairs-v5-10mm-four-step-full\\drobot_stairs_ppo_final.zip",
+      "model_sha256": "dff1e4bb2e646e0d91b8d754785c33af7dc70973e5822dc06096ed109ac3f125",
+      "policy_parameters_only": true,
+      "optimizer_state": false
+    },
+    "resumed_from": null
+  },
+  "ppo_algorithm_verification": {
+    "status": "PASS",
+    "verified_fields": [
+      "algorithm",
+      "policy_class",
+      "training_mode",
+      "observation_shape",
+      "action_shape",
+      "policy_hidden_layers",
+      "activation",
+      "rollout_steps",
+      "batch_size",
+      "epochs",
+      "learning_rate",
+      "gamma",
+      "gae_lambda",
+      "clip_range",
+      "entropy_coefficient",
+      "value_coefficient",
+      "maximum_gradient_norm",
+      "normalize_advantage",
+      "target_kl"
+    ],
+    "contract": {
+      "algorithm": "stable_baselines3.PPO",
+      "policy_class": "ActorCriticPolicy",
+      "training_mode": "full",
+      "observation_shape": [
+        60
+      ],
+      "action_shape": [
+        12
+      ],
+      "policy_hidden_layers": [
+        256,
+        256
+      ],
+      "activation": "ELU",
+      "rollout_steps": 2048,
+      "batch_size": 256,
+      "epochs": 10,
+      "learning_rate": 3e-05,
+      "gamma": 0.9975,
+      "gae_lambda": 0.95,
+      "clip_range": 0.2,
+      "entropy_coefficient": 0.001,
+      "value_coefficient": 0.5,
+      "maximum_gradient_norm": 0.5,
+      "normalize_advantage": true,
+      "target_kl": 0.03
+    }
+  },
+  "episodes": [
+    {
+      "return": 362.31753455096623,
+      "length_steps": 1057,
+      "duration_s": 8.808333333333334,
+      "active_step_count": 4,
+      "highest_step_reached": 0,
+      "stairs_completed": false,
+      "forward_displacement_m": 0.2498808056116104,
+      "lateral_displacement_m": 0.010654824785888195,
+      "elevation_gain_m": -0.009552299976348877,
+      "maximum_base_elevation_gain_m": 0.0027620792388916016,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.019999999552965164,
+        "front_right": 0.019999999552965164,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 1,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_terrain_height_m": 0.0,
+      "maximum_terrain_height_m": 0.0,
+      "minimum_base_clearance_m": 0.3572387099266052,
+      "maximum_body_tilt_deg": 8.54088478384929,
+      "goal_hold_duration_s": 0.0,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "no_forward_progress"
+      ]
+    },
+    {
+      "return": 344.56180110012775,
+      "length_steps": 600,
+      "duration_s": 5.0,
+      "active_step_count": 4,
+      "highest_step_reached": 0,
+      "stairs_completed": false,
+      "forward_displacement_m": 0.20798757672309875,
+      "lateral_displacement_m": -0.02854139544069767,
+      "elevation_gain_m": -0.002741515636444092,
+      "maximum_base_elevation_gain_m": 0.0017734766006469727,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.019999999552965164,
+        "front_right": 0.019999999552965164,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 1,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_terrain_height_m": 0.0,
+      "maximum_terrain_height_m": 0.0,
+      "minimum_base_clearance_m": 0.358212947845459,
+      "maximum_body_tilt_deg": 9.888232927576462,
+      "goal_hold_duration_s": 0.0,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "no_forward_progress"
+      ]
+    },
+    {
+      "return": 319.68063577622985,
+      "length_steps": 309,
+      "duration_s": 2.575,
+      "active_step_count": 4,
+      "highest_step_reached": 0,
+      "stairs_completed": false,
+      "forward_displacement_m": 0.21846529841423035,
+      "lateral_displacement_m": -0.257343590259552,
+      "elevation_gain_m": -0.12370626628398895,
+      "maximum_base_elevation_gain_m": 0.0010409355163574219,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.019999999552965164,
+        "front_right": 0.019999999552965164,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 1,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_terrain_height_m": 0.0,
+      "maximum_terrain_height_m": 0.0,
+      "minimum_base_clearance_m": 0.24904854595661163,
+      "maximum_body_tilt_deg": 32.24684688626291,
+      "goal_hold_duration_s": 0.0,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "base_clearance_too_low"
+      ]
+    },
+    {
+      "return": 1437.986031432401,
+      "length_steps": 887,
+      "duration_s": 7.391666666666667,
+      "active_step_count": 4,
+      "highest_step_reached": 2,
+      "stairs_completed": false,
+      "forward_displacement_m": 0.5413824319839478,
+      "lateral_displacement_m": 0.013137918896973133,
+      "elevation_gain_m": -0.07035189867019653,
+      "maximum_base_elevation_gain_m": 0.01790270209312439,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.019999999552965164,
+        "front_right": 0.019999999552965164,
+        "rear_left": 0.019999999552965164,
+        "rear_right": 0.019999999552965164
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 3,
+        "front_right": 3,
+        "rear_left": 1,
+        "rear_right": 1
+      },
+      "final_terrain_height_m": 0.01,
+      "maximum_terrain_height_m": 0.02,
+      "minimum_base_clearance_m": 0.29243549704551697,
+      "maximum_body_tilt_deg": 39.715745287843845,
+      "goal_hold_duration_s": 0.0,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ]
+    },
+    {
+      "return": 326.2633708058613,
+      "length_steps": 229,
+      "duration_s": 1.9083333333333334,
+      "active_step_count": 4,
+      "highest_step_reached": 0,
+      "stairs_completed": false,
+      "forward_displacement_m": 0.1942899525165558,
+      "lateral_displacement_m": 0.058421265333890915,
+      "elevation_gain_m": -0.062069594860076904,
+      "maximum_base_elevation_gain_m": 0.007856249809265137,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.019999999552965164,
+        "front_right": 0.019999999552965164,
+        "rear_left": 0.0,
+        "rear_right": 0.00996473804116249
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 1,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_terrain_height_m": 0.0,
+      "maximum_terrain_height_m": 0.0,
+      "minimum_base_clearance_m": 0.3106842041015625,
+      "maximum_body_tilt_deg": 39.811872610916886,
+      "goal_hold_duration_s": 0.0,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ]
+    },
+    {
+      "return": 1586.72907376643,
+      "length_steps": 784,
+      "duration_s": 6.533333333333333,
+      "active_step_count": 4,
+      "highest_step_reached": 2,
+      "stairs_completed": false,
+      "forward_displacement_m": 0.7082931995391846,
+      "lateral_displacement_m": -0.3012058138847351,
+      "elevation_gain_m": -0.01793864369392395,
+      "maximum_base_elevation_gain_m": 0.025558799505233765,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.019999999552965164,
+        "front_right": 0.019999999552965164,
+        "rear_left": 0.019999999552965164,
+        "rear_right": 0.019999999552965164
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 3,
+        "front_right": 3,
+        "rear_left": 2,
+        "rear_right": 1
+      },
+      "final_terrain_height_m": 0.02,
+      "maximum_terrain_height_m": 0.02,
+      "minimum_base_clearance_m": 0.3348594605922699,
+      "maximum_body_tilt_deg": 18.073277428410147,
+      "goal_hold_duration_s": 0.0,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "left_stair_corridor"
+      ]
+    },
+    {
+      "return": 160.99731805967082,
+      "length_steps": 600,
+      "duration_s": 5.0,
+      "active_step_count": 4,
+      "highest_step_reached": 0,
+      "stairs_completed": false,
+      "forward_displacement_m": 0.1713753044605255,
+      "lateral_displacement_m": 0.06663927435874939,
+      "elevation_gain_m": -0.0004648566246032715,
+      "maximum_base_elevation_gain_m": 0.0013674795627593994,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.014865651726722717,
+        "front_right": 0.019999999552965164,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 0,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_terrain_height_m": 0.0,
+      "maximum_terrain_height_m": 0.0,
+      "minimum_base_clearance_m": 0.3580455482006073,
+      "maximum_body_tilt_deg": 8.543942566265372,
+      "goal_hold_duration_s": 0.0,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "no_forward_progress"
+      ]
+    },
+    {
+      "return": 240.48153428330633,
+      "length_steps": 140,
+      "duration_s": 1.1666666666666667,
+      "active_step_count": 4,
+      "highest_step_reached": 0,
+      "stairs_completed": false,
+      "forward_displacement_m": 0.06819172203540802,
+      "lateral_displacement_m": -0.013283245265483856,
+      "elevation_gain_m": -0.12088477611541748,
+      "maximum_base_elevation_gain_m": 9.182095527648926e-05,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.019999999552965164,
+        "front_right": 0.019999999552965164,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 1,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_terrain_height_m": 0.0,
+      "maximum_terrain_height_m": 0.0,
+      "minimum_base_clearance_m": 0.25185567140579224,
+      "maximum_body_tilt_deg": 39.18284692819887,
+      "goal_hold_duration_s": 0.0,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ]
+    },
+    {
+      "return": 323.46000208688,
+      "length_steps": 356,
+      "duration_s": 2.966666666666667,
+      "active_step_count": 4,
+      "highest_step_reached": 0,
+      "stairs_completed": false,
+      "forward_displacement_m": 0.23523561656475067,
+      "lateral_displacement_m": 0.00729599641636014,
+      "elevation_gain_m": -0.12566998600959778,
+      "maximum_base_elevation_gain_m": 0.0056816041469573975,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.019999999552965164,
+        "front_right": 0.019999999552965164,
+        "rear_left": 0.00469350628554821,
+        "rear_right": 0.003964030649513006
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 1,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_terrain_height_m": 0.0,
+      "maximum_terrain_height_m": 0.0,
+      "minimum_base_clearance_m": 0.24709945917129517,
+      "maximum_body_tilt_deg": 36.13235229312702,
+      "goal_hold_duration_s": 0.0,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "base_clearance_too_low"
+      ]
+    },
+    {
+      "return": 346.13108550891064,
+      "length_steps": 203,
+      "duration_s": 1.6916666666666667,
+      "active_step_count": 4,
+      "highest_step_reached": 1,
+      "stairs_completed": false,
+      "forward_displacement_m": 0.3495684862136841,
+      "lateral_displacement_m": -0.060040801763534546,
+      "elevation_gain_m": -0.11026406288146973,
+      "maximum_base_elevation_gain_m": 0.00239524245262146,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.019999999552965164,
+        "front_right": 0.019999999552965164,
+        "rear_left": 0.002085097599774599,
+        "rear_right": 0.0
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 1,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_terrain_height_m": 0.01,
+      "maximum_terrain_height_m": 0.01,
+      "minimum_base_clearance_m": 0.25253140926361084,
+      "maximum_body_tilt_deg": 39.8434332087397,
+      "goal_hold_duration_s": 0.0,
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ]
+    }
+  ],
+  "success_count": 0,
+  "success_rate": 0.0,
+  "failure_reason_counts": {
+    "base_clearance_too_low": 2,
+    "body_tipped": 4,
+    "left_stair_corridor": 1,
+    "no_forward_progress": 3
+  },
+  "mean_return": 544.8608387370783,
+  "mean_highest_step_reached": 0.5,
+  "mean_forward_displacement_m": 0.2944670394062996,
+  "mean_elevation_gain_m": -0.06436439007520675,
+  "minimum_base_clearance_m": 0.24709945917129517,
+  "maximum_body_tilt_deg": 39.8434332087397,
+  "environment_contract": {
+    "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\exports\\isaac\\quadruped_robot_stairs_v5_10mm_world.usda",
+    "dof_names": [
+      "front_left_hip_abduction",
+      "rear_left_hip_abduction",
+      "front_right_hip_abduction",
+      "rear_right_hip_abduction",
+      "front_left_hip_flexion",
+      "rear_left_hip_flexion",
+      "front_right_hip_flexion",
+      "rear_right_hip_flexion",
+      "front_left_knee",
+      "rear_left_knee",
+      "front_right_knee",
+      "rear_right_knee"
+    ],
+    "nominal_joint_positions_rad": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.15449158847332,
+      0.15449158847332,
+      -0.15449158847332,
+      0.15449158847332,
+      0.469925194978714,
+      -0.469925194978714,
+      0.469925194978714,
+      -0.469925194978714
+    ],
+    "action_scale_rad": [
+      0.07999999821186066,
+      0.07999999821186066,
+      0.07999999821186066,
+      0.07999999821186066,
+      0.3499999940395355,
+      0.3499999940395355,
+      0.3499999940395355,
+      0.3499999940395355,
+      0.5,
+      0.5,
+      0.5,
+      0.5
+    ],
+    "observation_fields": [
+      "command_forward_velocity_m_s",
+      "command_lateral_velocity_m_s",
+      "command_yaw_rate_rad_s",
+      "imu_angular_velocity_x_rad_s",
+      "imu_angular_velocity_y_rad_s",
+      "imu_angular_velocity_z_rad_s",
+      "imu_projected_gravity_x",
+      "imu_projected_gravity_y",
+      "imu_projected_gravity_z",
+      "imu_linear_acceleration_x_g",
+      "imu_linear_acceleration_y_g",
+      "imu_linear_acceleration_z_g",
+      "joint_position_error_0",
+      "joint_position_error_1",
+      "joint_position_error_2",
+      "joint_position_error_3",
+      "joint_position_error_4",
+      "joint_position_error_5",
+      "joint_position_error_6",
+      "joint_position_error_7",
+      "joint_position_error_8",
+      "joint_position_error_9",
+      "joint_position_error_10",
+      "joint_position_error_11",
+      "joint_velocity_normalized_0",
+      "joint_velocity_normalized_1",
+      "joint_velocity_normalized_2",
+      "joint_velocity_normalized_3",
+      "joint_velocity_normalized_4",
+      "joint_velocity_normalized_5",
+      "joint_velocity_normalized_6",
+      "joint_velocity_normalized_7",
+      "joint_velocity_normalized_8",
+      "joint_velocity_normalized_9",
+      "joint_velocity_normalized_10",
+      "joint_velocity_normalized_11",
+      "previous_action_0",
+      "previous_action_1",
+      "previous_action_2",
+      "previous_action_3",
+      "previous_action_4",
+      "previous_action_5",
+      "previous_action_6",
+      "previous_action_7",
+      "previous_action_8",
+      "previous_action_9",
+      "previous_action_10",
+      "previous_action_11",
+      "terrain_height_delta_at_-0.100_m",
+      "terrain_height_delta_at_+0.000_m",
+      "terrain_height_delta_at_+0.080_m",
+      "terrain_height_delta_at_+0.160_m",
+      "terrain_height_delta_at_+0.240_m",
+      "terrain_height_delta_at_+0.320_m",
+      "terrain_height_delta_at_+0.450_m",
+      "terrain_height_delta_at_+0.600_m",
+      "goal_distance_normalized",
+      "lateral_offset_normalized",
+      "heading_error_sin",
+      "heading_error_cos"
+    ],
+    "observation_size": 60,
+    "action_size": 12,
+    "imu_fields": [
+      "angular_velocity_x_rad_s",
+      "angular_velocity_y_rad_s",
+      "angular_velocity_z_rad_s",
+      "projected_gravity_x",
+      "projected_gravity_y",
+      "projected_gravity_z",
+      "linear_acceleration_x_g",
+      "linear_acceleration_y_g",
+      "linear_acceleration_z_g"
+    ],
+    "rated_effort_cap_nm": 0.980665,
+    "applied_effort_cap_nm": 0.8825985,
+    "applied_joint_lower_limits_rad": [
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -2.094395160675049,
+      -2.094395160675049,
+      -2.094395160675049,
+      -2.094395160675049
+    ],
+    "applied_joint_upper_limits_rad": [
+      0.7853981852531433,
+      0.7853981852531433,
+      0.7853981852531433,
+      0.7853981852531433,
+      1.5707963705062866,
+      1.5707963705062866,
+      1.5707963705062866,
+      1.5707963705062866,
+      2.094395160675049,
+      2.094395160675049,
+      2.094395160675049,
+      2.094395160675049
+    ],
+    "robot_hardware_profile": {
+      "id": "one-leg-real-test-2026-07-28",
+      "evidence": [
+        "hardware/robot-runtime/servos/leg-1.toml",
+        "hardware/robot-runtime/servos/calibration-leg-1.json",
+        "conversations/2026-07-28-one-leg-wall-isaac-revisit.md"
+      ],
+      "center_tick": 2048,
+      "encoder_directions": {
+        "hip_abduction": 1,
+        "hip_flexion": -1,
+        "knee": -1
+      },
+      "joint_limits_deg": {
+        "hip_abduction": [
+          -45.0,
+          45.0
+        ],
+        "hip_flexion": [
+          -90.0,
+          90.0
+        ],
+        "knee": [
+          -120.0,
+          120.0
+        ]
+      },
+      "torque_limit_register": 300,
+      "torque_limit_register_full_scale": 1000,
+      "torque_limit_fraction": 0.3,
+      "stall_torque_nm": 2.941995,
+      "effort_cap_nm": 0.8825985,
+      "speed_register": 350,
+      "speed_register_applied_as_rad_s": false
+    },
+    "control_hz": 120,
+    "physics_hz": 120,
+    "task_id": "Drobot-Quadruped-Stairs-v5-10mm",
+    "walking_observation_size": 48,
+    "include_navigation_observation": true,
+    "terrain_input_note": "Analytic forward terrain profile; replace with a camera/depth estimator before hardware deployment.",
+    "physics_steps_per_control": 1,
+    "control_action_mode": "residual_over_flat",
+    "residual_policy": {
+      "enabled": true,
+      "base_task_id": "Drobot-Quadruped-Walk-v1",
+      "base_model": "simulation/isaac/models/ppo-walk-v1-2m/drobot_walk_ppo_final.zip",
+      "base_action_scale_rad": {
+        "hip_abduction": 0.12,
+        "hip_flexion": 0.3,
+        "knee": 0.4
+      },
+      "base_model_resolved": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-walk-v1-2m\\drobot_walk_ppo_final.zip",
+      "base_model_sha256": "eac4fd89066bf9483900188f8a5b8c047e848dfa2b3845f90c148967fdea56be",
+      "base_action_scale_by_dof_rad": [
+        0.11999999731779099,
+        0.11999999731779099,
+        0.11999999731779099,
+        0.11999999731779099,
+        0.30000001192092896,
+        0.30000001192092896,
+        0.30000001192092896,
+        0.30000001192092896,
+        0.4000000059604645,
+        0.4000000059604645,
+        0.4000000059604645,
+        0.4000000059604645
+      ]
+    },
+    "staircase": {
+      "start_x_m": 0.55,
+      "step_count": 4,
+      "tread_depth_m": 0.23,
+      "rise_m": 0.01,
+      "width_m": 1.0,
+      "top_platform_depth_m": 0.5,
+      "terrain_sample_offsets_m": [
+        -0.1,
+        0.0,
+        0.08,
+        0.16,
+        0.24,
+        0.32,
+        0.45,
+        0.6
+      ],
+      "terrain_height_normalization_m": 0.12,
+      "goal_distance_normalization_m": 1.6,
+      "goal_margin_m": 0.1
+    },
+    "curriculum_levels": [
+      {
+        "start_fraction": 0.0,
+        "active_steps": 1
+      },
+      {
+        "start_fraction": 0.25,
+        "active_steps": 2
+      },
+      {
+        "start_fraction": 0.5,
+        "active_steps": 3
+      },
+      {
+        "start_fraction": 0.75,
+        "active_steps": 4
+      }
+    ]
+  },
+  "screenshot_bytes": null
+}

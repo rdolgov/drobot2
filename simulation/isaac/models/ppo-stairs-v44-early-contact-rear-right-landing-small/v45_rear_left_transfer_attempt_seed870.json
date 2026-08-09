@@ -1,0 +1,22 @@
+{
+  "status": "FAIL",
+  "task_id": "Drobot-Quadruped-Stairs-v45-Rear-Left-Transfer",
+  "config": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\rl\\stairs\\quadruped_stairs_v45_rear_left_transfer.yaml",
+  "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\exports\\isaac\\quadruped_robot_stairs_v6_180mm_world.usda",
+  "seed": 870,
+  "stair_rise_m": 0.18,
+  "stair_tread_depth_m": 0.25,
+  "effort_cap_nm": 0.8825985,
+  "minimum_support_margin_m": 0.015,
+  "maximum_body_tilt_deg": 12.0,
+  "candidate_count": 4,
+  "models": {
+    "front_right": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-stairs-v10-180mm-25cm-front-right-placement-small\\drobot_stairs_ppo_final.zip",
+    "front_left": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-stairs-v17-single-foot-190mm-small\\drobot_stairs_ppo_final.zip",
+    "rear_right_swing_base": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-stairs-v17-single-foot-190mm-small\\drobot_stairs_ppo_final.zip",
+    "rear_right_swing_residual": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-stairs-v35-rear-right-190mm-lift-small\\drobot_stairs_ppo_final.zip",
+    "rear_right_support": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ppo-stairs-v44-early-contact-rear-right-landing-small\\drobot_stairs_ppo_final.zip"
+  },
+  "error": "RuntimeError(\"Could not reach inter_leg_transfer training phase 'rear_left' after 4 attempts; last failures=['body_tipped']\")",
+  "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\rl\\stairs\\search_rear_left_transfer_com.py\", line 231, in <module>\n    _, initial_info = phase_env.reset(seed=args.seed)\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\rl\\stairs\\_placement_phase_training.py\", line 508, in reset\n    raise RuntimeError(\nRuntimeError: Could not reach inter_leg_transfer training phase 'rear_left' after 4 attempts; last failures=['body_tipped']\n"
+}
