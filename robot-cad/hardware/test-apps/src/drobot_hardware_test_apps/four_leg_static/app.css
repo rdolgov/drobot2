@@ -131,6 +131,30 @@ h1 {
   gap: 10px;
 }
 
+.mode-badge {
+  flex: 0 0 auto;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  white-space: nowrap;
+}
+
+.mode-badge.hardware {
+  color: var(--lime);
+  border-color: rgba(185, 242, 113, 0.5);
+  background: rgba(185, 242, 113, 0.08);
+}
+
+.mode-badge.demo {
+  color: var(--amber);
+  border-color: rgba(255, 196, 92, 0.58);
+  background: rgba(255, 196, 92, 0.1);
+}
+
 .connection {
   gap: 8px;
   min-width: 174px;

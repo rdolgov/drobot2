@@ -7,6 +7,7 @@ import json
 import math
 import secrets
 import shutil
+import socket
 import threading
 import time
 import tomllib
@@ -1101,6 +1102,12 @@ class FourLegSession:
                 "temperature_warning_c": monitoring.temperature_warning_c,
                 "leg_current_warning_ma": monitoring.leg_current_warning_ma,
             },
+            "runtime": {
+                "mode": (
+                    "demo" if isinstance(self.bus, FourLegDemoBus) else "hardware"
+                ),
+                "port": getattr(self.bus, "port_name", None),
+            },
             "crawl": {
                 "active": self.crawl_active,
                 "stage": self.crawl_stage,
@@ -1136,6 +1143,21 @@ class FourLegSession:
 
 class FourLegHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
+    allow_reuse_address = False
+    allow_reuse_port = False
+
+    def server_bind(self) -> None:
+        # Windows permits two listeners on the same address unless the first
+        # socket explicitly requests exclusive ownership.  A demo and hardware
+        # dashboard sharing one port can otherwise receive alternating browser
+        # requests, making simulated motion look like real motor feedback.
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(
+                socket.SOL_SOCKET,
+                socket.SO_EXCLUSIVEADDRUSE,
+                1,
+            )
+        super().server_bind()
 
     def __init__(
         self,
@@ -1334,17 +1356,23 @@ def main(argv: list[str] | None = None) -> int:
         ramp_rate_deg_s=args.ramp_rate,
         persist_calibration=not args.demo,
     )
-    session.start()
     token = secrets.token_urlsafe(24)
     http_port = dashboard.server.http_port if args.http_port is None else args.http_port
-    server = FourLegHTTPServer((LOCAL_HOST, http_port), session, token)
+    try:
+        server = FourLegHTTPServer((LOCAL_HOST, http_port), session, token)
+    except OSError as exc:
+        raise SystemExit(
+            f"Dashboard port {http_port} is already in use. Stop the existing "
+            "demo or hardware dashboard before starting another one."
+        ) from exc
     url = f"http://{LOCAL_HOST}:{server.server_port}/"
     mode = "demo" if args.demo else f"hardware on {args.port}"
-    print(f"Drobot four-leg control ({mode}): {url}")
-    print("Local machine only. Ctrl+C disarms all motors and closes the bus.")
-    if not args.no_browser:
-        threading.Timer(0.4, webbrowser.open, args=(url,)).start()
     try:
+        session.start()
+        print(f"Drobot four-leg control ({mode}): {url}")
+        print("Local machine only. Ctrl+C disarms all motors and closes the bus.")
+        if not args.no_browser:
+            threading.Timer(0.4, webbrowser.open, args=(url,)).start()
         server.serve_forever(poll_interval=0.2)
     except KeyboardInterrupt:
         print("\nStopping four-leg controller...")

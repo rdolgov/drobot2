@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import math
+import socket
 from dataclasses import replace
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from drobot_leg_testbed.model import load_calibration, save_calibration
 from drobot_hardware_test_apps.crawl_gait import quasistatic_crawl_degrees
 from drobot_hardware_test_apps.four_leg_control import (
     FourLegDemoBus,
+    FourLegHTTPServer,
     FourLegSession,
     load_dashboard_config,
 )
@@ -117,9 +119,31 @@ def test_start_requires_all_motors_and_disarms_every_id() -> None:
         assert state["summary"]["online_count"] == 12
         assert state["summary"]["armed_count"] == 0
         assert state["summary"]["health"] == "nominal"
+        assert state["runtime"] == {"mode": "demo", "port": None}
         assert bus.torque == set()
     finally:
         session.close()
+
+
+def test_dashboard_port_is_exclusive() -> None:
+    first = FourLegHTTPServer(("127.0.0.1", 0), None, "first")
+    try:
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            assert (
+                first.socket.getsockopt(
+                    socket.SOL_SOCKET,
+                    socket.SO_EXCLUSIVEADDRUSE,
+                )
+                == 1
+            )
+        with pytest.raises(OSError):
+            FourLegHTTPServer(
+                ("127.0.0.1", first.server_port),
+                None,
+                "second",
+            )
+    finally:
+        first.server_close()
 
 
 def test_joint_arm_requires_ack_and_large_target_is_ramped() -> None:
