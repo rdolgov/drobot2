@@ -1,5 +1,9 @@
 # Crawl walk V4: wide mirrored stance
 
+> Historical record: V4 has been superseded by
+> [Distributed-push crawl V5](hardware-gait-sequence-v1.md). The dashboard no
+> longer executes the hardcoded V4 joint sequence described below.
+
 ## Decision
 
 V4 replaces the V3 common-direction walking posture. The assembled robot fell

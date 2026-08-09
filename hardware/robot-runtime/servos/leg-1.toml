@@ -1,9 +1,9 @@
 [bus]
 baudrate = 1000000
 torque_limit = 900
-speed = 700
-acceleration = 10
-max_command_step_deg = 5.0
+speed = 3400
+acceleration = 254
+max_command_step_deg = 15.0
 
 [[motors]]
 number = 1

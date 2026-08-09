@@ -26,10 +26,15 @@ The centers were last captured from the assembled whole-robot neutral pose on
 2026-08-09. They are specific to this robot and must be revalidated after horn,
 servo, wiring, or linkage changes.
 
-All profiles use 1,000,000 baud, 90% torque limit, speed 700, acceleration 10,
-and a five-degree maximum interactive command step. The dashboard motion ramp
-is 90 degrees/s. Software limits do not replace physical stops or collision
-checks.
+All profiles use 1,000,000 baud, a 90% torque limit, speed register 3400,
+acceleration register 254, and a 15-degree maximum command step. The dashboard
+motion ramp is 270 degrees/s. These are aggressive response settings selected
+for gait recovery; loaded joints may not reach no-load speed, and software
+limits do not replace physical stops or collision checks. See the
+[Waveshare ST3215 documentation](https://www.waveshare.com/wiki/ST3215_Servo)
+and the
+[ST3215-C047 datasheet](https://files.seeedstudio.com/products/Feetech/108090003_FEETECH_ST-3215-C047-Datasheet.pdf)
+for the vendor-level register and electrical context.
 
 ## Setup and guarded commands
 

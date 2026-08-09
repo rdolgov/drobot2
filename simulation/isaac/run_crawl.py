@@ -1103,7 +1103,11 @@ try:
                 "ik": (
                     "analytic common-direction two-link sagittal IK"
                     if args.gait_mode == "coordinated-push"
-                    else "analytic mirrored two-link sagittal IK"
+                    else (
+                        "analytic mirrored outward-bend two-link sagittal IK"
+                        if args.gait_mode == "distributed-push"
+                        else "analytic mirrored two-link sagittal IK"
+                    )
                 ),
             },
             "settle_seconds": settle_steps / CONTROL_HZ,

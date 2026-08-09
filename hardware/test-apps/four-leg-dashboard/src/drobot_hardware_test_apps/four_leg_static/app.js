@@ -409,10 +409,11 @@ function updateSummary(state) {
       : "READY / DISARMED";
   gaitPhase.textContent = `${phaseText}${swingText}${pushText}`;
   gaitProgress.style.width = `${Math.max(0, Math.min(100, crawl.progress * 100))}%`;
-  gaitDetail.textContent = crawl.pattern === "hardware_joint_sequence_v1"
-    ? `${crawl.sequence_repetitions} passes / ` +
-      `L1 hip 90 / L2 hip 70 / L4 knee 20 / ` +
-      `${crawl.duration_s.toFixed(0)} s`
+  gaitDetail.textContent = crawl.pattern === "distributed_push_crawl_v5"
+    ? `${crawl.cycles} cycles / ` +
+      `${(crawl.stride_mm).toFixed(0)} mm stride / ` +
+      `${(crawl.lift_mm).toFixed(0)} mm lift / ` +
+      `${crawl.duration_s.toFixed(1)} s`
     : `${crawl.stride_mm.toFixed(0)} mm stride / ` +
       `${crawl.lift_mm.toFixed(0)} mm lift / ` +
       `${crawl.stance_fore_aft_mm.toFixed(0)} mm front/rear splay / ` +
@@ -506,8 +507,8 @@ captureZeroAll.addEventListener("click", () => {
 setCrawlStance.addEventListener("click", () => {
   postAction(
     "/api/crawl-stance",
-    { safety_ack: true, confirmation: "SET WIDE WALK STANCE" },
-    "Moving all four legs to the wide mirrored walk stance",
+    { safety_ack: true, confirmation: "SET GAIT START STANCE" },
+    "Moving all four legs to the distributed-push start stance",
   );
 });
 
@@ -518,8 +519,8 @@ walkForward.addEventListener("click", () => {
   }
   postAction(
     "/api/crawl-forward",
-    { safety_ack: true, confirmation: "TEST GAIT SEQUENCE" },
-    "Moving to wide stance, then starting the two-pass gait sequence",
+    { safety_ack: true, confirmation: "TEST DISTRIBUTED CRAWL" },
+    "Moving to the start stance, then running two distributed-push cycles",
   );
 });
 

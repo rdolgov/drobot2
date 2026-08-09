@@ -62,13 +62,12 @@
         <section class="gait-panel" aria-labelledby="gaitTitle">
           <div class="gait-copy">
             <p class="eyebrow">SUPPORTED COMMISSIONING / FEET CLEAR</p>
-            <h2 id="gaitTitle">Hardware joint-sequence gait</h2>
+            <h2 id="gaitTitle">Eight-phase distributed-push crawl</h2>
             <p>
-              Starting from the wide stance, Leg 1 hip flexion moves to 90
-              degrees, then Leg 2 hip flexion moves to 70 degrees, then Leg 4
-              knee moves to 20 degrees. The robot returns to stance and repeats
-              the same sequence once. Each transition is smooth and all
-              unmentioned joints hold their current stance target.
+              Rear-right, front-right, rear-left, then front-left swing one at
+              a time. Each step transfers load, lifts and places one foot, then
+              uses all four planted feet for a deliberate rearward push. All 12
+              joints participate through foot-space inverse kinematics.
             </p>
             <div class="corner-map" aria-label="Configured body corner map">
               <span><b>1</b> FRONT LEFT</span>
@@ -87,16 +86,16 @@
             </div>
             <div class="gait-buttons">
               <button class="walk-button" id="setCrawlStance" type="button">
-                SET WIDE WALK STANCE
+                SET GAIT START STANCE
               </button>
               <button class="walk-button" id="walkForward" type="button">
-                TEST GAIT SEQUENCE
+                TEST DISTRIBUTED CRAWL
               </button>
               <button class="gait-stop-button" id="stopWalk" type="button">
                 STOP + DISARM
               </button>
             </div>
-            <small id="gaitDetail">2 passes / 4 smooth transitions per pass / 20 seconds</small>
+            <small id="gaitDetail">2 cycles / 8 steps / 112 mm stride / 13.3 seconds</small>
           </div>
         </section>
 

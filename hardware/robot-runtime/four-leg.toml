@@ -1,6 +1,6 @@
 [server]
 http_port = 8766
-ramp_rate_deg_s = 90.0
+ramp_rate_deg_s = 270.0
 heartbeat_timeout_s = 1.5
 
 [monitoring]
@@ -11,16 +11,16 @@ temperature_warning_c = 55
 leg_current_warning_ma = 2500.0
 
 [crawl]
-period_s = 20.0
-cycles = 1
+period_s = 6.666666667
+cycles = 2
 stance_settle_s = 1.5
-stride_m = 0.035
-lift_m = 0.016
+stride_m = 0.112
+lift_m = 0.014
 weight_shift_forward_m = 0.016
-weight_shift_lateral_m = 0.012
-stance_down_m = 0.272960722
-stance_fore_aft_m = 0.113064033
-abduction_deg = 15.0
+weight_shift_lateral_m = 0.0
+stance_down_m = 0.300
+stance_fore_aft_m = 0.025
+abduction_deg = 0.0
 start_tolerance_deg = 35.0
 
 [[legs]]

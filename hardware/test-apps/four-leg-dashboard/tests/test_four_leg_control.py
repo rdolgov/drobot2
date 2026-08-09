@@ -11,8 +11,10 @@ from drobot_leg_testbed.model import degrees_to_raw, load_calibration, save_cali
 
 from drobot_hardware_test_apps.crawl_gait import (
     COORDINATED_PUSH_SWING_ORDER,
+    DISTRIBUTED_PUSH_SWING_ORDER,
     coordinated_push_crawl_degrees,
     coordinated_push_stance_degrees,
+    distributed_push_crawl_degrees,
     hardware_joint_sequence_degrees,
     outward_bent_crawl_stance_degrees,
 )
@@ -67,28 +69,30 @@ def test_manifest_loads_verified_ids_and_directions() -> None:
     assert ids == list(range(1, 13))
     assert directions == [(-1, 1, 1), (1, 1, 1), (-1, -1, -1), (1, 1, 1)]
     assert dashboard.bus.torque_limit == 900
-    assert dashboard.bus.speed == 700
+    assert dashboard.bus.speed == 3400
+    assert dashboard.bus.acceleration == 254
+    assert dashboard.bus.max_command_step_deg == pytest.approx(15.0)
     assert [profile.corner for profile in dashboard.legs] == [
         "front_left",
         "front_right",
         "rear_left",
         "rear_right",
     ]
-    assert dashboard.server.ramp_rate_deg_s == 90.0
+    assert dashboard.server.ramp_rate_deg_s == 270.0
     assert dashboard.server.heartbeat_timeout_s == 1.5
     assert dashboard.monitoring.voltage_warning_low_v == pytest.approx(11.0)
     assert dashboard.monitoring.voltage_spread_warning_v == pytest.approx(0.3)
     assert dashboard.monitoring.temperature_warning_c == 55
     assert dashboard.monitoring.leg_current_warning_ma == pytest.approx(2500.0)
-    assert dashboard.crawl.period_s == 20.0
-    assert dashboard.crawl.cycles == 1
-    assert dashboard.crawl.stride_m == pytest.approx(0.035)
-    assert dashboard.crawl.lift_m == pytest.approx(0.016)
-    assert dashboard.crawl.stance_down_m == pytest.approx(0.272960722)
-    assert dashboard.crawl.stance_fore_aft_m == pytest.approx(0.113064033)
-    assert dashboard.crawl.abduction_deg == pytest.approx(15.0)
+    assert dashboard.crawl.period_s == pytest.approx(6.666666667)
+    assert dashboard.crawl.cycles == 2
+    assert dashboard.crawl.stride_m == pytest.approx(0.112)
+    assert dashboard.crawl.lift_m == pytest.approx(0.014)
+    assert dashboard.crawl.stance_down_m == pytest.approx(0.300)
+    assert dashboard.crawl.stance_fore_aft_m == pytest.approx(0.025)
+    assert dashboard.crawl.abduction_deg == pytest.approx(0.0)
     assert dashboard.crawl.weight_shift_forward_m == pytest.approx(0.016)
-    assert dashboard.crawl.weight_shift_lateral_m == pytest.approx(0.012)
+    assert dashboard.crawl.weight_shift_lateral_m == pytest.approx(0.0)
 
 
 def test_dashboard_crawl_matches_isaac_reference_and_motor_limits(
@@ -101,7 +105,7 @@ def test_dashboard_crawl_matches_isaac_reference_and_motor_limits(
 
     for sample in range(81):
         gait_time_s = config.period_s * sample / 80
-        dashboard_pose, _state = coordinated_push_crawl_degrees(
+        dashboard_pose, _state = distributed_push_crawl_degrees(
             gait_time_s,
             period_s=config.period_s,
             stride_m=config.stride_m,
@@ -112,7 +116,7 @@ def test_dashboard_crawl_matches_isaac_reference_and_motor_limits(
             fore_aft_m=config.stance_fore_aft_m,
             abduction_deg=config.abduction_deg,
         )
-        isaac_pose, _isaac_state = runtime.coordinated_push_crawl_by_name(
+        isaac_pose, _isaac_state = runtime.distributed_push_crawl_by_name(
             gait_time_s,
             period_s=config.period_s,
             stride_m=config.stride_m,
@@ -130,6 +134,13 @@ def test_dashboard_crawl_matches_isaac_reference_and_motor_limits(
                     math.degrees(isaac_pose[f"{profile.corner}_{motor.name}"])
                 )
                 assert motor.min_deg <= degrees <= motor.max_deg
+
+    assert DISTRIBUTED_PUSH_SWING_ORDER == (
+        "rear_right",
+        "front_right",
+        "rear_left",
+        "front_left",
+    )
 
 
 def test_coordinated_push_is_periodic_and_moves_every_planted_foot() -> None:
@@ -273,15 +284,16 @@ def test_hardware_joint_sequence_runs_requested_targets_twice() -> None:
         )
         return pose
 
+    transition_s = config.period_s / 8.0
     stance = pose_at(0.0)
-    first_leg_1 = pose_at(2.5)
-    first_leg_2 = pose_at(5.0)
-    first_leg_4 = pose_at(7.5)
-    second_stance = pose_at(10.0)
-    second_leg_1 = pose_at(12.5)
-    second_leg_2 = pose_at(15.0)
-    second_leg_4 = pose_at(17.5)
-    final_stance = pose_at(20.0)
+    first_leg_1 = pose_at(transition_s)
+    first_leg_2 = pose_at(2.0 * transition_s)
+    first_leg_4 = pose_at(3.0 * transition_s)
+    second_stance = pose_at(4.0 * transition_s)
+    second_leg_1 = pose_at(5.0 * transition_s)
+    second_leg_2 = pose_at(6.0 * transition_s)
+    second_leg_4 = pose_at(7.0 * transition_s)
+    final_stance = pose_at(config.period_s)
 
     assert first_leg_1[("front_left", "hip_flexion")] == pytest.approx(90.0)
     assert first_leg_2[("front_right", "hip_flexion")] == pytest.approx(70.0)
@@ -408,12 +420,12 @@ def test_walk_stance_arms_missing_motors_and_targets_mirrored_angles() -> None:
         with pytest.raises(ValueError, match="support"):
             session.set_crawl_stance(
                 safety_ack=False,
-                confirmation="SET WIDE WALK STANCE",
+                confirmation="SET GAIT START STANCE",
             )
         session.arm(1, 1, safety_ack=True)
         session.set_crawl_stance(
             safety_ack=True,
-            confirmation="SET WIDE WALK STANCE",
+            confirmation="SET GAIT START STANCE",
         )
         state = session.snapshot()
 
@@ -448,7 +460,7 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
         with pytest.raises(ValueError, match="supported"):
             session.start_crawl_forward(
                 safety_ack=False,
-                confirmation="TEST GAIT SEQUENCE",
+                confirmation="TEST DISTRIBUTED CRAWL",
             )
         with pytest.raises(ValueError, match="confirmation"):
             session.start_crawl_forward(safety_ack=True, confirmation="")
@@ -457,13 +469,13 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
         with pytest.raises(RuntimeError, match="Disarm all 12"):
             session.start_crawl_forward(
                 safety_ack=True,
-                confirmation="TEST GAIT SEQUENCE",
+                confirmation="TEST DISTRIBUTED CRAWL",
             )
         session.disarm_all()
 
         session.start_crawl_forward(
             safety_ack=True,
-            confirmation="TEST GAIT SEQUENCE",
+            confirmation="TEST DISTRIBUTED CRAWL",
         )
         state = session.snapshot()
 
@@ -475,17 +487,16 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
             "3": "rear_left",
             "4": "rear_right",
         }
-        assert state["crawl"]["duration_s"] == 20.0
-        assert state["crawl"]["pattern"] == "hardware_joint_sequence_v1"
-        assert state["crawl"]["sequence_repetitions"] == 2
+        assert state["crawl"]["duration_s"] == pytest.approx(13.333333334)
+        assert state["crawl"]["pattern"] == "distributed_push_crawl_v5"
         assert state["crawl"]["supported_test_only"] is True
-        assert state["crawl"]["stride_mm"] == pytest.approx(35.0)
-        assert state["crawl"]["lift_mm"] == pytest.approx(16.0)
-        assert state["crawl"]["stance_down_mm"] == pytest.approx(272.960722)
-        assert state["crawl"]["stance_fore_aft_mm"] == pytest.approx(113.064033)
-        assert state["crawl"]["abduction_deg"] == pytest.approx(15.0)
+        assert state["crawl"]["stride_mm"] == pytest.approx(112.0)
+        assert state["crawl"]["lift_mm"] == pytest.approx(14.0)
+        assert state["crawl"]["stance_down_mm"] == pytest.approx(300.0)
+        assert state["crawl"]["stance_fore_aft_mm"] == pytest.approx(25.0)
+        assert state["crawl"]["abduction_deg"] == pytest.approx(0.0)
         assert state["crawl"]["weight_shift_forward_mm"] == pytest.approx(16.0)
-        assert state["crawl"]["weight_shift_lateral_mm"] == pytest.approx(12.0)
+        assert state["crawl"]["weight_shift_lateral_mm"] == pytest.approx(0.0)
         assert state["summary"]["armed_count"] == 12
         assert bus.torque == set(range(1, 13))
         with pytest.raises(RuntimeError, match="Stop the active crawl"):
@@ -507,14 +518,14 @@ def test_crawl_preflight_rejects_off_center_pose_but_allows_telemetry_warning() 
         with pytest.raises(RuntimeError, match="Center the robot"):
             session.start_crawl_forward(
                 safety_ack=True,
-                confirmation="TEST GAIT SEQUENCE",
+                confirmation="TEST DISTRIBUTED CRAWL",
             )
 
         bus.positions[1] -= 500
         bus.voltage_v[12] = 10.4
         session.start_crawl_forward(
             safety_ack=True,
-            confirmation="TEST GAIT SEQUENCE",
+            confirmation="TEST DISTRIBUTED CRAWL",
         )
         state = session.snapshot()
         assert state["crawl"]["active"] is True
@@ -529,7 +540,7 @@ def test_crawl_completes_configured_cycles_and_holds_stance() -> None:
     try:
         session.start_crawl_forward(
             safety_ack=True,
-            confirmation="TEST GAIT SEQUENCE",
+            confirmation="TEST DISTRIBUTED CRAWL",
         )
         for tick in range(2000):
             if tick % 10 == 0:
@@ -542,7 +553,7 @@ def test_crawl_completes_configured_cycles_and_holds_stance() -> None:
         state = session.snapshot()
         assert tick < 1999
         assert state["crawl"]["stage"] == "complete"
-        assert state["crawl"]["phase"] == "holding_wide_mirrored_stance"
+        assert state["crawl"]["phase"] == "holding_gait_start_stance"
         assert state["crawl"]["progress"] == 1.0
         assert state["summary"]["armed_count"] == 12
         assert bus.torque == set(range(1, 13))

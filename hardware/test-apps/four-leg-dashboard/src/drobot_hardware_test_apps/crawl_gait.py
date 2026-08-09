@@ -496,10 +496,13 @@ def distributed_push_crawl_degrees(
             math.atan2(shifted_outward, vertical)
         )
 
-    pose = _pose_degrees(
-        down_by_corner,
-        forward_by_corner,
-        abduction_by_corner,
+    pose = _command_knees_downward(
+        _pose_degrees(
+            down_by_corner,
+            forward_by_corner,
+            abduction_by_corner,
+            knees_outward=True,
+        )
     )
     return pose, {
         "cycle_phase": cycle_phase,

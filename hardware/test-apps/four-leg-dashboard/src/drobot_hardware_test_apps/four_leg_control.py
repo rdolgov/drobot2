@@ -36,10 +36,8 @@ from drobot_leg_testbed.ports import resolve_port
 from drobot_leg_testbed.transport import MotorStatus, STSBus
 
 from drobot_hardware_test_apps.crawl_gait import (
-    HARDWARE_SEQUENCE_REPETITIONS,
     LEG_CORNERS,
-    hardware_joint_sequence_degrees,
-    outward_bent_crawl_stance_degrees,
+    distributed_push_crawl_degrees,
 )
 
 LOCAL_HOST = "127.0.0.1"
@@ -131,7 +129,7 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
     server = ServerConfig(
         http_port=int(server_data.get("http_port", 8766)),
         ramp_rate_deg_s=_finite_float(
-            server_data.get("ramp_rate_deg_s", 30.0),
+            server_data.get("ramp_rate_deg_s", 270.0),
             "server.ramp_rate_deg_s",
         ),
         heartbeat_timeout_s=_finite_float(
@@ -141,8 +139,8 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
     )
     if not 1 <= server.http_port <= 65_535:
         raise ValueError("server.http_port must be in [1, 65535]")
-    if not 1.0 <= server.ramp_rate_deg_s <= 90.0:
-        raise ValueError("server.ramp_rate_deg_s must be in [1, 90]")
+    if not 1.0 <= server.ramp_rate_deg_s <= 270.0:
+        raise ValueError("server.ramp_rate_deg_s must be in [1, 270]")
     if not 1.0 <= server.heartbeat_timeout_s <= 10.0:
         raise ValueError("server.heartbeat_timeout_s must be in [1, 10]")
 
@@ -179,16 +177,19 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("Leg-current warning must be in [100, 10000] mA")
 
     crawl = CrawlConfig(
-        period_s=_finite_float(crawl_data.get("period_s", 20.0), "crawl.period_s"),
-        cycles=int(crawl_data.get("cycles", 1)),
+        period_s=_finite_float(
+            crawl_data.get("period_s", 6.666666667),
+            "crawl.period_s",
+        ),
+        cycles=int(crawl_data.get("cycles", 2)),
         stance_settle_s=_finite_float(
             crawl_data.get("stance_settle_s", 1.5),
             "crawl.stance_settle_s",
         ),
-        stride_m=_finite_float(crawl_data.get("stride_m", 0.015), "crawl.stride_m"),
-        lift_m=_finite_float(crawl_data.get("lift_m", 0.010), "crawl.lift_m"),
+        stride_m=_finite_float(crawl_data.get("stride_m", 0.112), "crawl.stride_m"),
+        lift_m=_finite_float(crawl_data.get("lift_m", 0.014), "crawl.lift_m"),
         weight_shift_forward_m=_finite_float(
-            crawl_data.get("weight_shift_forward_m", 0.030),
+            crawl_data.get("weight_shift_forward_m", 0.016),
             "crawl.weight_shift_forward_m",
         ),
         weight_shift_lateral_m=_finite_float(
@@ -196,7 +197,7 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             "crawl.weight_shift_lateral_m",
         ),
         stance_down_m=_finite_float(
-            crawl_data.get("stance_down_m", 0.310),
+            crawl_data.get("stance_down_m", 0.300),
             "crawl.stance_down_m",
         ),
         stance_fore_aft_m=_finite_float(
@@ -212,14 +213,14 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             "crawl.start_tolerance_deg",
         ),
     )
-    if not 10.0 <= crawl.period_s <= 60.0:
-        raise ValueError("crawl.period_s must be in [10, 60]")
+    if not 5.0 <= crawl.period_s <= 60.0:
+        raise ValueError("crawl.period_s must be in [5, 60]")
     if not 1 <= crawl.cycles <= 4:
         raise ValueError("crawl.cycles must be in [1, 4]")
     if not 0.5 <= crawl.stance_settle_s <= 5.0:
         raise ValueError("crawl.stance_settle_s must be in [0.5, 5]")
-    if not 0.005 <= crawl.stride_m <= 0.075:
-        raise ValueError("crawl.stride_m must be in [0.005, 0.075]")
+    if not 0.005 <= crawl.stride_m <= 0.120:
+        raise ValueError("crawl.stride_m must be in [0.005, 0.120]")
     if not 0.005 <= crawl.lift_m <= 0.025:
         raise ValueError("crawl.lift_m must be in [0.005, 0.025]")
     if not 0.0 <= crawl.weight_shift_forward_m <= 0.040:
@@ -369,8 +370,8 @@ class FourLegSession:
             if heartbeat_timeout_s is None
             else heartbeat_timeout_s
         )
-        if not 1.0 <= self.ramp_rate_deg_s <= 90.0:
-            raise ValueError("ramp rate must be in [1, 90] deg/s")
+        if not 1.0 <= self.ramp_rate_deg_s <= 270.0:
+            raise ValueError("ramp rate must be in [1, 270] deg/s")
         if not 1.0 <= self.heartbeat_timeout_s <= 10.0:
             raise ValueError("heartbeat timeout must be in [1, 10] seconds")
         self.tick_interval_s = tick_interval_s
@@ -506,9 +507,13 @@ class FourLegSession:
         gait_time_s: float,
     ) -> tuple[dict[tuple[int, str], float], dict[str, object]]:
         config = self.dashboard.crawl
-        pose, state = hardware_joint_sequence_degrees(
+        pose, state = distributed_push_crawl_degrees(
             gait_time_s,
             period_s=config.period_s,
+            stride_m=config.stride_m,
+            lift_m=config.lift_m,
+            weight_shift_forward_m=config.weight_shift_forward_m,
+            weight_shift_lateral_m=config.weight_shift_lateral_m,
             down_m=config.stance_down_m,
             fore_aft_m=config.stance_fore_aft_m,
             abduction_deg=config.abduction_deg,
@@ -527,7 +532,13 @@ class FourLegSession:
 
     def _crawl_stance_targets_locked(self) -> dict[tuple[int, str], float]:
         config = self.dashboard.crawl
-        pose = outward_bent_crawl_stance_degrees(
+        pose, _state = distributed_push_crawl_degrees(
+            0.0,
+            period_s=config.period_s,
+            stride_m=config.stride_m,
+            lift_m=config.lift_m,
+            weight_shift_forward_m=config.weight_shift_forward_m,
+            weight_shift_lateral_m=config.weight_shift_lateral_m,
             down_m=config.stance_down_m,
             fore_aft_m=config.stance_fore_aft_m,
             abduction_deg=config.abduction_deg,
@@ -557,7 +568,7 @@ class FourLegSession:
         self.crawl_phase = str(state["phase"])
         swing_corner = state["swing_corner"]
         self.crawl_swing_corner = None if swing_corner is None else str(swing_corner)
-        push_partner = state["push_partner"]
+        push_partner = state.get("push_partner")
         self.crawl_push_partner = None if push_partner is None else str(push_partner)
 
     def _crawl_targets_reached_locked(self, tolerance_deg: float = 0.3) -> bool:
@@ -578,7 +589,7 @@ class FourLegSession:
         now = self.clock()
         config = self.dashboard.crawl
         if self.crawl_stage == "preparing":
-            self._set_crawl_stance_locked("settling_wide_mirrored_stance")
+            self._set_crawl_stance_locked("settling_gait_start_stance")
             if not self._crawl_targets_reached_locked():
                 self.crawl_target_reached_at = None
                 return
@@ -591,7 +602,7 @@ class FourLegSession:
             self.crawl_target_reached_at = None
             self.crawl_progress = 0.0
             self.last_event = (
-                "Wide stance settled; preparing the hardware joint sequence"
+                "Gait start stance settled; preparing distributed push crawl"
             )
             return
 
@@ -612,7 +623,7 @@ class FourLegSession:
             self.crawl_started_at = now
             self.crawl_target_reached_at = None
             self.last_event = (
-                "Hardware gait sequence started; running two passes"
+                "Distributed push crawl started; rear-right swings first"
             )
             return
 
@@ -626,16 +637,16 @@ class FourLegSession:
                 self._set_crawl_pose_locked(elapsed)
                 return
             self.crawl_stage = "finishing"
-            self._set_crawl_stance_locked("returning_to_wide_mirrored_stance")
+            self._set_crawl_stance_locked("returning_to_gait_start_stance")
             return
 
-        self._set_crawl_stance_locked("holding_wide_mirrored_stance")
+        self._set_crawl_stance_locked("holding_gait_start_stance")
         if self._crawl_targets_reached_locked():
             self.crawl_stage = "complete"
-            self.crawl_phase = "holding_wide_mirrored_stance"
+            self.crawl_phase = "holding_gait_start_stance"
             self.crawl_progress = 1.0
             self.last_event = (
-                "Hardware gait sequence complete; all motors holding stance"
+                "Distributed push crawl complete; all motors holding stance"
             )
 
     def _cancel_crawl_locked(self) -> None:
@@ -661,8 +672,8 @@ class FourLegSession:
             raise ValueError(
                 "Confirm the body is supported with every foot clear before testing"
             )
-        if confirmation != "TEST GAIT SEQUENCE":
-            raise ValueError("TEST GAIT SEQUENCE confirmation is required")
+        if confirmation != "TEST DISTRIBUTED CRAWL":
+            raise ValueError("TEST DISTRIBUTED CRAWL confirmation is required")
 
         with self.lock:
             if self.crawl_active:
@@ -710,7 +721,7 @@ class FourLegSession:
                 self.crawl_started_at = None
                 self.crawl_target_reached_at = None
                 self.crawl_progress = 0.0
-                self._set_crawl_stance_locked("moving_to_wide_mirrored_stance")
+                self._set_crawl_stance_locked("moving_to_gait_start_stance")
             except Exception:
                 for profile, motor in newly_armed:
                     try:
@@ -723,7 +734,7 @@ class FourLegSession:
             self.last_heartbeat = self.clock()
             self.fault = None
             self.last_event = (
-                "All 12 motors moving to the wide mirrored crawl stance"
+                "All 12 motors moving to the distributed-push start stance"
             )
 
     def stop_crawl(self) -> None:
@@ -889,8 +900,8 @@ class FourLegSession:
     ) -> None:
         if not safety_ack:
             raise ValueError("Confirm full support, clearance, and cutoff")
-        if confirmation != "SET WIDE WALK STANCE":
-            raise ValueError("SET WIDE WALK STANCE confirmation is required")
+        if confirmation != "SET GAIT START STANCE":
+            raise ValueError("SET GAIT START STANCE confirmation is required")
 
         with self.lock:
             self._require_manual_control_locked()
@@ -1194,9 +1205,8 @@ class FourLegSession:
                 "port": getattr(self.bus, "port_name", None),
             },
             "crawl": {
-                "pattern": "hardware_joint_sequence_v1",
+                "pattern": "distributed_push_crawl_v5",
                 "supported_test_only": True,
-                "sequence_repetitions": HARDWARE_SEQUENCE_REPETITIONS,
                 "active": self.crawl_active,
                 "stage": self.crawl_stage,
                 "phase": self.crawl_phase,

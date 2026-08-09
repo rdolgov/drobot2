@@ -581,10 +581,13 @@ def distributed_push_crawl_by_name(
         down_by_leg[leg] = math.hypot(vertical, shifted_outward)
         abduction_by_leg[leg] = math.degrees(math.atan2(shifted_outward, vertical))
 
-    pose = pose_by_name(
-        down_by_leg_m=down_by_leg,
-        forward_by_leg_m=forward_by_leg,
-        abduction_by_leg_deg=abduction_by_leg,
+    pose = _command_knees_downward(
+        pose_by_name(
+            down_by_leg_m=down_by_leg,
+            forward_by_leg_m=forward_by_leg,
+            abduction_by_leg_deg=abduction_by_leg,
+            knees_outward=True,
+        )
     )
     expected_support_legs = (
         [leg for leg in LEGS if leg != swing_leg]
