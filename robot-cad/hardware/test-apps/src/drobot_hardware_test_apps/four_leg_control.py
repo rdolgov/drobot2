@@ -34,6 +34,11 @@ from drobot_leg_testbed.model import (
 from drobot_leg_testbed.ports import resolve_port
 from drobot_leg_testbed.transport import MotorStatus, STSBus
 
+from drobot_hardware_test_apps.crawl_gait import (
+    LEG_CORNERS,
+    quasistatic_crawl_degrees,
+)
+
 LOCAL_HOST = "127.0.0.1"
 APP_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = APP_ROOT / "config" / "four-leg.toml"
@@ -57,9 +62,25 @@ class ServerConfig:
 
 
 @dataclass(frozen=True)
+class CrawlConfig:
+    period_s: float
+    cycles: int
+    stance_settle_s: float
+    stride_m: float
+    lift_m: float
+    weight_shift_forward_m: float
+    weight_shift_lateral_m: float
+    stance_down_m: float
+    stance_fore_aft_m: float
+    abduction_deg: float
+    start_tolerance_deg: float
+
+
+@dataclass(frozen=True)
 class LegProfile:
     number: int
     label: str
+    corner: str
     config: LegConfig
     calibration: Calibration
     config_path: Path
@@ -70,6 +91,7 @@ class LegProfile:
 class DashboardConfig:
     server: ServerConfig
     monitoring: MonitoringConfig
+    crawl: CrawlConfig
     legs: tuple[LegProfile, ...]
 
     @property
@@ -91,11 +113,14 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
 
     server_data = data.get("server")
     monitoring_data = data.get("monitoring")
+    crawl_data = data.get("crawl")
     leg_data = data.get("legs")
     if not isinstance(server_data, dict):
         raise ValueError("Manifest requires a [server] table")
     if not isinstance(monitoring_data, dict):
         raise ValueError("Manifest requires a [monitoring] table")
+    if not isinstance(crawl_data, dict):
+        raise ValueError("Manifest requires a [crawl] table")
     if not isinstance(leg_data, list) or len(leg_data) != 4:
         raise ValueError("Manifest requires exactly four [[legs]] tables")
 
@@ -149,14 +174,76 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
     if not 100 <= monitoring.leg_current_warning_ma <= 10_000:
         raise ValueError("Leg-current warning must be in [100, 10000] mA")
 
+    crawl = CrawlConfig(
+        period_s=_finite_float(crawl_data.get("period_s", 20.0), "crawl.period_s"),
+        cycles=int(crawl_data.get("cycles", 1)),
+        stance_settle_s=_finite_float(
+            crawl_data.get("stance_settle_s", 1.5),
+            "crawl.stance_settle_s",
+        ),
+        stride_m=_finite_float(crawl_data.get("stride_m", 0.015), "crawl.stride_m"),
+        lift_m=_finite_float(crawl_data.get("lift_m", 0.010), "crawl.lift_m"),
+        weight_shift_forward_m=_finite_float(
+            crawl_data.get("weight_shift_forward_m", 0.030),
+            "crawl.weight_shift_forward_m",
+        ),
+        weight_shift_lateral_m=_finite_float(
+            crawl_data.get("weight_shift_lateral_m", 0.0),
+            "crawl.weight_shift_lateral_m",
+        ),
+        stance_down_m=_finite_float(
+            crawl_data.get("stance_down_m", 0.310),
+            "crawl.stance_down_m",
+        ),
+        stance_fore_aft_m=_finite_float(
+            crawl_data.get("stance_fore_aft_m", 0.025),
+            "crawl.stance_fore_aft_m",
+        ),
+        abduction_deg=_finite_float(
+            crawl_data.get("abduction_deg", 0.0),
+            "crawl.abduction_deg",
+        ),
+        start_tolerance_deg=_finite_float(
+            crawl_data.get("start_tolerance_deg", 35.0),
+            "crawl.start_tolerance_deg",
+        ),
+    )
+    if not 12.0 <= crawl.period_s <= 60.0:
+        raise ValueError("crawl.period_s must be in [12, 60]")
+    if not 1 <= crawl.cycles <= 4:
+        raise ValueError("crawl.cycles must be in [1, 4]")
+    if not 0.5 <= crawl.stance_settle_s <= 5.0:
+        raise ValueError("crawl.stance_settle_s must be in [0.5, 5]")
+    if not 0.005 <= crawl.stride_m <= 0.030:
+        raise ValueError("crawl.stride_m must be in [0.005, 0.030]")
+    if not 0.005 <= crawl.lift_m <= 0.020:
+        raise ValueError("crawl.lift_m must be in [0.005, 0.020]")
+    if not 0.0 <= crawl.weight_shift_forward_m <= 0.040:
+        raise ValueError("crawl.weight_shift_forward_m must be in [0, 0.040]")
+    if not 0.0 <= crawl.weight_shift_lateral_m <= 0.030:
+        raise ValueError("crawl.weight_shift_lateral_m must be in [0, 0.030]")
+    if not 0.250 <= crawl.stance_down_m <= 0.315:
+        raise ValueError("crawl.stance_down_m must be in [0.250, 0.315]")
+    if not 0.0 <= crawl.stance_fore_aft_m <= 0.060:
+        raise ValueError("crawl.stance_fore_aft_m must be in [0, 0.060]")
+    if not 0.0 <= crawl.abduction_deg <= 12.0:
+        raise ValueError("crawl.abduction_deg must be in [0, 12]")
+    if not 10.0 <= crawl.start_tolerance_deg <= 45.0:
+        raise ValueError("crawl.start_tolerance_deg must be in [10, 45]")
+
     profiles: list[LegProfile] = []
     for index, entry in enumerate(leg_data, start=1):
         if not isinstance(entry, dict):
             raise ValueError(f"legs[{index}] must be a table")
         number = int(entry.get("number", index))
         label = str(entry.get("label", f"Leg {number}")).strip()
+        corner = str(entry.get("corner", "")).strip().lower()
         if not label:
             raise ValueError(f"legs[{index}].label must not be empty")
+        if corner not in LEG_CORNERS:
+            raise ValueError(
+                f"legs[{index}].corner must be one of {', '.join(LEG_CORNERS)}"
+            )
         config_path = (manifest_path.parent / str(entry["profile"])).resolve()
         calibration_path = (manifest_path.parent / str(entry["calibration"])).resolve()
         config = load_config(config_path)
@@ -165,6 +252,7 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             LegProfile(
                 number=number,
                 label=label,
+                corner=corner,
                 config=config,
                 calibration=calibration,
                 config_path=config_path,
@@ -175,6 +263,8 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
     if {profile.number for profile in profiles} != {1, 2, 3, 4}:
         raise ValueError("Leg numbers must be exactly 1, 2, 3, and 4")
     profiles.sort(key=lambda profile: profile.number)
+    if {profile.corner for profile in profiles} != set(LEG_CORNERS):
+        raise ValueError("Four-leg dashboard requires each body corner exactly once")
     first_bus = profiles[0].config.bus
     if any(profile.config.bus != first_bus for profile in profiles[1:]):
         raise ValueError("All four leg profiles must use identical bus settings")
@@ -182,7 +272,7 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
     if sorted(ids) != list(range(1, 13)):
         raise ValueError("Four-leg dashboard requires unique servo IDs 1 through 12")
 
-    return DashboardConfig(server, monitoring, tuple(profiles))
+    return DashboardConfig(server, monitoring, crawl, tuple(profiles))
 
 
 class FourLegDemoBus:
@@ -294,6 +384,12 @@ class FourLegSession:
         self.last_heartbeat = clock()
         self.last_event = "Starting"
         self.fault: str | None = None
+        self.crawl_stage = "idle"
+        self.crawl_phase = "idle"
+        self.crawl_swing_corner: str | None = None
+        self.crawl_started_at: float | None = None
+        self.crawl_target_reached_at: float | None = None
+        self.crawl_progress = 0.0
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.worker: threading.Thread | None = None
@@ -369,6 +465,8 @@ class FourLegSession:
                     self.last_event = "Browser heartbeat lost; all motors disarmed"
                     return
 
+            self._advance_crawl_locked()
+
             step_limit = min(
                 self.dashboard.bus.max_command_step_deg,
                 self.ramp_rate_deg_s * self.tick_interval_s,
@@ -389,6 +487,200 @@ class FourLegSession:
                     step = max(-step_limit, min(step_limit, delta))
                     controller.command(motor, current + step)
 
+    @property
+    def crawl_active(self) -> bool:
+        return self.crawl_stage in {"preparing", "walking", "finishing"}
+
+    def _crawl_pose_locked(
+        self,
+        gait_time_s: float,
+    ) -> tuple[dict[tuple[int, str], float], dict[str, object]]:
+        config = self.dashboard.crawl
+        pose, state = quasistatic_crawl_degrees(
+            gait_time_s,
+            period_s=config.period_s,
+            stride_m=config.stride_m,
+            lift_m=config.lift_m,
+            weight_shift_forward_m=config.weight_shift_forward_m,
+            weight_shift_lateral_m=config.weight_shift_lateral_m,
+            down_m=config.stance_down_m,
+            fore_aft_m=config.stance_fore_aft_m,
+            abduction_deg=config.abduction_deg,
+        )
+        targets: dict[tuple[int, str], float] = {}
+        for profile in self.profiles:
+            for motor in profile.config.motors:
+                degrees = pose[(profile.corner, motor.name)]
+                degrees_to_raw(
+                    degrees,
+                    motor,
+                    profile.calibration.motor(motor),
+                )
+                targets[(profile.number, motor.name)] = degrees
+        return targets, state
+
+    def _set_crawl_pose_locked(self, gait_time_s: float) -> None:
+        targets, state = self._crawl_pose_locked(gait_time_s)
+        self.desired_deg.update(targets)
+        self.crawl_phase = str(state["phase"])
+        swing_corner = state["swing_corner"]
+        self.crawl_swing_corner = None if swing_corner is None else str(swing_corner)
+
+    def _crawl_targets_reached_locked(self, tolerance_deg: float = 0.3) -> bool:
+        for profile in self.profiles:
+            controller = self.controllers[profile.number]
+            for motor in profile.config.motors:
+                commanded = controller.targets_deg.get(motor.name)
+                desired = self.desired_deg.get((profile.number, motor.name))
+                if commanded is None or desired is None:
+                    return False
+                if abs(commanded - desired) > tolerance_deg:
+                    return False
+        return True
+
+    def _advance_crawl_locked(self) -> None:
+        if not self.crawl_active:
+            return
+        now = self.clock()
+        config = self.dashboard.crawl
+        if self.crawl_stage == "preparing":
+            self._set_crawl_pose_locked(0.0)
+            self.crawl_phase = "settling_stance"
+            if not self._crawl_targets_reached_locked():
+                self.crawl_target_reached_at = None
+                return
+            if self.crawl_target_reached_at is None:
+                self.crawl_target_reached_at = now
+                return
+            if now - self.crawl_target_reached_at < config.stance_settle_s:
+                return
+            self.crawl_stage = "walking"
+            self.crawl_started_at = now
+            self.crawl_target_reached_at = None
+            self.crawl_progress = 0.0
+            self.last_event = "Slow crawl started; rear-right foot moves first"
+            return
+
+        duration_s = config.period_s * config.cycles
+        if self.crawl_stage == "walking":
+            if self.crawl_started_at is None:
+                raise RuntimeError("Crawl clock was not initialized")
+            elapsed = max(0.0, now - self.crawl_started_at)
+            self.crawl_progress = min(elapsed / duration_s, 1.0)
+            if elapsed < duration_s:
+                self._set_crawl_pose_locked(elapsed)
+                return
+            self.crawl_stage = "finishing"
+            self.crawl_phase = "returning_to_stance"
+            self.crawl_swing_corner = None
+            self._set_crawl_pose_locked(0.0)
+            self.crawl_phase = "returning_to_stance"
+            return
+
+        self._set_crawl_pose_locked(0.0)
+        self.crawl_phase = "holding_stance"
+        if self._crawl_targets_reached_locked():
+            self.crawl_stage = "complete"
+            self.crawl_phase = "holding_stance"
+            self.crawl_progress = 1.0
+            self.last_event = (
+                "Forward crawl complete; all 12 motors holding crawl stance"
+            )
+
+    def _cancel_crawl_locked(self) -> None:
+        self.crawl_stage = "idle"
+        self.crawl_phase = "idle"
+        self.crawl_swing_corner = None
+        self.crawl_started_at = None
+        self.crawl_target_reached_at = None
+        self.crawl_progress = 0.0
+
+    def _require_manual_control_locked(self) -> None:
+        if self.crawl_active:
+            raise RuntimeError("Stop the active crawl before manual motion")
+
+    def start_crawl_forward(
+        self,
+        *,
+        safety_ack: bool,
+        confirmation: str,
+    ) -> None:
+        if not safety_ack:
+            raise ValueError(
+                "Confirm floor clearance, corner map, and cutoff before walking"
+            )
+        if confirmation != "WALK FORWARD":
+            raise ValueError("WALK FORWARD confirmation is required")
+
+        with self.lock:
+            if self.crawl_active:
+                raise RuntimeError("A crawl is already active")
+            if self._armed_count_locked():
+                raise RuntimeError("Disarm all 12 motors before starting a crawl")
+            if self.fault:
+                raise RuntimeError("Clear the reported fault before starting a crawl")
+
+            preflight = self._snapshot_locked()
+            warnings = preflight["summary"]["warnings"]
+            if warnings:
+                raise RuntimeError(
+                    "Resolve telemetry warnings before walking: " + "; ".join(warnings)
+                )
+
+            out_of_start_range: list[str] = []
+            for leg in preflight["legs"]:
+                for motor in leg["motors"]:
+                    if (
+                        abs(float(motor["measured_deg"]))
+                        > self.dashboard.crawl.start_tolerance_deg
+                    ):
+                        out_of_start_range.append(
+                            f"ID {motor['id']} ({motor['measured_deg']:+.1f} deg)"
+                        )
+            if out_of_start_range:
+                raise RuntimeError(
+                    "Center the robot before walking; outside start tolerance: "
+                    + ", ".join(out_of_start_range)
+                )
+
+            sample_count = 80
+            duration_s = self.dashboard.crawl.period_s
+            for sample in range(sample_count + 1):
+                self._crawl_pose_locked(duration_s * sample / sample_count)
+
+            newly_armed: list[tuple[LegProfile, MotorConfig]] = []
+            try:
+                for profile in self.profiles:
+                    controller = self.controllers[profile.number]
+                    for motor in profile.config.motors:
+                        state = controller.arm(motor)
+                        newly_armed.append((profile, motor))
+                        self.desired_deg[(profile.number, motor.name)] = state.degrees
+                self.crawl_stage = "preparing"
+                self.crawl_phase = "moving_to_stance"
+                self.crawl_swing_corner = None
+                self.crawl_started_at = None
+                self.crawl_target_reached_at = None
+                self.crawl_progress = 0.0
+                self._set_crawl_pose_locked(0.0)
+            except Exception:
+                for profile, motor in newly_armed:
+                    try:
+                        self.controllers[profile.number].disarm(motor)
+                    except Exception:
+                        pass
+                self._disarm_all_locked(raise_errors=False)
+                raise
+
+            self.last_heartbeat = self.clock()
+            self.fault = None
+            self.last_event = "All 12 motors moving to the slow-crawl stance"
+
+    def stop_crawl(self) -> None:
+        with self.lock:
+            self._disarm_all_locked(raise_errors=True)
+            self.last_event = "Crawl stopped; all 12 motors disarmed"
+
     def heartbeat(self) -> None:
         with self.lock:
             self.last_heartbeat = self.clock()
@@ -404,6 +696,7 @@ class FourLegSession:
             raise ValueError("Confirm support, clearance, and cutoff before arming")
         profile, motor, controller = self._selection(leg_number, motor_selector)
         with self.lock:
+            self._require_manual_control_locked()
             state = controller.arm(motor)
             self.desired_deg[(profile.number, motor.name)] = state.degrees
             self.last_heartbeat = self.clock()
@@ -420,6 +713,7 @@ class FourLegSession:
         controller = self.controllers[profile.number]
         newly_armed: list[MotorConfig] = []
         with self.lock:
+            self._require_manual_control_locked()
             try:
                 for motor in profile.config.motors:
                     if motor.servo_id in controller.armed_ids:
@@ -449,6 +743,7 @@ class FourLegSession:
             raise ValueError("Target angle must be finite")
         profile, motor, controller = self._selection(leg_number, motor_selector)
         with self.lock:
+            self._require_manual_control_locked()
             if motor.servo_id not in controller.armed_ids:
                 raise RuntimeError(f"{profile.label} / {motor.name} is disarmed")
             degrees_to_raw(
@@ -467,6 +762,7 @@ class FourLegSession:
         profile = self._profile(leg_number)
         controller = self.controllers[profile.number]
         with self.lock:
+            self._require_manual_control_locked()
             armed = 0
             for motor in profile.config.motors:
                 if motor.servo_id not in controller.armed_ids:
@@ -481,6 +777,7 @@ class FourLegSession:
 
     def zero_all_armed(self) -> None:
         with self.lock:
+            self._require_manual_control_locked()
             armed = 0
             for profile in self.profiles:
                 controller = self.controllers[profile.number]
@@ -507,6 +804,7 @@ class FourLegSession:
             raise ValueError("CENTER ALL 12 confirmation is required")
 
         with self.lock:
+            self._require_manual_control_locked()
             try:
                 for profile in self.profiles:
                     controller = self.controllers[profile.number]
@@ -545,6 +843,7 @@ class FourLegSession:
             raise ValueError("CAPTURE ZERO ALL confirmation is required")
 
         with self.lock:
+            self._require_manual_control_locked()
             if self._armed_count_locked():
                 raise RuntimeError("Disarm all motors before capturing zero")
 
@@ -610,6 +909,10 @@ class FourLegSession:
     ) -> None:
         profile, motor, controller = self._selection(leg_number, motor_selector)
         with self.lock:
+            if self.crawl_active:
+                self._disarm_all_locked(raise_errors=True)
+                self.last_event = "Crawl stopped; all 12 motors disarmed"
+                return
             if motor.servo_id in controller.armed_ids:
                 controller.disarm(motor)
             else:
@@ -623,6 +926,10 @@ class FourLegSession:
         profile = self._profile(leg_number)
         controller = self.controllers[profile.number]
         with self.lock:
+            if self.crawl_active:
+                self._disarm_all_locked(raise_errors=True)
+                self.last_event = "Crawl stopped; all 12 motors disarmed"
+                return
             errors: list[Exception] = []
             for motor in profile.config.motors:
                 try:
@@ -645,6 +952,7 @@ class FourLegSession:
             self.last_event = "All 12 motors disarmed"
 
     def _disarm_all_locked(self, *, raise_errors: bool) -> None:
+        self._cancel_crawl_locked()
         errors: list[Exception] = []
         for profile in self.profiles:
             controller = self.controllers[profile.number]
@@ -721,6 +1029,7 @@ class FourLegSession:
                 {
                     "number": profile.number,
                     "label": profile.label,
+                    "corner": profile.corner,
                     "current_ma": leg_current,
                     "armed_count": sum(motor["armed"] for motor in motors),
                     "motors": motors,
@@ -791,6 +1100,23 @@ class FourLegSession:
                 "voltage_warning_high_v": monitoring.voltage_warning_high_v,
                 "temperature_warning_c": monitoring.temperature_warning_c,
                 "leg_current_warning_ma": monitoring.leg_current_warning_ma,
+            },
+            "crawl": {
+                "active": self.crawl_active,
+                "stage": self.crawl_stage,
+                "phase": self.crawl_phase,
+                "swing_corner": self.crawl_swing_corner,
+                "progress": self.crawl_progress,
+                "period_s": self.dashboard.crawl.period_s,
+                "cycles": self.dashboard.crawl.cycles,
+                "duration_s": (
+                    self.dashboard.crawl.period_s * self.dashboard.crawl.cycles
+                ),
+                "stride_mm": self.dashboard.crawl.stride_m * 1000.0,
+                "lift_mm": self.dashboard.crawl.lift_m * 1000.0,
+                "corner_map": {
+                    str(profile.number): profile.corner for profile in self.profiles
+                },
             },
             "any_armed": bool(self._armed_count_locked()),
             "last_event": self.last_event,
@@ -934,6 +1260,13 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
                     payload["leg"],
                     safety_ack=payload.get("safety_ack") is True,
                 )
+            elif self.path == "/api/crawl-forward":
+                self.server.session.start_crawl_forward(
+                    safety_ack=payload.get("safety_ack") is True,
+                    confirmation=str(payload.get("confirmation", "")),
+                )
+            elif self.path == "/api/crawl-stop":
+                self.server.session.stop_crawl()
             elif self.path == "/api/target":
                 self.server.session.set_target(
                     payload["leg"],

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import importlib
+import math
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from drobot_leg_testbed.model import load_calibration, save_calibration
 
+from drobot_hardware_test_apps.crawl_gait import quasistatic_crawl_degrees
 from drobot_hardware_test_apps.four_leg_control import (
     FourLegDemoBus,
     FourLegSession,
@@ -55,6 +58,55 @@ def test_manifest_loads_verified_ids_and_directions() -> None:
     assert directions == [(-1, 1, 1), (1, 1, 1), (-1, -1, -1), (1, 1, 1)]
     assert dashboard.bus.torque_limit == 300
     assert dashboard.bus.speed == 350
+    assert [profile.corner for profile in dashboard.legs] == [
+        "front_left",
+        "front_right",
+        "rear_left",
+        "rear_right",
+    ]
+    assert dashboard.crawl.period_s == 20.0
+    assert dashboard.crawl.cycles == 2
+
+
+def test_dashboard_crawl_matches_isaac_reference_and_motor_limits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dashboard = load_dashboard_config(ROOT / "config" / "four-leg.toml")
+    monkeypatch.syspath_prepend(str(ROOT.parents[1]))
+    runtime = importlib.import_module("simulation.isaac._quadruped_runtime")
+    config = dashboard.crawl
+
+    for sample in range(81):
+        gait_time_s = config.period_s * sample / 80
+        dashboard_pose, _state = quasistatic_crawl_degrees(
+            gait_time_s,
+            period_s=config.period_s,
+            stride_m=config.stride_m,
+            lift_m=config.lift_m,
+            weight_shift_forward_m=config.weight_shift_forward_m,
+            weight_shift_lateral_m=config.weight_shift_lateral_m,
+            down_m=config.stance_down_m,
+            fore_aft_m=config.stance_fore_aft_m,
+            abduction_deg=config.abduction_deg,
+        )
+        isaac_pose, _isaac_state = runtime.quasistatic_crawl_by_name(
+            gait_time_s,
+            period_s=config.period_s,
+            stride_m=config.stride_m,
+            lift_m=config.lift_m,
+            weight_shift_forward_m=config.weight_shift_forward_m,
+            weight_shift_lateral_m=config.weight_shift_lateral_m,
+            down_m=config.stance_down_m,
+            fore_aft_m=config.stance_fore_aft_m,
+            abduction_deg=config.abduction_deg,
+        )
+        for profile in dashboard.legs:
+            for motor in profile.config.motors:
+                degrees = dashboard_pose[(profile.corner, motor.name)]
+                assert degrees == pytest.approx(
+                    math.degrees(isaac_pose[f"{profile.corner}_{motor.name}"])
+                )
+                assert motor.min_deg <= degrees <= motor.max_deg
 
 
 def test_start_requires_all_motors_and_disarms_every_id() -> None:
@@ -140,6 +192,100 @@ def test_center_all_requires_confirmation_and_targets_calibrated_zero() -> None:
             for motor in leg["motors"]
         )
         assert "calibrated zero" in state["last_event"].lower()
+    finally:
+        session.close()
+
+
+def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> None:
+    session, bus, _clock = _session()
+    try:
+        with pytest.raises(ValueError, match="corner map"):
+            session.start_crawl_forward(
+                safety_ack=False,
+                confirmation="WALK FORWARD",
+            )
+        with pytest.raises(ValueError, match="confirmation"):
+            session.start_crawl_forward(safety_ack=True, confirmation="")
+
+        session.arm(1, 1, safety_ack=True)
+        with pytest.raises(RuntimeError, match="Disarm all 12"):
+            session.start_crawl_forward(
+                safety_ack=True,
+                confirmation="WALK FORWARD",
+            )
+        session.disarm_all()
+
+        session.start_crawl_forward(
+            safety_ack=True,
+            confirmation="WALK FORWARD",
+        )
+        state = session.snapshot()
+
+        assert state["crawl"]["active"] is True
+        assert state["crawl"]["stage"] == "preparing"
+        assert state["crawl"]["corner_map"] == {
+            "1": "front_left",
+            "2": "front_right",
+            "3": "rear_left",
+            "4": "rear_right",
+        }
+        assert state["summary"]["armed_count"] == 12
+        assert bus.torque == set(range(1, 13))
+        with pytest.raises(RuntimeError, match="Stop the active crawl"):
+            session.set_target(1, 1, 5.0)
+
+        session.stop_crawl()
+        state = session.snapshot()
+        assert state["crawl"]["active"] is False
+        assert state["summary"]["armed_count"] == 0
+        assert bus.torque == set()
+    finally:
+        session.close()
+
+
+def test_crawl_preflight_rejects_off_center_pose_and_telemetry_warning() -> None:
+    session, bus, _clock = _session()
+    try:
+        bus.positions[1] += 500
+        with pytest.raises(RuntimeError, match="Center the robot"):
+            session.start_crawl_forward(
+                safety_ack=True,
+                confirmation="WALK FORWARD",
+            )
+
+        bus.positions[1] -= 500
+        bus.voltage_v[12] = 10.4
+        with pytest.raises(RuntimeError, match="telemetry warnings"):
+            session.start_crawl_forward(
+                safety_ack=True,
+                confirmation="WALK FORWARD",
+            )
+    finally:
+        session.close()
+
+
+def test_crawl_completes_configured_cycles_and_holds_stance() -> None:
+    session, bus, clock = _session()
+    try:
+        session.start_crawl_forward(
+            safety_ack=True,
+            confirmation="WALK FORWARD",
+        )
+        for tick in range(1100):
+            if tick % 10 == 0:
+                session.heartbeat()
+            clock.advance(0.05)
+            session.advance_once()
+            if session.crawl_stage == "complete":
+                break
+
+        state = session.snapshot()
+        assert tick < 1099
+        assert state["crawl"]["stage"] == "complete"
+        assert state["crawl"]["phase"] == "holding_stance"
+        assert state["crawl"]["progress"] == 1.0
+        assert state["summary"]["armed_count"] == 12
+        assert bus.torque == set(range(1, 13))
     finally:
         session.close()
 
