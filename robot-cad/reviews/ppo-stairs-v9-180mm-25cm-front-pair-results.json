@@ -1,0 +1,49 @@
+{
+  "status": "PARTIAL",
+  "task_id": "Drobot-Quadruped-Stairs-v9-180mm-Front-Pair-Placement",
+  "scope": "Composed left-leg PPO, force-gated all-feet-loaded body transfer, and right-leg PPO; no joint end-to-end PPO claim",
+  "stair_geometry": {
+    "rise_m": 0.18,
+    "tread_depth_m": 0.25
+  },
+  "evaluation_seed": 195,
+  "policy_input": "Blind fixed geometry; no RGB or ToF pixels",
+  "verified_progress": {
+    "front_left_force_placement": true,
+    "front_left_to_front_right_body_transfer": true,
+    "independent_front_right_force_placement": true,
+    "composed_front_right_force_placement": false
+  },
+  "body_transfer_gate": {
+    "support_margin_m": 0.0886179993342852,
+    "placed_front_left_load_n": 21.302093505859375,
+    "next_front_right_load_n": 7.294163703918457,
+    "base_speed_m_s": 0.01213663395172846,
+    "body_rate_rad_s": 0.15799233317375183,
+    "maximum_tilt_to_gate_deg": 4.16612237132885,
+    "all_support_contacts_loaded": true
+  },
+  "conservative_corridor_result": {
+    "maximum_lateral_deviation_m": 0.20,
+    "front_right_maximum_lift_m": 0.16283759474754333,
+    "maximum_support_slip_m": 0.024342048913240433,
+    "maximum_body_tilt_deg": 5.819114464547115,
+    "failure_reasons": ["left_stair_corridor"]
+  },
+  "measurable_slip_probe": {
+    "maximum_lateral_deviation_m": 0.23,
+    "front_right_maximum_lift_m": 0.1808546632528305,
+    "maximum_support_slip_m": 0.0333840474486351,
+    "slipping_leg": "front_left",
+    "other_support_slip_max_m": 0.010393038392066956,
+    "maximum_body_tilt_deg": 9.054275734779695
+  },
+  "rubber_friction_sensitivity": {
+    "baseline_static_dynamic_friction": [0.90, 0.75],
+    "probe_static_dynamic_friction": [1.20, 1.00],
+    "probe_front_left_slip_m": 0.03282453119754791,
+    "probe_front_right_lift_m": 0.15415829420089722,
+    "conclusion": "Higher simulated friction changed slip by less than 2% and reduced lift; the dominant problem is control-induced dragging, not insufficient contact friction."
+  },
+  "decision": "Keep the independent per-leg policies and force-gated body transfer. Train a controller that unloads the placed front-left foot without lateral dragging before extending to rear legs. Vision remains deferred."
+}

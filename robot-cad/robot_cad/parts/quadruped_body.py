@@ -56,8 +56,9 @@ BATTERY_RAIL_CLEARANCE_PER_SIDE_MM = 1.0
 BATTERY_RAIL_HEIGHT_Z_MM = 8.0
 BATTERY_RAIL_CORNER_RADIUS_MM = 4.0
 
-# A removable tray sits above the battery, leaving about 34 mm beneath the lid
-# for electronics.  Four standoffs remain outside the battery rail.
+# A removable tray can sit above the battery, leaving about 34 mm beneath the
+# lid for electronics.  The body no longer molds in fixed-height tray posts;
+# optional detachable standoffs can use the universal floor grid instead.
 ELECTRONICS_TRAY_LENGTH_X_MM = 180.0
 ELECTRONICS_TRAY_WIDTH_Y_MM = 132.0
 ELECTRONICS_TRAY_THICKNESS_Z_MM = 3.0
@@ -68,16 +69,13 @@ ELECTRONICS_CLEAR_HEIGHT_Z_MM = (
     - ELECTRONICS_TRAY_BOTTOM_Z_MM
     - ELECTRONICS_TRAY_THICKNESS_Z_MM
 )
-TRAY_STANDOFF_RADIUS_MM = 5.5
-TRAY_STANDOFF_X_MM = 80.0
-TRAY_STANDOFF_Y_MM = 55.0
-TRAY_M3_PILOT_DIAMETER_MM = 2.8
-TRAY_PILOT_DEPTH_MM = 8.0
-TRAY_STANDOFF_CENTERS_XY_MM = (
-    (-TRAY_STANDOFF_X_MM, -TRAY_STANDOFF_Y_MM),
-    (-TRAY_STANDOFF_X_MM, TRAY_STANDOFF_Y_MM),
-    (TRAY_STANDOFF_X_MM, -TRAY_STANDOFF_Y_MM),
-    (TRAY_STANDOFF_X_MM, TRAY_STANDOFF_Y_MM),
+TRAY_MOUNT_X_MM = 80.0
+TRAY_MOUNT_Y_MM = 60.0
+TRAY_MOUNT_CENTERS_XY_MM = (
+    (-TRAY_MOUNT_X_MM, -TRAY_MOUNT_Y_MM),
+    (-TRAY_MOUNT_X_MM, TRAY_MOUNT_Y_MM),
+    (TRAY_MOUNT_X_MM, -TRAY_MOUNT_Y_MM),
+    (TRAY_MOUNT_X_MM, TRAY_MOUNT_Y_MM),
 )
 
 # Four side-wall-supported bosses retain the removable lid.
@@ -103,9 +101,9 @@ VENT_SLOT_Z_MM = (74.0, 86.0)
 # Symmetric service openings and utility mounting holes.  The side cable
 # opening fits in the 36 mm clear strip between the two 84 mm hip backing
 # pads, so neither body-side hip plate can cover it.  Bottom utility holes
-# stay outside the battery rail and clear the electronics-tray standoffs.
-SIDE_CABLE_PORT_LENGTH_X_MM = 24.0
-SIDE_CABLE_PORT_HEIGHT_Z_MM = 14.0
+# stay outside the battery rail.
+SIDE_CABLE_PORT_LENGTH_X_MM = 32.0
+SIDE_CABLE_PORT_HEIGHT_Z_MM = 20.0
 SIDE_CABLE_PORT_CENTER_X_MM = 0.0
 SIDE_CABLE_PORT_CENTER_Z_MM = 50.0
 UTILITY_M2_CLEARANCE_DIAMETER_MM = 2.4
@@ -113,6 +111,30 @@ UTILITY_M3_CLEARANCE_DIAMETER_MM = 3.4
 BASE_UTILITY_M2_X_MM = (-35.0, 35.0)
 BASE_UTILITY_M3_X_MM = (-75.0, 75.0)
 BASE_UTILITY_Y_MM = (-68.0, 68.0)
+
+# Dense M3 floor field through both the body center and outer mounting bands.
+# A local keep-out protects only the raised battery-retaining rail itself.
+# Legacy M2/M3 utility holes stay available and receive their own local webs.
+FLOOR_MOUNTING_GRID_PITCH_MM = 10.0
+FLOOR_MOUNTING_GRID_M3_CLEARANCE_DIAMETER_MM = 3.4
+FLOOR_MOUNTING_GRID_MIN_WEB_MM = 2.0
+FLOOR_MOUNTING_GRID_X_MM = tuple(float(value) for value in range(-100, 101, 10))
+FLOOR_MOUNTING_GRID_Y_MM = tuple(float(value) for value in range(-70, 71, 10))
+
+# Universal M3 body-wall fields.  Front and rear faces carry the broad grid;
+# the long side faces use only the 36 mm clear strip between the two hip plates.
+# Short wall-local cutters avoid drilling through internal features.
+BODY_WALL_MOUNTING_GRID_PITCH_MM = 10.0
+BODY_WALL_MOUNTING_GRID_M3_CLEARANCE_DIAMETER_MM = 3.4
+BODY_WALL_MOUNTING_GRID_MIN_WEB_MM = 2.0
+FRONT_REAR_MOUNTING_GRID_Y_MM = tuple(
+    float(value) for value in range(-60, 61, 10)
+)
+FRONT_REAR_MOUNTING_GRID_Z_MM = tuple(
+    float(value) for value in range(20, 81, 10)
+)
+SIDE_MOUNTING_GRID_X_MM = (-10.0, 0.0, 10.0)
+SIDE_MOUNTING_GRID_Z_MM = FRONT_REAR_MOUNTING_GRID_Z_MM
 
 # Current official Bambu Lab X2D print envelopes.
 X2D_MAIN_NOZZLE_VOLUME_MM = (256.0, 256.0, 260.0)
@@ -221,20 +243,6 @@ def make_battery_retaining_rail() -> Shape:
     return _one_valid_solid(outer - inner, "battery_retaining_rail")
 
 
-def make_tray_standoffs() -> tuple[Shape, ...]:
-    """Return four floor-connected electronics-tray standoffs."""
-    standoff_min_z = BODY_FLOOR_MM - FUSION_OVERLAP_MM
-    standoff_height = ELECTRONICS_TRAY_BOTTOM_Z_MM - standoff_min_z
-    return tuple(
-        Cylinder(
-            TRAY_STANDOFF_RADIUS_MM,
-            standoff_height,
-            align=(Align.CENTER, Align.CENTER, Align.MIN),
-        ).moved(Location((x_mm, y_mm, standoff_min_z)))
-        for x_mm, y_mm in TRAY_STANDOFF_CENTERS_XY_MM
-    )
-
-
 def make_lid_bosses() -> tuple[Shape, ...]:
     """Return four top bosses that overlap the side walls."""
     height = BODY_BASE_HEIGHT_Z_MM - LID_BOSS_BOTTOM_Z_MM
@@ -261,19 +269,6 @@ def make_hip_mount_hole_tools() -> tuple[Shape, ...]:
         .moved(Location((x_mm, 0.0, z_mm)))
         for x_mm in HIP_MOUNT_HOLE_X_MM
         for z_mm in HIP_MOUNT_HOLE_Z_MM
-    )
-
-
-def make_tray_pilot_tools() -> tuple[Shape, ...]:
-    """Return shallow M3 pilot cutters in the electronics standoffs."""
-    start_z = ELECTRONICS_TRAY_BOTTOM_Z_MM - TRAY_PILOT_DEPTH_MM
-    return tuple(
-        Cylinder(
-            TRAY_M3_PILOT_DIAMETER_MM / 2.0,
-            TRAY_PILOT_DEPTH_MM + BOOLEAN_OVERTRAVEL_MM,
-            align=(Align.CENTER, Align.CENTER, Align.MIN),
-        ).moved(Location((x_mm, y_mm, start_z)))
-        for x_mm, y_mm in TRAY_STANDOFF_CENTERS_XY_MM
     )
 
 
@@ -345,6 +340,163 @@ def make_side_cable_port_tool() -> Shape:
     return center_box.fuse(*caps)
 
 
+def _grid_center_clears_rectangular_opening(
+    center_ab_mm: tuple[float, float],
+    opening_center_ab_mm: tuple[float, float],
+    opening_size_a_mm: float,
+    opening_size_b_mm: float,
+) -> bool:
+    """Return whether an M3 grid point preserves the declared feature web."""
+    hole_radius = BODY_WALL_MOUNTING_GRID_M3_CLEARANCE_DIAMETER_MM / 2.0
+    keepout = hole_radius + BODY_WALL_MOUNTING_GRID_MIN_WEB_MM
+    return (
+        abs(center_ab_mm[0] - opening_center_ab_mm[0])
+        > opening_size_a_mm / 2.0 + keepout
+        or abs(center_ab_mm[1] - opening_center_ab_mm[1])
+        > opening_size_b_mm / 2.0 + keepout
+    )
+
+
+def front_rear_mounting_grid_centers_yz_mm() -> tuple[tuple[float, float], ...]:
+    """Return front/rear M3 grid centers after ventilation keep-outs."""
+    vent_openings = tuple(
+        (y_mm, z_mm)
+        for y_mm in VENT_SLOT_Y_MM
+        for z_mm in VENT_SLOT_Z_MM
+    )
+    return tuple(
+        (y_mm, z_mm)
+        for y_mm in FRONT_REAR_MOUNTING_GRID_Y_MM
+        for z_mm in FRONT_REAR_MOUNTING_GRID_Z_MM
+        if all(
+            _grid_center_clears_rectangular_opening(
+                (y_mm, z_mm),
+                opening_center,
+                VENT_SLOT_WIDTH_Y_MM,
+                VENT_SLOT_HEIGHT_Z_MM,
+            )
+            for opening_center in vent_openings
+        )
+    )
+
+
+def side_mounting_grid_centers_xz_mm() -> tuple[tuple[float, float], ...]:
+    """Return side-wall M3 centers clear of the enlarged wire port."""
+    port_center = (SIDE_CABLE_PORT_CENTER_X_MM, SIDE_CABLE_PORT_CENTER_Z_MM)
+    return tuple(
+        (x_mm, z_mm)
+        for x_mm in SIDE_MOUNTING_GRID_X_MM
+        for z_mm in SIDE_MOUNTING_GRID_Z_MM
+        if _grid_center_clears_rectangular_opening(
+            (x_mm, z_mm),
+            port_center,
+            SIDE_CABLE_PORT_LENGTH_X_MM,
+            SIDE_CABLE_PORT_HEIGHT_Z_MM,
+        )
+    )
+
+
+def make_front_rear_mounting_grid_hole_tools() -> tuple[Shape, ...]:
+    """Return short M3 cutters through only the front and rear walls."""
+    cutter_length = BODY_WALL_MM + 2.0 * BOOLEAN_OVERTRAVEL_MM
+    wall_center_x = BODY_LENGTH_X_MM / 2.0 - BODY_WALL_MM / 2.0
+    return tuple(
+        Cylinder(
+            BODY_WALL_MOUNTING_GRID_M3_CLEARANCE_DIAMETER_MM / 2.0,
+            cutter_length,
+            align=(Align.CENTER, Align.CENTER, Align.CENTER),
+        )
+        .rotate(Axis.Y, 90.0)
+        .moved(Location((side * wall_center_x, y_mm, z_mm)))
+        for side in (-1.0, 1.0)
+        for y_mm, z_mm in front_rear_mounting_grid_centers_yz_mm()
+    )
+
+
+def make_side_mounting_grid_hole_tools() -> tuple[Shape, ...]:
+    """Return short M3 cutters through the clear strip of each long side wall."""
+    cutter_length = BODY_WALL_MM + 2.0 * BOOLEAN_OVERTRAVEL_MM
+    wall_center_y = BODY_WIDTH_Y_MM / 2.0 - BODY_WALL_MM / 2.0
+    return tuple(
+        Cylinder(
+            BODY_WALL_MOUNTING_GRID_M3_CLEARANCE_DIAMETER_MM / 2.0,
+            cutter_length,
+            align=(Align.CENTER, Align.CENTER, Align.CENTER),
+        )
+        .rotate(Axis.X, 90.0)
+        .moved(Location((x_mm, side * wall_center_y, z_mm)))
+        for side in (-1.0, 1.0)
+        for x_mm, z_mm in side_mounting_grid_centers_xz_mm()
+    )
+
+
+def floor_mounting_grid_centers_xy_mm() -> tuple[tuple[float, float], ...]:
+    """Return M3 floor centers inside and outside the protected battery rail."""
+    rail_opening_length = (
+        BATTERY_CLEAR_LENGTH_X_MM
+        + 2.0 * BATTERY_RAIL_CLEARANCE_PER_SIDE_MM
+    )
+    rail_opening_width = (
+        BATTERY_CLEAR_WIDTH_Y_MM
+        + 2.0 * BATTERY_RAIL_CLEARANCE_PER_SIDE_MM
+    )
+    rail_outer_length = rail_opening_length + 2.0 * BATTERY_RAIL_THICKNESS_MM
+    rail_outer_width = rail_opening_width + 2.0 * BATTERY_RAIL_THICKNESS_MM
+    grid_radius = FLOOR_MOUNTING_GRID_M3_CLEARANCE_DIAMETER_MM / 2.0
+    rail_keepout = grid_radius + FLOOR_MOUNTING_GRID_MIN_WEB_MM
+    legacy_openings = tuple(
+        (x_mm, y_mm, UTILITY_M2_CLEARANCE_DIAMETER_MM / 2.0)
+        for x_mm in BASE_UTILITY_M2_X_MM
+        for y_mm in BASE_UTILITY_Y_MM
+    ) + tuple(
+        (x_mm, y_mm, UTILITY_M3_CLEARANCE_DIAMETER_MM / 2.0)
+        for x_mm in BASE_UTILITY_M3_X_MM
+        for y_mm in BASE_UTILITY_Y_MM
+    )
+    return tuple(
+        (x_mm, y_mm)
+        for x_mm in FLOOR_MOUNTING_GRID_X_MM
+        for y_mm in FLOOR_MOUNTING_GRID_Y_MM
+        if (
+            (
+                abs(x_mm) < rail_opening_length / 2.0 - rail_keepout
+                and abs(y_mm) < rail_opening_width / 2.0 - rail_keepout
+            )
+            or (
+                abs(x_mm) > rail_outer_length / 2.0 + rail_keepout
+                or abs(y_mm) > rail_outer_width / 2.0 + rail_keepout
+            )
+        )
+        and all(
+            (
+                (x_mm - opening_x_mm) ** 2
+                + (y_mm - opening_y_mm) ** 2
+            )
+            ** 0.5
+            > (
+                grid_radius
+                + opening_radius_mm
+                + FLOOR_MOUNTING_GRID_MIN_WEB_MM
+            )
+            for opening_x_mm, opening_y_mm, opening_radius_mm in legacy_openings
+        )
+    )
+
+
+def make_floor_mounting_grid_hole_tools() -> tuple[Shape, ...]:
+    """Return M3 cutters through the floor without cutting the raised rail."""
+    cutter_height = BODY_FLOOR_MM + 2.0 * BOOLEAN_OVERTRAVEL_MM
+    cutter_min_z = -BOOLEAN_OVERTRAVEL_MM
+    return tuple(
+        Cylinder(
+            FLOOR_MOUNTING_GRID_M3_CLEARANCE_DIAMETER_MM / 2.0,
+            cutter_height,
+            align=(Align.CENTER, Align.CENTER, Align.MIN),
+        ).moved(Location((x_mm, y_mm, cutter_min_z)))
+        for x_mm, y_mm in floor_mounting_grid_centers_xy_mm()
+    )
+
+
 def make_base_utility_mount_hole_tools() -> tuple[Shape, ...]:
     """Return M2/M3 clearance cutters through the protected floor rails."""
     cutter_height = BODY_FLOOR_MM + 2.0 * BOOLEAN_OVERTRAVEL_MM
@@ -376,15 +528,16 @@ def make_body_base() -> Shape:
     reinforced = shell.fuse(
         *make_hip_backing_pads(),
         make_battery_retaining_rail(),
-        *make_tray_standoffs(),
         *make_lid_bosses(),
     )
     finished = reinforced - (
         make_hip_mount_hole_tools()
-        + make_tray_pilot_tools()
         + make_lid_insert_pilot_tools()
         + make_front_rear_vent_tools()
         + (make_side_cable_port_tool(),)
+        + make_front_rear_mounting_grid_hole_tools()
+        + make_side_mounting_grid_hole_tools()
+        + make_floor_mounting_grid_hole_tools()
         + make_base_utility_mount_hole_tools()
     )
     return _one_valid_solid(finished, "quadruped_body_base")

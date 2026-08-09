@@ -6,6 +6,13 @@ Use a forward-and-downward depth sensor to create a small robot-frame terrain
 profile. Keep the body IMU and joint feedback in the policy. Do not train PPO
 directly from full RGB frames for the next experiment.
 
+For the inexpensive prototype, use an **ST VL53L5CX 8 x 8 multi-zone ToF
+sensor on the Pololu 3417 carrier**. The 2026-07-31 observed one-piece price
+was `$19.95`; the carrier is approximately `13 x 18 x 3 mm`, weighs `0.5 g`
+without headers, accepts `2.5-5.5 V`, and connects over I2C. This is now the
+modeled v7 policy input. A wider stereo depth camera remains an upgrade path,
+not a requirement for the first sensor/learning test.
+
 The selected physical Arducam is a monocular RGB camera. Isaac can synthesize
 depth from its camera prim, but that does not make metric depth available from
 the physical camera. Monocular depth estimation remains a possible later
@@ -21,11 +28,13 @@ clearance, the lower image ray meets level ground roughly 0.61 m ahead. The v2
 first riser begins only 0.31-0.37 m ahead of the reset base, so it can be below
 the camera's useful view just when precise foot placement is needed.
 
-For stair perception, pitch the depth optical axis down about 25 degrees and
-verify that both front feet, the first riser, and at least 0.6 m of the path are
-visible. At that angle the approximate near-ground intersection becomes 0.24
-m. Final pitch and placement must be validated with the real sensor's minimum
-range and a CAD/Isaac visibility check.
+The earlier `25 deg` pitch estimate applies to the wider D405 field of view.
+The VL53L5CX detection volume is only about `45 deg` horizontally and
+vertically (`65 deg` diagonal), so v7 models a `40 deg` downward pitch. Its
+zone-center rays span approximately `20.3-59.7 deg` downward. At the current
+optical origin this covers the first risers without pointing the top zones
+above the horizon. Final placement still needs a CAD adapter and a real
+minimum-range/occlusion bench check.
 
 ## Required sensing
 
@@ -48,20 +57,22 @@ to a depth camera.
 
 ## Current candidate screening
 
-The first prototype recommendation is a **RealSense D405**, mounted on a new
-adapter and pitched down about 25 degrees. Its published ideal range is
-0.07-0.50 m, depth field of view is 87 x 58 degrees, depth rate is up to 90 Hz,
-and streaming depth/IR power is 1.55 W. That matches the close front-foot
-workspace better than a general navigation stereo camera. Its short ideal
-maximum range means it should complement, not replace, the existing RGB camera
-for longer-range teleoperation.
+The selected cheap prototype is the **ST VL53L5CX on Pololu carrier 3417**.
+It provides 64 range zones, a `65 deg` diagonal detection volume, and a
+`20 mm-4 m` published range. Crucially, the `60 Hz` headline applies to
+`4 x 4` mode; full `8 x 8` operation is limited to `15 Hz`. V7 therefore holds
+one 8 x 8 sample for eight `120 Hz` control frames and adds one sample frame
+(`66.7 ms`) of latency. The ST accuracy figure near `20-200 mm` is represented
+as bounded `+/-15 mm` noise; longer ranges use bounded `+/-5%` noise. The
+additional `5%` per-zone dropout is a conservative simulation assumption, not
+a manufacturer specification.
 
-An **ST VL53L5CX** breakout is the lightweight fallback. It provides an 8 x 8
-multi-zone depth map over a 65-degree diagonal field at up to 60 Hz. The
-datasheet specifies approximately +/-15 mm accuracy from 20-200 mm, which is a
-large fraction of the current 40 mm riser. It is suitable for an inexpensive
-bench prototype, but its coarse spatial and height resolution make it a weaker
-primary sensor for learned foot placement.
+A **RealSense D405**, mounted on an adapter and pitched down about 25 degrees,
+is the wider-field upgrade. Its published ideal range is `0.07-0.50 m`, depth
+field of view is `87 x 58 deg`, depth rate is up to `90 Hz`, and streaming
+depth/IR power is `1.55 W`. It covers the close front-foot workspace with much
+more spatial detail, but costs, weighs, and consumes substantially more than
+the multi-zone ToF prototype.
 
 An **OAK-D Lite** offers onboard stereo/vision compute, but its published ideal
 depth range begins around 0.8 m; approximately 0.2 m minimum depth requires
@@ -70,8 +81,10 @@ bias make it less attractive for this first close-stair experiment.
 
 Manufacturer references:
 
+- [Pololu VL53L5CX carrier 3417](https://www.pololu.com/product/3417)
 - [RealSense D405 specifications](https://www.realsenseai.com/products/d405/)
 - [ST VL53L5CX product and datasheet](https://www.st.com/en/imaging-and-photonics-solutions/vl53l5cx.html)
+- [ST VL53L5CX Linux driver](https://www.st.com/en/embedded-software/stsw-img025.html)
 - [Luxonis OAK-D Lite specifications](https://docs.luxonis.com/hardware/products/OAK-D%20Lite)
 
 Do not purchase or finalize the adapter from these paper specifications alone.
@@ -82,21 +95,23 @@ still provisional in the mechanical specification.
 
 ## Policy interface
 
-Convert depth into a compact local height representation before PPO:
+V7 exposes a compact representation that can be reproduced directly from the
+real sensor without reconstructing privileged terrain height:
 
 ```text
-depth frame (15-30 Hz)
-  -> reject invalid/out-of-range pixels
-  -> transform points into the body frame
-  -> crop front-foot workspace
-  -> 3 lateral lanes x 8 forward height samples
-  -> hold/update terrain vector at the 60 Hz control loop
+8 x 8 range frame (15 Hz)
+  -> apply range limits and reject invalid zones
+  -> median columns into left [0,1,2], center [3,4], right [5,6,7]
+  -> retain all 8 vertical rows (24 normalized depth values)
+  -> one-frame delay, then hold each vector for 8 control frames at 120 Hz
 ```
 
-The policy should receive the compact terrain vector, IMU, joint state,
-previous action, gait phase, and commanded motion. Add depth noise, dropout,
-latency, extrinsic error, and invalid pixels during simulation. Avoid giving
-world `X/Y` or exact staircase geometry to the final hardware policy.
+The v7 policy receives those 24 depth values, IMU, joint state, previous
+action, navigation/goal state, and the existing foot-sequence observations.
+It does not receive RGB pixels or analytic stair-height samples. Navigation,
+goal, and foot-progress inputs remain simulator conveniences and still need a
+hardware estimator or removal before deployment. Extrinsic randomization is
+not yet implemented.
 
 ## Training sequence
 

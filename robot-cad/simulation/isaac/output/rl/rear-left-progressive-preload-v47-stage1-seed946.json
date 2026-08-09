@@ -1,0 +1,1192 @@
+{
+  "accepted_stage_count": 0,
+  "accepted_stages": [],
+  "achieved_support_margin_m": null,
+  "camera_policy_input": false,
+  "candidate_durations_seconds": [
+    5.0,
+    8.0
+  ],
+  "candidate_pitch_feedback_modes": [
+    "off",
+    "front_only",
+    "all"
+  ],
+  "candidate_target_deltas_m": [
+    [
+      0.005,
+      -0.005
+    ],
+    [
+      0.01,
+      -0.005
+    ],
+    [
+      0.005,
+      -0.01
+    ],
+    [
+      0.01,
+      -0.01
+    ]
+  ],
+  "config": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\stairs\\quadruped_stairs_v46_rear_right_sidestep.yaml",
+  "effort_cap_nm": 0.8825985,
+  "final_balance_position_m": [
+    0.4650029305381289,
+    0.05219639409822875,
+    0.318576892650225
+  ],
+  "learned_action_input": false,
+  "maximum_stages": 1,
+  "original_start_balance_position_m": [
+    0.47689429021702384,
+    0.05756186521460534,
+    0.33147429123638933
+  ],
+  "original_target_balance_position_m": [
+    0.5568942874670029,
+    -0.040537793189287186,
+    0.33147429123638933
+  ],
+  "original_target_delta_xy_m": [
+    0.07999999724997903,
+    -0.09809965840389252
+  ],
+  "phase_snapshot": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\rear-left-transfer-snapshot-v46-seed937.json",
+  "phase_snapshot_mode": "inter_leg_transfer",
+  "saved_transfer_snapshot": null,
+  "scope": "Exact-V46-snapshot progressive four-foot rear-left COM preload",
+  "seed": 946,
+  "source_task_id": "Drobot-Quadruped-Stairs-v46-Rear-Right-Sidestep",
+  "stage_searches": [
+    {
+      "accepted_count": 0,
+      "best": {
+        "accepted": false,
+        "duration_seconds": 5.0,
+        "failure_reasons": [],
+        "final_balance_position_m": [
+          0.47404684294050575,
+          0.05768245214566422,
+          0.325824330285926
+        ],
+        "final_pre_unload_gate_failures": [
+          "support_contact_lost",
+          "placed_tread_unloaded",
+          "support_margin_low",
+          "body_not_upright"
+        ],
+        "final_support_margin_m": -0.07565402902861393,
+        "final_target_error_m": 0.012951932736341046,
+        "id": "stage1-pitchoff-duration5.0-forward+0.005-lateral-0.010",
+        "initial_balance_position_m": [
+          0.47700438290573677,
+          0.05746334623294372,
+          0.3312902581690405
+        ],
+        "initial_support_margin_m": -0.10308315838736702,
+        "maximum_all_foot_slip_m": 0.03107915259897709,
+        "maximum_body_tilt_deg": 14.902526186919774,
+        "measured_balance_delta_xy_m": [
+          -0.0029575399652310153,
+          0.00021910591272050056
+        ],
+        "minimum_all_foot_load_n": 0.0,
+        "minimum_completed_tread_load_n": 0.0,
+        "pitch_feedback_mode": "off",
+        "settled": false,
+        "stage": 1,
+        "steps": 444,
+        "support_margin_progress_m": 0.027429129358753093,
+        "target_delta_xy_m": [
+          0.005,
+          -0.01
+        ],
+        "terminated": false,
+        "truncated": false
+      },
+      "ranked_candidates": [
+        {
+          "accepted": false,
+          "duration_seconds": 5.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.47404684294050575,
+            0.05768245214566422,
+            0.325824330285926
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.07565402902861393,
+          "final_target_error_m": 0.012951932736341046,
+          "id": "stage1-pitchoff-duration5.0-forward+0.005-lateral-0.010",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.03107915259897709,
+          "maximum_body_tilt_deg": 14.902526186919774,
+          "measured_balance_delta_xy_m": [
+            -0.0029575399652310153,
+            0.00021910591272050056
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "off",
+          "settled": false,
+          "stage": 1,
+          "steps": 444,
+          "support_margin_progress_m": 0.027429129358753093,
+          "target_delta_xy_m": [
+            0.005,
+            -0.01
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 8.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.47402126563694663,
+            0.05771311732960084,
+            0.32574515613634036
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.0757765585771117,
+          "final_target_error_m": 0.012991842151702453,
+          "id": "stage1-pitchoff-duration8.0-forward+0.005-lateral-0.010",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.031001275405287743,
+          "maximum_body_tilt_deg": 14.995304896864004,
+          "measured_balance_delta_xy_m": [
+            -0.0029831172687901364,
+            0.0002497710966571226
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "off",
+          "settled": false,
+          "stage": 1,
+          "steps": 624,
+          "support_margin_progress_m": 0.027306599810255322,
+          "target_delta_xy_m": [
+            0.005,
+            -0.01
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 5.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.4718286752059825,
+            0.05500592060153602,
+            0.3251284762880796
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.07719451532694087,
+          "final_target_error_m": 0.012666311604028336,
+          "id": "stage1-pitchfront_only-duration5.0-forward+0.005-lateral-0.010",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.0282257292419672,
+          "maximum_body_tilt_deg": 14.726099718219002,
+          "measured_balance_delta_xy_m": [
+            -0.005175707699754284,
+            -0.002457425631407696
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "front_only",
+          "settled": false,
+          "stage": 1,
+          "steps": 444,
+          "support_margin_progress_m": 0.025888643060426153,
+          "target_delta_xy_m": [
+            0.005,
+            -0.01
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 8.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.47172686239365774,
+            0.05503283289836607,
+            0.325046626453363
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.07722584555550721,
+          "final_target_error_m": 0.012764190165191952,
+          "id": "stage1-pitchfront_only-duration8.0-forward+0.005-lateral-0.010",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.028262842446565628,
+          "maximum_body_tilt_deg": 14.788897180882142,
+          "measured_balance_delta_xy_m": [
+            -0.005277520512079026,
+            -0.0024305133345776456
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "front_only",
+          "settled": false,
+          "stage": 1,
+          "steps": 624,
+          "support_margin_progress_m": 0.02585731283185981,
+          "target_delta_xy_m": [
+            0.005,
+            -0.01
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 8.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.47319636302571133,
+            0.05395566611699653,
+            0.3238568039399266
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.07868945781804455,
+          "final_target_error_m": 0.015045622332275943,
+          "id": "stage1-pitchfront_only-duration8.0-forward+0.010-lateral-0.010",
+          "initial_balance_position_m": [
+            0.4768246157027216,
+            0.05758059833075114,
+            0.3310911998125297
+          ],
+          "initial_support_margin_m": -0.10329101306784867,
+          "maximum_all_foot_slip_m": 0.02489829994738102,
+          "maximum_body_tilt_deg": 16.467440508778598,
+          "measured_balance_delta_xy_m": [
+            -0.0036282526770102796,
+            -0.0036249322137546086
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "front_only",
+          "settled": false,
+          "stage": 1,
+          "steps": 624,
+          "support_margin_progress_m": 0.02460155524980412,
+          "target_delta_xy_m": [
+            0.01,
+            -0.01
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 8.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.47395545720425414,
+            0.05523019096301067,
+            0.32332361189934666
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.07888189523523685,
+          "final_target_error_m": 0.01518546442221667,
+          "id": "stage1-pitchoff-duration8.0-forward+0.010-lateral-0.010",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.02521594800055027,
+          "maximum_body_tilt_deg": 17.93661798122295,
+          "measured_balance_delta_xy_m": [
+            -0.00304892570148263,
+            -0.0022331552699330487
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "off",
+          "settled": false,
+          "stage": 1,
+          "steps": 624,
+          "support_margin_progress_m": 0.02420126315213017,
+          "target_delta_xy_m": [
+            0.01,
+            -0.01
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 5.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.47290754813888736,
+            0.05398261342691397,
+            0.32355319404211635
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.07903509220912833,
+          "final_target_error_m": 0.01532826760981695,
+          "id": "stage1-pitchfront_only-duration5.0-forward+0.010-lateral-0.010",
+          "initial_balance_position_m": [
+            0.47683243544974274,
+            0.0575753276999207,
+            0.3310971574995341
+          ],
+          "initial_support_margin_m": -0.10328330705529543,
+          "maximum_all_foot_slip_m": 0.024738848209381104,
+          "maximum_body_tilt_deg": 16.732602166366043,
+          "measured_balance_delta_xy_m": [
+            -0.003924887310855385,
+            -0.003592714273006732
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "front_only",
+          "settled": false,
+          "stage": 1,
+          "steps": 444,
+          "support_margin_progress_m": 0.0242482148461671,
+          "target_delta_xy_m": [
+            0.01,
+            -0.01
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 5.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.4725309576207987,
+            0.05483303341649802,
+            0.3223531181755942
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.08003795146236865,
+          "final_target_error_m": 0.016033402108272025,
+          "id": "stage1-pitchoff-duration5.0-forward+0.010-lateral-0.010",
+          "initial_balance_position_m": [
+            0.47682836135252704,
+            0.057576709324178965,
+            0.3310931336136795
+          ],
+          "initial_support_margin_m": -0.10328462288540179,
+          "maximum_all_foot_slip_m": 0.02441815659403801,
+          "maximum_body_tilt_deg": 19.052529090870866,
+          "measured_balance_delta_xy_m": [
+            -0.004297403731728322,
+            -0.0027436759076809453
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "off",
+          "settled": false,
+          "stage": 1,
+          "steps": 444,
+          "support_margin_progress_m": 0.023246671423033133,
+          "target_delta_xy_m": [
+            0.01,
+            -0.01
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 5.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.4685273510919672,
+            0.053669369239029555,
+            0.32195365071133025
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.09108723882608707,
+          "final_target_error_m": 0.014837287564604394,
+          "id": "stage1-pitchall-duration5.0-forward+0.005-lateral-0.010",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.019664088264107704,
+          "maximum_body_tilt_deg": 16.599914283966818,
+          "measured_balance_delta_xy_m": [
+            -0.008477031813769575,
+            -0.0037939769939141638
+          ],
+          "minimum_all_foot_load_n": 0.3491392731666565,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "all",
+          "settled": false,
+          "stage": 1,
+          "steps": 444,
+          "support_margin_progress_m": 0.011995919561279947,
+          "target_delta_xy_m": [
+            0.005,
+            -0.01
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 8.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.47450510694422854,
+            0.05677560228846958,
+            0.32591084189777525
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.0917734175472614,
+          "final_target_error_m": 0.008650704572183213,
+          "id": "stage1-pitchoff-duration8.0-forward+0.005-lateral-0.005",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.013440487906336784,
+          "maximum_body_tilt_deg": 15.221075937042034,
+          "measured_balance_delta_xy_m": [
+            -0.0024992759615082294,
+            -0.0006877439444741354
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "off",
+          "settled": false,
+          "stage": 1,
+          "steps": 624,
+          "support_margin_progress_m": 0.011309740840105623,
+          "target_delta_xy_m": [
+            0.005,
+            -0.005
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 5.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.47441082890439745,
+            0.056746024684311766,
+            0.32586574592974377
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.09185585040842119,
+          "final_target_error_m": 0.008717992569079408,
+          "id": "stage1-pitchoff-duration5.0-forward+0.005-lateral-0.005",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.013388535007834435,
+          "maximum_body_tilt_deg": 15.262268924760438,
+          "measured_balance_delta_xy_m": [
+            -0.0025935540013393155,
+            -0.0007173215486319523
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "off",
+          "settled": false,
+          "stage": 1,
+          "steps": 444,
+          "support_margin_progress_m": 0.011227307978945833,
+          "target_delta_xy_m": [
+            0.005,
+            -0.005
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 5.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.4720907141393056,
+            0.053768668583204525,
+            0.32494705144776087
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.09275876131471922,
+          "final_target_error_m": 0.009999234587755383,
+          "id": "stage1-pitchfront_only-duration5.0-forward+0.005-lateral-0.005",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.012679992243647575,
+          "maximum_body_tilt_deg": 15.237937801303277,
+          "measured_balance_delta_xy_m": [
+            -0.0049136687664311784,
+            -0.0036946776497391934
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "front_only",
+          "settled": false,
+          "stage": 1,
+          "steps": 444,
+          "support_margin_progress_m": 0.010324397072647803,
+          "target_delta_xy_m": [
+            0.005,
+            -0.005
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 8.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.4706413163123556,
+            0.053789125307288736,
+            0.3239158924762762
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.09442414285111823,
+          "final_target_error_m": 0.011196320920567234,
+          "id": "stage1-pitchfront_only-duration8.0-forward+0.005-lateral-0.005",
+          "initial_balance_position_m": [
+            0.476776532409707,
+            0.057620978325255374,
+            0.3310695330978721
+          ],
+          "initial_support_margin_m": -0.1033374366657484,
+          "maximum_all_foot_slip_m": 0.014729856513440609,
+          "maximum_body_tilt_deg": 16.244162651333202,
+          "measured_balance_delta_xy_m": [
+            -0.006135216097351404,
+            -0.0038318530179666382
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "front_only",
+          "settled": false,
+          "stage": 1,
+          "steps": 624,
+          "support_margin_progress_m": 0.008913293814630172,
+          "target_delta_xy_m": [
+            0.005,
+            -0.005
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 8.0,
+          "failure_reasons": [],
+          "final_balance_position_m": [
+            0.4685828617761616,
+            0.05318988412620362,
+            0.32182541257661335
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.09479657097371004,
+          "final_target_error_m": 0.014592136927628821,
+          "id": "stage1-pitchall-duration8.0-forward+0.005-lateral-0.010",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.017854396253824234,
+          "maximum_body_tilt_deg": 16.57583395635686,
+          "measured_balance_delta_xy_m": [
+            -0.008421521129575171,
+            -0.004273462106740102
+          ],
+          "minimum_all_foot_load_n": 0.34701257944107056,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "all",
+          "settled": false,
+          "stage": 1,
+          "steps": 624,
+          "support_margin_progress_m": 0.008286587413656982,
+          "target_delta_xy_m": [
+            0.005,
+            -0.01
+          ],
+          "terminated": false,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 8.0,
+          "failure_reasons": [
+            "body_tipped"
+          ],
+          "final_balance_position_m": [
+            0.47172135878037175,
+            0.05459513935138084,
+            0.3216879295720862
+          ],
+          "final_pre_unload_gate_failures": [
+            "transfer_incomplete",
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.09588072135832729,
+          "final_target_error_m": 0.015430987039323446,
+          "id": "stage1-pitchoff-duration8.0-forward+0.010-lateral-0.005",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.02066951058804989,
+          "maximum_body_tilt_deg": 19.95327817004643,
+          "measured_balance_delta_xy_m": [
+            -0.005283024125365021,
+            -0.0028682068815628764
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "off",
+          "settled": false,
+          "stage": 1,
+          "steps": 406,
+          "support_margin_progress_m": 0.007202437029039735,
+          "target_delta_xy_m": [
+            0.01,
+            -0.005
+          ],
+          "terminated": true,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 5.0,
+          "failure_reasons": [
+            "body_tipped"
+          ],
+          "final_balance_position_m": [
+            0.4715799698033085,
+            0.054627148045988866,
+            0.32169906641363305
+          ],
+          "final_pre_unload_gate_failures": [
+            "transfer_incomplete",
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_rate_high",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.09606764887586047,
+          "final_target_error_m": 0.015575447038900694,
+          "id": "stage1-pitchoff-duration5.0-forward+0.010-lateral-0.005",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.020656684413552284,
+          "maximum_body_tilt_deg": 19.960352264714025,
+          "measured_balance_delta_xy_m": [
+            -0.005424413102428249,
+            -0.0028361981869548525
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "off",
+          "settled": false,
+          "stage": 1,
+          "steps": 256,
+          "support_margin_progress_m": 0.0070155095115065486,
+          "target_delta_xy_m": [
+            0.01,
+            -0.005
+          ],
+          "terminated": true,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 5.0,
+          "failure_reasons": [
+            "body_tipped"
+          ],
+          "final_balance_position_m": [
+            0.4700328189062472,
+            0.052510018593145275,
+            0.3209326409762802
+          ],
+          "final_pre_unload_gate_failures": [
+            "transfer_incomplete",
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.09628114433347953,
+          "final_target_error_m": 0.016778244821400785,
+          "id": "stage1-pitchfront_only-duration5.0-forward+0.010-lateral-0.005",
+          "initial_balance_position_m": [
+            0.4768108533813626,
+            0.05759407762168577,
+            0.33108327602245274
+          ],
+          "initial_support_margin_m": -0.10330781249317748,
+          "maximum_all_foot_slip_m": 0.019851766526699066,
+          "maximum_body_tilt_deg": 19.95570984870891,
+          "measured_balance_delta_xy_m": [
+            -0.00677803447511538,
+            -0.005084059028540498
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "front_only",
+          "settled": false,
+          "stage": 1,
+          "steps": 296,
+          "support_margin_progress_m": 0.007026668159697949,
+          "target_delta_xy_m": [
+            0.01,
+            -0.005
+          ],
+          "terminated": true,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 8.0,
+          "failure_reasons": [
+            "body_tipped"
+          ],
+          "final_balance_position_m": [
+            0.46996671648524446,
+            0.05243925812403273,
+            0.32081555707091697
+          ],
+          "final_pre_unload_gate_failures": [
+            "transfer_incomplete",
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.09657093785757208,
+          "final_target_error_m": 0.01680354444832101,
+          "id": "stage1-pitchfront_only-duration8.0-forward+0.010-lateral-0.005",
+          "initial_balance_position_m": [
+            0.47676915693832117,
+            0.05763189331222538,
+            0.3310680484341793
+          ],
+          "initial_support_margin_m": -0.1033494780577578,
+          "maximum_all_foot_slip_m": 0.019830137491226196,
+          "maximum_body_tilt_deg": 19.978021991503674,
+          "measured_balance_delta_xy_m": [
+            -0.006802440453076708,
+            -0.00519263518819265
+          ],
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "front_only",
+          "settled": false,
+          "stage": 1,
+          "steps": 464,
+          "support_margin_progress_m": 0.006778540200185715,
+          "target_delta_xy_m": [
+            0.01,
+            -0.005
+          ],
+          "terminated": true,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 5.0,
+          "failure_reasons": [
+            "body_tipped"
+          ],
+          "final_balance_position_m": [
+            0.46476370183445853,
+            0.05254108204588278,
+            0.3186168535523545
+          ],
+          "final_pre_unload_gate_failures": [
+            "transfer_incomplete",
+            "support_margin_low",
+            "body_rate_high",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.10529137340346571,
+          "final_target_error_m": 0.022812963053668284,
+          "id": "stage1-pitchall-duration5.0-forward+0.010-lateral-0.010",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.02307404763996601,
+          "maximum_body_tilt_deg": 19.986496539477365,
+          "measured_balance_delta_xy_m": [
+            -0.012240681071278237,
+            -0.004922264187060939
+          ],
+          "minimum_all_foot_load_n": 0.07824503630399704,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "all",
+          "settled": false,
+          "stage": 1,
+          "steps": 162,
+          "support_margin_progress_m": -0.0022082150160986913,
+          "target_delta_xy_m": [
+            0.01,
+            -0.01
+          ],
+          "terminated": true,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 8.0,
+          "failure_reasons": [
+            "body_tipped"
+          ],
+          "final_balance_position_m": [
+            0.4650029305381289,
+            0.05219639409822875,
+            0.318576892650225
+          ],
+          "final_pre_unload_gate_failures": [
+            "transfer_incomplete",
+            "support_margin_low",
+            "body_rate_high",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.10639161218967184,
+          "final_target_error_m": 0.02250479141045177,
+          "id": "stage1-pitchall-duration8.0-forward+0.010-lateral-0.010",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.02283359318971634,
+          "maximum_body_tilt_deg": 19.989433844820706,
+          "measured_balance_delta_xy_m": [
+            -0.012001452367607857,
+            -0.005266952134714967
+          ],
+          "minimum_all_foot_load_n": 0.07770697772502899,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "all",
+          "settled": false,
+          "stage": 1,
+          "steps": 254,
+          "support_margin_progress_m": -0.0033084538023048227,
+          "target_delta_xy_m": [
+            0.01,
+            -0.01
+          ],
+          "terminated": true,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 8.0,
+          "failure_reasons": [
+            "body_tipped"
+          ],
+          "final_balance_position_m": [
+            0.46525922320060487,
+            0.05217199142250792,
+            0.31873652969515925
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.10682675742976334,
+          "final_target_error_m": 0.016813466948216265,
+          "id": "stage1-pitchall-duration8.0-forward+0.005-lateral-0.005",
+          "initial_balance_position_m": [
+            0.4770713279864002,
+            0.057386017589503915,
+            0.33111683236232325
+          ],
+          "initial_support_margin_m": -0.1032163482426959,
+          "maximum_all_foot_slip_m": 0.022585313767194748,
+          "maximum_body_tilt_deg": 19.952007179607072,
+          "measured_balance_delta_xy_m": [
+            -0.011812104785795308,
+            -0.005214026166995997
+          ],
+          "minimum_all_foot_load_n": 0.4853758215904236,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "all",
+          "settled": false,
+          "stage": 1,
+          "steps": 483,
+          "support_margin_progress_m": -0.00361040918706744,
+          "target_delta_xy_m": [
+            0.005,
+            -0.005
+          ],
+          "terminated": true,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 5.0,
+          "failure_reasons": [
+            "body_tipped"
+          ],
+          "final_balance_position_m": [
+            0.46471347795369705,
+            0.052068144273833515,
+            0.3185349344366362
+          ],
+          "final_pre_unload_gate_failures": [
+            "transfer_incomplete",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.10729629020451839,
+          "final_target_error_m": 0.01707043686267092,
+          "id": "stage1-pitchall-duration5.0-forward+0.005-lateral-0.005",
+          "initial_balance_position_m": [
+            0.47677511101869535,
+            0.05761631899856678,
+            0.3310655481862775
+          ],
+          "initial_support_margin_m": -0.10333377835627965,
+          "maximum_all_foot_slip_m": 0.022409766912460327,
+          "maximum_body_tilt_deg": 20.002836290827958,
+          "measured_balance_delta_xy_m": [
+            -0.0120616330649983,
+            -0.0055481747247332625
+          ],
+          "minimum_all_foot_load_n": 0.16558165848255157,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "all",
+          "settled": false,
+          "stage": 1,
+          "steps": 269,
+          "support_margin_progress_m": -0.003962511848238745,
+          "target_delta_xy_m": [
+            0.005,
+            -0.005
+          ],
+          "terminated": true,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 5.0,
+          "failure_reasons": [
+            "body_tipped"
+          ],
+          "final_balance_position_m": [
+            0.4658265530669933,
+            0.05202844275589194,
+            0.3189049560551889
+          ],
+          "final_pre_unload_gate_failures": [
+            "transfer_incomplete",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.10814656777755492,
+          "final_target_error_m": 0.02118229469021491,
+          "id": "stage1-pitchall-duration5.0-forward+0.010-lateral-0.005",
+          "initial_balance_position_m": [
+            0.47700438290573677,
+            0.05746334623294372,
+            0.3312902581690405
+          ],
+          "initial_support_margin_m": -0.10308315838736702,
+          "maximum_all_foot_slip_m": 0.021844007074832916,
+          "maximum_body_tilt_deg": 20.028000030333644,
+          "measured_balance_delta_xy_m": [
+            -0.011177829838743492,
+            -0.005434903477051778
+          ],
+          "minimum_all_foot_load_n": 0.3471421003341675,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "all",
+          "settled": false,
+          "stage": 1,
+          "steps": 173,
+          "support_margin_progress_m": -0.005063409390187901,
+          "target_delta_xy_m": [
+            0.01,
+            -0.005
+          ],
+          "terminated": true,
+          "truncated": false
+        },
+        {
+          "accepted": false,
+          "duration_seconds": 8.0,
+          "failure_reasons": [
+            "body_tipped"
+          ],
+          "final_balance_position_m": [
+            0.46609938333708717,
+            0.052095244380073694,
+            0.3190231994536895
+          ],
+          "final_pre_unload_gate_failures": [
+            "transfer_incomplete",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_support_margin_m": -0.10847809658339122,
+          "final_target_error_m": 0.020973590635869836,
+          "id": "stage1-pitchall-duration8.0-forward+0.010-lateral-0.005",
+          "initial_balance_position_m": [
+            0.47707098751080146,
+            0.05738391694997002,
+            0.3311172162045852
+          ],
+          "initial_support_margin_m": -0.10322948898963304,
+          "maximum_all_foot_slip_m": 0.02156260795891285,
+          "maximum_body_tilt_deg": 19.994148653129308,
+          "measured_balance_delta_xy_m": [
+            -0.010971604173714289,
+            -0.005288672569896326
+          ],
+          "minimum_all_foot_load_n": 0.5291472673416138,
+          "minimum_completed_tread_load_n": 0.0,
+          "pitch_feedback_mode": "all",
+          "settled": false,
+          "stage": 1,
+          "steps": 280,
+          "support_margin_progress_m": -0.005248607593758184,
+          "target_delta_xy_m": [
+            0.01,
+            -0.005
+          ],
+          "terminated": true,
+          "truncated": false
+        }
+      ],
+      "stage": 1
+    }
+  ],
+  "stair_rise_m": 0.18,
+  "stair_tread_depth_m": 0.25,
+  "status": "NO_ACCEPTED_PATH",
+  "strict_pass": false,
+  "target_leg": "rear_left",
+  "task_id": "Drobot-Quadruped-Stairs-v47-Progressive-Rear-Left-Preload"
+}

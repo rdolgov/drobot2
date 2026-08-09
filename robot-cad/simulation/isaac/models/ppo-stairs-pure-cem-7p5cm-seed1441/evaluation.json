@@ -1,0 +1,62 @@
+{
+  "schema_version": 2,
+  "task": "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct",
+  "checkpoint": "model.pt",
+  "strict_success_definition": "one unnamed foot >= 0.075 m above reset for five post-settle control steps while the other three feet remain force-loaded",
+  "reset": {
+    "base_height_m": 0.3,
+    "yaw_deg": 90.0,
+    "joint_position_noise_rad": 0.02,
+    "lateral_jitter_m": 0.015
+  },
+  "stairs": {"rise_m": 0.18, "tread_depth_m": 0.25},
+  "cem": {
+    "parallel_environments": 128,
+    "populations": 2,
+    "generations": 20,
+    "transitions": 614400,
+    "all_completed": 5603,
+    "all_successful": 15,
+    "center_success_observed": true
+  },
+  "fresh_screens": {
+    "source": {"successful": 0, "completed": 137},
+    "population_0": {"successful": 0, "completed": 353},
+    "population_1": {"successful": 1, "completed": 308, "rate": 0.00324675},
+    "best_sample": {"successful": 0, "completed": 327}
+  },
+  "replicated_cem_consolidation": {
+    "report": "replicated_cem_report_seed1471.json",
+    "seed": 1471,
+    "parallel_environments": 128,
+    "replicas_per_candidate": 4,
+    "candidate_groups_per_generation": 32,
+    "generations": 40,
+    "transitions": 1228800,
+    "first_episode_successes": 8,
+    "successful_candidate_groups": 8,
+    "multi_replica_successful_groups": 0,
+    "center_successes": 0,
+    "promotion": "rejected"
+  },
+  "ordinary_recording": {
+    "seed": 1452,
+    "viewer_env_index": 96,
+    "duration_s": 30.0,
+    "selected_environment_success": false,
+    "all_envs_successful": 1,
+    "all_envs_completed": 632,
+    "successful_env_index": 72,
+    "replicate_physics_isolated": true,
+    "parallel_replicas_shared_display_coordinates": true,
+    "visual_clutter": true,
+    "path": "reviews/ppo-stairs-cem-7p5cm-pop1-env96-seed1452-30s.mp4"
+  },
+  "limitations": [
+    "fresh success is rare and reset-sensitive",
+    "recorded robot did not cross the strict 7.5 cm gate",
+    "archived parallel video draws isolated physics replicas at shared display coordinates",
+    "no repeatable 10 cm or 19 cm held lift",
+    "no tread placement, weight transfer, step, or climb"
+  ]
+}

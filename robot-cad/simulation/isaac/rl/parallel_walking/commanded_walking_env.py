@@ -1,0 +1,633 @@
+"""Pure-RL vectorized commanded-walking environment for Drobot."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import gymnasium as gym
+import isaaclab.sim as sim_utils
+import torch
+import warp as wp
+from isaaclab import cloner
+from isaaclab.assets import Articulation
+from isaaclab.envs import DirectRLEnv
+from isaaclab.sensors import ContactSensor, Imu
+
+from . import preview_control
+from .commanded_walking_env_cfg import (
+    SERVO_VELOCITY_LIMIT_RAD_S,
+    DrobotCommandedWalkingForwardEnvCfg,
+)
+
+
+class DrobotCommandedWalkingEnv(DirectRLEnv):
+    """Learn locomotion from velocity commands without a prescribed gait phase."""
+
+    cfg: DrobotCommandedWalkingForwardEnvCfg
+    def __init__(
+        self,
+        cfg: DrobotCommandedWalkingForwardEnvCfg,
+        render_mode: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(cfg, render_mode, **kwargs)
+        self._actions = torch.zeros(
+            self.num_envs, gym.spaces.flatdim(self.single_action_space), device=self.device
+        )
+        self._previous_actions = torch.zeros_like(self._actions)
+        self._previous_targets = self._robot.data.default_joint_pos.torch.clone()
+        self._commands = torch.zeros((self.num_envs, 3), device=self.device)
+        self._joint_scale = torch.tensor(
+            [
+                self.cfg.action_scale_abduction_rad
+                if name.endswith("hip_abduction")
+                else self.cfg.action_scale_hip_rad
+                if name.endswith("hip_flexion")
+                else self.cfg.action_scale_knee_rad
+                for name in self._robot.joint_names
+            ],
+            dtype=torch.float32,
+            device=self.device,
+        )
+        if len(self._robot.joint_names) != 12:
+            raise RuntimeError(f"Expected 12 joints, got {self._robot.joint_names}")
+        self._base_sensor_ids, _ = self._contact_sensor.find_sensors("base_link")
+        self._foot_sensor_ids, self._foot_sensor_names = self._contact_sensor.find_sensors(
+            ".*_distal_link"
+        )
+        if len(self._base_sensor_ids) == 0:
+            raise RuntimeError("Could not find base_link in the contact sensor")
+        if len(self._foot_sensor_ids) != 4:
+            raise RuntimeError(
+                f"Expected four foot sensors, got {self._foot_sensor_names}"
+            )
+
+        self._steps_since_reset = torch.zeros(
+            self.num_envs, dtype=torch.long, device=self.device
+        )
+        self._failed = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self._failure_nonfinite = torch.zeros_like(self._failed)
+        self._failure_low_height = torch.zeros_like(self._failed)
+        self._failure_tilt = torch.zeros_like(self._failed)
+        self._failure_out_of_bounds = torch.zeros_like(self._failed)
+        self._failure_base_contact = torch.zeros_like(self._failed)
+        self._episode_start_position = torch.zeros((self.num_envs, 3), device=self.device)
+        self._episode_velocity_error_sum = torch.zeros(self.num_envs, device=self.device)
+        self._episode_yaw_error_sum = torch.zeros(self.num_envs, device=self.device)
+        self._episode_commanded_distance = torch.zeros(self.num_envs, device=self.device)
+        self._episode_action_saturation_sum = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self._episode_swing_step_sum = torch.zeros(self.num_envs, device=self.device)
+        self._episode_touchdown_count = torch.zeros(self.num_envs, device=self.device)
+        self._episode_qualified_touchdown_count = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self._episode_command_speed_sum = torch.zeros(self.num_envs, device=self.device)
+        self._episode_base_height_sum = torch.zeros(self.num_envs, device=self.device)
+        self._sustained_window_steps = max(
+            1, int(round(self.cfg.sustained_speed_window_s / self.step_dt))
+        )
+        self._rolling_command_speed = torch.zeros(
+            (self.num_envs, self._sustained_window_steps), device=self.device
+        )
+        self._env_indices = torch.arange(self.num_envs, device=self.device)
+        self._episode_min_rolling_speed = torch.full(
+            (self.num_envs,), torch.inf, device=self.device
+        )
+        self._episode_stall_step_sum = torch.zeros(self.num_envs, device=self.device)
+        reward_term_names = (
+            "forward_velocity_tracking",
+            "sustained_progress",
+            "sustained_stall",
+            "upright",
+            "alive",
+            "lateral_velocity",
+            "vertical_velocity",
+            "roll_pitch_rate",
+            "yaw_rate",
+            "body_height",
+            "action_rate",
+            "action_magnitude",
+            "joint_velocity",
+            "termination",
+        )
+        self._episode_reward_term_sums = {
+            name: torch.zeros(self.num_envs, device=self.device)
+            for name in reward_term_names
+        }
+
+    def _current_episode_horizon_steps(self) -> int:
+        curriculum_step = (
+            self.common_step_counter + self.cfg.command_curriculum_offset_steps
+        )
+        fraction = min(
+            float(curriculum_step) / self.cfg.episode_horizon_curriculum_steps,
+            1.0,
+        )
+        horizon_s = self.cfg.initial_training_horizon_s + fraction * (
+            self.cfg.final_training_horizon_s
+            - self.cfg.initial_training_horizon_s
+        )
+        return max(1, int(round(horizon_s / self.step_dt)))
+
+    def _setup_scene(self):
+        self._robot = Articulation(self.cfg.robot)
+        self.scene.articulations["robot"] = self._robot
+        self._contact_sensor = ContactSensor(self.cfg.contact_sensor)
+        self.scene.sensors["contact_sensor"] = self._contact_sensor
+        self._imu_sensor = Imu(self.cfg.imu_sensor)
+        self.scene.sensors["imu_sensor"] = self._imu_sensor
+
+        self.cfg.terrain.num_envs = self.scene.cfg.num_envs
+        self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
+        self._terrain = self.cfg.terrain.class_type(self.cfg.terrain)
+
+        src, dest = "/World/envs/env_0", "/World/envs/env_{}"
+        positions = cloner.grid_transforms(
+            self.scene.num_envs, self.scene.cfg.env_spacing, device=self.device
+        )[0]
+        plan = cloner.clone_plan_from_env_0(src, dest, self.scene.num_envs, self.device, positions)
+        cloner.replicate(plan, stage=self.scene.stage)
+        if self.device == "cpu":
+            self.scene.filter_collisions(global_prim_paths=[self.cfg.terrain.prim_path])
+
+        light = sim_utils.DomeLightCfg(intensity=1800.0, color=(0.82, 0.82, 0.82))
+        light.func("/World/Light", light)
+
+    def _pre_physics_step(self, actions: torch.Tensor):
+        self._previous_actions.copy_(self._actions)
+        self._actions = torch.clamp(actions, -1.0, 1.0)
+        desired_targets = (
+            self._robot.data.default_joint_pos.torch + self._joint_scale * self._actions
+        )
+        limits = self._robot.data.soft_joint_pos_limits.torch
+        desired_targets = torch.clamp(
+            desired_targets, limits[:, :, 0], limits[:, :, 1]
+        )
+        max_delta = SERVO_VELOCITY_LIMIT_RAD_S * self.step_dt
+        self._processed_actions = torch.clamp(
+            desired_targets,
+            self._previous_targets - max_delta,
+            self._previous_targets + max_delta,
+        )
+        self._previous_targets.copy_(self._processed_actions)
+
+    def _apply_action(self):
+        self._robot.set_joint_position_target_index(target=self._processed_actions)
+
+    def _base_contact_force(self) -> torch.Tensor:
+        force = self._contact_sensor.data.net_forces_w.torch[:, self._base_sensor_ids]
+        return torch.linalg.norm(force, dim=-1).amax(dim=1)
+
+    def _foot_forces(self) -> torch.Tensor:
+        force = self._contact_sensor.data.net_forces_w.torch[:, self._foot_sensor_ids]
+        return torch.linalg.norm(force, dim=-1)
+
+    def _get_observations(self) -> dict[str, torch.Tensor]:
+        policy_observation = torch.cat(
+            (
+                self._commands,
+                self._imu_sensor.data.ang_vel_b.torch,
+                self._robot.data.projected_gravity_b.torch,
+                self._imu_sensor.data.lin_acc_b.torch / 9.81,
+                self._robot.data.joint_pos.torch - self._robot.data.default_joint_pos.torch,
+                self._robot.data.joint_vel.torch / SERVO_VELOCITY_LIMIT_RAD_S,
+                self._previous_actions,
+            ),
+            dim=-1,
+        )
+        foot_contact = (self._foot_forces() > 1.0).float()
+        base_height = (
+            self._robot.data.root_pos_w.torch[:, 2:3]
+            - self._terrain.env_origins[:, 2:3]
+        )
+        critic_observation = torch.cat(
+            (
+                policy_observation,
+                self._robot.data.root_lin_vel_b.torch,
+                base_height,
+                foot_contact,
+            ),
+            dim=-1,
+        )
+        return {
+            "policy": torch.clamp(policy_observation, -20.0, 20.0),
+            "critic": torch.clamp(critic_observation, -20.0, 20.0),
+        }
+
+    def _get_rewards(self) -> torch.Tensor:
+        linear_velocity = self._robot.data.root_lin_vel_b.torch
+        angular_velocity = self._robot.data.root_ang_vel_b.torch
+        forward_error = linear_velocity[:, 0] - self._commands[:, 0]
+        velocity_error_squared = torch.square(forward_error)
+        yaw_error = angular_velocity[:, 2] - self._commands[:, 2]
+        velocity_tracking = torch.exp(
+            -velocity_error_squared / self.cfg.velocity_tracking_sigma_m_s**2
+        )
+        command_speed = torch.linalg.norm(self._commands[:, :2], dim=1)
+        command_direction = self._commands[:, :2] / torch.clamp(
+            command_speed.unsqueeze(1), min=1.0e-4
+        )
+        commanded_velocity = torch.sum(
+            linear_velocity[:, :2] * command_direction, dim=1
+        )
+        rolling_slots = torch.remainder(
+            self._steps_since_reset, self._sustained_window_steps
+        )
+        self._rolling_command_speed[self._env_indices, rolling_slots] = (
+            commanded_velocity
+        )
+        rolling_counts = torch.clamp(
+            self._steps_since_reset + 1,
+            min=1,
+            max=self._sustained_window_steps,
+        ).float()
+        rolling_speed = torch.sum(self._rolling_command_speed, dim=1) / rolling_counts
+        rolling_window_ready = (
+            self._steps_since_reset + 1 >= self._sustained_window_steps
+        )
+        displacement = self._robot.data.root_pos_w.torch - self._episode_start_position
+        net_commanded_distance = torch.sum(
+            displacement[:, :2] * command_direction, dim=1
+        )
+        active_translation = command_speed > 0.03
+        sustained_progress = torch.where(
+            active_translation,
+            torch.clamp(
+                rolling_speed / torch.clamp(command_speed, min=1.0e-4),
+                min=-1.0,
+                max=1.0,
+            ),
+            torch.zeros_like(rolling_speed),
+        )
+        normalized_stall_deficit = torch.clamp(
+            (self.cfg.minimum_sustained_speed_m_s - rolling_speed)
+            / self.cfg.minimum_sustained_speed_m_s,
+            min=0.0,
+            max=2.0,
+        )
+        sustained_stall = rolling_window_ready & active_translation & (
+            rolling_speed < self.cfg.minimum_sustained_speed_m_s
+        )
+        net_commanded_distance = torch.where(
+            active_translation,
+            net_commanded_distance,
+            torch.zeros_like(net_commanded_distance),
+        )
+        upright_cosine = torch.clamp(
+            -self._robot.data.projected_gravity_b.torch[:, 2], 0.0, 1.0
+        )
+        base_height = (
+            self._robot.data.root_pos_w.torch[:, 2]
+            - self._terrain.env_origins[:, 2]
+        )
+        height_error = base_height - self.cfg.target_base_height_m
+        action_rate = torch.mean(
+            torch.square(self._actions - self._previous_actions), dim=1
+        )
+        action_magnitude = torch.mean(torch.square(self._actions), dim=1)
+        joint_speed = torch.mean(
+            torch.square(self._robot.data.joint_vel.torch / SERVO_VELOCITY_LIMIT_RAD_S),
+            dim=1,
+        )
+
+        foot_forces = self._foot_forces()
+        foot_contact = foot_forces > 1.0
+        last_air_time = self._contact_sensor.data.last_air_time.torch[
+            :, self._foot_sensor_ids
+        ]
+        first_contact = self._contact_sensor.compute_first_contact(self.step_dt).torch[
+            :, self._foot_sensor_ids
+        ]
+        airborne_count = torch.sum((~foot_contact).float(), dim=1)
+        symmetric_swing = (airborne_count >= 1.0) & (airborne_count <= 2.0)
+        qualified_touchdown = first_contact.bool() & (
+            last_air_time >= self.cfg.qualified_foot_air_time_s
+        )
+
+        # Preserve the validated short-horizon objective, then explicitly reward
+        # rolling forward progress so a policy cannot collect its return with an
+        # initial burst followed by a fixed saturated stance.  Physical
+        # displacement and falls remain separate metrics so exploits stay visible.
+        reward_terms = {
+            "forward_velocity_tracking": (
+                self.cfg.reward_forward_velocity_tracking * velocity_tracking
+            ),
+            "sustained_progress": (
+                self.cfg.reward_sustained_progress * sustained_progress
+            ),
+            "sustained_stall": (
+                -self.cfg.penalty_sustained_stall
+                * torch.square(normalized_stall_deficit)
+                * (rolling_window_ready & active_translation).float()
+            ),
+            "upright": self.cfg.reward_upright * upright_cosine,
+            "alive": torch.full_like(upright_cosine, self.cfg.reward_alive),
+            "lateral_velocity": (
+                -self.cfg.penalty_lateral_velocity * torch.square(linear_velocity[:, 1])
+            ),
+            "vertical_velocity": (
+                -self.cfg.penalty_vertical_velocity * torch.square(linear_velocity[:, 2])
+            ),
+            "roll_pitch_rate": (
+                -self.cfg.penalty_roll_pitch_rate
+                * torch.sum(torch.square(angular_velocity[:, :2]), dim=1)
+            ),
+            "yaw_rate": -self.cfg.penalty_yaw_rate * torch.square(yaw_error),
+            "body_height": -self.cfg.penalty_body_height * torch.square(height_error),
+            "action_rate": -self.cfg.penalty_action_rate * action_rate,
+            "action_magnitude": -self.cfg.penalty_action_magnitude * action_magnitude,
+            "joint_velocity": -self.cfg.penalty_joint_velocity * joint_speed,
+            "termination": -self.cfg.penalty_termination * self._failed.float(),
+        }
+        reward = (
+            torch.stack(tuple(reward_terms.values()), dim=0).sum(dim=0)
+            * self.cfg.reward_scale
+        )
+
+        self._episode_velocity_error_sum += torch.sqrt(velocity_error_squared)
+        self._episode_yaw_error_sum += torch.abs(yaw_error)
+        self._episode_commanded_distance.copy_(net_commanded_distance)
+        self._episode_action_saturation_sum += torch.mean(
+            (torch.abs(self._actions) >= 0.98).float(), dim=1
+        )
+        self._episode_swing_step_sum += symmetric_swing.float()
+        self._episode_touchdown_count += torch.sum(first_contact.float(), dim=1)
+        self._episode_qualified_touchdown_count += torch.sum(
+            qualified_touchdown.float(), dim=1
+        )
+        self._episode_command_speed_sum += command_speed
+        self._episode_base_height_sum += base_height
+        self._episode_stall_step_sum += sustained_stall.float()
+        self._episode_min_rolling_speed = torch.where(
+            rolling_window_ready & active_translation,
+            torch.minimum(self._episode_min_rolling_speed, rolling_speed),
+            self._episode_min_rolling_speed,
+        )
+        for name, term in reward_terms.items():
+            self._episode_reward_term_sums[name] += term
+        return reward
+
+    def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
+        self._steps_since_reset += 1
+        root_position = self._robot.data.root_pos_w.torch
+        local_position = root_position - self._terrain.env_origins
+        upright_cosine = -self._robot.data.projected_gravity_b.torch[:, 2]
+        base_contact = (self._base_contact_force() > 5.0) & (
+            self._steps_since_reset > self.cfg.base_contact_grace_steps
+        )
+        finite = torch.isfinite(root_position).all(dim=1) & torch.isfinite(
+            self._robot.data.joint_pos.torch
+        ).all(dim=1)
+        self._failure_nonfinite = ~finite
+        self._failure_low_height = (
+            local_position[:, 2] < self.cfg.minimum_base_height_m
+        )
+        self._failure_tilt = upright_cosine < self.cfg.minimum_upright_cosine
+        if self.cfg.disable_time_limit:
+            self._failure_out_of_bounds = torch.zeros_like(self._failed)
+        else:
+            self._failure_out_of_bounds = (
+                torch.linalg.norm(local_position[:, :2], dim=1)
+                > self.cfg.maximum_distance_from_origin_m
+            )
+        self._failure_base_contact = base_contact
+        self._failed = (
+            self._failure_nonfinite
+            | self._failure_low_height
+            | self._failure_tilt
+            | self._failure_out_of_bounds
+            | self._failure_base_contact
+        )
+        if self.cfg.disable_time_limit:
+            time_out = torch.zeros_like(self._failed)
+        else:
+            time_out = (
+                self.episode_length_buf
+                >= self._current_episode_horizon_steps() - 1
+            )
+        return self._failed, time_out
+
+    def _sample_commands(self, env_ids: torch.Tensor) -> None:
+        count = len(env_ids)
+        self._commands[env_ids] = 0.0
+        override = preview_control.COMMAND_OVERRIDE
+        if override is not None:
+            self._commands[env_ids] = torch.tensor(
+                override, dtype=torch.float32, device=self.device
+            )
+            return
+
+        if self.cfg.command_profile == "forward":
+            curriculum_fraction = min(
+                float(
+                    self.common_step_counter
+                    + self.cfg.command_curriculum_offset_steps
+                )
+                / self.cfg.command_curriculum_steps,
+                1.0,
+            )
+            speed_min = self.cfg.initial_forward_speed_min_m_s + curriculum_fraction * (
+                self.cfg.forward_speed_min_m_s
+                - self.cfg.initial_forward_speed_min_m_s
+            )
+            speed_max = self.cfg.initial_forward_speed_max_m_s + curriculum_fraction * (
+                self.cfg.forward_speed_max_m_s
+                - self.cfg.initial_forward_speed_max_m_s
+            )
+            self._commands[env_ids, 0] = torch.empty(
+                count, device=self.device
+            ).uniform_(speed_min, speed_max)
+            return
+        if self.cfg.command_profile != "directional":
+            raise ValueError(f"Unknown command profile: {self.cfg.command_profile}")
+
+        # 50% forward, 15% backward, 15% left, 15% right, 5% stop.
+        selector = torch.rand(count, device=self.device)
+        forward = selector < 0.50
+        backward = (selector >= 0.50) & (selector < 0.65)
+        left = (selector >= 0.65) & (selector < 0.80)
+        right = (selector >= 0.80) & (selector < 0.95)
+        random_unit = torch.rand(count, device=self.device)
+        self._commands[env_ids[forward], 0] = (
+            self.cfg.forward_speed_min_m_s
+            + random_unit[forward]
+            * (self.cfg.forward_speed_max_m_s - self.cfg.forward_speed_min_m_s)
+        )
+        self._commands[env_ids[backward], 0] = -(
+            self.cfg.backward_speed_min_m_s
+            + random_unit[backward]
+            * (self.cfg.backward_speed_max_m_s - self.cfg.backward_speed_min_m_s)
+        )
+        turn_speed = torch.rand(count, device=self.device) * self.cfg.turn_forward_speed_max_m_s
+        turn_rate = self.cfg.turn_rate_min_rad_s + torch.rand(count, device=self.device) * (
+            self.cfg.turn_rate_max_rad_s - self.cfg.turn_rate_min_rad_s
+        )
+        turning = left | right
+        self._commands[env_ids[turning], 0] = turn_speed[turning]
+        self._commands[env_ids[left], 2] = turn_rate[left]
+        self._commands[env_ids[right], 2] = -turn_rate[right]
+
+    def _reset_idx(self, env_ids: Sequence[int] | torch.Tensor | None):
+        if env_ids is None:
+            env_ids = wp.to_torch(self._robot._ALL_INDICES)
+        env_ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long)
+
+        if len(env_ids) > 0:
+            completed = self._steps_since_reset[env_ids] > 0
+            completed_steps = torch.clamp(self._steps_since_reset[env_ids], min=1).float()
+            log = self.extras.setdefault("log", {})
+            log["Metrics/mean_velocity_error_m_s"] = (
+                self._episode_velocity_error_sum[env_ids] / completed_steps
+            ).mean().item()
+            log["Metrics/mean_yaw_error_rad_s"] = (
+                self._episode_yaw_error_sum[env_ids] / completed_steps
+            ).mean().item()
+            log["Metrics/commanded_distance_m"] = self._episode_commanded_distance[
+                env_ids
+            ].mean().item()
+            episode_duration = completed_steps * self.step_dt
+            log["Metrics/mean_commanded_speed_m_s"] = (
+                self._episode_commanded_distance[env_ids] / episode_duration
+            ).mean().item()
+            displacement = (
+                self._robot.data.root_pos_w.torch[env_ids]
+                - self._episode_start_position[env_ids]
+            )
+            log["Metrics/net_forward_displacement_m"] = displacement[:, 0].mean().item()
+            log["Metrics/net_lateral_displacement_m"] = displacement[:, 1].mean().item()
+            log["Metrics/target_speed_m_s"] = (
+                self._episode_command_speed_sum[env_ids] / completed_steps
+            ).mean().item()
+            log["Metrics/mean_base_height_m"] = (
+                self._episode_base_height_sum[env_ids] / completed_steps
+            ).mean().item()
+            valid_minimum_speed = torch.where(
+                torch.isfinite(self._episode_min_rolling_speed[env_ids]),
+                self._episode_min_rolling_speed[env_ids],
+                torch.zeros_like(self._episode_min_rolling_speed[env_ids]),
+            )
+            log["Metrics/min_rolling_forward_speed_m_s"] = (
+                valid_minimum_speed.mean().item()
+            )
+            mature_steps = torch.clamp(
+                completed_steps - self._sustained_window_steps + 1, min=1.0
+            )
+            log["Metrics/sustained_stall_rate"] = (
+                self._episode_stall_step_sum[env_ids] / mature_steps
+            ).mean().item()
+            log["Metrics/current_episode_horizon_s"] = (
+                self._current_episode_horizon_steps() * self.step_dt
+            )
+            motion_command = torch.linalg.norm(
+                self._commands[env_ids, :2], dim=1
+            ) > 0.03
+            success_distance = (
+                self.cfg.distance_success_fraction
+                * torch.linalg.norm(self._commands[env_ids, :2], dim=1)
+                * episode_duration
+            )
+            distance_success = (
+                completed
+                & motion_command
+                & ~self._failed[env_ids]
+                & (self._episode_commanded_distance[env_ids] >= success_distance)
+            )
+            completed_motion = completed & motion_command
+            log["Metrics/distance_success_rate"] = (
+                distance_success.float().sum()
+                / torch.clamp(completed_motion.float().sum(), min=1.0)
+            ).item()
+            log["Metrics/action_saturation_rate"] = (
+                self._episode_action_saturation_sum[env_ids] / completed_steps
+            ).mean().item()
+            log["Metrics/swing_step_rate"] = (
+                self._episode_swing_step_sum[env_ids] / completed_steps
+            ).mean().item()
+            log["Metrics/touchdowns_per_episode"] = self._episode_touchdown_count[
+                env_ids
+            ].mean().item()
+            log["Metrics/qualified_touchdowns_per_episode"] = (
+                self._episode_qualified_touchdown_count[env_ids].mean().item()
+            )
+            log["Metrics/fall_rate"] = (
+                (self._failed[env_ids] & completed).float().sum()
+                / torch.clamp(completed.float().sum(), min=1.0)
+            ).item()
+            for label, failure in (
+                ("nonfinite", self._failure_nonfinite),
+                ("low_height", self._failure_low_height),
+                ("tilt", self._failure_tilt),
+                ("out_of_bounds", self._failure_out_of_bounds),
+                ("base_contact", self._failure_base_contact),
+            ):
+                log[f"Metrics/failure_{label}_rate"] = (
+                    (failure[env_ids] & completed).float().sum()
+                    / torch.clamp(completed.float().sum(), min=1.0)
+                ).item()
+            for name, term_sum in self._episode_reward_term_sums.items():
+                log[f"Reward/{name}"] = (
+                    term_sum[env_ids] / completed_steps
+                ).mean().item()
+
+        self._robot.reset(env_ids)
+        super()._reset_idx(env_ids)
+        if len(env_ids) == self.num_envs:
+            if self.cfg.disable_time_limit:
+                self.episode_length_buf.zero_()
+            else:
+                self.episode_length_buf[:] = torch.randint_like(
+                    self.episode_length_buf,
+                    high=self._current_episode_horizon_steps(),
+                )
+
+        joint_position = self._robot.data.default_joint_pos.torch[env_ids].clone()
+        joint_position += self.cfg.reset_joint_position_noise_rad * (
+            2.0 * torch.rand_like(joint_position) - 1.0
+        )
+        joint_velocity = torch.zeros_like(self._robot.data.default_joint_vel.torch[env_ids])
+        root_pose = self._robot.data.default_root_pose.torch[env_ids].clone()
+        root_pose[:, :3] += self._terrain.env_origins[env_ids]
+        root_pose[:, :2] += self.cfg.reset_xy_jitter_m * (
+            2.0 * torch.rand((len(env_ids), 2), device=self.device) - 1.0
+        )
+        root_velocity = torch.zeros_like(self._robot.data.default_root_vel.torch[env_ids])
+
+        self._robot.write_root_pose_to_sim_index(root_pose=root_pose, env_ids=env_ids)
+        self._robot.write_root_velocity_to_sim_index(
+            root_velocity=root_velocity, env_ids=env_ids
+        )
+        self._robot.write_joint_position_to_sim_index(
+            position=joint_position, env_ids=env_ids
+        )
+        self._robot.write_joint_velocity_to_sim_index(
+            velocity=joint_velocity, env_ids=env_ids
+        )
+
+        self._sample_commands(env_ids)
+        self._actions[env_ids] = 0.0
+        self._previous_actions[env_ids] = 0.0
+        self._previous_targets[env_ids] = joint_position
+        self._steps_since_reset[env_ids] = 0
+        self._failed[env_ids] = False
+        self._failure_nonfinite[env_ids] = False
+        self._failure_low_height[env_ids] = False
+        self._failure_tilt[env_ids] = False
+        self._failure_out_of_bounds[env_ids] = False
+        self._failure_base_contact[env_ids] = False
+        self._episode_start_position[env_ids] = root_pose[:, :3]
+        self._episode_velocity_error_sum[env_ids] = 0.0
+        self._episode_yaw_error_sum[env_ids] = 0.0
+        self._episode_commanded_distance[env_ids] = 0.0
+        self._episode_action_saturation_sum[env_ids] = 0.0
+        self._episode_swing_step_sum[env_ids] = 0.0
+        self._episode_touchdown_count[env_ids] = 0.0
+        self._episode_qualified_touchdown_count[env_ids] = 0.0
+        self._episode_command_speed_sum[env_ids] = 0.0
+        self._episode_base_height_sum[env_ids] = 0.0
+        self._rolling_command_speed[env_ids] = 0.0
+        self._episode_min_rolling_speed[env_ids] = torch.inf
+        self._episode_stall_step_sum[env_ids] = 0.0
+        for term_sum in self._episode_reward_term_sums.values():
+            term_sum[env_ids] = 0.0

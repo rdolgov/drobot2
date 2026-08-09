@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "model_sha256": "5d4cdccb5826c68988d752135a9dd357b1528bf278f9cef68b2f03fe423f6031",
+  "cem_report_sha256": "a6a4459508649a702bcd79b4f63179b00994f0cc2984de5f206534d645f2bf7d",
+  "replicated_cem_report_seed1471_sha256": "8053affa4759e839cde9aae8abdf536c069fced5029e20ad62269b895ecdbadd",
+  "actor_observation_count": 70,
+  "actor_trainable_parameters": 324706,
+  "actor_fp32_bytes_approx": 1298824,
+  "checkpoint_bytes": 2507781,
+  "effort_limit_nm": 0.8825985,
+  "target_lift_m": 0.075,
+  "pure_rl": true,
+  "selected_leg_input": false,
+  "reference_motion": false
+}

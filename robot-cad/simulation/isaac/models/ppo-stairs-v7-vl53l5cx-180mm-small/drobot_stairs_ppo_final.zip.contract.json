@@ -1,0 +1,397 @@
+{
+  "schema_version": 2,
+  "task_id": "Drobot-Quadruped-Stairs-v7-VL53L5CX-180mm",
+  "model": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\models\\ppo-stairs-v7-vl53l5cx-180mm-small\\drobot_stairs_ppo_final.zip",
+  "model_sha256": "18d422eecce4d6677cf005b06d93d290bd956aaab9c3810dc32e472148e0dd6b",
+  "config": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\stairs\\quadruped_stairs_v7_vl53l5cx.yaml",
+  "config_sha256": "3224948e37ba46c61918eb5e34f41eecc7ede1ee1406d1f6e35bc3d273ada020",
+  "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_stairs_v6_180mm_world.usda",
+  "world_sha256": "ba1b7a8335be38bbc32d68f87dbd5c48a5bcc266f16649b1d499b01b626a43b4",
+  "world_dependencies": [
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_manual_world.usda",
+      "sha256": "30c773a88564c21b87bb3da8fb0762f0d63f7350e2a31fc6d7ab7fae1542e3d9"
+    },
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_floating.usdc",
+      "sha256": "71b639bd877913bffeac47a1cfcb6f3dcabbbd1e25c6fba90b8b87e7ea96c6b8"
+    }
+  ],
+  "training_seed": 142,
+  "environment_contract": {
+    "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_stairs_v6_180mm_world.usda",
+    "dof_names": [
+      "front_left_hip_abduction",
+      "rear_left_hip_abduction",
+      "front_right_hip_abduction",
+      "rear_right_hip_abduction",
+      "front_left_hip_flexion",
+      "rear_left_hip_flexion",
+      "front_right_hip_flexion",
+      "rear_right_hip_flexion",
+      "front_left_knee",
+      "rear_left_knee",
+      "front_right_knee",
+      "rear_right_knee"
+    ],
+    "nominal_joint_positions_rad": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.15449158847332,
+      0.15449158847332,
+      -0.15449158847332,
+      0.15449158847332,
+      0.469925194978714,
+      -0.469925194978714,
+      0.469925194978714,
+      -0.469925194978714
+    ],
+    "action_scale_rad": [
+      0.18000000715255737,
+      0.18000000715255737,
+      0.18000000715255737,
+      0.18000000715255737,
+      0.6000000238418579,
+      0.6000000238418579,
+      0.6000000238418579,
+      0.6000000238418579,
+      0.8999999761581421,
+      0.8999999761581421,
+      0.8999999761581421,
+      0.8999999761581421
+    ],
+    "observation_fields": [
+      "command_forward_velocity_m_s",
+      "command_lateral_velocity_m_s",
+      "command_yaw_rate_rad_s",
+      "imu_angular_velocity_x_rad_s",
+      "imu_angular_velocity_y_rad_s",
+      "imu_angular_velocity_z_rad_s",
+      "imu_projected_gravity_x",
+      "imu_projected_gravity_y",
+      "imu_projected_gravity_z",
+      "imu_linear_acceleration_x_g",
+      "imu_linear_acceleration_y_g",
+      "imu_linear_acceleration_z_g",
+      "joint_position_error_0",
+      "joint_position_error_1",
+      "joint_position_error_2",
+      "joint_position_error_3",
+      "joint_position_error_4",
+      "joint_position_error_5",
+      "joint_position_error_6",
+      "joint_position_error_7",
+      "joint_position_error_8",
+      "joint_position_error_9",
+      "joint_position_error_10",
+      "joint_position_error_11",
+      "joint_velocity_normalized_0",
+      "joint_velocity_normalized_1",
+      "joint_velocity_normalized_2",
+      "joint_velocity_normalized_3",
+      "joint_velocity_normalized_4",
+      "joint_velocity_normalized_5",
+      "joint_velocity_normalized_6",
+      "joint_velocity_normalized_7",
+      "joint_velocity_normalized_8",
+      "joint_velocity_normalized_9",
+      "joint_velocity_normalized_10",
+      "joint_velocity_normalized_11",
+      "previous_action_0",
+      "previous_action_1",
+      "previous_action_2",
+      "previous_action_3",
+      "previous_action_4",
+      "previous_action_5",
+      "previous_action_6",
+      "previous_action_7",
+      "previous_action_8",
+      "previous_action_9",
+      "previous_action_10",
+      "previous_action_11",
+      "tof_depth_left_row_00_normalized",
+      "tof_depth_left_row_01_normalized",
+      "tof_depth_left_row_02_normalized",
+      "tof_depth_left_row_03_normalized",
+      "tof_depth_left_row_04_normalized",
+      "tof_depth_left_row_05_normalized",
+      "tof_depth_left_row_06_normalized",
+      "tof_depth_left_row_07_normalized",
+      "tof_depth_center_row_00_normalized",
+      "tof_depth_center_row_01_normalized",
+      "tof_depth_center_row_02_normalized",
+      "tof_depth_center_row_03_normalized",
+      "tof_depth_center_row_04_normalized",
+      "tof_depth_center_row_05_normalized",
+      "tof_depth_center_row_06_normalized",
+      "tof_depth_center_row_07_normalized",
+      "tof_depth_right_row_00_normalized",
+      "tof_depth_right_row_01_normalized",
+      "tof_depth_right_row_02_normalized",
+      "tof_depth_right_row_03_normalized",
+      "tof_depth_right_row_04_normalized",
+      "tof_depth_right_row_05_normalized",
+      "tof_depth_right_row_06_normalized",
+      "tof_depth_right_row_07_normalized",
+      "goal_distance_normalized",
+      "lateral_offset_normalized",
+      "heading_error_sin",
+      "heading_error_cos",
+      "foot_tread_progress_front_left",
+      "foot_tread_progress_front_right",
+      "foot_tread_progress_rear_left",
+      "foot_tread_progress_rear_right",
+      "next_foot_target_front_left",
+      "next_foot_target_front_right",
+      "next_foot_target_rear_left",
+      "next_foot_target_rear_right"
+    ],
+    "observation_size": 84,
+    "action_size": 12,
+    "imu_fields": [
+      "angular_velocity_x_rad_s",
+      "angular_velocity_y_rad_s",
+      "angular_velocity_z_rad_s",
+      "projected_gravity_x",
+      "projected_gravity_y",
+      "projected_gravity_z",
+      "linear_acceleration_x_g",
+      "linear_acceleration_y_g",
+      "linear_acceleration_z_g"
+    ],
+    "rated_effort_cap_nm": 0.980665,
+    "applied_effort_cap_nm": 0.8825985,
+    "applied_joint_lower_limits_rad": [
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -2.094395160675049,
+      -2.094395160675049,
+      -2.094395160675049,
+      -2.094395160675049
+    ],
+    "applied_joint_upper_limits_rad": [
+      0.7853981852531433,
+      0.7853981852531433,
+      0.7853981852531433,
+      0.7853981852531433,
+      1.5707963705062866,
+      1.5707963705062866,
+      1.5707963705062866,
+      1.5707963705062866,
+      2.094395160675049,
+      2.094395160675049,
+      2.094395160675049,
+      2.094395160675049
+    ],
+    "robot_hardware_profile": {
+      "id": "one-leg-real-test-2026-07-28",
+      "evidence": [
+        "hardware/one-leg-testbed/leg.toml",
+        "hardware/one-leg-testbed/calibration.json",
+        "conversations/2026-07-28-one-leg-wall-isaac-revisit.md"
+      ],
+      "center_tick": 2048,
+      "encoder_directions": {
+        "hip_abduction": 1,
+        "hip_flexion": -1,
+        "knee": -1
+      },
+      "joint_limits_deg": {
+        "hip_abduction": [
+          -45.0,
+          45.0
+        ],
+        "hip_flexion": [
+          -90.0,
+          90.0
+        ],
+        "knee": [
+          -120.0,
+          120.0
+        ]
+      },
+      "torque_limit_register": 300,
+      "torque_limit_register_full_scale": 1000,
+      "torque_limit_fraction": 0.3,
+      "stall_torque_nm": 2.941995,
+      "effort_cap_nm": 0.8825985,
+      "speed_register": 350,
+      "speed_register_applied_as_rad_s": false
+    },
+    "control_hz": 120,
+    "physics_hz": 120,
+    "task_id": "Drobot-Quadruped-Stairs-v7-VL53L5CX-180mm",
+    "walking_observation_size": 48,
+    "include_navigation_observation": true,
+    "include_foot_progress_observation": true,
+    "foot_placement_sequence": [
+      "front_left",
+      "front_right",
+      "rear_left",
+      "rear_right"
+    ],
+    "terrain_perception_mode": "vl53l5cx_raycast",
+    "terrain_perception": {
+      "mode": "vl53l5cx_raycast",
+      "sensor_model": "ST VL53L5CX on Pololu carrier 3417",
+      "optical_origin_from_base_xyz_m": [
+        0.1145,
+        0.0,
+        0.123
+      ],
+      "pitch_down_deg": 40.0,
+      "rows": 8,
+      "columns": 8,
+      "horizontal_fov_deg": 45.0,
+      "vertical_fov_deg": 45.0,
+      "minimum_range_m": 0.02,
+      "maximum_range_m": 4.0,
+      "useful_normalization_range_m": 1.5,
+      "update_rate_hz": 15,
+      "latency_frames": 1,
+      "near_accuracy_limit_m": 0.2,
+      "near_accuracy_bound_m": 0.015,
+      "far_relative_accuracy_bound": 0.05,
+      "dropout_probability": 0.05,
+      "lane_columns": [
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          5,
+          6,
+          7
+        ]
+      ]
+    },
+    "terrain_input_note": "Noisy, held, latency-delayed 8 x 8 VL53L5CX PhysX raycasts compressed to 24 lane/row depth values; RGB camera pixels are not policy inputs.",
+    "rgb_camera_policy_input": false,
+    "terrain_sensor_runtime": {
+      "ray_count": 64,
+      "control_frames_per_measurement": 8,
+      "latency_frames": 1,
+      "latency_seconds": 0.06666666666666667
+    },
+    "physics_steps_per_control": 1,
+    "control_action_mode": "residual_over_flat",
+    "residual_policy": {
+      "enabled": true,
+      "base_task_id": "Drobot-Quadruped-Walk-v1",
+      "base_model": "simulation/isaac/models/ppo-walk-v1-2m/drobot_walk_ppo_final.zip",
+      "base_action_scale_rad": {
+        "hip_abduction": 0.12,
+        "hip_flexion": 0.3,
+        "knee": 0.4
+      },
+      "base_model_resolved": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\models\\ppo-walk-v1-2m\\drobot_walk_ppo_final.zip",
+      "base_model_sha256": "eac4fd89066bf9483900188f8a5b8c047e848dfa2b3845f90c148967fdea56be",
+      "base_action_scale_by_dof_rad": [
+        0.11999999731779099,
+        0.11999999731779099,
+        0.11999999731779099,
+        0.11999999731779099,
+        0.30000001192092896,
+        0.30000001192092896,
+        0.30000001192092896,
+        0.30000001192092896,
+        0.4000000059604645,
+        0.4000000059604645,
+        0.4000000059604645,
+        0.4000000059604645
+      ]
+    },
+    "staircase": {
+      "start_x_m": 0.55,
+      "step_count": 4,
+      "tread_depth_m": 0.25,
+      "rise_m": 0.18,
+      "width_m": 1.0,
+      "top_platform_depth_m": 0.5,
+      "terrain_sample_offsets_m": [
+        -0.15,
+        0.0,
+        0.08,
+        0.16,
+        0.25,
+        0.375,
+        0.5,
+        0.75
+      ],
+      "terrain_height_normalization_m": 0.36,
+      "goal_distance_normalization_m": 2.0,
+      "goal_margin_m": 0.1
+    },
+    "curriculum_levels": [
+      {
+        "start_fraction": 0.0,
+        "active_steps": 1
+      },
+      {
+        "start_fraction": 0.25,
+        "active_steps": 2
+      },
+      {
+        "start_fraction": 0.5,
+        "active_steps": 3
+      },
+      {
+        "start_fraction": 0.75,
+        "active_steps": 4
+      }
+    ],
+    "success_requirements": {
+      "minimum_base_elevation_fraction": 0.9,
+      "required_feet_on_goal_tread": 4,
+      "hold_seconds": 0.5
+    }
+  },
+  "algorithm_contract": {
+    "algorithm": "stable_baselines3.PPO",
+    "policy_class": "ActorCriticPolicy",
+    "training_mode": "smoke",
+    "observation_shape": [
+      84
+    ],
+    "action_shape": [
+      12
+    ],
+    "policy_hidden_layers": [
+      256,
+      256
+    ],
+    "activation": "ELU",
+    "rollout_steps": 128,
+    "batch_size": 64,
+    "epochs": 2,
+    "learning_rate": 3e-05,
+    "gamma": 0.998,
+    "gae_lambda": 0.95,
+    "clip_range": 0.2,
+    "entropy_coefficient": 0.003,
+    "value_coefficient": 0.5,
+    "maximum_gradient_norm": 0.5,
+    "normalize_advantage": true,
+    "target_kl": 0.03
+  },
+  "transferred_from": {
+    "model": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\models\\ppo-stairs-v6-180mm-25cm-small\\drobot_stairs_ppo_initialized.zip",
+    "model_sha256": "c29cb71ab596392c36292a57ca98473e7c4807a9de700bc7824bf2e0d73f91bc",
+    "policy_parameters_only": true,
+    "optimizer_state": false
+  },
+  "resumed_from": null
+}

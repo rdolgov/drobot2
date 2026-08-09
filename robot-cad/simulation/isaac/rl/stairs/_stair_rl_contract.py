@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 
 import numpy as np
 from _rl_contract import (
@@ -11,6 +12,506 @@ from _rl_contract import (
     POLICY_OBSERVATION_FIELDS,
     POLICY_OBSERVATION_SIZE,
 )
+
+STAIR_FOOT_NAMES = (
+    "front_left",
+    "front_right",
+    "rear_left",
+    "rear_right",
+)
+PLACEMENT_PHASES = (
+    "weight_shift",
+    "lift",
+    "advance",
+    "lower",
+    "hold",
+)
+PLACEMENT_REFERENCE_OBSERVATION_FIELDS = (
+    *(f"placement_phase_{phase}" for phase in PLACEMENT_PHASES),
+    "placement_desired_swing_height_normalized",
+    "placement_measured_swing_height_normalized",
+    "placement_swing_x_error_normalized",
+    "placement_swing_z_error_normalized",
+    "placement_tread_normal_load_normalized",
+    "placement_support_contact_fraction",
+    "placement_support_margin_normalized",
+    "placement_maximum_support_slip_normalized",
+)
+SUPPORT_REGULATION_OBSERVATION_FIELDS = (
+    *(
+        f"placement_total_normal_load_{name}_normalized"
+        for name in STAIR_FOOT_NAMES
+    ),
+    "placement_com_target_error_x_normalized",
+    "placement_com_target_error_y_normalized",
+    *(
+        f"placement_pd_effort_cap_ratio_{name}"
+        for name in STAIR_FOOT_NAMES
+    ),
+    *(
+        f"placement_pd_saturated_joint_fraction_{name}"
+        for name in STAIR_FOOT_NAMES
+    ),
+)
+TRANSFER_LOAD_OBSERVATION_FIELDS = (
+    "placement_active_swing_total_load_normalized",
+)
+STAIR_LEG_DOF_INDICES = (
+    (0, 4, 8),
+    (2, 6, 10),
+    (1, 5, 9),
+    (3, 7, 11),
+)
+
+FIRST_TREAD_EXPERIMENT_PROFILES = (
+    "baseline-forward",
+    "forward-preposition",
+    "forward-preposition-touchdown",
+    "forward-preposition-load",
+    "forward-preposition-load-slow",
+    "forward-preposition-load-catch-half",
+    "forward-preposition-load-catch-forward",
+    "forward-preposition-load-catch-forward-only",
+    "forward-preposition-load-catch-front-left-preload",
+    "forward-preposition-load-precontact-forward",
+    "forward-preposition-load-advance-forward",
+    "forward-preposition-load-advance-forward-deep",
+    "forward-preposition-load-advance-forward-floor",
+    "front-pair-preposition-load-advance-forward-floor",
+    "forward-preposition-load-catch-forward-fast",
+    "forward-preposition-load-catch-centered",
+    "fully-folded-forward",
+    "low-crouch-forward",
+    "angled-hip",
+    "diagonal-hip",
+    "sideways-hip",
+    "low-crouch-sideways-hip",
+)
+
+
+def stair_advance_reference_offsets(
+    *,
+    leg: str,
+    world_forward_m: float,
+    body_yaw_rad: float,
+) -> tuple[float, float]:
+    """Resolve world +X stair advance into sagittal and outward leg offsets."""
+
+    if leg not in STAIR_FOOT_NAMES:
+        raise ValueError(f"Unknown stair foot: {leg!r}")
+    values = np.asarray([world_forward_m, body_yaw_rad], dtype=np.float64)
+    if not np.all(np.isfinite(values)):
+        raise ValueError("stair advance and body yaw must be finite")
+    body_forward_m = float(world_forward_m) * float(np.cos(body_yaw_rad))
+    body_lateral_m = -float(world_forward_m) * float(np.sin(body_yaw_rad))
+    side_sign = 1.0 if leg.endswith("_left") else -1.0
+    return body_forward_m, side_sign * body_lateral_m
+
+
+def config_for_first_tread_experiment(
+    task_config: Mapping[str, object],
+    profile: str | None,
+) -> dict[str, object]:
+    """Return one reproducible first-tread stance/approach experiment."""
+
+    resolved = deepcopy(dict(task_config))
+    selected = "baseline-forward" if profile is None else str(profile)
+    if selected not in FIRST_TREAD_EXPERIMENT_PROFILES:
+        raise ValueError(
+            f"Unknown first-tread profile {selected!r}; "
+            f"available={list(FIRST_TREAD_EXPERIMENT_PROFILES)}"
+        )
+    resolved["first_tread_experiment_profile"] = selected
+    resolved.setdefault("target_heading_yaw_deg", 0.0)
+    if selected == "baseline-forward":
+        return resolved
+
+    nominal_stance = dict(resolved["nominal_stance"])
+    termination = dict(resolved["termination"])
+    reward = dict(resolved["reward"])
+    placement = deepcopy(dict(resolved["placement_reference"]))
+    placement_curriculum = deepcopy(dict(resolved["placement_curriculum"]))
+    residual_scale = deepcopy(
+        dict(resolved["placement_residual_action_scale_rad"])
+    )
+
+    if selected in {
+        "forward-preposition",
+        "forward-preposition-touchdown",
+        "forward-preposition-load",
+        "forward-preposition-load-slow",
+        "forward-preposition-load-catch-half",
+        "forward-preposition-load-catch-forward",
+        "forward-preposition-load-catch-forward-only",
+        "forward-preposition-load-catch-front-left-preload",
+        "forward-preposition-load-precontact-forward",
+        "forward-preposition-load-advance-forward",
+        "forward-preposition-load-advance-forward-deep",
+        "forward-preposition-load-advance-forward-floor",
+        "front-pair-preposition-load-advance-forward-floor",
+        "forward-preposition-load-catch-forward-fast",
+        "forward-preposition-load-catch-centered",
+    }:
+        # Move the hips 30 mm closer to the riser while subtracting the same
+        # distance from every leg-relative reach target. The intended world
+        # tread target therefore stays fixed, but the swing leg works in a
+        # more vertical and less extended part of its workspace.
+        resolved["reset_start_x_range_m"] = [0.35, 0.37]
+        for level in placement_curriculum["levels"]:
+            for field in (
+                "lift_forward_offset_m",
+                "swing_forward_offset_m",
+                "landing_forward_offset_m",
+            ):
+                level[field] = float(level[field]) - 0.030
+            if selected == "forward-preposition-touchdown":
+                # V59 stopped with the foot-tip center around 199 mm and no
+                # qualified load on the 180 mm top. Command 15 mm farther
+                # down during landing while retaining the verified apex.
+                level["landing_lift_m"] = 0.130
+            elif selected in {
+                "forward-preposition-load",
+                "forward-preposition-load-slow",
+                "forward-preposition-load-catch-half",
+                "forward-preposition-load-catch-forward",
+                "forward-preposition-load-catch-forward-only",
+                "forward-preposition-load-catch-front-left-preload",
+                "forward-preposition-load-precontact-forward",
+                "forward-preposition-load-advance-forward",
+                "forward-preposition-load-advance-forward-deep",
+                "forward-preposition-load-advance-forward-floor",
+                "front-pair-preposition-load-advance-forward-floor",
+                "forward-preposition-load-catch-forward-fast",
+                "forward-preposition-load-catch-centered",
+            }:
+                # V60's 130 mm landing command left the 12.5 mm-radius fork
+                # proxy roughly 2.7 mm above the tread. The deeper target is
+                # a bounded actuator-compliance probe, not a looser gate.
+                level["landing_lift_m"] = 0.110
+                if selected == "forward-preposition-load-slow":
+                    level["accept_early_tread_contact_after_clearance"] = True
+        if selected == "forward-preposition-load-slow":
+            timing = dict(placement["timing"])
+            timing["lower_duration_seconds"] = 3.0
+            placement["timing"] = timing
+        elif selected.startswith("forward-preposition-load-catch-") or selected in {
+            "forward-preposition-load-precontact-forward",
+            "forward-preposition-load-advance-forward",
+            "forward-preposition-load-advance-forward-deep",
+            "forward-preposition-load-advance-forward-floor",
+            "front-pair-preposition-load-advance-forward-floor",
+        }:
+            catch_parameters = {
+                "forward-preposition-load-catch-half": (0.50, 0.50, 1.50, 1.0),
+                "forward-preposition-load-catch-forward": (1.00, 0.50, 1.00, 1.0),
+                "forward-preposition-load-catch-forward-only": (
+                    1.00,
+                    0.00,
+                    1.00,
+                    1.0,
+                ),
+                "forward-preposition-load-catch-front-left-preload": (
+                    1.00,
+                    0.00,
+                    0.75,
+                    1.0,
+                ),
+                "forward-preposition-load-precontact-forward": (
+                    1.00,
+                    0.00,
+                    0.75,
+                    1.0,
+                ),
+                "forward-preposition-load-advance-forward": (
+                    1.00,
+                    0.00,
+                    0.75,
+                    1.0,
+                ),
+                "forward-preposition-load-advance-forward-deep": (
+                    1.00,
+                    0.00,
+                    0.75,
+                    1.0,
+                ),
+                "forward-preposition-load-advance-forward-floor": (
+                    1.00,
+                    0.00,
+                    0.75,
+                    1.0,
+                ),
+                "front-pair-preposition-load-advance-forward-floor": (
+                    1.00,
+                    0.00,
+                    0.75,
+                    1.0,
+                ),
+                "forward-preposition-load-catch-forward-fast": (
+                    1.00,
+                    0.50,
+                    0.35,
+                    0.5,
+                ),
+                "forward-preposition-load-catch-centered": (
+                    1.00,
+                    1.00,
+                    1.00,
+                    1.0,
+                ),
+            }
+            (
+                forward_release,
+                lateral_release,
+                duration_seconds,
+                contact_threshold_n,
+            ) = (
+                catch_parameters[selected]
+            )
+            # The three-foot unloading bias is useful until the sole reaches
+            # the tread, but V61 kept that bias throughout touchdown. Latch on
+            # geometry-qualified top load and smoothly return the commanded
+            # body shift toward the new four-foot support polygon.
+            regulated_legs = (
+                ["front_right", "front_left"]
+                if selected
+                == "front-pair-preposition-load-advance-forward-floor"
+                else ["front_right"]
+            )
+            placement["touchdown_support_regulation"] = {
+                "enabled": True,
+                "legs": regulated_legs,
+                "phases": ["lower", "hold"],
+                "contact_threshold_n": contact_threshold_n,
+                "release_duration_seconds": duration_seconds,
+                "forward_release_fraction": forward_release,
+                "lateral_release_fraction": lateral_release,
+            }
+            if selected == "forward-preposition-load-catch-front-left-preload":
+                placement["touchdown_support_regulation"][
+                    "preload_extension_m_by_leg"
+                ] = {"front_left": 0.008}
+            elif selected == "forward-preposition-load-precontact-forward":
+                placement["touchdown_support_regulation"][
+                    "precontact_forward_release_fraction"
+                ] = 1.0
+            elif selected in {
+                "forward-preposition-load-advance-forward",
+                "forward-preposition-load-advance-forward-deep",
+                "forward-preposition-load-advance-forward-floor",
+                "front-pair-preposition-load-advance-forward-floor",
+            }:
+                placement["touchdown_support_regulation"].update(
+                    {
+                        "precontact_forward_release_fraction": 1.0,
+                        "precontact_forward_release_phase": "advance",
+                    }
+                )
+                if selected == "forward-preposition-load-advance-forward-deep":
+                    for level in placement_curriculum["levels"]:
+                        level["landing_lift_m"] = 0.085
+                elif selected in {
+                    "forward-preposition-load-advance-forward-floor",
+                    "front-pair-preposition-load-advance-forward-floor",
+                }:
+                    for level in placement_curriculum["levels"]:
+                        level["landing_lift_m"] = 0.055
+            # Cap only geometry-qualified tread-top load. This protects the
+            # contact transient without letting shin/riser force steer the
+            # controller or satisfy placement success.
+            placement["touchdown_load_regulation"] = {
+                "enabled": True,
+                "legs": regulated_legs,
+                "phases": ["lower", "hold"],
+                "target_tread_load_n": 10.0,
+                "proportional_gain_m_per_n": 0.0005,
+                "maximum_lift_correction_m": 0.020,
+                "attack_smoothing_factor": 0.50,
+                "release_smoothing_factor": 0.05,
+            }
+            if selected == "front-pair-preposition-load-advance-forward-floor":
+                # Reproduce V74/V75 exactly for the precursor leg even though
+                # the older front-pair task owns a per-leg override. The next
+                # left-foot stage continues to use the selected (and likewise
+                # pre-positioned/deepened) curriculum level.
+                resolved["reset_start_y_range_m"] = [-0.002, 0.002]
+                resolved["reset_start_yaw_range_deg"] = [-0.15, 0.15]
+                resolved["reset_joint_noise_rad"] = 0.003
+                resolved.pop("reset_joint_offsets_rad", None)
+                level_override_by_leg = deepcopy(
+                    dict(placement.get("level_override_by_leg", {}))
+                )
+                level_override_by_leg["front_right"] = {
+                    "success_mode": "tread_contact",
+                    "apex_lift_m": 0.200,
+                    "landing_lift_m": 0.055,
+                    "lift_forward_offset_m": 0.080,
+                    "swing_forward_offset_m": 0.165,
+                    "landing_forward_offset_m": 0.150,
+                    "target_tread_fraction": 0.25,
+                    "contact_hold_seconds": 0.50,
+                }
+                placement["level_override_by_leg"] = level_override_by_leg
+                transfer = deepcopy(
+                    dict(placement.get("inter_leg_transfer", {}))
+                )
+                transfer_overrides = deepcopy(
+                    dict(transfer.get("override_by_next_swing_leg", {}))
+                )
+                front_left_transfer = deepcopy(
+                    dict(transfer_overrides.get("front_left", {}))
+                )
+                front_left_transfer.update(
+                    {
+                        "unload_duration_seconds": 3.0,
+                        "maximum_seconds": 10.0,
+                        # The unload checkpoint is a state, not a threshold
+                        # crossing: keep every transfer gate true continuously
+                        # for half a second before the lift policy may start.
+                        "gate_hold_seconds": 0.50,
+                        "swing_unload_lift_m": 0.080,
+                        "maximum_swing_unloaded_load_n": 1.0,
+                    }
+                )
+                transfer_overrides["front_left"] = front_left_transfer
+                transfer["training_reward"] = {
+                    "balance_target_error_progress_per_m": 1000.0,
+                    "support_margin_progress_per_m": 2000.0,
+                    "swing_load_reduction_per_n": 50.0,
+                    "body_pitch_error_progress_per_rad": 500.0,
+                    "vertical_balance_target_error_progress_per_m": 1500.0,
+                    "swing_load_cost_per_n": 2.0,
+                    "vertical_balance_target_error_cost_per_m": 500.0,
+                    "maximum_progress_m_per_step": 0.010,
+                    "maximum_load_progress_n_per_step": 1.0,
+                    "maximum_pitch_progress_rad_per_step": 0.020,
+                    "maximum_vertical_progress_m_per_step": 0.005,
+                }
+                transfer["override_by_next_swing_leg"] = transfer_overrides
+                placement["inter_leg_transfer"] = transfer
+                # The transfer policy needs the measured quantity controlled by
+                # its unload gate. Keep this opt-in and append-only so the V75
+                # precursor's 81-field observation remains a valid prefix.
+                resolved["include_transfer_load_observation"] = True
+                # A second-foot success is invalid if the already completed
+                # front-right foothold has unloaded. Five newtons is safely
+                # below V74/V75's observed 11-17 N retained load but well above
+                # the 1 N contact-noise threshold. The 35 mm slip limit admits
+                # the verified V75 prefix while bounding any additional motion.
+                placement["completed_foot_minimum_tread_load_n"] = 5.0
+                termination = deepcopy(dict(resolved["termination"]))
+                termination["maximum_support_slip_m"] = 0.035
+                resolved["termination"] = termination
+    elif selected == "fully-folded-forward":
+        # 160.370 mm down with 25 mm fore/aft puts the knee at 119 degrees,
+        # one degree inside the measured 120-degree hardware limit.
+        nominal_stance["down_m"] = 0.1603704915
+        resolved["reset_start_z_m"] = 0.32
+        termination["minimum_base_clearance_m"] = 0.14
+        reward["target_body_clearance_m"] = 0.22
+        for level in placement_curriculum["levels"]:
+            level["apex_lift_m"] = 0.150
+            level["landing_lift_m"] = 0.130
+    elif selected == "low-crouch-forward":
+        nominal_stance["down_m"] = 0.220
+        resolved["reset_start_z_m"] = 0.38
+        termination["minimum_base_clearance_m"] = 0.18
+        reward["target_body_clearance_m"] = 0.28
+    else:
+        angled = selected == "angled-hip"
+        diagonal = selected == "diagonal-hip"
+        target_yaw_deg = 20.0 if angled else (45.0 if diagonal else 90.0)
+        resolved["target_heading_yaw_deg"] = target_yaw_deg
+        resolved["reset_start_yaw_range_deg"] = [
+            target_yaw_deg,
+            target_yaw_deg,
+        ]
+        resolved["reset_start_x_range_m"] = [0.32, 0.34]
+        termination["maximum_lateral_deviation_m"] = 0.35
+        placement["weight_shift"] = (
+            {"forward_m": 0.045, "lateral_m": 0.045}
+            if angled
+            else {"forward_m": 0.025, "lateral_m": 0.015}
+        )
+        sideways_offsets = (
+            (0.110, 0.135, 0.150)
+            if angled
+            else (
+                (0.070, 0.080, 0.090)
+                if diagonal
+                else (0.090, 0.100, 0.110)
+            )
+        )
+        for level, offset_m in zip(
+            placement_curriculum["levels"],
+            sideways_offsets,
+            strict=True,
+        ):
+            level["lift_forward_offset_m"] = 0.080 if angled else offset_m
+            level["swing_forward_offset_m"] = offset_m
+            level["apex_lift_m"] = (
+                0.200 if angled else (0.185 if diagonal else 0.180)
+            )
+            level["landing_forward_offset_m"] = max(0.060, offset_m - 0.010)
+        residual_scale["swing"].update(
+            {
+                "hip_abduction": (
+                    0.18 if angled else (0.28 if diagonal else 0.35)
+                ),
+                "hip_flexion": 0.18 if angled else (0.22 if diagonal else 0.12),
+                "knee": 0.24 if (angled or diagonal) else 0.18,
+            }
+        )
+        residual_scale["support"].update(
+            {
+                "hip_abduction": 0.18,
+                "hip_flexion": 0.20,
+                "knee": 0.28,
+            }
+        )
+        if selected == "low-crouch-sideways-hip":
+            nominal_stance["down_m"] = 0.220
+            resolved["reset_start_z_m"] = 0.38
+            termination["minimum_base_clearance_m"] = 0.18
+            reward["target_body_clearance_m"] = 0.28
+
+    resolved["nominal_stance"] = nominal_stance
+    resolved["termination"] = termination
+    resolved["reward"] = reward
+    resolved["placement_reference"] = placement
+    resolved["placement_curriculum"] = placement_curriculum
+    resolved["placement_residual_action_scale_rad"] = residual_scale
+    return resolved
+
+
+def config_for_height_stage(
+    config: Mapping[str, object],
+    stage_id: str | None,
+) -> dict[str, object]:
+    """Return a config copy with one declared stair-height stage applied."""
+
+    resolved = deepcopy(dict(config))
+    if stage_id is None:
+        return resolved
+    stages = list(resolved.get("stair_height_stages", ()))
+    matches = [stage for stage in stages if str(stage["id"]) == stage_id]
+    if len(matches) != 1:
+        available = [str(stage["id"]) for stage in stages]
+        raise ValueError(
+            f"Unknown stair height stage {stage_id!r}; available={available}"
+        )
+    stage = dict(matches[0])
+    task = dict(resolved["task"])
+    staircase = dict(task["staircase"])
+    rise_m = float(stage["rise_m"])
+    if rise_m <= 0.0:
+        raise ValueError("Stair height stage rise_m must be positive")
+    task["id"] = str(stage["task_id"])
+    task["world"] = str(stage["world"])
+    staircase["rise_m"] = rise_m
+    task["staircase"] = staircase
+    resolved["task"] = task
+    resolved["selected_stair_height_stage"] = stage
+    return resolved
 
 
 def _finite_vector(value, length: int, label: str) -> np.ndarray:
@@ -49,6 +550,93 @@ def validate_staircase_config(staircase: Mapping[str, object]) -> None:
         raise ValueError(
             "staircase.terrain_sample_offsets_m must be strictly increasing"
         )
+
+
+def validated_foot_contact_patch_config(
+    config: Mapping[str, object] | None,
+) -> dict[str, object]:
+    """Validate an opt-in simulation foot pad without changing leg reach.
+
+    A box models a flat pad rigidly fixed normal to distal-link +X. A sphere
+    models a rounded boot for this no-ankle leg. Both are recentered so their
+    outermost +X point sits at ``contact_plane_offset_m`` beyond the existing
+    fork-axis contact center; the default 12.5 mm therefore preserves the
+    original proxy's effective leg length.
+    """
+
+    values = dict(config or {})
+    enabled = bool(values.get("enabled", False))
+    if not enabled:
+        return {"enabled": False}
+    patch_id = str(values.get("id", "")).strip()
+    shape = str(values.get("shape", "box")).strip().lower()
+    if not patch_id:
+        raise ValueError("foot_contact_patch.id must be nonempty")
+    if shape not in {"box", "sphere"}:
+        raise ValueError("foot_contact_patch.shape must be box or sphere")
+    common_bounds = {
+        "contact_plane_offset_m": (0.005, 0.030),
+        "contact_offset_m": (0.0005, 0.010),
+        "rest_offset_m": (-0.005, 0.005),
+    }
+    normalized: dict[str, object] = {
+        "enabled": True,
+        "id": patch_id,
+        "shape": shape,
+    }
+    legs = tuple(str(leg) for leg in values.get("legs", STAIR_FOOT_NAMES))
+    if (
+        not legs
+        or len(set(legs)) != len(legs)
+        or any(leg not in STAIR_FOOT_NAMES for leg in legs)
+    ):
+        raise ValueError(
+            "foot_contact_patch.legs must contain unique known robot legs"
+        )
+    normalized["legs"] = list(legs)
+    common_defaults = {
+        "contact_plane_offset_m": 0.0125,
+        "contact_offset_m": 0.002,
+        "rest_offset_m": 0.0,
+    }
+    for field, (minimum, maximum) in common_bounds.items():
+        value = float(values.get(field, common_defaults[field]))
+        if not np.isfinite(value) or value < minimum or value > maximum:
+            raise ValueError(
+                f"foot_contact_patch.{field} must be finite and within "
+                f"[{minimum}, {maximum}]"
+            )
+        normalized[field] = value
+    shape_bounds = (
+        {
+            "thickness_m": (0.002, 0.020),
+            "width_m": (0.015, 0.080),
+            "length_m": (0.015, 0.100),
+        }
+        if shape == "box"
+        else {"radius_m": (0.015, 0.040)}
+    )
+    shape_defaults = {
+        "thickness_m": 0.008,
+        "width_m": 0.040,
+        "length_m": 0.050,
+        "radius_m": 0.020,
+    }
+    for field, (minimum, maximum) in shape_bounds.items():
+        value = float(values.get(field, shape_defaults[field]))
+        if not np.isfinite(value) or value < minimum or value > maximum:
+            raise ValueError(
+                f"foot_contact_patch.{field} must be finite and within "
+                f"[{minimum}, {maximum}]"
+            )
+        normalized[field] = value
+    if float(normalized["contact_offset_m"]) <= float(
+        normalized["rest_offset_m"]
+    ):
+        raise ValueError(
+            "foot_contact_patch.contact_offset_m must exceed rest_offset_m"
+        )
+    return normalized
 
 
 def stair_height_at_x(
@@ -126,6 +714,1867 @@ def curriculum_active_steps(
     return active
 
 
+def placement_curriculum_level(
+    progress_fraction: float,
+    levels: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    """Select one ordered single-tread placement stage."""
+
+    progress = float(np.clip(progress_fraction, 0.0, 1.0))
+    if not levels:
+        raise ValueError("placement curriculum levels cannot be empty")
+    selected: dict[str, object] | None = None
+    previous_start = -1.0
+    for raw_level in levels:
+        level = dict(raw_level)
+        start = float(level["start_fraction"])
+        if start < 0.0 or start > 1.0 or start <= previous_start:
+            raise ValueError(
+                "placement curriculum start fractions must increase within [0, 1]"
+            )
+        apex = float(level["apex_lift_m"])
+        landing = float(level["landing_lift_m"])
+        forward = float(level["swing_forward_offset_m"])
+        lift_forward = float(level.get("lift_forward_offset_m", min(forward, 0.11)))
+        landing_forward = float(level.get("landing_forward_offset_m", forward))
+        success_mode = str(level.get("success_mode", "tread_contact"))
+        tread_fraction = float(level["target_tread_fraction"])
+        if apex <= 0.0 or landing <= 0.0 or landing > apex:
+            raise ValueError("placement lift heights must satisfy 0 < landing <= apex")
+        if forward < 0.0 or (
+            forward == 0.0 and success_mode != "swing_lift_hold"
+        ):
+            raise ValueError(
+                "placement swing_forward_offset_m must be positive unless "
+                "the stage is a pure swing lift hold"
+            )
+        if lift_forward < 0.0 or lift_forward > forward:
+            raise ValueError(
+                "placement lift_forward_offset_m must be within "
+                "[0, swing forward]"
+            )
+        if landing_forward < 0.0 or landing_forward > forward:
+            raise ValueError(
+                "placement landing_forward_offset_m must be within "
+                "[0, swing forward]"
+            )
+        if tread_fraction <= 0.0 or tread_fraction >= 1.0:
+            raise ValueError("placement target_tread_fraction must be within (0, 1)")
+        if progress >= start:
+            selected = level
+        previous_start = start
+    if selected is None:
+        raise ValueError("the first placement curriculum level must start at zero")
+    return selected
+
+
+def placement_success_mode(
+    *,
+    swing_leg: str,
+    default_mode: str = "tread_contact",
+    mode_by_leg: Mapping[str, object] | None = None,
+    active_level: Mapping[str, object] | None = None,
+) -> str:
+    """Resolve level, leg, then task success mode for a placement stage."""
+
+    leg_modes = dict(mode_by_leg or {})
+    level = dict(active_level or {})
+    mode = str(
+        level.get(
+            "success_mode",
+            leg_modes.get(str(swing_leg), default_mode),
+        )
+    )
+    if mode not in {"tread_contact", "swing_lift_hold"}:
+        raise ValueError(
+            "placement success mode must be tread_contact or swing_lift_hold"
+        )
+    return mode
+
+
+def placement_reference_state(
+    elapsed_seconds: float,
+    *,
+    timing: Mapping[str, float],
+    level: Mapping[str, object],
+) -> dict[str, object]:
+    """Return the explicit shift, lift/advance, lower, and hold reference."""
+
+    elapsed = max(0.0, float(elapsed_seconds))
+    shift_start = float(timing["shift_start_seconds"])
+    shift_duration = float(timing["shift_duration_seconds"])
+    lift_start = float(timing["lift_start_seconds"])
+    lift_duration = float(timing["lift_duration_seconds"])
+    advance_start = float(timing["advance_start_seconds"])
+    advance_duration = float(timing["advance_duration_seconds"])
+    lower_start = float(timing["lower_start_seconds"])
+    lower_duration = float(timing["lower_duration_seconds"])
+    if min(shift_start, lift_start, advance_start, lower_start) < 0.0:
+        raise ValueError("placement phase start times cannot be negative")
+    if min(shift_duration, lift_duration, advance_duration, lower_duration) <= 0.0:
+        raise ValueError("placement phase durations must be positive")
+    if lift_start < shift_start + shift_duration - 1e-9:
+        raise ValueError("placement lift must start after the weight shift")
+    if advance_start < lift_start + lift_duration - 1e-9:
+        raise ValueError("placement advance must start after lift")
+    if lower_start < advance_start + advance_duration - 1e-9:
+        raise ValueError("placement lower must start after advance")
+
+    def smoothstep(value: float) -> float:
+        clipped = float(np.clip(value, 0.0, 1.0))
+        return clipped * clipped * (3.0 - 2.0 * clipped)
+
+    shift_fraction = smoothstep((elapsed - shift_start) / shift_duration)
+    lift_fraction = smoothstep((elapsed - lift_start) / lift_duration)
+    advance_fraction = smoothstep(
+        (elapsed - advance_start) / advance_duration
+    )
+    lower_fraction = smoothstep((elapsed - lower_start) / lower_duration)
+    apex_lift = float(level["apex_lift_m"])
+    landing_lift = float(level["landing_lift_m"])
+    desired_lift = apex_lift * lift_fraction
+    if elapsed >= lower_start:
+        desired_lift = apex_lift + lower_fraction * (landing_lift - apex_lift)
+    final_forward = float(level["swing_forward_offset_m"])
+    lift_forward = min(
+        final_forward,
+        float(level.get("lift_forward_offset_m", 0.11)),
+    )
+    desired_forward = lift_forward * lift_fraction
+    if elapsed >= advance_start:
+        desired_forward = lift_forward + advance_fraction * (
+            final_forward - lift_forward
+        )
+    if elapsed >= lower_start:
+        landing_forward = float(
+            level.get("landing_forward_offset_m", final_forward)
+        )
+        desired_forward = final_forward + lower_fraction * (
+            landing_forward - final_forward
+        )
+    forward_fraction = (
+        0.0 if final_forward == 0.0 else desired_forward / final_forward
+    )
+    if elapsed < lift_start:
+        phase = "weight_shift"
+    elif elapsed < advance_start:
+        phase = "lift"
+    elif elapsed < lower_start:
+        phase = "advance"
+    elif elapsed < lower_start + lower_duration:
+        phase = "lower"
+    else:
+        phase = "hold"
+    return {
+        "elapsed_seconds": elapsed,
+        "phase": phase,
+        "phase_one_hot": tuple(float(phase == name) for name in PLACEMENT_PHASES),
+        "shift_fraction": shift_fraction,
+        "lift_fraction": lift_fraction,
+        "advance_fraction": advance_fraction,
+        "forward_fraction": forward_fraction,
+        "lower_fraction": lower_fraction,
+        "desired_lift_m": desired_lift,
+        "desired_forward_offset_m": desired_forward,
+        "contact_expected": phase in {"lower", "hold"},
+    }
+
+
+def placement_advance_clearance_gate_state(
+    *,
+    candidate_phase: str,
+    measured_clearance_m: float,
+    minimum_clearance_m: float,
+    held_steps: int,
+    maximum_hold_steps: int,
+) -> dict[str, object]:
+    """Gate forward swing on measured clearance with a bounded safe hold."""
+
+    phase = str(candidate_phase)
+    if phase not in PLACEMENT_PHASES:
+        raise ValueError(f"unknown placement phase: {phase}")
+    measured = float(measured_clearance_m)
+    minimum = float(minimum_clearance_m)
+    if not np.isfinite(measured) or not np.isfinite(minimum):
+        raise ValueError("clearance values must be finite")
+    if minimum <= 0.0:
+        raise ValueError("minimum clearance must be positive")
+    held = int(held_steps)
+    maximum = int(maximum_hold_steps)
+    if held < 0 or maximum < 1:
+        raise ValueError("clearance hold steps must be non-negative and bounded")
+
+    advance_due = phase in {"advance", "lower", "hold"}
+    released = bool(advance_due and measured >= minimum)
+    hold_reference = bool(advance_due and not released)
+    next_held = held + int(hold_reference)
+    return {
+        "advance_due": advance_due,
+        "released": released,
+        "hold_reference": hold_reference,
+        "held_steps": next_held,
+        "timed_out": bool(hold_reference and next_held >= maximum),
+        "clearance_error_m": max(0.0, minimum - measured),
+    }
+
+
+def inter_leg_transfer_state(
+    elapsed_seconds: float,
+    *,
+    duration_seconds: float,
+    unload_duration_seconds: float = 0.0,
+    unload_elapsed_seconds: float | None = None,
+) -> dict[str, object]:
+    """Return a smooth transfer with an optionally gated unload clock."""
+
+    duration = float(duration_seconds)
+    if duration <= 0.0:
+        raise ValueError("inter-leg transfer duration must be positive")
+    unload_duration = float(unload_duration_seconds)
+    if unload_duration < 0.0:
+        raise ValueError("inter-leg unload duration cannot be negative")
+    elapsed = max(0.0, float(elapsed_seconds))
+    linear_fraction = float(
+        np.clip(elapsed / duration, 0.0, 1.0)
+    )
+    transfer_fraction = linear_fraction * linear_fraction * (
+        3.0 - 2.0 * linear_fraction
+    )
+    unload_elapsed = (
+        max(0.0, elapsed - duration)
+        if unload_elapsed_seconds is None
+        else max(0.0, float(unload_elapsed_seconds))
+    )
+    unload_linear_fraction = (
+        float(np.clip(unload_elapsed / unload_duration, 0.0, 1.0))
+        if unload_duration > 0.0
+        else 1.0
+    )
+    unload_fraction = unload_linear_fraction * unload_linear_fraction * (
+        3.0 - 2.0 * unload_linear_fraction
+    )
+    return {
+        "phase": "weight_shift",
+        "phase_one_hot": tuple(
+            float(name == "weight_shift") for name in PLACEMENT_PHASES
+        ),
+        "shift_fraction": 1.0,
+        "lift_fraction": 0.0,
+        "advance_fraction": 0.0,
+        "forward_fraction": 0.0,
+        "lower_fraction": 0.0,
+        "desired_lift_m": 0.0,
+        "desired_forward_offset_m": 0.0,
+        "contact_expected": False,
+        "transfer_fraction": transfer_fraction,
+        "unload_fraction": unload_fraction,
+        "unload_elapsed_seconds": unload_elapsed,
+        "transfer_stage": (
+            "shift"
+            if transfer_fraction < 1.0 - 1e-9
+            else (
+                "pre_unload_settle"
+                if unload_fraction <= 1e-9
+                else ("unload" if unload_fraction < 1.0 - 1e-9 else "gate")
+            )
+        ),
+    }
+
+
+def inter_leg_pre_unload_gate_failures(
+    *,
+    transfer_fraction: float,
+    support_contact_fraction: float,
+    completed_tread_loaded: bool,
+    next_swing_total_load_n: float,
+    minimum_next_swing_preload_n: float,
+    support_margin_m: float,
+    minimum_support_margin_m: float,
+    balance_target_error_m: float,
+    maximum_balance_target_error_m: float,
+    base_speed_m_s: float,
+    maximum_base_speed_m_s: float,
+    body_rate_rad_s: float,
+    maximum_body_rate_rad_s: float,
+    upright_cosine: float,
+    minimum_upright_cosine: float,
+) -> tuple[str, ...]:
+    """Return reasons a four-foot transfer state is not ready to unload."""
+
+    values = np.asarray(
+        [
+            transfer_fraction,
+            support_contact_fraction,
+            next_swing_total_load_n,
+            minimum_next_swing_preload_n,
+            support_margin_m,
+            minimum_support_margin_m,
+            balance_target_error_m,
+            maximum_balance_target_error_m,
+            base_speed_m_s,
+            maximum_base_speed_m_s,
+            body_rate_rad_s,
+            maximum_body_rate_rad_s,
+            upright_cosine,
+            minimum_upright_cosine,
+        ],
+        dtype=np.float64,
+    )
+    if not np.all(np.isfinite(values)):
+        raise ValueError("pre-unload gate inputs must be finite")
+    if any(
+        value < 0.0
+        for value in (
+            minimum_next_swing_preload_n,
+            maximum_balance_target_error_m,
+            maximum_base_speed_m_s,
+            maximum_body_rate_rad_s,
+        )
+    ):
+        raise ValueError("pre-unload gate thresholds cannot be negative")
+
+    failures: list[str] = []
+    if float(transfer_fraction) < 1.0 - 1e-6:
+        failures.append("transfer_incomplete")
+    if float(support_contact_fraction) < 1.0 - 1e-6:
+        failures.append("support_contact_lost")
+    if not bool(completed_tread_loaded):
+        failures.append("placed_tread_unloaded")
+    if float(next_swing_total_load_n) < float(minimum_next_swing_preload_n):
+        failures.append("next_swing_not_preloaded")
+    if float(support_margin_m) < float(minimum_support_margin_m):
+        failures.append("support_margin_low")
+    if float(balance_target_error_m) > float(maximum_balance_target_error_m):
+        failures.append("balance_target_error_high")
+    if float(base_speed_m_s) > float(maximum_base_speed_m_s):
+        failures.append("base_not_settled")
+    if float(body_rate_rad_s) > float(maximum_body_rate_rad_s):
+        failures.append("body_rate_high")
+    if float(upright_cosine) < float(minimum_upright_cosine):
+        failures.append("body_not_upright")
+    return tuple(failures)
+
+
+def stable_transfer_snapshot_gate_failures(
+    *,
+    transfer_gate_failures: Sequence[str],
+    swing_load_n: float,
+    maximum_swing_load_n: float,
+    support_contact_fraction: float,
+    support_margin_m: float,
+    minimum_support_margin_m: float,
+    support_slip_m: float,
+    maximum_support_slip_m: float,
+    upright_cosine: float,
+    minimum_upright_cosine: float,
+    base_speed_m_s: float,
+    maximum_base_speed_m_s: float,
+    body_rate_rad_s: float,
+    maximum_body_rate_rad_s: float,
+) -> tuple[str, ...]:
+    """Gate a stable near-unload state before saving a training snapshot.
+
+    A candidate may still be partway through the analytic transfer and may
+    still carry load on the future swing foot. Those two deficiencies are the
+    purpose of the stationary follow-up phase. Contact loss, low support
+    margin, excessive motion, tilt, or slip are never admitted into the saved
+    boundary.
+    """
+
+    numeric_values = (
+        swing_load_n,
+        maximum_swing_load_n,
+        support_contact_fraction,
+        support_margin_m,
+        minimum_support_margin_m,
+        support_slip_m,
+        maximum_support_slip_m,
+        upright_cosine,
+        minimum_upright_cosine,
+        base_speed_m_s,
+        maximum_base_speed_m_s,
+        body_rate_rad_s,
+        maximum_body_rate_rad_s,
+    )
+    if not all(np.isfinite(float(value)) for value in numeric_values):
+        return ("non_finite_snapshot_metric",)
+    if (
+        maximum_swing_load_n <= 0.0
+        or minimum_support_margin_m < 0.0
+        or maximum_support_slip_m < 0.0
+        or not 0.0 < minimum_upright_cosine <= 1.0
+        or maximum_base_speed_m_s < 0.0
+        or maximum_body_rate_rad_s < 0.0
+    ):
+        raise ValueError("Stable snapshot thresholds are invalid")
+
+    allowed_incomplete = {
+        "transfer_incomplete",
+        "swing_unload_incomplete",
+        "next_swing_still_loaded",
+        "base_target_error_high",
+    }
+    failures = [
+        f"transfer_gate:{failure}"
+        for failure in transfer_gate_failures
+        if str(failure) not in allowed_incomplete
+    ]
+    if float(swing_load_n) > float(maximum_swing_load_n):
+        failures.append("swing_load_high")
+    if float(support_contact_fraction) < 1.0:
+        failures.append("support_contact_lost")
+    if float(support_margin_m) < float(minimum_support_margin_m):
+        failures.append("support_margin_low")
+    if float(support_slip_m) > float(maximum_support_slip_m):
+        failures.append("support_slip_high")
+    if float(upright_cosine) < float(minimum_upright_cosine):
+        failures.append("body_not_upright")
+    if float(base_speed_m_s) > float(maximum_base_speed_m_s):
+        failures.append("base_not_settled")
+    if float(body_rate_rad_s) > float(maximum_body_rate_rad_s):
+        failures.append("body_rate_high")
+    return tuple(dict.fromkeys(failures))
+
+
+def support_triangle_incenter_xy(
+    support_points_xy_m: Sequence[Sequence[float]],
+) -> np.ndarray:
+    """Return the point with equal distance to all three support edges."""
+
+    points = np.asarray(support_points_xy_m, dtype=np.float64)
+    if points.shape != (3, 2) or not np.all(np.isfinite(points)):
+        raise ValueError("support_points_xy_m must be a finite 3x2 triangle")
+    first_edge = points[1] - points[0]
+    second_edge = points[2] - points[0]
+    twice_area = abs(
+        float(
+            first_edge[0] * second_edge[1]
+            - first_edge[1] * second_edge[0]
+        )
+    )
+    if twice_area <= 1e-9:
+        raise ValueError("support triangle must have nonzero area")
+    opposite_edge_lengths = np.asarray(
+        [
+            np.linalg.norm(points[1] - points[2]),
+            np.linalg.norm(points[0] - points[2]),
+            np.linalg.norm(points[0] - points[1]),
+        ],
+        dtype=np.float64,
+    )
+    perimeter = float(np.sum(opposite_edge_lengths))
+    if perimeter <= 0.0:
+        raise ValueError("support triangle perimeter must be positive")
+    return (
+        np.sum(points * opposite_edge_lengths[:, None], axis=0) / perimeter
+    ).astype(np.float32)
+
+
+def bounded_support_incenter_target_xy(
+    *,
+    reference_point_xy_m: Sequence[float],
+    support_points_xy_m: Sequence[Sequence[float]],
+    incenter_blend: float,
+    target_offset_xy_m: Sequence[float] = (0.0, 0.0),
+    maximum_shift_xy_m: Sequence[float] = (0.12, 0.12),
+) -> np.ndarray:
+    """Return a bounded balance target inside a three-foot support polygon."""
+
+    reference = _finite_vector(
+        reference_point_xy_m,
+        2,
+        "reference_point_xy_m",
+    )
+    offset = _finite_vector(
+        target_offset_xy_m,
+        2,
+        "target_offset_xy_m",
+    )
+    maximum_shift = _finite_vector(
+        maximum_shift_xy_m,
+        2,
+        "maximum_shift_xy_m",
+    )
+    blend = float(incenter_blend)
+    if blend <= 0.0 or blend > 1.0:
+        raise ValueError("incenter_blend must be within (0, 1]")
+    if np.any(maximum_shift <= 0.0):
+        raise ValueError("maximum_shift_xy_m values must be positive")
+    incenter = np.asarray(
+        support_triangle_incenter_xy(support_points_xy_m),
+        dtype=np.float64,
+    )
+    desired_delta = blend * (incenter - reference) + offset
+    return (
+        reference
+        + np.clip(desired_delta, -maximum_shift, maximum_shift)
+    ).astype(np.float64)
+
+
+def support_margin_constrained_target_xy(
+    *,
+    desired_target_xy_m: Sequence[float],
+    support_points_xy_m: Sequence[Sequence[float]],
+    minimum_margin_m: float,
+) -> np.ndarray:
+    """Clip a desired COM target to a safe three-foot support inset.
+
+    The returned point is the farthest point toward ``desired_target_xy_m``
+    on the line from the support triangle's incenter that retains the requested
+    edge clearance. This keeps a forward transfer command useful while making
+    the support-margin contract authoritative instead of relying on an
+    unconstrained open-loop body shift.
+    """
+
+    desired = _finite_vector(
+        desired_target_xy_m,
+        2,
+        "desired_target_xy_m",
+    ).astype(np.float64)
+    points = np.asarray(support_points_xy_m, dtype=np.float64)
+    if points.shape != (3, 2) or not np.all(np.isfinite(points)):
+        raise ValueError("support_points_xy_m must be a finite 3x2 triangle")
+    minimum_margin = float(minimum_margin_m)
+    if not np.isfinite(minimum_margin) or minimum_margin < 0.0:
+        raise ValueError("minimum_margin_m must be finite and nonnegative")
+
+    center = np.mean(points, axis=0)
+    angles = np.arctan2(points[:, 1] - center[1], points[:, 0] - center[0])
+    ordered = points[np.argsort(angles)]
+
+    def signed_margin(point: np.ndarray) -> float:
+        margins: list[float] = []
+        for index in range(3):
+            start = ordered[index]
+            edge = ordered[(index + 1) % 3] - start
+            edge_length = float(np.linalg.norm(edge))
+            if edge_length <= 1e-9:
+                raise ValueError("support triangle points must be distinct")
+            relative = point - start
+            margins.append(
+                float(
+                    (edge[0] * relative[1] - edge[1] * relative[0])
+                    / edge_length
+                )
+            )
+        return min(margins)
+
+    incenter = np.asarray(
+        support_triangle_incenter_xy(points),
+        dtype=np.float64,
+    )
+    incenter_margin = signed_margin(incenter)
+    if minimum_margin > incenter_margin + 1e-9:
+        raise ValueError(
+            "minimum_margin_m exceeds the support triangle inradius"
+        )
+    if signed_margin(desired) >= minimum_margin:
+        return desired
+
+    low = 0.0
+    high = 1.0
+    for _ in range(48):
+        midpoint = 0.5 * (low + high)
+        candidate = incenter + midpoint * (desired - incenter)
+        if signed_margin(candidate) >= minimum_margin:
+            low = midpoint
+        else:
+            high = midpoint
+    return (incenter + low * (desired - incenter)).astype(np.float64)
+
+
+def touchdown_load_lift_correction_m(
+    *,
+    measured_tread_load_n: float,
+    target_tread_load_n: float,
+    proportional_gain_m_per_n: float,
+    maximum_lift_correction_m: float,
+) -> float:
+    """Return an upward swing-foot correction for excess touchdown load."""
+
+    measured = float(measured_tread_load_n)
+    target = float(target_tread_load_n)
+    gain = float(proportional_gain_m_per_n)
+    maximum = float(maximum_lift_correction_m)
+    if not np.isfinite(measured) or measured < 0.0:
+        raise ValueError("measured_tread_load_n must be finite and nonnegative")
+    if not np.isfinite(target) or target <= 0.0:
+        raise ValueError("target_tread_load_n must be finite and positive")
+    if not np.isfinite(gain) or gain <= 0.0:
+        raise ValueError(
+            "proportional_gain_m_per_n must be finite and positive"
+        )
+    if not np.isfinite(maximum) or maximum <= 0.0:
+        raise ValueError(
+            "maximum_lift_correction_m must be finite and positive"
+        )
+    return float(np.clip((measured - target) * gain, 0.0, maximum))
+
+
+def touchdown_support_release_state(
+    *,
+    measured_tread_load_n: float,
+    contact_threshold_n: float,
+    current_step: int,
+    trigger_step: int | None,
+    release_duration_steps: int,
+) -> tuple[int | None, float]:
+    """Latch qualified touchdown and return its smooth support-release phase."""
+
+    measured = float(measured_tread_load_n)
+    threshold = float(contact_threshold_n)
+    step = int(current_step)
+    duration = int(release_duration_steps)
+    if not np.isfinite(measured) or measured < 0.0:
+        raise ValueError("measured_tread_load_n must be finite and nonnegative")
+    if not np.isfinite(threshold) or threshold <= 0.0:
+        raise ValueError("contact_threshold_n must be finite and positive")
+    if step < 0:
+        raise ValueError("current_step cannot be negative")
+    if duration <= 0:
+        raise ValueError("release_duration_steps must be positive")
+    latched_step = None if trigger_step is None else int(trigger_step)
+    if latched_step is not None and (latched_step < 0 or latched_step > step):
+        raise ValueError("trigger_step must be within [0, current_step]")
+    if latched_step is None and measured >= threshold:
+        latched_step = step
+    if latched_step is None:
+        return None, 0.0
+    linear_fraction = float(
+        np.clip((step - latched_step + 1) / duration, 0.0, 1.0)
+    )
+    smooth_fraction = linear_fraction * linear_fraction * (
+        3.0 - 2.0 * linear_fraction
+    )
+    return latched_step, float(smooth_fraction)
+
+
+def balance_target_error_xy(
+    *,
+    balance_position_xy_m: Sequence[float],
+    target_position_xy_m: Sequence[float],
+) -> np.ndarray:
+    """Return the signed whole-robot balance error in the target frame."""
+
+    balance = _finite_vector(
+        balance_position_xy_m,
+        2,
+        "balance_position_xy_m",
+    )
+    target = _finite_vector(
+        target_position_xy_m,
+        2,
+        "target_position_xy_m",
+    )
+    return balance.astype(np.float64) - target.astype(np.float64)
+
+
+def support_load_share_vertical_corrections(
+    *,
+    support_points_xy_m: Sequence[Sequence[float]],
+    target_position_xy_m: Sequence[float],
+    measured_normal_loads_n: Sequence[float],
+    proportional_gain_m: float,
+    maximum_correction_m: float,
+    minimum_total_load_n: float = 1.0,
+    minimum_desired_fraction: float = 0.05,
+) -> np.ndarray:
+    """Return zero-sum stance-leg extension corrections from load error."""
+
+    points = np.asarray(support_points_xy_m, dtype=np.float64)
+    if points.shape != (3, 2) or not np.all(np.isfinite(points)):
+        raise ValueError("support_points_xy_m must contain three finite XY points")
+    target = _finite_vector(
+        target_position_xy_m,
+        2,
+        "target_position_xy_m",
+    ).astype(np.float64)
+    loads = _finite_vector(
+        measured_normal_loads_n,
+        3,
+        "measured_normal_loads_n",
+    ).astype(np.float64)
+    if np.any(loads < 0.0):
+        raise ValueError("measured_normal_loads_n must be nonnegative")
+    gain = float(proportional_gain_m)
+    maximum = float(maximum_correction_m)
+    minimum_total = float(minimum_total_load_n)
+    minimum_fraction = float(minimum_desired_fraction)
+    if gain <= 0.0 or not np.isfinite(gain):
+        raise ValueError("proportional_gain_m must be finite and positive")
+    if maximum <= 0.0 or not np.isfinite(maximum):
+        raise ValueError("maximum_correction_m must be finite and positive")
+    if minimum_total < 0.0 or not np.isfinite(minimum_total):
+        raise ValueError("minimum_total_load_n must be finite and nonnegative")
+    if not 0.0 <= minimum_fraction < 1.0 / 3.0:
+        raise ValueError("minimum_desired_fraction must be within [0, 1/3)")
+    total_load = float(np.sum(loads))
+    if total_load < minimum_total:
+        return np.zeros(3, dtype=np.float64)
+
+    barycentric_matrix = np.asarray(
+        [
+            [points[0, 0], points[1, 0], points[2, 0]],
+            [points[0, 1], points[1, 1], points[2, 1]],
+            [1.0, 1.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+    determinant = float(np.linalg.det(barycentric_matrix))
+    if abs(determinant) < 1e-9:
+        raise ValueError("support points do not form a triangle")
+    desired_fractions = np.linalg.solve(
+        barycentric_matrix,
+        np.asarray([target[0], target[1], 1.0], dtype=np.float64),
+    )
+    desired_fractions = np.maximum(desired_fractions, minimum_fraction)
+    desired_fractions /= float(np.sum(desired_fractions))
+    measured_fractions = loads / total_load
+    correction = gain * (desired_fractions - measured_fractions)
+    correction -= float(np.mean(correction))
+    correction = np.clip(correction, -maximum, maximum)
+    correction -= float(np.mean(correction))
+    correction = np.clip(correction, -maximum, maximum)
+    correction[np.abs(correction) < 1e-9] = 0.0
+    return correction.astype(np.float64)
+
+
+def equalized_foot_load_vertical_corrections(
+    *,
+    measured_normal_loads_n: Sequence[float],
+    proportional_gain_m: float,
+    maximum_correction_m: float,
+    minimum_total_load_n: float = 1.0,
+) -> np.ndarray:
+    """Return zero-sum corrections that preload four contacting feet equally."""
+
+    loads = _finite_vector(
+        measured_normal_loads_n,
+        len(STAIR_FOOT_NAMES),
+        "measured_normal_loads_n",
+    ).astype(np.float64)
+    if np.any(loads < 0.0):
+        raise ValueError("measured_normal_loads_n must be nonnegative")
+    gain = float(proportional_gain_m)
+    maximum = float(maximum_correction_m)
+    minimum_total = float(minimum_total_load_n)
+    if gain <= 0.0 or not np.isfinite(gain):
+        raise ValueError("proportional_gain_m must be finite and positive")
+    if maximum <= 0.0 or not np.isfinite(maximum):
+        raise ValueError("maximum_correction_m must be finite and positive")
+    if minimum_total < 0.0 or not np.isfinite(minimum_total):
+        raise ValueError("minimum_total_load_n must be finite and nonnegative")
+    total_load = float(np.sum(loads))
+    if total_load < minimum_total:
+        return np.zeros(len(STAIR_FOOT_NAMES), dtype=np.float64)
+
+    measured_fractions = loads / total_load
+    desired_fractions = np.full(
+        len(STAIR_FOOT_NAMES),
+        1.0 / len(STAIR_FOOT_NAMES),
+        dtype=np.float64,
+    )
+    correction = gain * (desired_fractions - measured_fractions)
+    correction -= float(np.mean(correction))
+    correction = np.clip(correction, -maximum, maximum)
+    correction -= float(np.mean(correction))
+    correction = np.clip(correction, -maximum, maximum)
+    correction[np.abs(correction) < 1e-9] = 0.0
+    return correction.astype(np.float64)
+
+
+def minimum_foot_load_vertical_corrections(
+    *,
+    measured_normal_loads_n: Sequence[float],
+    target_foot_index: int,
+    minimum_target_load_n: float,
+    proportional_gain_m_per_n: float,
+    maximum_correction_m: float,
+    minimum_total_load_n: float = 1.0,
+    redistribution_fraction: float = 1.0,
+) -> np.ndarray:
+    """Extend one underloaded foot with optional redistribution to the others."""
+
+    loads = _finite_vector(
+        measured_normal_loads_n,
+        len(STAIR_FOOT_NAMES),
+        "measured_normal_loads_n",
+    ).astype(np.float64)
+    if np.any(loads < 0.0):
+        raise ValueError("measured_normal_loads_n must be nonnegative")
+    target_index = int(target_foot_index)
+    if target_index < 0 or target_index >= len(STAIR_FOOT_NAMES):
+        raise ValueError("target_foot_index is out of range")
+    target_load = float(minimum_target_load_n)
+    gain = float(proportional_gain_m_per_n)
+    maximum = float(maximum_correction_m)
+    minimum_total = float(minimum_total_load_n)
+    redistribution = float(redistribution_fraction)
+    if target_load <= 0.0 or not np.isfinite(target_load):
+        raise ValueError("minimum_target_load_n must be finite and positive")
+    if gain <= 0.0 or not np.isfinite(gain):
+        raise ValueError(
+            "proportional_gain_m_per_n must be finite and positive"
+        )
+    if maximum <= 0.0 or not np.isfinite(maximum):
+        raise ValueError("maximum_correction_m must be finite and positive")
+    if minimum_total < 0.0 or not np.isfinite(minimum_total):
+        raise ValueError("minimum_total_load_n must be finite and nonnegative")
+    if not 0.0 <= redistribution <= 1.0 or not np.isfinite(redistribution):
+        raise ValueError("redistribution_fraction must be within [0, 1]")
+    if float(np.sum(loads)) < minimum_total:
+        return np.zeros(len(STAIR_FOOT_NAMES), dtype=np.float64)
+
+    load_deficit_n = max(0.0, target_load - float(loads[target_index]))
+    extension_m = min(maximum, gain * load_deficit_n)
+    if extension_m <= 0.0:
+        return np.zeros(len(STAIR_FOOT_NAMES), dtype=np.float64)
+    correction = np.full(
+        len(STAIR_FOOT_NAMES),
+        -redistribution * extension_m / (len(STAIR_FOOT_NAMES) - 1),
+        dtype=np.float64,
+    )
+    correction[target_index] = extension_m
+    correction[np.abs(correction) < 1e-9] = 0.0
+    return correction
+
+
+def joint_effort_telemetry_sample(
+    *,
+    target_joint_positions_rad: Sequence[float],
+    measured_joint_positions_rad: Sequence[float],
+    joint_velocities_rad_s: Sequence[float] | None = None,
+    drive_stiffness_nm_rad: Sequence[float] | None = None,
+    drive_damping_nm_s_rad: Sequence[float] | None = None,
+    effort_cap_nm: float,
+    reported_actuation_effort_nm: Sequence[float] | None = None,
+    projected_joint_reaction_load_nm: Sequence[float] | None = None,
+) -> dict[str, np.ndarray | float]:
+    """Return finite tracking, implicit-drive demand, and load telemetry."""
+
+    target = _finite_vector(
+        target_joint_positions_rad,
+        JOINT_COUNT,
+        "target_joint_positions_rad",
+    )
+    measured = _finite_vector(
+        measured_joint_positions_rad,
+        JOINT_COUNT,
+        "measured_joint_positions_rad",
+    )
+    cap = float(effort_cap_nm)
+    if not np.isfinite(cap) or cap <= 0.0:
+        raise ValueError("effort_cap_nm must be finite and positive")
+    result: dict[str, np.ndarray | float] = {
+        "joint_tracking_error_rad": (target - measured).astype(np.float64),
+    }
+    pd_inputs = (
+        joint_velocities_rad_s,
+        drive_stiffness_nm_rad,
+        drive_damping_nm_s_rad,
+    )
+    if any(value is not None for value in pd_inputs):
+        if not all(value is not None for value in pd_inputs):
+            raise ValueError(
+                "joint velocities, drive stiffness, and drive damping must "
+                "be provided together"
+            )
+        velocities = _finite_vector(
+            joint_velocities_rad_s,
+            JOINT_COUNT,
+            "joint_velocities_rad_s",
+        )
+        stiffness = _finite_vector(
+            drive_stiffness_nm_rad,
+            JOINT_COUNT,
+            "drive_stiffness_nm_rad",
+        )
+        damping = _finite_vector(
+            drive_damping_nm_s_rad,
+            JOINT_COUNT,
+            "drive_damping_nm_s_rad",
+        )
+        if np.any(stiffness < 0.0) or np.any(damping < 0.0):
+            raise ValueError("drive gains must be non-negative")
+        requested = stiffness * (target - measured) - damping * velocities
+        result["requested_pd_effort_nm"] = requested.astype(np.float64)
+        result["capped_pd_effort_nm"] = np.clip(
+            requested,
+            -cap,
+            cap,
+        ).astype(np.float64)
+        result["requested_pd_effort_nm_peak_to_cap_ratio"] = float(
+            np.max(np.abs(requested)) / cap
+        )
+        result["requested_pd_effort_nm_95pct_cap_fraction"] = float(
+            np.mean(np.abs(requested) >= 0.95 * cap - 1e-6)
+        )
+    for label, values in (
+        ("reported_actuation_effort_nm", reported_actuation_effort_nm),
+        (
+            "projected_joint_reaction_load_nm",
+            projected_joint_reaction_load_nm,
+        ),
+    ):
+        if values is None:
+            continue
+        vector = _finite_vector(values, JOINT_COUNT, label).astype(np.float64)
+        result[label] = vector
+    return result
+
+
+def post_landing_reposition_snapshot(
+    snapshot: Mapping[str, object],
+    *,
+    leg: str,
+) -> dict[str, object]:
+    """Rewind one completed leg for a measured post-landing re-placement.
+
+    The physical articulation state is preserved.  Only the placement state
+    machine is rewound so the selected, just-completed foot can be lifted and
+    landed again before the following leg is allowed to unload.
+    """
+
+    stored = deepcopy(dict(snapshot))
+    sequence = tuple(str(item) for item in stored["placement_sequence_legs"])
+    if leg not in sequence:
+        raise ValueError(f"Unknown post-landing reposition leg: {leg}")
+    leg_index = sequence.index(leg)
+    if leg_index >= len(sequence) - 1:
+        raise ValueError("Post-landing reposition leg must have a following leg")
+    expected_next_leg = sequence[leg_index + 1]
+    completed = tuple(str(item) for item in stored["completed_placement_legs"])
+    if completed != sequence[: leg_index + 1]:
+        raise ValueError(
+            "Post-landing reposition snapshot must contain the exact completed "
+            "prefix through the selected leg"
+        )
+    if (
+        int(stored["placement_sequence_position"]) != leg_index + 1
+        or str(stored["placement_swing_leg"]) != expected_next_leg
+        or not bool(stored.get("placement_transfer_active", False))
+    ):
+        raise ValueError(
+            "Post-landing reposition requires the following leg's active "
+            "inter-leg transfer boundary"
+        )
+    transfer_reference = deepcopy(
+        dict(stored.get("placement_transfer_reference_by_leg", {}))
+    )
+    if set(transfer_reference) != set(STAIR_FOOT_NAMES):
+        raise ValueError(
+            "Post-landing reposition requires a four-leg transfer reference"
+        )
+
+    current_base = deepcopy(stored["base_position_m"])
+    current_balance = deepcopy(
+        stored.get("placement_transfer_start_balance_position_m", current_base)
+    )
+    maximum_lifts = list(stored.get("maximum_foot_lift_m", ()))
+    baseline_lift_m = (
+        float(maximum_lifts[STAIR_FOOT_NAMES.index(leg)])
+        if len(maximum_lifts) == len(STAIR_FOOT_NAMES)
+        else 0.0
+    )
+    if not np.isfinite(baseline_lift_m) or baseline_lift_m < 0.0:
+        raise ValueError("Post-landing baseline lift must be finite and nonnegative")
+
+    stored["placement_sequence_position"] = leg_index
+    stored["placement_swing_leg"] = leg
+    stored["completed_placement_legs"] = list(sequence[:leg_index])
+    for key in (
+        "completed_placement_joint_targets_by_leg",
+        "completed_placement_reference_by_leg",
+    ):
+        values = deepcopy(dict(stored.get(key, {})))
+        values.pop(leg, None)
+        stored[key] = values
+    stored["placement_leg_baseline_reference_by_leg"] = transfer_reference
+    stored["placement_leg_baseline_base_position_m"] = current_base
+    stored["placement_leg_baseline_balance_position_m"] = current_balance
+    stored["placement_leg_baseline_lift_offset_m"] = baseline_lift_m
+    stored["placement_transfer_active"] = False
+    stored["placement_transfer_reference_by_leg"] = {}
+    stored["placement_transfer_start_base_position_m"] = current_base
+    stored["placement_transfer_target_base_position_m"] = current_base
+    stored["placement_transfer_start_balance_position_m"] = current_balance
+    stored["placement_transfer_target_balance_position_m"] = current_balance
+    for key in ("previous_action", "previous_residual_action"):
+        values = list(stored.get(key, ()))
+        stored[key] = [0.0] * len(values)
+    return stored
+
+
+def reanchor_inter_leg_transfer_snapshot(
+    snapshot: Mapping[str, object],
+    *,
+    balance_position_m: Sequence[float],
+    target_delta_xy_m: Sequence[float],
+    reference_by_leg: Mapping[str, Mapping[str, float]],
+) -> dict[str, object]:
+    """Restart an active transfer from one measured four-foot equilibrium.
+
+    Progressive COM preload uses this between bounded target increments.  The
+    articulation state remains physical, while the analytic transfer's base,
+    composite-COM, and leg-reference origins are moved to the newly settled
+    state.  This avoids accumulating a large reference error from the first
+    stair-transfer boundary.
+    """
+
+    stored = deepcopy(dict(snapshot))
+    if int(stored.get("schema_version", 0)) != 1:
+        raise ValueError("Unsupported placement phase snapshot schema")
+    if not bool(stored.get("placement_transfer_active", False)):
+        raise ValueError("Progressive preload requires an active inter-leg transfer")
+
+    current_base = _finite_vector(
+        stored["base_position_m"],
+        3,
+        "base_position_m",
+    ).astype(np.float64)
+    current_balance = _finite_vector(
+        balance_position_m,
+        3,
+        "balance_position_m",
+    ).astype(np.float64)
+    target_delta = _finite_vector(
+        target_delta_xy_m,
+        2,
+        "target_delta_xy_m",
+    ).astype(np.float64)
+    if np.any(np.abs(target_delta) > 0.15):
+        raise ValueError("Progressive preload target delta cannot exceed 0.15 m")
+
+    references = deepcopy(dict(reference_by_leg))
+    if set(references) != set(STAIR_FOOT_NAMES):
+        raise ValueError("Progressive preload requires a four-leg reference")
+    for leg, parameters in references.items():
+        if not isinstance(parameters, Mapping):
+            raise ValueError(f"Progressive preload reference for {leg} is invalid")
+        values = np.asarray(tuple(parameters.values()), dtype=np.float64)
+        if not values.size or not np.all(np.isfinite(values)):
+            raise ValueError(
+                f"Progressive preload reference for {leg} must be finite"
+            )
+
+    target_base = current_base.copy()
+    target_base[:2] += target_delta
+    target_balance = current_balance.copy()
+    target_balance[:2] += target_delta
+    stored["placement_transfer_reference_by_leg"] = references
+    stored["placement_transfer_start_base_position_m"] = current_base.tolist()
+    stored["placement_transfer_target_base_position_m"] = target_base.tolist()
+    stored["placement_transfer_start_balance_position_m"] = (
+        current_balance.tolist()
+    )
+    stored["placement_transfer_target_balance_position_m"] = (
+        target_balance.tolist()
+    )
+    stored["placement_leg_baseline_reference_by_leg"] = deepcopy(references)
+    stored["placement_leg_baseline_base_position_m"] = current_base.tolist()
+    stored["placement_leg_baseline_balance_position_m"] = (
+        current_balance.tolist()
+    )
+    for key in ("previous_action", "previous_residual_action"):
+        values = list(stored.get(key, ()))
+        stored[key] = [0.0] * len(values)
+    return stored
+
+
+def placement_phase_ready(
+    *,
+    sequence_legs: Sequence[str],
+    completed_legs: Sequence[str],
+    active_leg: str,
+    transfer_active: bool,
+    target_leg: str,
+) -> bool:
+    """Return whether a post-transfer target-leg phase is ready for PPO."""
+
+    sequence = tuple(str(leg) for leg in sequence_legs)
+    if target_leg not in sequence:
+        raise ValueError(f"Unknown placement phase target: {target_leg}")
+    target_position = sequence.index(target_leg)
+    completed = set(str(leg) for leg in completed_legs)
+    return bool(
+        not transfer_active
+        and active_leg == target_leg
+        and all(leg in completed for leg in sequence[:target_position])
+    )
+
+
+def placement_transfer_ready(
+    *,
+    sequence_legs: Sequence[str],
+    completed_legs: Sequence[str],
+    active_leg: str,
+    transfer_active: bool,
+    target_leg: str,
+) -> bool:
+    """Return whether PPO should control the transfer into ``target_leg``."""
+
+    sequence = tuple(str(leg) for leg in sequence_legs)
+    if target_leg not in sequence:
+        raise ValueError(f"Unknown placement transfer target: {target_leg}")
+    target_position = sequence.index(target_leg)
+    if target_position == 0:
+        return False
+    completed = tuple(str(leg) for leg in completed_legs)
+    return bool(
+        transfer_active
+        and active_leg == target_leg
+        and completed == sequence[:target_position]
+    )
+
+
+def compose_bounded_residual_action(
+    base_action: Sequence[float],
+    residual_action: Sequence[float],
+    *,
+    residual_scale: float,
+    residual_mask: Sequence[float] | None = None,
+) -> np.ndarray:
+    """Add a bounded corrective action to a frozen base-policy action."""
+
+    base = np.asarray(base_action, dtype=np.float32)
+    residual = np.asarray(residual_action, dtype=np.float32)
+    if base.shape != residual.shape or base.ndim != 1:
+        raise ValueError("base and residual actions must be matching vectors")
+    if not np.all(np.isfinite(base)) or not np.all(np.isfinite(residual)):
+        raise ValueError("base and residual actions must be finite")
+    mask = (
+        np.ones_like(base)
+        if residual_mask is None
+        else np.asarray(residual_mask, dtype=np.float32)
+    )
+    if mask.shape != base.shape or not np.all(np.isfinite(mask)):
+        raise ValueError("residual_mask must match the finite action vector")
+    if np.any(mask < 0.0) or np.any(mask > 1.0):
+        raise ValueError("residual_mask values must be within [0, 1]")
+    scale = float(residual_scale)
+    if scale <= 0.0 or scale > 1.0:
+        raise ValueError("residual_scale must be within (0, 1]")
+    return np.clip(base + scale * mask * residual, -1.0, 1.0).astype(np.float32)
+
+
+def overlay_masked_action(
+    base_action: Sequence[float],
+    overlay_action: Sequence[float],
+    action_mask: Sequence[float],
+) -> np.ndarray:
+    """Replace selected joints in ``base_action`` with an overlay policy.
+
+    This keeps a swing-leg policy active while a disjoint support policy spans
+    the controller handoff immediately after an inter-leg transfer.
+    """
+
+    base = np.asarray(base_action, dtype=np.float32)
+    overlay = np.asarray(overlay_action, dtype=np.float32)
+    mask = np.asarray(action_mask, dtype=np.float32)
+    if base.ndim != 1 or overlay.shape != base.shape or mask.shape != base.shape:
+        raise ValueError("base, overlay, and action_mask must be matching vectors")
+    if not all(np.all(np.isfinite(value)) for value in (base, overlay, mask)):
+        raise ValueError("masked action inputs must be finite")
+    if np.any((mask != 0.0) & (mask != 1.0)):
+        raise ValueError("action_mask must be binary")
+    return np.clip(
+        base * (1.0 - mask) + overlay * mask,
+        -1.0,
+        1.0,
+    ).astype(np.float32)
+
+
+def expand_compact_masked_action(
+    compact_action: Sequence[float],
+    action_mask: Sequence[float],
+) -> np.ndarray:
+    """Expand a policy action onto the active entries of a full joint mask."""
+
+    compact = np.asarray(compact_action, dtype=np.float32)
+    mask = np.asarray(action_mask, dtype=np.float32)
+    if compact.ndim != 1 or mask.ndim != 1:
+        raise ValueError("compact action and action_mask must be vectors")
+    if not np.all(np.isfinite(compact)) or not np.all(np.isfinite(mask)):
+        raise ValueError("compact action and action_mask must be finite")
+    if np.any((mask != 0.0) & (mask != 1.0)):
+        raise ValueError("action_mask must be binary")
+    active_indices = np.flatnonzero(mask)
+    if compact.shape != active_indices.shape:
+        raise ValueError(
+            "compact action size must match the active action_mask entries: "
+            f"{compact.shape} != {active_indices.shape}"
+        )
+    expanded = np.zeros(mask.shape, dtype=np.float32)
+    expanded[active_indices] = compact
+    return expanded
+
+
+def placement_policy_action_mask(
+    dof_names: Sequence[str],
+    *,
+    target_leg: str,
+    mode: str,
+) -> np.ndarray:
+    """Select the joints a phase-specific placement policy may command."""
+
+    names = tuple(str(name) for name in dof_names)
+    target_prefix = f"{target_leg}_"
+    if not any(name.startswith(target_prefix) for name in names):
+        raise ValueError(f"unknown placement target leg: {target_leg}")
+    if mode == "support_only":
+        selected = [not name.startswith(target_prefix) for name in names]
+    elif mode == "swing_only":
+        selected = [name.startswith(target_prefix) for name in names]
+    elif mode == "support_abduction_only":
+        selected = [
+            not name.startswith(target_prefix)
+            and name.endswith("_hip_abduction")
+            for name in names
+        ]
+    elif mode == "swing_plus_support_abduction":
+        selected = [
+            name.startswith(target_prefix)
+            or name.endswith("_hip_abduction")
+            for name in names
+        ]
+    elif mode == "swing_plus_support_hips":
+        selected = [
+            name.startswith(target_prefix)
+            or name.endswith("_hip_abduction")
+            or name.endswith("_hip_flexion")
+            for name in names
+        ]
+    elif mode == "swing_plus_support_all":
+        # The target swing leg plus every joint on the three support legs is
+        # the full 12-DOF action. Keeping this as an explicit mode allows a
+        # compact 9-output hip policy to expand into only the three previously
+        # unavailable support-knee rows while inherited outputs stay frozen.
+        selected = [True for _ in names]
+    else:
+        raise ValueError(f"unknown placement action mask mode: {mode}")
+    return np.asarray(selected, dtype=np.float32)
+
+
+def stabilized_support_reference_base_delta(
+    *,
+    desired_base_delta_m: Sequence[float],
+    actual_base_delta_m: Sequence[float],
+    anchor_follow_gain: float | Sequence[float],
+    error_feedback_gain_xyz: Sequence[float],
+) -> np.ndarray:
+    """Return a support reference that actively rejects post-transfer drift.
+
+    A zero feedback gain preserves the existing anchor-follow blend. Positive
+    feedback moves the virtual support-foot target beyond the desired body
+    pose, increasing the joint-position error that restores the base. This is
+    deliberately a proprioceptive controller: it uses the simulated base pose,
+    not camera input or privileged stair geometry.
+    """
+
+    desired = _finite_vector(
+        desired_base_delta_m,
+        3,
+        "desired_base_delta_m",
+    )
+    actual = _finite_vector(
+        actual_base_delta_m,
+        3,
+        "actual_base_delta_m",
+    )
+    feedback = _finite_vector(
+        error_feedback_gain_xyz,
+        3,
+        "error_feedback_gain_xyz",
+    )
+    follow = (
+        np.full(3, float(anchor_follow_gain), dtype=np.float64)
+        if np.isscalar(anchor_follow_gain)
+        else _finite_vector(
+            anchor_follow_gain,
+            3,
+            "anchor_follow_gain",
+        )
+    )
+    if np.any(follow < 0.0) or np.any(follow > 1.0):
+        raise ValueError("anchor_follow_gain values must be within [0, 1]")
+    if np.any(feedback < 0.0) or np.any(feedback > 2.0):
+        raise ValueError("error feedback gains must be within [0, 2]")
+    tracking_error = actual - desired
+    return (
+        desired + (follow - feedback) * tracking_error
+    ).astype(np.float64)
+
+
+def staged_swing_reference_base_delta(
+    *,
+    base_delta_m: Sequence[float],
+    advance_fraction: float,
+    end_scale_xyz: Sequence[float],
+) -> np.ndarray:
+    """Release a swing foot from its world anchor only after clearance.
+
+    The placement controller normally subtracts the desired base motion from
+    the swing reference so the raised foot remains fixed in world space.  A
+    scale of one preserves that behavior. During the advance phase this helper
+    smoothly approaches ``end_scale_xyz``; a forward end scale of zero lets
+    body translation carry the cleared foot without changing the lift
+    trajectory or actuator authority.
+    """
+
+    base_delta = _finite_vector(base_delta_m, 3, "base_delta_m").astype(
+        np.float64
+    )
+    end_scale = _finite_vector(end_scale_xyz, 3, "end_scale_xyz").astype(
+        np.float64
+    )
+    fraction = float(advance_fraction)
+    if not np.isfinite(fraction) or fraction < 0.0 or fraction > 1.0:
+        raise ValueError("advance_fraction must be finite and within [0, 1]")
+    if np.any(end_scale < 0.0) or np.any(end_scale > 1.0):
+        raise ValueError("end_scale_xyz values must be within [0, 1]")
+    scale = 1.0 + fraction * (end_scale - 1.0)
+    return (base_delta * scale).astype(np.float64)
+
+
+def staged_swing_outward_offset_m(
+    *,
+    maximum_offset_m: float,
+    advance_fraction: float,
+) -> float:
+    """Ramp a bounded lateral foothold offset during swing advance."""
+
+    offset = float(maximum_offset_m)
+    fraction = float(advance_fraction)
+    if not np.isfinite(offset) or abs(offset) > 0.15:
+        raise ValueError(
+            "maximum_offset_m must be finite and within [-0.15, 0.15]"
+        )
+    if not np.isfinite(fraction) or fraction < 0.0 or fraction > 1.0:
+        raise ValueError("advance_fraction must be finite and within [0, 1]")
+    return offset * fraction
+
+
+def split_post_clearance_advance_fractions(
+    *,
+    advance_fraction: float,
+    body_shift_fraction_of_advance: float,
+    sequence: str = "body_then_swing",
+) -> tuple[float, float]:
+    """Sequence body shift and swing advance inside one clearance gate."""
+
+    fraction = float(advance_fraction)
+    split = float(body_shift_fraction_of_advance)
+    if not np.isfinite(fraction) or fraction < 0.0 or fraction > 1.0:
+        raise ValueError("advance_fraction must be finite and within [0, 1]")
+    if not np.isfinite(split) or split <= 0.0 or split >= 1.0:
+        raise ValueError(
+            "body_shift_fraction_of_advance must be finite and within (0, 1)"
+        )
+    if sequence not in {"body_then_swing", "swing_then_body"}:
+        raise ValueError(
+            "sequence must be body_then_swing or swing_then_body"
+        )
+
+    def smoothstep(value: float) -> float:
+        clipped = float(np.clip(value, 0.0, 1.0))
+        return clipped * clipped * (3.0 - 2.0 * clipped)
+
+    if sequence == "body_then_swing":
+        body_shift_fraction = smoothstep(fraction / split)
+        swing_advance_fraction = smoothstep(
+            (fraction - split) / (1.0 - split)
+        )
+    else:
+        swing_fraction = 1.0 - split
+        swing_advance_fraction = smoothstep(fraction / swing_fraction)
+        body_shift_fraction = smoothstep(
+            (fraction - swing_fraction) / split
+        )
+    return body_shift_fraction, swing_advance_fraction
+
+
+def placement_completion_settle_gate_failures(
+    *,
+    base_linear_velocity_xyz_m_s: Sequence[float],
+    body_angular_velocity_xyz_rad_s: Sequence[float],
+    upright_cosine: float,
+    maximum_base_speed_m_s: float,
+    maximum_body_rate_rad_s: float,
+    minimum_upright_cosine: float,
+) -> tuple[str, ...]:
+    """Gate foot-placement completion on measured whole-body settling.
+
+    This gate is evaluated only after the force-backed contact hold succeeds.
+    It prevents an inter-leg COM transfer from starting at an arbitrary point
+    in the landing oscillation, using only base/IMU proprioception.
+    """
+
+    linear_velocity = _finite_vector(
+        base_linear_velocity_xyz_m_s,
+        3,
+        "base_linear_velocity_xyz_m_s",
+    )
+    angular_velocity = _finite_vector(
+        body_angular_velocity_xyz_rad_s,
+        3,
+        "body_angular_velocity_xyz_rad_s",
+    )
+    upright = float(upright_cosine)
+    maximum_speed = float(maximum_base_speed_m_s)
+    maximum_rate = float(maximum_body_rate_rad_s)
+    minimum_upright = float(minimum_upright_cosine)
+    if not np.isfinite(upright) or not -1.0 <= upright <= 1.0:
+        raise ValueError("upright_cosine must be finite and within [-1, 1]")
+    if not np.isfinite(maximum_speed) or maximum_speed <= 0.0:
+        raise ValueError("maximum_base_speed_m_s must be finite and positive")
+    if not np.isfinite(maximum_rate) or maximum_rate <= 0.0:
+        raise ValueError("maximum_body_rate_rad_s must be finite and positive")
+    if not np.isfinite(minimum_upright) or not 0.0 < minimum_upright <= 1.0:
+        raise ValueError(
+            "minimum_upright_cosine must be finite and within (0, 1]"
+        )
+
+    failures: list[str] = []
+    # Match the transfer settle gate: vertical contact-solver velocity can
+    # alias at the control sample rate even while the foot is force-backed.
+    # Horizontal drift is the quantity that shrinks the support margin.
+    if float(np.linalg.norm(linear_velocity[:2])) > maximum_speed:
+        failures.append("base_not_settled")
+    if float(np.linalg.norm(angular_velocity)) > maximum_rate:
+        failures.append("body_rate_high")
+    if upright < minimum_upright:
+        failures.append("body_not_upright")
+    return tuple(failures)
+
+
+def support_pitch_vertical_corrections(
+    *,
+    support_legs: Sequence[str],
+    projected_gravity_x: float,
+    proportional_gain_m: float,
+    maximum_correction_m: float,
+    target_projected_gravity_x: float = 0.0,
+) -> dict[str, float]:
+    """Level sagittal attitude by differentially extending stance legs.
+
+    For this robot's IMU/joint convention, negative projected gravity X is
+    corrected by shortening front stance legs and extending rear stance legs.
+    This creates the restoring pitch moment without camera input.
+    """
+
+    gravity_x = float(projected_gravity_x)
+    target_x = float(target_projected_gravity_x)
+    gain = float(proportional_gain_m)
+    maximum = float(maximum_correction_m)
+    legs = tuple(str(leg) for leg in support_legs)
+    if not np.isfinite(gravity_x):
+        raise ValueError("projected_gravity_x must be finite")
+    if not np.isfinite(target_x) or abs(target_x) > 1.0:
+        raise ValueError(
+            "target_projected_gravity_x must be finite and within [-1, 1]"
+        )
+    if not np.isfinite(gain) or gain <= 0.0:
+        raise ValueError("proportional_gain_m must be finite and positive")
+    if not np.isfinite(maximum) or maximum <= 0.0:
+        raise ValueError("maximum_correction_m must be finite and positive")
+    if not legs or any(leg not in STAIR_FOOT_NAMES for leg in legs):
+        raise ValueError("support_legs must contain known robot legs")
+
+    correction = float(
+        np.clip(gain * (gravity_x - target_x), -maximum, maximum)
+    )
+    return {
+        leg: correction if leg.startswith("front_") else -correction
+        for leg in legs
+    }
+
+
+def support_roll_vertical_corrections(
+    *,
+    support_legs: Sequence[str],
+    projected_gravity_y: float,
+    target_projected_gravity_y: float,
+    proportional_gain_m: float,
+    maximum_correction_m: float,
+) -> dict[str, float]:
+    """Hold frontal attitude by differentially extending left/right legs.
+
+    Positive projected gravity Y corresponds to the left side of this robot
+    sitting lower.  Extending the left stance legs and shortening the right
+    stance legs creates the restoring roll moment.  A nonzero target lets a
+    mixed-height transfer preserve its measured stable entry attitude instead
+    of introducing a load-changing level-command discontinuity.
+    """
+
+    gravity_y = float(projected_gravity_y)
+    target_y = float(target_projected_gravity_y)
+    gain = float(proportional_gain_m)
+    maximum = float(maximum_correction_m)
+    legs = tuple(str(leg) for leg in support_legs)
+    if not np.isfinite(gravity_y):
+        raise ValueError("projected_gravity_y must be finite")
+    if not np.isfinite(target_y) or abs(target_y) > 1.0:
+        raise ValueError(
+            "target_projected_gravity_y must be finite and within [-1, 1]"
+        )
+    if not np.isfinite(gain) or gain <= 0.0:
+        raise ValueError("proportional_gain_m must be finite and positive")
+    if not np.isfinite(maximum) or maximum <= 0.0:
+        raise ValueError("maximum_correction_m must be finite and positive")
+    if not legs or any(leg not in STAIR_FOOT_NAMES for leg in legs):
+        raise ValueError("support_legs must contain known robot legs")
+
+    correction = float(
+        np.clip(gain * (gravity_y - target_y), -maximum, maximum)
+    )
+    return {
+        leg: correction if leg.endswith("_left") else -correction
+        for leg in legs
+    }
+
+
+def staged_support_rear_pitch_scale(
+    *,
+    elapsed_seconds: float,
+    front_only_seconds: float,
+    blend_seconds: float,
+) -> float:
+    """Smoothly restore rear-stance pitch correction after a front-only catch."""
+
+    elapsed = float(elapsed_seconds)
+    hold = float(front_only_seconds)
+    blend = float(blend_seconds)
+    if not np.isfinite(elapsed) or elapsed < 0.0:
+        raise ValueError("elapsed_seconds must be finite and nonnegative")
+    if not np.isfinite(hold) or hold < 0.0:
+        raise ValueError("front_only_seconds must be finite and nonnegative")
+    if not np.isfinite(blend) or blend < 0.0:
+        raise ValueError("blend_seconds must be finite and nonnegative")
+    if elapsed <= hold:
+        return 0.0
+    if blend == 0.0:
+        return 1.0
+    fraction = float(np.clip((elapsed - hold) / blend, 0.0, 1.0))
+    return fraction * fraction * (3.0 - 2.0 * fraction)
+
+
+def placement_contact_reached(
+    *,
+    swing_tip_position_m: Sequence[float],
+    swing_tread_normal_load_n: float,
+    support_ground_normal_loads_n: Sequence[float],
+    projected_gravity_xyz: Sequence[float],
+    staircase: Mapping[str, object],
+    target_tread_fraction: float,
+    target_x_tolerance_m: float,
+    target_z_tolerance_m: float,
+    contact_on_threshold_n: float,
+    minimum_upright_cosine: float,
+) -> bool:
+    """Require force-backed top contact inside the reviewed tread window."""
+
+    validate_staircase_config(staircase)
+    tip = _finite_vector(swing_tip_position_m, 3, "swing_tip_position_m")
+    support_loads = _finite_vector(
+        support_ground_normal_loads_n,
+        len(STAIR_FOOT_NAMES) - 1,
+        "support_ground_normal_loads_n",
+    )
+    gravity = _finite_vector(projected_gravity_xyz, 3, "projected_gravity_xyz")
+    threshold = float(contact_on_threshold_n)
+    if threshold <= 0.0:
+        raise ValueError("contact_on_threshold_n must be positive")
+    target_x = float(staircase["start_x_m"]) + float(
+        target_tread_fraction
+    ) * float(staircase["tread_depth_m"])
+    target_z = float(staircase["rise_m"])
+    return bool(
+        float(swing_tread_normal_load_n) >= threshold
+        and np.all(support_loads >= threshold)
+        and abs(float(tip[0]) - target_x) <= float(target_x_tolerance_m)
+        and abs(float(tip[2]) - target_z) <= float(target_z_tolerance_m)
+        and float(-gravity[2]) >= float(minimum_upright_cosine)
+    )
+
+
+def qualified_step_top_normal_loads(
+    *,
+    foot_tip_positions_m,
+    step_normal_loads_n,
+    staircase: Mapping[str, object],
+    minimum_horizontal_inset_m: float = 0.005,
+    maximum_top_height_error_m: float = 0.015,
+) -> np.ndarray:
+    """Mask step-layer loads that are not geometrically on an exposed top.
+
+    Isaac's contact-force filters identify the stair box involved in a
+    contact, but not which face produced the force.  A spherical foot against
+    a riser edge can therefore report a positive vertical StepLayer load.  A
+    load is a tread-top load only when the sampled foot bottom is horizontally
+    inside that step's exposed top and vertically near its top surface.
+    """
+
+    validate_staircase_config(staircase)
+    tips = np.asarray(foot_tip_positions_m, dtype=np.float64)
+    loads = np.asarray(step_normal_loads_n, dtype=np.float64)
+    step_count = int(staircase["step_count"])
+    if tips.ndim != 2 or tips.shape[1] != 3 or not np.all(np.isfinite(tips)):
+        raise ValueError("foot_tip_positions_m must have finite shape (N, 3)")
+    if loads.shape != (tips.shape[0], step_count) or not np.all(
+        np.isfinite(loads)
+    ):
+        raise ValueError(
+            "step_normal_loads_n must have finite shape (N, step_count)"
+        )
+    if np.any(loads < 0.0):
+        raise ValueError("step_normal_loads_n cannot contain negative loads")
+    inset = float(minimum_horizontal_inset_m)
+    height_tolerance = float(maximum_top_height_error_m)
+    tread = float(staircase["tread_depth_m"])
+    width = float(staircase["width_m"])
+    if not np.isfinite(inset) or inset < 0.0:
+        raise ValueError("minimum_horizontal_inset_m must be finite and nonnegative")
+    if 2.0 * inset >= min(tread, width):
+        raise ValueError("minimum_horizontal_inset_m leaves no usable tread top")
+    if not np.isfinite(height_tolerance) or height_tolerance <= 0.0:
+        raise ValueError("maximum_top_height_error_m must be finite and positive")
+
+    start = float(staircase["start_x_m"])
+    rise = float(staircase["rise_m"])
+    end = start + step_count * tread + float(
+        staircase["top_platform_depth_m"]
+    )
+    qualified = np.zeros_like(loads, dtype=np.float32)
+    inside_width = np.abs(tips[:, 1]) <= width / 2.0 - inset
+    for step_index in range(step_count):
+        top_start_x = start + step_index * tread
+        top_end_x = (
+            start + (step_index + 1) * tread
+            if step_index + 1 < step_count
+            else end
+        )
+        top_z = (step_index + 1) * rise
+        on_exposed_top = (
+            (tips[:, 0] >= top_start_x + inset)
+            & (tips[:, 0] <= top_end_x - inset)
+            & inside_width
+            & (np.abs(tips[:, 2] - top_z) <= height_tolerance)
+        )
+        qualified[:, step_index] = np.where(
+            on_exposed_top,
+            loads[:, step_index],
+            0.0,
+        )
+    return qualified
+
+
+def placement_lift_hold_reached(
+    *,
+    swing_tip_height_m: float,
+    initial_swing_tip_height_m: float,
+    support_normal_loads_n: Sequence[float],
+    support_margin_m: float,
+    projected_gravity_xyz: Sequence[float],
+    minimum_lift_m: float,
+    contact_on_threshold_n: float,
+    minimum_support_margin_m: float,
+    minimum_upright_cosine: float,
+) -> bool:
+    """Require a force-supported upright hold above the requested foot lift."""
+
+    support_loads = _finite_vector(
+        support_normal_loads_n,
+        len(STAIR_FOOT_NAMES) - 1,
+        "support_normal_loads_n",
+    )
+    gravity = _finite_vector(projected_gravity_xyz, 3, "projected_gravity_xyz")
+    lift = float(swing_tip_height_m) - float(initial_swing_tip_height_m)
+    threshold = float(contact_on_threshold_n)
+    minimum_lift = float(minimum_lift_m)
+    if threshold <= 0.0:
+        raise ValueError("contact_on_threshold_n must be positive")
+    if minimum_lift <= 0.0:
+        raise ValueError("minimum_lift_m must be positive")
+    return bool(
+        lift >= minimum_lift
+        and np.all(support_loads >= threshold)
+        and float(support_margin_m) >= float(minimum_support_margin_m)
+        and float(-gravity[2]) >= float(minimum_upright_cosine)
+    )
+
+
+def completed_placement_tread_load_state(
+    step_top_normal_loads_n: Sequence[Sequence[float]],
+    completed_leg_indices: Sequence[int],
+    *,
+    minimum_tread_load_n: float,
+) -> tuple[bool, float, np.ndarray]:
+    """Return whether every completed foothold retains qualified top load."""
+
+    loads = np.asarray(step_top_normal_loads_n, dtype=np.float64)
+    if loads.ndim != 2 or not np.all(np.isfinite(loads)):
+        raise ValueError("step_top_normal_loads_n must be a finite matrix")
+    if np.any(loads < 0.0):
+        raise ValueError("step_top_normal_loads_n cannot be negative")
+    threshold = float(minimum_tread_load_n)
+    if not np.isfinite(threshold) or threshold <= 0.0:
+        raise ValueError("minimum_tread_load_n must be finite and positive")
+    indices = tuple(int(value) for value in completed_leg_indices)
+    if len(set(indices)) != len(indices) or any(
+        value < 0 or value >= loads.shape[0] for value in indices
+    ):
+        raise ValueError("completed_leg_indices must be unique valid rows")
+    if not indices:
+        return True, 0.0, np.zeros(0, dtype=np.float32)
+    completed_loads = np.sum(loads[list(indices), :], axis=1)
+    return (
+        bool(np.all(completed_loads >= threshold)),
+        float(np.min(completed_loads)),
+        completed_loads.astype(np.float32),
+    )
+
+
+def pack_placement_reference_observation(
+    *,
+    stair_observation: Sequence[float],
+    phase_one_hot: Sequence[float],
+    desired_swing_height_m: float,
+    measured_swing_height_m: float,
+    swing_x_error_m: float,
+    swing_z_error_m: float,
+    tread_normal_load_n: float,
+    support_contact_fraction: float,
+    support_margin_m: float,
+    maximum_support_slip_m: float,
+    staircase: Mapping[str, object],
+    contact_load_normalization_n: float,
+) -> np.ndarray:
+    """Append phase, target error, force, support, and slip state."""
+
+    base = np.asarray(stair_observation, dtype=np.float32).reshape(-1)
+    if base.size == 0 or not np.all(np.isfinite(base)):
+        raise ValueError("stair_observation must contain finite values")
+    phases = _finite_vector(phase_one_hot, len(PLACEMENT_PHASES), "phase_one_hot")
+    if not np.isclose(float(np.sum(phases)), 1.0, atol=1e-6):
+        raise ValueError("phase_one_hot must select exactly one phase")
+    rise = float(staircase["rise_m"])
+    tread = float(staircase["tread_depth_m"])
+    load_scale = float(contact_load_normalization_n)
+    if load_scale <= 0.0:
+        raise ValueError("contact_load_normalization_n must be positive")
+    extras = np.asarray(
+        [
+            *phases,
+            float(desired_swing_height_m) / rise,
+            float(measured_swing_height_m) / rise,
+            float(swing_x_error_m) / tread,
+            float(swing_z_error_m) / rise,
+            float(tread_normal_load_n) / load_scale,
+            float(support_contact_fraction),
+            float(support_margin_m) / 0.10,
+            float(maximum_support_slip_m) / 0.05,
+        ],
+        dtype=np.float32,
+    )
+    if not np.all(np.isfinite(extras)):
+        raise ValueError("placement observation inputs must be finite")
+    return np.clip(
+        np.concatenate((base, extras)),
+        -POLICY_OBSERVATION_CLIP,
+        POLICY_OBSERVATION_CLIP,
+    ).astype(np.float32)
+
+
+def pack_support_regulation_observation(
+    *,
+    stair_observation: Sequence[float],
+    total_foot_normal_loads_n: Sequence[float],
+    com_target_error_xy_m: Sequence[float],
+    requested_pd_effort_nm: Sequence[float],
+    effort_cap_nm: float,
+    contact_load_normalization_n: float,
+    com_error_normalization_m: float = 0.10,
+) -> np.ndarray:
+    """Append load distribution, COM error, and per-leg drive saturation."""
+
+    base = np.asarray(stair_observation, dtype=np.float32).reshape(-1)
+    if base.size == 0 or not np.all(np.isfinite(base)):
+        raise ValueError("stair_observation must contain finite values")
+    loads = _finite_vector(
+        total_foot_normal_loads_n,
+        len(STAIR_FOOT_NAMES),
+        "total_foot_normal_loads_n",
+    )
+    com_error = _finite_vector(
+        com_target_error_xy_m,
+        2,
+        "com_target_error_xy_m",
+    )
+    requested_effort = _finite_vector(
+        requested_pd_effort_nm,
+        JOINT_COUNT,
+        "requested_pd_effort_nm",
+    )
+    effort_cap = float(effort_cap_nm)
+    load_scale = float(contact_load_normalization_n)
+    com_scale = float(com_error_normalization_m)
+    if effort_cap <= 0.0 or not np.isfinite(effort_cap):
+        raise ValueError("effort_cap_nm must be finite and positive")
+    if load_scale <= 0.0 or not np.isfinite(load_scale):
+        raise ValueError(
+            "contact_load_normalization_n must be finite and positive"
+        )
+    if com_scale <= 0.0 or not np.isfinite(com_scale):
+        raise ValueError("com_error_normalization_m must be finite and positive")
+
+    effort_cap_ratios: list[float] = []
+    saturated_joint_fractions: list[float] = []
+    for indices in STAIR_LEG_DOF_INDICES:
+        leg_effort = np.abs(requested_effort[list(indices)])
+        effort_cap_ratios.append(float(np.max(leg_effort) / effort_cap))
+        saturated_joint_fractions.append(
+            float(np.mean(leg_effort >= 0.95 * effort_cap - 1e-6))
+        )
+    extras = np.asarray(
+        [
+            *(loads / load_scale),
+            *(com_error / com_scale),
+            *effort_cap_ratios,
+            *saturated_joint_fractions,
+        ],
+        dtype=np.float32,
+    )
+    return np.clip(
+        np.concatenate((base, extras)),
+        -POLICY_OBSERVATION_CLIP,
+        POLICY_OBSERVATION_CLIP,
+    ).astype(np.float32)
+
+
+def pack_transfer_load_observation(
+    *,
+    stair_observation: Sequence[float],
+    active_swing_total_load_n: float,
+    contact_load_normalization_n: float,
+) -> np.ndarray:
+    """Append the active swing foot's measured total normal load."""
+
+    base = np.asarray(stair_observation, dtype=np.float32).reshape(-1)
+    load = float(active_swing_total_load_n)
+    load_scale = float(contact_load_normalization_n)
+    if base.size == 0 or not np.all(np.isfinite(base)):
+        raise ValueError("stair_observation must contain finite values")
+    if not np.isfinite(load) or load < 0.0:
+        raise ValueError("active_swing_total_load_n must be finite and nonnegative")
+    if not np.isfinite(load_scale) or load_scale <= 0.0:
+        raise ValueError("contact_load_normalization_n must be finite and positive")
+    return np.clip(
+        np.concatenate((base, np.asarray((load / load_scale,), dtype=np.float32))),
+        -POLICY_OBSERVATION_CLIP,
+        POLICY_OBSERVATION_CLIP,
+    ).astype(np.float32)
+
+
 def progress_gate_failures(
     *,
     completed_episodes: int,
@@ -181,15 +2630,137 @@ def goal_x_for_active_steps(
     return tread_end - margin
 
 
+def stair_goal_reached(
+    *,
+    base_world_x_m: float,
+    base_elevation_gain_m: float,
+    goal_world_x_m: float,
+    minimum_base_elevation_gain_m: float,
+    current_foot_steps: Sequence[int],
+    active_steps: int,
+    required_feet_on_goal_tread: int = 0,
+) -> bool:
+    """Return whether the body and required feet simultaneously reached the goal."""
+
+    foot_steps = np.asarray(current_foot_steps, dtype=np.int32).reshape(-1)
+    required_feet = int(required_feet_on_goal_tread)
+    if int(active_steps) < 1:
+        raise ValueError("active_steps must be positive")
+    if required_feet < 0 or required_feet > foot_steps.size:
+        raise ValueError(
+            "required_feet_on_goal_tread must be within the foot-step vector"
+        )
+    feet_on_goal = int(np.count_nonzero(foot_steps >= int(active_steps)))
+    return bool(
+        float(base_world_x_m) >= float(goal_world_x_m)
+        and float(base_elevation_gain_m)
+        >= float(minimum_base_elevation_gain_m)
+        and feet_on_goal >= required_feet
+    )
+
+
+def foot_tread_progress(
+    *,
+    foot_tip_positions_m,
+    highest_foot_steps: Sequence[int],
+    staircase: Mapping[str, object],
+    active_steps: int,
+    approach_distance_m: float,
+    landing_fraction: float = 0.35,
+) -> np.ndarray:
+    """Return continuous per-foot progress toward each next stair tread."""
+
+    validate_staircase_config(staircase)
+    tips = np.asarray(foot_tip_positions_m, dtype=np.float32)
+    if tips.ndim != 2 or tips.shape[1] != 3 or not np.all(np.isfinite(tips)):
+        raise ValueError("foot_tip_positions_m must have finite shape (N, 3)")
+    completed = np.asarray(highest_foot_steps, dtype=np.int32).reshape(-1)
+    if completed.shape != (tips.shape[0],):
+        raise ValueError("highest_foot_steps must match the foot-tip count")
+    maximum_steps = int(staircase["step_count"])
+    active = int(active_steps)
+    if active < 1 or active > maximum_steps:
+        raise ValueError("active_steps is outside the staircase")
+    approach = float(approach_distance_m)
+    landing = float(landing_fraction)
+    if approach <= 0.0:
+        raise ValueError("approach_distance_m must be positive")
+    if not 0.0 < landing < 1.0:
+        raise ValueError("landing_fraction must be within (0, 1)")
+
+    start = float(staircase["start_x_m"])
+    tread = float(staircase["tread_depth_m"])
+    rise = float(staircase["rise_m"])
+    progress = np.zeros(tips.shape[0], dtype=np.float32)
+    for index, tip in enumerate(tips):
+        completed_steps = int(np.clip(completed[index], 0, active))
+        if completed_steps >= active:
+            progress[index] = float(active)
+            continue
+        next_step = completed_steps + 1
+        riser_x = start + (next_step - 1) * tread
+        target_x = riser_x + landing * tread
+        lower_surface_z = completed_steps * rise
+        x_fraction = np.clip(
+            (float(tip[0]) - (riser_x - approach))
+            / (target_x - (riser_x - approach)),
+            0.0,
+            1.0,
+        )
+        z_fraction = np.clip(
+            (float(tip[2]) - lower_surface_z) / rise,
+            0.0,
+            1.0,
+        )
+        progress[index] = completed_steps + min(x_fraction, z_fraction)
+    return progress
+
+
+def next_foot_target_index(
+    highest_foot_steps: Sequence[int],
+    *,
+    active_steps: int,
+    sequence_indices: Sequence[int],
+) -> int | None:
+    """Choose the next foot in a repeatable one-tread-at-a-time sequence."""
+
+    completed = np.asarray(highest_foot_steps, dtype=np.int32).reshape(-1)
+    if completed.size == 0:
+        raise ValueError("highest_foot_steps cannot be empty")
+    active = int(active_steps)
+    if active < 1:
+        raise ValueError("active_steps must be positive")
+    sequence = tuple(int(value) for value in sequence_indices)
+    if sorted(sequence) != list(range(completed.size)):
+        raise ValueError("sequence_indices must be a permutation of the feet")
+    target_step = min(int(np.min(completed)) + 1, active)
+    for index in sequence:
+        if int(completed[index]) < target_step:
+            return index
+    return None
+
+
 def stair_observation_fields(
     terrain_sample_offsets_m: Sequence[float],
     *,
     include_navigation_observation: bool = False,
+    include_foot_progress_observation: bool = False,
+    include_placement_reference_observation: bool = False,
+    include_support_regulation_observation: bool = False,
+    include_transfer_load_observation: bool = False,
+    terrain_observation_fields: Sequence[str] | None = None,
 ) -> tuple[str, ...]:
-    terrain_fields = tuple(
-        f"terrain_height_delta_at_{float(offset):+.3f}_m"
-        for offset in terrain_sample_offsets_m
-    )
+    if terrain_observation_fields is None:
+        terrain_fields = tuple(
+            f"terrain_height_delta_at_{float(offset):+.3f}_m"
+            for offset in terrain_sample_offsets_m
+        )
+    else:
+        terrain_fields = tuple(str(field) for field in terrain_observation_fields)
+        if not terrain_fields or any(not field for field in terrain_fields):
+            raise ValueError("terrain_observation_fields cannot be empty")
+        if len(set(terrain_fields)) != len(terrain_fields):
+            raise ValueError("terrain_observation_fields must be unique")
     fields = POLICY_OBSERVATION_FIELDS + terrain_fields + (
         "goal_distance_normalized",
     )
@@ -199,6 +2770,27 @@ def stair_observation_fields(
             "heading_error_sin",
             "heading_error_cos",
         )
+    if include_foot_progress_observation:
+        fields += tuple(
+            f"foot_tread_progress_{name}" for name in STAIR_FOOT_NAMES
+        )
+        fields += tuple(
+            f"next_foot_target_{name}" for name in STAIR_FOOT_NAMES
+        )
+    if include_placement_reference_observation:
+        fields += PLACEMENT_REFERENCE_OBSERVATION_FIELDS
+    if include_support_regulation_observation:
+        if not include_placement_reference_observation:
+            raise ValueError(
+                "support regulation observation requires placement reference"
+            )
+        fields += SUPPORT_REGULATION_OBSERVATION_FIELDS
+    if include_transfer_load_observation:
+        if not include_placement_reference_observation:
+            raise ValueError(
+                "transfer load observation requires placement reference"
+            )
+        fields += TRANSFER_LOAD_OBSERVATION_FIELDS
     return fields
 
 
@@ -211,8 +2803,12 @@ def pack_stair_policy_observation(
     goal_world_x_m: float,
     staircase: Mapping[str, object],
     include_navigation_observation: bool = False,
+    include_foot_progress_observation: bool = False,
+    foot_progress_normalized=None,
+    next_foot_target_one_hot=None,
+    terrain_observation_values=None,
 ) -> np.ndarray:
-    """Append a compact forward terrain scan and curriculum goal distance."""
+    """Append a terrain observation and curriculum goal distance."""
 
     validate_staircase_config(staircase)
     base = _finite_vector(
@@ -220,20 +2816,34 @@ def pack_stair_policy_observation(
         POLICY_OBSERVATION_SIZE,
         "walking_observation",
     )
-    offsets = np.asarray(
-        staircase["terrain_sample_offsets_m"],
-        dtype=np.float32,
-    ).reshape(-1)
-    local_height = stair_height_at_x(base_world_x_m, staircase)
-    heights = np.asarray(
-        [
-            stair_height_at_x(base_world_x_m + float(offset), staircase)
-            for offset in offsets
-        ],
-        dtype=np.float32,
-    )
-    height_scale = float(staircase["terrain_height_normalization_m"])
-    terrain_profile = np.clip((heights - local_height) / height_scale, -2.0, 2.0)
+    if terrain_observation_values is None:
+        offsets = np.asarray(
+            staircase["terrain_sample_offsets_m"],
+            dtype=np.float32,
+        ).reshape(-1)
+        local_height = stair_height_at_x(base_world_x_m, staircase)
+        heights = np.asarray(
+            [
+                stair_height_at_x(base_world_x_m + float(offset), staircase)
+                for offset in offsets
+            ],
+            dtype=np.float32,
+        )
+        height_scale = float(staircase["terrain_height_normalization_m"])
+        terrain_profile = np.clip(
+            (heights - local_height) / height_scale,
+            -2.0,
+            2.0,
+        )
+    else:
+        terrain_profile = np.asarray(
+            terrain_observation_values,
+            dtype=np.float32,
+        ).reshape(-1)
+        if terrain_profile.size == 0 or not np.all(np.isfinite(terrain_profile)):
+            raise ValueError(
+                "terrain_observation_values must contain finite values"
+            )
     goal_distance = np.clip(
         (float(goal_world_x_m) - float(base_world_x_m))
         / float(staircase["goal_distance_normalization_m"]),
@@ -246,6 +2856,25 @@ def pack_stair_policy_observation(
         lateral_offset = np.clip(float(base_world_y_m) / half_width, -2.0, 2.0)
         heading = float(heading_error_rad)
         appended.extend((lateral_offset, np.sin(heading), np.cos(heading)))
+    if include_foot_progress_observation:
+        progress = _finite_vector(
+            foot_progress_normalized,
+            len(STAIR_FOOT_NAMES),
+            "foot_progress_normalized",
+        )
+        target = _finite_vector(
+            next_foot_target_one_hot,
+            len(STAIR_FOOT_NAMES),
+            "next_foot_target_one_hot",
+        )
+        if np.any(progress < 0.0) or np.any(progress > 1.0):
+            raise ValueError("foot_progress_normalized must be within [0, 1]")
+        if np.any(target < 0.0) or np.any(target > 1.0):
+            raise ValueError("next_foot_target_one_hot must be within [0, 1]")
+        if not np.isclose(float(np.sum(target)), 1.0, atol=1e-6):
+            raise ValueError("next_foot_target_one_hot must select exactly one foot")
+        appended.extend(progress.tolist())
+        appended.extend(target.tolist())
     observation = np.concatenate(
         (base, np.asarray(appended, dtype=np.float32))
     ).astype(np.float32)
@@ -274,6 +2903,22 @@ def stair_reward_terms(
     failed: bool,
     succeeded: bool,
     reward_config: Mapping[str, float],
+    foot_lift_progress_m: float = 0.0,
+    foot_step_placement_progress: int = 0,
+    foot_tread_progress: float = 0.0,
+    foot_tread_support_count: int = 0,
+    swing_target_distance_m: float = 0.0,
+    tread_contact_reached: bool = False,
+    support_contact_fraction: float = 0.0,
+    support_slip_m: float = 0.0,
+    support_margin_m: float = 0.0,
+    balance_target_error_xy_m: Sequence[float] | None = None,
+    support_normal_loads_n: Sequence[float] | None = None,
+    requested_pd_effort_nm: Sequence[float] | None = None,
+    effort_cap_nm: float = 1.0,
+    contact_load_normalization_n: float = 50.0,
+    swing_height_error_m: float | None = None,
+    clearance_gate_deficit_m: float = 0.0,
 ) -> dict[str, float]:
     """Return individually reviewable stair-climbing reward terms."""
 
@@ -303,9 +2948,66 @@ def stair_reward_terms(
     sigma = float(reward_config["velocity_tracking_sigma_m_s"])
     if sigma <= 0.0:
         raise ValueError("velocity_tracking_sigma_m_s must be positive")
+    placement_sigma = float(
+        reward_config.get("swing_target_tracking_sigma_m", 0.05)
+    )
+    if placement_sigma <= 0.0:
+        raise ValueError("swing_target_tracking_sigma_m must be positive")
+    height_sigma = float(
+        reward_config.get("swing_height_tracking_sigma_m", 0.02)
+    )
+    if height_sigma <= 0.0:
+        raise ValueError("swing_height_tracking_sigma_m must be positive")
+    height_error = (
+        None
+        if swing_height_error_m is None
+        else float(swing_height_error_m)
+    )
+    gate_deficit = float(clearance_gate_deficit_m)
+    if height_error is not None and not np.isfinite(height_error):
+        raise ValueError("swing_height_error_m must be finite")
+    if not np.isfinite(gate_deficit) or gate_deficit < 0.0:
+        raise ValueError(
+            "clearance_gate_deficit_m must be finite and nonnegative"
+        )
+    balance_error = (
+        np.zeros(2, dtype=np.float32)
+        if balance_target_error_xy_m is None
+        else _finite_vector(
+            balance_target_error_xy_m,
+            2,
+            "balance_target_error_xy_m",
+        )
+    )
+    support_loads = np.asarray(
+        () if support_normal_loads_n is None else support_normal_loads_n,
+        dtype=np.float32,
+    ).reshape(-1)
+    if not np.all(np.isfinite(support_loads)) or np.any(support_loads < 0.0):
+        raise ValueError("support_normal_loads_n must be finite and nonnegative")
+    effort_cap = float(effort_cap_nm)
+    load_scale = float(contact_load_normalization_n)
+    if effort_cap <= 0.0 or not np.isfinite(effort_cap):
+        raise ValueError("effort_cap_nm must be finite and positive")
+    if load_scale <= 0.0 or not np.isfinite(load_scale):
+        raise ValueError(
+            "contact_load_normalization_n must be finite and positive"
+        )
+    requested_effort = np.asarray(
+        () if requested_pd_effort_nm is None else requested_pd_effort_nm,
+        dtype=np.float32,
+    ).reshape(-1)
+    if requested_effort.size not in (0, JOINT_COUNT) or not np.all(
+        np.isfinite(requested_effort)
+    ):
+        raise ValueError(
+            f"requested_pd_effort_nm must contain {JOINT_COUNT} finite values"
+        )
 
     velocity_error = float(linear[0] - command[0])
     velocity_tracking = float(np.exp(-((velocity_error / sigma) ** 2)))
+    if bool(reward_config.get("subtract_zero_velocity_tracking", False)):
+        velocity_tracking -= float(np.exp(-((command[0] / sigma) ** 2)))
     upright_cosine = float(np.clip(-gravity[2], 0.0, 1.0))
     clearance_error = (
         float(base_clearance_m)
@@ -327,6 +3029,10 @@ def stair_reward_terms(
             * float(terrain_height_gain_m)
         ),
         "upright": float(reward_config["upright"]) * upright_cosine,
+        "upright_deviation": (
+            float(reward_config.get("upright_deviation", 0.0))
+            * (1.0 - upright_cosine)
+        ),
         "alive": float(reward_config["alive"]),
         "centerline": (
             float(reward_config["centerline"]) * float(lateral_position_m**2)
@@ -365,6 +3071,88 @@ def stair_reward_terms(
             float(reward_config["joint_velocity"])
             * float(np.mean(np.square(joint_velocity)))
         ),
+        "foot_lift_progress": (
+            float(reward_config.get("foot_lift_progress", 0.0))
+            * max(0.0, float(foot_lift_progress_m))
+        ),
+        "foot_step_placement": (
+            float(reward_config.get("foot_step_placement", 0.0))
+            * max(0, int(foot_step_placement_progress))
+        ),
+        "foot_tread_progress": (
+            float(reward_config.get("foot_tread_progress", 0.0))
+            * max(0.0, float(foot_tread_progress))
+        ),
+        "foot_tread_support": (
+            float(reward_config.get("foot_tread_support", 0.0))
+            * max(0, int(foot_tread_support_count))
+        ),
+        "swing_target_tracking": (
+            float(reward_config.get("swing_target_tracking", 0.0))
+            * float(
+                np.exp(
+                    -0.5
+                    * (float(swing_target_distance_m) / placement_sigma) ** 2
+                )
+            )
+        ),
+        "swing_height_tracking": (
+            float(reward_config.get("swing_height_tracking", 0.0))
+            * (
+                float(np.exp(-0.5 * (height_error / height_sigma) ** 2))
+                if height_error is not None
+                else 0.0
+            )
+        ),
+        "clearance_gate_deficit": (
+            float(reward_config.get("clearance_gate_deficit", 0.0))
+            * gate_deficit
+        ),
+        "tread_contact": (
+            float(reward_config.get("tread_contact", 0.0))
+            if tread_contact_reached
+            else 0.0
+        ),
+        "support_contact": (
+            float(reward_config.get("support_contact", 0.0))
+            * float(np.clip(support_contact_fraction, 0.0, 1.0))
+        ),
+        "support_slip": (
+            float(reward_config.get("support_slip", 0.0))
+            * max(0.0, float(support_slip_m))
+        ),
+        "support_margin": (
+            float(reward_config.get("support_margin", 0.0))
+            * float(np.clip(support_margin_m, -0.10, 0.10))
+        ),
+        "balance_target_error": (
+            float(reward_config.get("balance_target_error", 0.0))
+            * float(np.sum(np.square(balance_error / 0.10)))
+        ),
+        "minimum_support_load": (
+            float(reward_config.get("minimum_support_load", 0.0))
+            * (
+                float(np.clip(np.min(support_loads) / load_scale, 0.0, 1.0))
+                if support_loads.size
+                else 0.0
+            )
+        ),
+        "pd_effort_saturation": (
+            float(reward_config.get("pd_effort_saturation", 0.0))
+            * (
+                float(
+                    np.mean(
+                        np.clip(
+                            np.abs(requested_effort) / effort_cap - 0.95,
+                            0.0,
+                            2.0,
+                        )
+                    )
+                )
+                if requested_effort.size
+                else 0.0
+            )
+        ),
         "failure": float(reward_config["failure"]) if failed else 0.0,
         "success": float(reward_config["success"]) if succeeded else 0.0,
     }
@@ -382,6 +3170,8 @@ def stair_failure_reasons(
     minimum_upright_cosine: float,
     maximum_lateral_deviation_m: float,
     minimum_world_x_m: float,
+    support_slip_m: float = 0.0,
+    maximum_support_slip_m: float | None = None,
     finite_state: bool = True,
 ) -> tuple[str, ...]:
     """Return deterministic fall, corridor, and non-finite failure reasons."""
@@ -400,6 +3190,11 @@ def stair_failure_reasons(
         reasons.append("body_tipped")
     if abs(float(lateral_position_m)) > float(maximum_lateral_deviation_m):
         reasons.append("left_stair_corridor")
+    if (
+        maximum_support_slip_m is not None
+        and float(support_slip_m) > float(maximum_support_slip_m)
+    ):
+        reasons.append("support_slip_exceeded")
     if float(world_x_m) < float(minimum_world_x_m):
         reasons.append("moved_too_far_backward")
     return tuple(reasons)

@@ -1,0 +1,238 @@
+{
+  "accepted_stage_count": 0,
+  "accepted_stages": [],
+  "achieved_support_margin_m": null,
+  "camera_policy_input": false,
+  "candidate_durations_seconds": [
+    5.0
+  ],
+  "candidate_load_sharing_gains_m": [
+    0.0001
+  ],
+  "candidate_pitch_feedback_gains_m": [
+    0.08
+  ],
+  "candidate_pitch_feedback_modes": [
+    "off"
+  ],
+  "candidate_roll_feedback_gains_m": [
+    0.0
+  ],
+  "candidate_target_deltas_m": [
+    [
+      0.005,
+      -0.005
+    ]
+  ],
+  "config": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\stairs\\quadruped_stairs_v46_rear_right_sidestep.yaml",
+  "effort_cap_nm": 0.8825985,
+  "final_balance_position_m": [
+    0.48046130139488,
+    0.06034527224449698,
+    0.3311496612061434
+  ],
+  "foot_contact_material": {
+    "dynamic_friction": 1.5,
+    "friction_combine_mode": "max",
+    "static_friction": 1.8
+  },
+  "learned_action_input": false,
+  "load_sharing_maximum_correction_m": 0.0001,
+  "load_sharing_smoothing_factor": 0.5,
+  "maximum_stages": 1,
+  "minimum_balance_progress_fraction": 0.5,
+  "minimum_final_rear_right_load_n": 5.0,
+  "original_start_balance_position_m": [
+    0.47946185198638297,
+    0.06035268842536884,
+    0.33364146661152855
+  ],
+  "original_target_balance_position_m": [
+    0.55946184694767,
+    -0.028395947068929672,
+    0.33364146661152855
+  ],
+  "original_target_delta_xy_m": [
+    0.07999999496128701,
+    -0.08874863549429851
+  ],
+  "phase_snapshot": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\rear-left-transfer-snapshot-v48-force-backed-seed964.json",
+  "phase_snapshot_mode": "inter_leg_transfer",
+  "pitch_feedback_maximum_correction_m": 0.025,
+  "pitch_include_next_swing_leg_before_unload": false,
+  "pitch_target_projected_gravity_x": 0.0,
+  "roll_feedback_maximum_correction_m": 0.025,
+  "roll_target_projected_gravity_y": 0.1009,
+  "saved_transfer_snapshot": null,
+  "scope": "Exact force-backed snapshot higher-traction rear-left COM preload",
+  "seed": 970,
+  "source_task_id": "Drobot-Quadruped-Stairs-v46-Rear-Right-Sidestep",
+  "stage_searches": [
+    {
+      "accepted_count": 0,
+      "best": {
+        "acceptance_gate_failures": [
+          "insufficient_balance_progress",
+          "rear_right_contact_lost",
+          "body_tilt_high",
+          "settle_hold_incomplete"
+        ],
+        "accepted": false,
+        "duration_seconds": 5.0,
+        "failure_reasons": [],
+        "final_all_foot_loads_n": [
+          43.60287857055664,
+          19.255186080932617,
+          25.947664260864258,
+          0.0
+        ],
+        "final_balance_position_m": [
+          0.48046130139488,
+          0.06034527224449698,
+          0.3311496612061434
+        ],
+        "final_base_speed_m_s": 0.01746029952686821,
+        "final_body_rate_rad_s": 0.05945361778140068,
+        "final_completed_tread_loads_n": [
+          19.255186080932617,
+          43.60287857055664,
+          0.0
+        ],
+        "final_pre_unload_gate_failures": [
+          "support_contact_lost",
+          "placed_tread_unloaded",
+          "support_margin_low",
+          "body_not_upright"
+        ],
+        "final_projected_gravity_xyz": [
+          -0.205743208527565,
+          0.11198614537715912,
+          -0.9721776247024536
+        ],
+        "final_support_margin_m": -0.08092769711039899,
+        "final_target_error_m": 0.006788749645985944,
+        "final_transfer_fraction": 1.0,
+        "id": "stage1-pitchoff-pitchgain0.080-rollgain0.000-loadgain0.000-duration5.0-forward+0.005-lateral-0.005",
+        "initial_balance_position_m": [
+          0.4797956846408358,
+          0.060120308534600715,
+          0.3334641131826436
+        ],
+        "initial_support_margin_m": -0.09524910608966997,
+        "load_sharing_gain_m": 0.0001,
+        "maximum_abs_pitch_deg": 11.873236345563582,
+        "maximum_abs_roll_deg": 6.9228329439662435,
+        "maximum_all_foot_slip_m": 0.015488710254430771,
+        "maximum_body_tilt_deg": 13.547232137865365,
+        "measured_balance_delta_xy_m": [
+          0.0006656167540442515,
+          0.00022496370989626147
+        ],
+        "measured_balance_progress_fraction": 0.04406530441479901,
+        "measured_balance_progress_m": 0.00031158875566753886,
+        "minimum_all_foot_load_n": 0.0,
+        "minimum_completed_tread_load_n": 0.0,
+        "minimum_rear_right_load_n": 0.0,
+        "pitch_feedback_gain_m": 0.08,
+        "pitch_feedback_mode": "off",
+        "roll_feedback_gain_m": 0.0,
+        "settled": false,
+        "stage": 1,
+        "steps": 444,
+        "support_margin_progress_m": 0.014321408979270978,
+        "target_delta_xy_m": [
+          0.005,
+          -0.005
+        ],
+        "terminated": false,
+        "truncated": false
+      },
+      "ranked_candidates": [
+        {
+          "acceptance_gate_failures": [
+            "insufficient_balance_progress",
+            "rear_right_contact_lost",
+            "body_tilt_high",
+            "settle_hold_incomplete"
+          ],
+          "accepted": false,
+          "duration_seconds": 5.0,
+          "failure_reasons": [],
+          "final_all_foot_loads_n": [
+            43.60287857055664,
+            19.255186080932617,
+            25.947664260864258,
+            0.0
+          ],
+          "final_balance_position_m": [
+            0.48046130139488,
+            0.06034527224449698,
+            0.3311496612061434
+          ],
+          "final_base_speed_m_s": 0.01746029952686821,
+          "final_body_rate_rad_s": 0.05945361778140068,
+          "final_completed_tread_loads_n": [
+            19.255186080932617,
+            43.60287857055664,
+            0.0
+          ],
+          "final_pre_unload_gate_failures": [
+            "support_contact_lost",
+            "placed_tread_unloaded",
+            "support_margin_low",
+            "body_not_upright"
+          ],
+          "final_projected_gravity_xyz": [
+            -0.205743208527565,
+            0.11198614537715912,
+            -0.9721776247024536
+          ],
+          "final_support_margin_m": -0.08092769711039899,
+          "final_target_error_m": 0.006788749645985944,
+          "final_transfer_fraction": 1.0,
+          "id": "stage1-pitchoff-pitchgain0.080-rollgain0.000-loadgain0.000-duration5.0-forward+0.005-lateral-0.005",
+          "initial_balance_position_m": [
+            0.4797956846408358,
+            0.060120308534600715,
+            0.3334641131826436
+          ],
+          "initial_support_margin_m": -0.09524910608966997,
+          "load_sharing_gain_m": 0.0001,
+          "maximum_abs_pitch_deg": 11.873236345563582,
+          "maximum_abs_roll_deg": 6.9228329439662435,
+          "maximum_all_foot_slip_m": 0.015488710254430771,
+          "maximum_body_tilt_deg": 13.547232137865365,
+          "measured_balance_delta_xy_m": [
+            0.0006656167540442515,
+            0.00022496370989626147
+          ],
+          "measured_balance_progress_fraction": 0.04406530441479901,
+          "measured_balance_progress_m": 0.00031158875566753886,
+          "minimum_all_foot_load_n": 0.0,
+          "minimum_completed_tread_load_n": 0.0,
+          "minimum_rear_right_load_n": 0.0,
+          "pitch_feedback_gain_m": 0.08,
+          "pitch_feedback_mode": "off",
+          "roll_feedback_gain_m": 0.0,
+          "settled": false,
+          "stage": 1,
+          "steps": 444,
+          "support_margin_progress_m": 0.014321408979270978,
+          "target_delta_xy_m": [
+            0.005,
+            -0.005
+          ],
+          "terminated": false,
+          "truncated": false
+        }
+      ],
+      "stage": 1
+    }
+  ],
+  "stair_rise_m": 0.18,
+  "stair_tread_depth_m": 0.25,
+  "status": "NO_ACCEPTED_PATH",
+  "strict_pass": false,
+  "target_leg": "rear_left",
+  "task_id": "Drobot-Quadruped-Stairs-v49-Traction-Sensitivity-Rear-Left-Preload"
+}

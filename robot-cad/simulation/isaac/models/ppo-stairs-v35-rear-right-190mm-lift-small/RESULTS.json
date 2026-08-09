@@ -1,0 +1,28 @@
+{
+  "task_id": "Drobot-Quadruped-Stairs-v35-Full-First-Tread",
+  "milestone": "rear_right_190mm_clearance_without_fall",
+  "full_stair_climb_achieved": false,
+  "rear_right_tread_landing_achieved": false,
+  "training_timesteps": 512,
+  "seed": 832,
+  "stair_tread_depth_m": 0.25,
+  "stair_rise_m": 0.18,
+  "minimum_clearance_gate_m": 0.19,
+  "maximum_training_rear_right_lift_m": 0.19225941598415375,
+  "independent_evaluation": {
+    "model_contract": "PASS",
+    "ppo_algorithm_contract": "PASS",
+    "clearance_gate_released": true,
+    "clearance_gate_timeout": false,
+    "failure_reasons": [],
+    "duration_s": 65.0,
+    "maximum_body_tilt_deg": 17.09091359727439
+  },
+  "applied_effort_cap_nm": 0.8825985,
+  "policy_action_size": 3,
+  "camera_used_by_policy": false,
+  "camera_role": "external_recording_only",
+  "model_sha256": "21bc20d289f31031d037548de7ae0554e534eac0d0133d0379b52f4d5d601270",
+  "config_sha256": "5de61fe07f450fd97c20d6b4cf08a417b15eb0ce4f37f4c8c59a0f05c1ec6806",
+  "video_sha256": "9f223bef5ff34cf89a9b05cb89f812516ac17f9a268137c6e5ac19e6ed3c2fcf"
+}

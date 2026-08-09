@@ -1,0 +1,361 @@
+"""Pure-RL, vectorized Drobot stair task registration."""
+
+import gymnasium as gym
+
+from . import agents
+
+gym.register(
+    id="Drobot-Pure-Stairs-Direct",
+    entry_point=f"{__name__}.pure_stairs_env:DrobotPureStairsEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.pure_stairs_env_cfg:DrobotPureStairsEnvCfg",
+        "rsl_rl_cfg_entry_point": (
+            f"{agents.__name__}.rsl_rl_ppo_cfg:DrobotPureStairsPPORunnerCfg"
+        ),
+    },
+)
+
+
+def _register_variant(task_id: str, env_cfg: str, runner_cfg: str) -> None:
+    gym.register(
+        id=task_id,
+        entry_point=f"{__name__}.pure_stairs_env:DrobotPureStairsEnv",
+        disable_env_checker=True,
+        kwargs={
+            "env_cfg_entry_point": f"{__name__}.pure_stairs_env_cfg:{env_cfg}",
+            "rsl_rl_cfg_entry_point": (f"{agents.__name__}.rsl_rl_ppo_cfg:{runner_cfg}"),
+        },
+    )
+
+
+_register_variant(
+    "Drobot-Pure-Stairs-Hip-Direct",
+    "DrobotPureStairsHipEnvCfg",
+    "DrobotPureStairsHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Low-Hip-Direct",
+    "DrobotPureStairsLowHipEnvCfg",
+    "DrobotPureStairsLowHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Sideways-Hip-Direct",
+    "DrobotPureStairsSidewaysHipEnvCfg",
+    "DrobotPureStairsSidewaysHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Hip-Direct",
+    "DrobotPureStairsFirstStepHipEnvCfg",
+    "DrobotPureStairsFirstStepHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Landing-Hip-Direct",
+    "DrobotPureStairsFirstStepLandingHipEnvCfg",
+    "DrobotPureStairsFirstStepLandingHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Landing-Long-Hip-Direct",
+    "DrobotPureStairsFirstStepLandingHipEnvCfg",
+    "DrobotPureStairsFirstStepLandingLongHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Landing-Consolidate-Hip-Direct",
+    "DrobotPureStairsFirstStepLandingConsolidateHipEnvCfg",
+    "DrobotPureStairsFirstStepLandingConsolidateHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Contact-Retention-Hip-Direct",
+    "DrobotPureStairsFirstStepContactRetentionHipEnvCfg",
+    "DrobotPureStairsFirstStepContactRetentionHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Broad-Support-Retention-Hip-Direct",
+    "DrobotPureStairsFirstStepBroadSupportRetentionHipEnvCfg",
+    "DrobotPureStairsFirstStepBroadSupportRetentionHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Support-Retention-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105SupportRetentionHipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105SupportRetentionHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width90-Support-Retention-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth90SupportRetentionHipEnvCfg",
+    "DrobotPureStairsFirstStepWidth90SupportRetentionHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Rise10-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Rise10HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Rise10HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low25-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low25HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low25HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low50-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low50HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low50HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low25-To37-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low25To37HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low25To37HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low37-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low37HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low37HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low25-To37-HardBias-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low25To37HardBiasHipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low25To37HardBiasHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low25-To37-HardBias-Rise10-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low25To37HardBiasRise10HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low25To37HardBiasRise10HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Low25-To37-HardBias-Stand-Rise10-Hip-Direct",
+    "DrobotPureStairsLow25To37HardBiasStandRise10HipEnvCfg",
+    "DrobotPureStairsLow25To37HardBiasStandRise10HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Low25-To37-HardBias-ThreeSupport-Rise10-Hip-Direct",
+    "DrobotPureStairsLow25To37HardBiasThreeSupportRise10HipEnvCfg",
+    "DrobotPureStairsLow25To37HardBiasThreeSupportRise10HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Low25-To37-HardBias-TwoSupport-Rise5-Hip-Direct",
+    "DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipEnvCfg",
+    "DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Low25-To37-HardBias-TwoSupport-Rise5-Hip-Consolidate-Direct",
+    "DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipEnvCfg",
+    "DrobotPureStairsLow25To37HardBiasTwoSupportRise5HipConsolidatePPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-FullFold-TwoSupport-Rise5-Hip-Direct",
+    "DrobotPureStairsFullFoldTwoSupportRise5HipEnvCfg",
+    "DrobotPureStairsFullFoldTwoSupportRise5HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw45-FullFold-TwoSupport-Rise5-Hip-Direct",
+    "DrobotPureStairsYaw45FullFoldTwoSupportRise5HipEnvCfg",
+    "DrobotPureStairsYaw45FullFoldTwoSupportRise5HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw67p5-FullFold-TwoSupport-Rise5-Hip-Direct",
+    "DrobotPureStairsYaw67p5FullFoldTwoSupportRise5HipEnvCfg",
+    "DrobotPureStairsYaw67p5FullFoldTwoSupportRise5HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-TwoSupport-Rise5-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldTwoSupportRise5HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldTwoSupportRise5HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift10-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift10HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift5-Hip-Direct",
+    "DrobotPureStairsYaw90FoldBridgeFootLift5HipEnvCfg",
+    "DrobotPureStairsYaw90FoldBridgeFootLift5HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift10-Hip-Direct",
+    "DrobotPureStairsYaw90FoldBridgeFootLift10HipEnvCfg",
+    "DrobotPureStairsYaw90FoldBridgeFootLift10HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift5-Consolidate-Hip-Direct",
+    "DrobotPureStairsYaw90FoldBridgeFootLift5HipEnvCfg",
+    "DrobotPureStairsYaw90FoldBridgeFootLift5ConsolidateHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FoldBridge-Foot-Lift5-Wide512-Hip-Direct",
+    "DrobotPureStairsYaw90FoldBridgeFootLift5HipEnvCfg",
+    "DrobotPureStairsYaw90FoldBridgeFootLift5Wide512HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Wide512-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5HipEnvCfg",
+    "DrobotPureStairsYaw90FoldBridgeFootLift5Wide512HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Coupled-Wide512-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5CoupledHipEnvCfg",
+    "DrobotPureStairsYaw90FoldBridgeFootLift5Wide512HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-TwoMode-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5CoupledHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5TwoModeHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-GRU-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5CoupledHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5GruHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-SuccessDominant-GRU-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5SuccessDominantHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5GruHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-SensorAsym-GRU-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5SensorAsymHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5GruHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentMode-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5SuccessDominantHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5PersistentModeHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5SuccessDominantHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-Consolidate-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5SuccessDominantHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasConsolidateHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-CEM-Robust-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5CemRobustHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5PersistentBiasCemRobustHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift10-PersistentBias-CEM-Robust-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift10CemRobustHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift10PersistentBiasCemRobustHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift7p5CemRobustHipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift7p5PersistentBiasCemRobustHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-Neutral-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct",
+    "DrobotPureStairsYaw90NeutralFootLift7p5CemRobustHipEnvCfg",
+    "DrobotPureStairsYaw90NeutralFootLift7p5PersistentBiasCemRobustHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Forward-Neutral-Foot-Lift7p5-PersistentBias-CEM-Robust-Hip-Direct",
+    "DrobotPureStairsForwardNeutralFootLift7p5CemRobustHipEnvCfg",
+    "DrobotPureStairsForwardNeutralFootLift7p5PersistentBiasCemRobustHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FoldTail75-Foot-Lift5-Wide512-Hip-Direct",
+    "DrobotPureStairsYaw90FoldTail75FootLift5HipEnvCfg",
+    "DrobotPureStairsYaw90FoldTail75FootLift5Wide512HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-Consolidate-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift5HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift5ConsolidateHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift10-Consolidate-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift10HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift10ConsolidateHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift14-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift14HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift14HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift19-Hip-Direct",
+    "DrobotPureStairsYaw90FullFoldFootLift19HipEnvCfg",
+    "DrobotPureStairsYaw90FullFoldFootLift19HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Sideways-TwoSupport-Rise5-Hip-Direct",
+    "DrobotPureStairsSidewaysTwoSupportRise5HipEnvCfg",
+    "DrobotPureStairsSidewaysTwoSupportRise5HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Low25-To37-HardBias-Upright-Rise10-Hip-Direct",
+    "DrobotPureStairsLow25To37HardBiasUprightRise10HipEnvCfg",
+    "DrobotPureStairsLow25To37HardBiasUprightRise10HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low75-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low75HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low75HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low100-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low100HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low100HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Width105-Low25-Consolidate-Hip-Direct",
+    "DrobotPureStairsFirstStepWidth105Low25HipEnvCfg",
+    "DrobotPureStairsFirstStepWidth105Low25ConsolidateHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Landing-Low-Hip-Direct",
+    "DrobotPureStairsFirstStepLandingLowHipEnvCfg",
+    "DrobotPureStairsFirstStepLandingLowHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Landing-Sideways-Hip-Direct",
+    "DrobotPureStairsFirstStepLandingSidewaysHipEnvCfg",
+    "DrobotPureStairsFirstStepLandingSidewaysHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Close1-Hip-Direct",
+    "DrobotPureStairsFirstStepClose1HipEnvCfg",
+    "DrobotPureStairsFirstStepClose1HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Close2-Hip-Direct",
+    "DrobotPureStairsFirstStepClose2HipEnvCfg",
+    "DrobotPureStairsFirstStepClose2HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Close4-Hip-Direct",
+    "DrobotPureStairsFirstStepClose4HipEnvCfg",
+    "DrobotPureStairsFirstStepClose4HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-First-Step-Close6-Hip-Direct",
+    "DrobotPureStairsFirstStepClose6HipEnvCfg",
+    "DrobotPureStairsFirstStepClose6HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Foot-Lift-Hip-Direct",
+    "DrobotPureStairsFootLiftHipEnvCfg",
+    "DrobotPureStairsFootLiftHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Foot-Lift-Consolidate-Hip-Direct",
+    "DrobotPureStairsFootLiftConsolidateHipEnvCfg",
+    "DrobotPureStairsFootLiftConsolidateHipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Foot-Lift-10-Hip-Direct",
+    "DrobotPureStairsFootLift10HipEnvCfg",
+    "DrobotPureStairsFootLift10HipPPORunnerCfg",
+)
+_register_variant(
+    "Drobot-Pure-Stairs-Foot-Lift-14-Hip-Direct",
+    "DrobotPureStairsFootLift14HipEnvCfg",
+    "DrobotPureStairsFootLift14HipPPORunnerCfg",
+)

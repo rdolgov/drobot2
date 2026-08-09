@@ -1,0 +1,26 @@
+{
+  "task": "Drobot-Pure-Stairs-First-Step-Close2-Hip-Direct",
+  "seed": 1090,
+  "parallel_environments": 128,
+  "transitions": 245760,
+  "stair_rise_m": 0.18,
+  "stair_tread_depth_m": 0.25,
+  "effort_limit_nm": 0.8825985,
+  "checkpoint_iteration": 411,
+  "best_reset_batch_tread_contacts": 0.5,
+  "max_tread_hold_s": 0.13333335518836975,
+  "max_base_gain_m": 0.011595875024795532,
+  "required_base_gain_m": 0.02,
+  "max_foot_clearance_m": 0.3144382834434509,
+  "success_rate": 0.0,
+  "actor_inputs": [
+    "imu",
+    "vl53l5cx_depth",
+    "joint_position",
+    "joint_velocity",
+    "previous_action",
+    "foot_load_contact"
+  ],
+  "rgb_policy_input": false,
+  "scripted_leg_order": false
+}

@@ -8,5 +8,7 @@
 *.usd filter=lfs diff=lfs merge=lfs -text
 *.usda filter=lfs diff=lfs merge=lfs -text
 *.usdc filter=lfs diff=lfs merge=lfs -text
+*.onnx filter=lfs diff=lfs merge=lfs -text
+*.onnx.data filter=lfs diff=lfs merge=lfs -text
 tools/cad-viewer-markup/*.patch -diff
 tools/cad-viewer-markup/runtime/dist/** -text -diff

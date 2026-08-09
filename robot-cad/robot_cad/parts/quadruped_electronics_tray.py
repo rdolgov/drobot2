@@ -101,7 +101,7 @@ def make_mount_hole_tools() -> tuple[Shape, ...]:
                 )
             )
         )
-        for x_mm, y_mm in quadruped_body.TRAY_STANDOFF_CENTERS_XY_MM
+        for x_mm, y_mm in quadruped_body.TRAY_MOUNT_CENTERS_XY_MM
     )
 
 

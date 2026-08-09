@@ -26,3 +26,13 @@ build/
 dist/
 *.egg-info/
 node_modules/
+
+# Local deployment worktrees and packaged site handoffs
+/cad-design-review-site/
+/drobot-stair-training-site/
+/*.tar.gz
+
+# Large reproducible runtime scratch output
+/robot-cad/.pytest_tmp*/
+/robot-cad/.tmp/
+/robot-cad/logs/

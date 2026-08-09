@@ -1,0 +1,67 @@
+{
+  "status": "PASS",
+  "task": "front-right direct 190 mm lift and 0.50 s hold",
+  "training": {
+    "algorithm": "PPO residual around analytic placement reference",
+    "timesteps": 8192,
+    "seed": 195,
+    "successful_episodes": 28,
+    "completed_episodes": 28,
+    "mastery_levels_mm": [15, 20, 35, 60, 100, 140, 190],
+    "successes_required_per_level": 2,
+    "final_level_successes": 10
+  },
+  "strict_deterministic_evaluation": {
+    "episodes": 3,
+    "successes": 3,
+    "maximum_front_right_lift_mm": [204.61, 204.84, 205.05],
+    "required_lift_mm": 190,
+    "required_hold_s": 0.5,
+    "minimum_support_contact_fraction": 1.0,
+    "maximum_support_slip_mm": 3.42,
+    "maximum_body_tilt_deg": 2.39,
+    "minimum_base_clearance_mm": 362.57,
+    "failure_reasons": []
+  },
+  "recording": {
+    "file": "ppo-stairs-v13-front-right-190mm-lift-success.mp4",
+    "sha256": "495aa1c1022e4de4721453709d6e7a521744b1b87733292b40657d7c6772c862",
+    "frames": 168,
+    "fps": 30,
+    "resolution": [960, 540],
+    "episode_duration_s": 5.6,
+    "maximum_front_right_lift_mm": 204.61,
+    "support_contact_fraction": 1.0,
+    "maximum_support_slip_mm": 3.39,
+    "maximum_body_tilt_deg": 2.39,
+    "hold_s": 0.5
+  },
+  "geometry": {
+    "rise_mm": 180,
+    "tread_depth_mm": 250,
+    "fixed_known_geometry": true
+  },
+  "sensing": {
+    "rgb_camera_policy_input": false,
+    "inputs": [
+      "simulated IMU",
+      "joint positions and velocities",
+      "previous action",
+      "contact-derived placement state",
+      "analytic fixed-stair height profile"
+    ]
+  },
+  "traction": {
+    "custom_foot_material_enabled": false,
+    "measurable_slip_threshold_mm": 25
+  },
+  "model": {
+    "file": "simulation/isaac/models/ppo-stairs-v13-front-right-190mm-lift-small/drobot_stairs_ppo_final.zip",
+    "sha256": "b53a8d3d0087f816403461f328c758657d85ab6b19a08d79e951a8f4b85a9494"
+  },
+  "limitations": [
+    "isolated one-foot lift, not tread placement or stair ascent",
+    "fixed reset and known analytic stair geometry",
+    "simulation result, not a hardware deployment qualification"
+  ]
+}

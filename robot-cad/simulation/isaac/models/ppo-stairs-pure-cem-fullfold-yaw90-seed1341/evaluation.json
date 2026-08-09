@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "task": "Drobot-Pure-Stairs-Yaw90-FullFold-Foot-Lift5-PersistentBias-Hip-Direct",
+  "checkpoint": "model.pt",
+  "strict_success_definition": "one unnamed foot >= 0.05 m above reset for four post-settle control steps while the other three feet remain force-loaded",
+  "reset": {
+    "base_height_m": 0.3,
+    "yaw_deg": 90.0,
+    "joint_position_noise_rad": 0.01,
+    "lateral_jitter_m": 0.01
+  },
+  "stairs": {
+    "rise_m": 0.18,
+    "tread_depth_m": 0.25
+  },
+  "population_0_screens": [
+    {"seed": 1351, "successful": 5, "completed": 151},
+    {"seed": 1352, "successful": 6, "completed": 138},
+    {"seed": 1353, "successful": 5, "completed": 156},
+    {"seed": 1354, "successful": 3, "completed": 138}
+  ],
+  "population_0_total": {"successful": 19, "completed": 583, "rate": 0.03259005},
+  "population_1_total": {"successful": 18, "completed": 568, "rate": 0.03169014},
+  "stronger_reset_validation": {
+    "reset": {"joint_position_noise_rad": 0.02, "lateral_jitter_m": 0.015},
+    "screens": [
+      {"seed": 1381, "successful": 12, "completed": 158},
+      {"seed": 1382, "successful": 13, "completed": 189},
+      {"seed": 1383, "successful": 9, "completed": 162}
+    ],
+    "total": {"successful": 34, "completed": 509, "rate": 0.06679764}
+  },
+  "accepted_recording": {
+    "seed": 1351,
+    "viewer_env_index": 10,
+    "duration_s": 30.0,
+    "selected_environment_success": true,
+    "all_envs_successful": 26,
+    "all_envs_completed": 638,
+    "path": "reviews/ppo-stairs-robust-cem-pop0-env10-seed1351-30s.mp4"
+  },
+  "limitations": [
+    "success remains reset- and render-sensitive",
+    "no 100 mm or 190 mm held lift",
+    "no tread placement, weight transfer, step, or climb"
+  ]
+}

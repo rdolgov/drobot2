@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import hypot
 from pathlib import Path
 
 from build123d import Align, Box, Cylinder, Location, Shape
@@ -45,6 +46,19 @@ LEKIWI_CAMERA_CABLE_PORT_LENGTH_X_MM = 20.0
 LEKIWI_CAMERA_CABLE_PORT_WIDTH_Y_MM = 12.0
 LEKIWI_CAMERA_CABLE_PORT_CENTER_X_MM = 65.0
 LEKIWI_CAMERA_CABLE_PORT_CENTER_Y_MM = 0.0
+
+# Universal M3 mounting field for future compute, fuse, power-distribution,
+# sensor, and cable-management hardware.  The 10 mm pitch is dense enough to
+# adapt common board standoffs with small brackets while leaving 6.6 mm of
+# material between neighboring 3.4 mm holes.  Keep-outs preserve at least a
+# 2 mm web around every existing opening.  The three camera holes happen to
+# land on the grid and are counted as usable grid locations without cutting
+# them twice.
+LID_MOUNTING_GRID_PITCH_MM = 10.0
+LID_MOUNTING_GRID_X_MM = tuple(float(value) for value in range(-90, 91, 10))
+LID_MOUNTING_GRID_Y_MM = tuple(float(value) for value in range(-60, 61, 10))
+LID_MOUNTING_GRID_M3_CLEARANCE_DIAMETER_MM = 3.4
+LID_MOUNTING_GRID_MIN_WEB_MM = 2.0
 
 
 def _one_valid_solid(shape: Shape, label: str) -> Shape:
@@ -279,6 +293,140 @@ def make_lekiwi_camera_cable_port_tool() -> Shape:
     )
 
 
+def _center_clears_rectangular_opening(
+    center_xy_mm: tuple[float, float],
+    opening_center_xy_mm: tuple[float, float],
+    opening_length_x_mm: float,
+    opening_width_y_mm: float,
+) -> bool:
+    """Return whether a grid hole leaves the required web around an opening."""
+    grid_radius = LID_MOUNTING_GRID_M3_CLEARANCE_DIAMETER_MM / 2.0
+    keepout = grid_radius + LID_MOUNTING_GRID_MIN_WEB_MM
+    return (
+        abs(center_xy_mm[0] - opening_center_xy_mm[0])
+        > opening_length_x_mm / 2.0 + keepout
+        or abs(center_xy_mm[1] - opening_center_xy_mm[1])
+        > opening_width_y_mm / 2.0 + keepout
+    )
+
+
+def _center_clears_round_hole(
+    center_xy_mm: tuple[float, float],
+    hole_center_xy_mm: tuple[float, float],
+    hole_diameter_mm: float,
+) -> bool:
+    """Return whether a grid hole leaves the required web around another hole."""
+    required_distance = (
+        LID_MOUNTING_GRID_M3_CLEARANCE_DIAMETER_MM / 2.0
+        + hole_diameter_mm / 2.0
+        + LID_MOUNTING_GRID_MIN_WEB_MM
+    )
+    return hypot(
+        center_xy_mm[0] - hole_center_xy_mm[0],
+        center_xy_mm[1] - hole_center_xy_mm[1],
+    ) >= required_distance
+
+
+def lid_mounting_grid_centers_xy_mm() -> tuple[tuple[float, float], ...]:
+    """Return usable 10 mm-pitch M3 grid centers after feature keep-outs."""
+    vent_openings = tuple(
+        (x_mm, y_mm)
+        for x_mm in LID_VENT_X_MM
+        for y_mm in LID_VENT_Y_MM
+        if not (x_mm == 60.0 and y_mm == 0.0)
+    )
+    rectangular_openings = (
+        tuple(
+            (
+                center,
+                LID_VENT_SLOT_LENGTH_X_MM,
+                LID_VENT_SLOT_WIDTH_Y_MM,
+            )
+            for center in vent_openings
+        )
+        + tuple(
+            (
+                (x_mm, y_mm),
+                LID_CABLE_PORT_LENGTH_X_MM,
+                LID_CABLE_PORT_WIDTH_Y_MM,
+            )
+            for x_mm in LID_CABLE_PORT_X_MM
+            for y_mm in LID_CABLE_PORT_Y_MM
+        )
+        + (
+            (
+                (
+                    LEKIWI_CAMERA_CABLE_PORT_CENTER_X_MM,
+                    LEKIWI_CAMERA_CABLE_PORT_CENTER_Y_MM,
+                ),
+                LEKIWI_CAMERA_CABLE_PORT_LENGTH_X_MM,
+                LEKIWI_CAMERA_CABLE_PORT_WIDTH_Y_MM,
+            ),
+        )
+    )
+    round_holes = (
+        tuple(
+            ((x_mm, y_mm), quadruped_body.UTILITY_M2_CLEARANCE_DIAMETER_MM)
+            for x_mm in LID_UTILITY_M2_X_MM
+            for y_mm in LID_UTILITY_Y_MM
+        )
+        + tuple(
+            (
+                center,
+                quadruped_body.UTILITY_M3_CLEARANCE_DIAMETER_MM,
+            )
+            for center in LID_REAR_UTILITY_M3_CENTERS_XY_MM
+        )
+        + tuple(
+            (center, LID_M3_CLEARANCE_DIAMETER_MM)
+            for center in quadruped_body.LID_BOSS_CENTERS_XY_MM
+        )
+    )
+
+    return tuple(
+        (x_mm, y_mm)
+        for x_mm in LID_MOUNTING_GRID_X_MM
+        for y_mm in LID_MOUNTING_GRID_Y_MM
+        if all(
+            _center_clears_rectangular_opening(
+                (x_mm, y_mm),
+                opening_center,
+                opening_length,
+                opening_width,
+            )
+            for opening_center, opening_length, opening_width in (
+                rectangular_openings
+            )
+        )
+        and all(
+            _center_clears_round_hole(
+                (x_mm, y_mm),
+                hole_center,
+                hole_diameter,
+            )
+            for hole_center, hole_diameter in round_holes
+        )
+    )
+
+
+def make_lid_mounting_grid_hole_tools() -> tuple[Shape, ...]:
+    """Return new M3 cutters for the universal top mounting field."""
+    cutter_height = (
+        quadruped_body.BODY_LID_THICKNESS_Z_MM
+        + 2.0 * quadruped_body.BOOLEAN_OVERTRAVEL_MM
+    )
+    cutter_min_z = -quadruped_body.BOOLEAN_OVERTRAVEL_MM
+    return tuple(
+        Cylinder(
+            LID_MOUNTING_GRID_M3_CLEARANCE_DIAMETER_MM / 2.0,
+            cutter_height,
+            align=(Align.CENTER, Align.CENTER, Align.MIN),
+        ).moved(Location((x_mm, y_mm, cutter_min_z)))
+        for x_mm, y_mm in lid_mounting_grid_centers_xy_mm()
+        if (x_mm, y_mm) not in LEKIWI_CAMERA_MOUNT_HOLE_CENTERS_XY_MM
+    )
+
+
 def make_lid_utility_mount_hole_tools() -> tuple[Shape, ...]:
     """Return utility holes plus the LeKiwi-compatible camera mount row."""
     cutter_height = (
@@ -319,6 +467,7 @@ def make_lid() -> Shape:
         + make_lid_vent_tools()
         + make_lid_cable_port_tools()
         + (make_lekiwi_camera_cable_port_tool(),)
+        + make_lid_mounting_grid_hole_tools()
         + make_lid_utility_mount_hole_tools()
     )
     return _one_valid_solid(finished, "quadruped_body_lid")

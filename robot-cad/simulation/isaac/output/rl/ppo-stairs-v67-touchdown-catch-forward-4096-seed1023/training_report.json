@@ -1,0 +1,2012 @@
+{
+  "status": "PASS",
+  "task_id": "Drobot-Quadruped-Stairs-v10-180mm-Front-Right-Placement",
+  "config": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\stairs\\quadruped_stairs_v10_front_right_single_tread_placement.yaml",
+  "config_sha256": "f2d06eca4aeb1aa2e75a04f16f7a73d2fe4afc32d0c8b331444a932a8b48c9b0",
+  "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_stairs_v6_180mm_world.usda",
+  "world_sha256": "ba1b7a8335be38bbc32d68f87dbd5c48a5bcc266f16649b1d499b01b626a43b4",
+  "world_dependencies": [
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_manual_world.usda",
+      "sha256": "30c773a88564c21b87bb3da8fb0762f0d63f7350e2a31fc6d7ab7fae1542e3d9"
+    },
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_floating.usdc",
+      "sha256": "71b639bd877913bffeac47a1cfcb6f3dcabbbd1e25c6fba90b8b87e7ea96c6b8"
+    }
+  ],
+  "output_dir": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\ppo-stairs-v67-touchdown-catch-forward-4096-seed1023",
+  "smoke_test": false,
+  "initialize_only": false,
+  "training_mode": "full",
+  "algorithm_contract_requested": {
+    "algorithm": "stable_baselines3.PPO",
+    "policy_class": "ActorCriticPolicy",
+    "training_mode": "full",
+    "observation_shape": [
+      81
+    ],
+    "action_shape": [
+      12
+    ],
+    "policy_hidden_layers": [
+      256,
+      256
+    ],
+    "activation": "ELU",
+    "rollout_steps": 1024,
+    "batch_size": 128,
+    "epochs": 8,
+    "learning_rate": 1e-05,
+    "gamma": 0.997,
+    "gae_lambda": 0.95,
+    "clip_range": 0.2,
+    "entropy_coefficient": 0.0001,
+    "value_coefficient": 0.5,
+    "maximum_gradient_norm": 0.5,
+    "normalize_advantage": true,
+    "target_kl": 0.03
+  },
+  "requested_total_timesteps": 4096,
+  "ppo_run_overrides": {
+    "learning_rate": 1e-05,
+    "initial_log_std": -4.0,
+    "entropy_coefficient": 0.0001
+  },
+  "curriculum_total_timesteps": 4096,
+  "requested_seed": 1023,
+  "height_stage": null,
+  "fixed_active_steps": null,
+  "placement_start_level": null,
+  "fixed_placement_level": "quarter-tread-load",
+  "fixed_placement_landing_lift_m": null,
+  "first_tread_profile": "forward-preposition-load-catch-forward",
+  "phase_train_leg": null,
+  "phase_train_transfer": false,
+  "phase_transfer_post_hold_seconds": 0.0,
+  "phase_transfer_residual_action_scale": null,
+  "phase_post_transfer_hold_only": false,
+  "precursor_leg_models": {},
+  "phase_base_model": null,
+  "phase_base_swing_only": false,
+  "phase_base_residual_model": null,
+  "phase_base_residual_scale": 0.5,
+  "phase_base_residual_mode": null,
+  "phase_base_residual_compact_action": false,
+  "phase_residual_scale": 0.25,
+  "phase_residual_support_only": false,
+  "phase_residual_swing_only": false,
+  "phase_residual_support_abduction_only": false,
+  "phase_residual_swing_support_abduction": false,
+  "phase_compact_residual_action": false,
+  "phase_snapshot_cache_enabled": true,
+  "phase_snapshot": null,
+  "initial_action_bias_requested": null,
+  "terrain_perception_mode": "analytic_height_profile",
+  "terrain_perception": {
+    "mode": "analytic_height_profile"
+  },
+  "device_request": "cpu",
+  "isaac_sim_version": "6.0.1",
+  "torch_version": "2.10.0+cu128",
+  "stable_baselines3_version": "2.9.0",
+  "cuda_available": true,
+  "cuda_device": "NVIDIA GeForce RTX 5090",
+  "zero_action_mean_initialization": {
+    "weight": "all_zero",
+    "bias": "all_zero"
+  },
+  "stair_policy_transfer": {
+    "source_model": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\ppo-stairs-v61-forward-preposition-load-1024-seed1013\\drobot_stairs_ppo_final.zip",
+    "source_model_sha256": "cf22b56416f8044a2fa20c470ee09145fef67c6eb2d334c69dbff912f4d62298",
+    "parameter_count": 13,
+    "optimizer_transferred": false,
+    "source_observation_size": 81,
+    "target_observation_size": 81,
+    "mode": "exact_same_shape",
+    "expanded_inputs": [],
+    "log_std_overridden_after_transfer": -4.0
+  },
+  "training_seed": 1023,
+  "ppo_algorithm_verification": {
+    "status": "PASS",
+    "verified_fields": [
+      "algorithm",
+      "policy_class",
+      "training_mode",
+      "observation_shape",
+      "action_shape",
+      "policy_hidden_layers",
+      "activation",
+      "rollout_steps",
+      "batch_size",
+      "epochs",
+      "learning_rate",
+      "gamma",
+      "gae_lambda",
+      "clip_range",
+      "entropy_coefficient",
+      "value_coefficient",
+      "maximum_gradient_norm",
+      "normalize_advantage",
+      "target_kl"
+    ],
+    "contract": {
+      "algorithm": "stable_baselines3.PPO",
+      "policy_class": "ActorCriticPolicy",
+      "training_mode": "full",
+      "observation_shape": [
+        81
+      ],
+      "action_shape": [
+        12
+      ],
+      "policy_hidden_layers": [
+        256,
+        256
+      ],
+      "activation": "ELU",
+      "rollout_steps": 1024,
+      "batch_size": 128,
+      "epochs": 8,
+      "learning_rate": 1e-05,
+      "gamma": 0.997,
+      "gae_lambda": 0.95,
+      "clip_range": 0.2,
+      "entropy_coefficient": 0.0001,
+      "value_coefficient": 0.5,
+      "maximum_gradient_norm": 0.5,
+      "normalize_advantage": true,
+      "target_kl": 0.03
+    }
+  },
+  "actual_total_timesteps": 4096,
+  "model": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\ppo-stairs-v67-touchdown-catch-forward-4096-seed1023\\drobot_stairs_ppo_final.zip",
+  "model_bytes": 2155836,
+  "model_manifest": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\ppo-stairs-v67-touchdown-catch-forward-4096-seed1023\\drobot_stairs_ppo_final.zip.contract.json",
+  "model_parameter_count": 176921,
+  "ppo": {
+    "algorithm": "stable_baselines3.PPO",
+    "policy_class": "ActorCriticPolicy",
+    "training_mode": "full",
+    "observation_shape": [
+      81
+    ],
+    "action_shape": [
+      12
+    ],
+    "policy_hidden_layers": [
+      256,
+      256
+    ],
+    "activation": "ELU",
+    "rollout_steps": 1024,
+    "batch_size": 128,
+    "epochs": 8,
+    "learning_rate": 1e-05,
+    "gamma": 0.997,
+    "gae_lambda": 0.95,
+    "clip_range": 0.2,
+    "entropy_coefficient": 0.0001,
+    "value_coefficient": 0.5,
+    "maximum_gradient_norm": 0.5,
+    "normalize_advantage": true,
+    "target_kl": 0.03
+  },
+  "initial_curriculum_progress": 0.0,
+  "environment_contract": {
+    "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_stairs_v6_180mm_world.usda",
+    "dof_names": [
+      "front_left_hip_abduction",
+      "rear_left_hip_abduction",
+      "front_right_hip_abduction",
+      "rear_right_hip_abduction",
+      "front_left_hip_flexion",
+      "rear_left_hip_flexion",
+      "front_right_hip_flexion",
+      "rear_right_hip_flexion",
+      "front_left_knee",
+      "rear_left_knee",
+      "front_right_knee",
+      "rear_right_knee"
+    ],
+    "nominal_joint_positions_rad": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.2610241174697876,
+      0.2610241174697876,
+      -0.2610241174697876,
+      0.2610241174697876,
+      0.6883306503295898,
+      -0.6883306503295898,
+      0.6883306503295898,
+      -0.6883306503295898
+    ],
+    "action_scale_rad": [
+      0.10000000149011612,
+      0.10000000149011612,
+      0.03999999910593033,
+      0.10000000149011612,
+      0.2199999988079071,
+      0.2199999988079071,
+      0.07999999821186066,
+      0.2199999988079071,
+      0.30000001192092896,
+      0.30000001192092896,
+      0.11999999731779099,
+      0.30000001192092896
+    ],
+    "observation_fields": [
+      "command_forward_velocity_m_s",
+      "command_lateral_velocity_m_s",
+      "command_yaw_rate_rad_s",
+      "imu_angular_velocity_x_rad_s",
+      "imu_angular_velocity_y_rad_s",
+      "imu_angular_velocity_z_rad_s",
+      "imu_projected_gravity_x",
+      "imu_projected_gravity_y",
+      "imu_projected_gravity_z",
+      "imu_linear_acceleration_x_g",
+      "imu_linear_acceleration_y_g",
+      "imu_linear_acceleration_z_g",
+      "joint_position_error_0",
+      "joint_position_error_1",
+      "joint_position_error_2",
+      "joint_position_error_3",
+      "joint_position_error_4",
+      "joint_position_error_5",
+      "joint_position_error_6",
+      "joint_position_error_7",
+      "joint_position_error_8",
+      "joint_position_error_9",
+      "joint_position_error_10",
+      "joint_position_error_11",
+      "joint_velocity_normalized_0",
+      "joint_velocity_normalized_1",
+      "joint_velocity_normalized_2",
+      "joint_velocity_normalized_3",
+      "joint_velocity_normalized_4",
+      "joint_velocity_normalized_5",
+      "joint_velocity_normalized_6",
+      "joint_velocity_normalized_7",
+      "joint_velocity_normalized_8",
+      "joint_velocity_normalized_9",
+      "joint_velocity_normalized_10",
+      "joint_velocity_normalized_11",
+      "previous_action_0",
+      "previous_action_1",
+      "previous_action_2",
+      "previous_action_3",
+      "previous_action_4",
+      "previous_action_5",
+      "previous_action_6",
+      "previous_action_7",
+      "previous_action_8",
+      "previous_action_9",
+      "previous_action_10",
+      "previous_action_11",
+      "terrain_height_delta_at_-0.150_m",
+      "terrain_height_delta_at_+0.000_m",
+      "terrain_height_delta_at_+0.080_m",
+      "terrain_height_delta_at_+0.160_m",
+      "terrain_height_delta_at_+0.250_m",
+      "terrain_height_delta_at_+0.375_m",
+      "terrain_height_delta_at_+0.500_m",
+      "terrain_height_delta_at_+0.750_m",
+      "goal_distance_normalized",
+      "lateral_offset_normalized",
+      "heading_error_sin",
+      "heading_error_cos",
+      "foot_tread_progress_front_left",
+      "foot_tread_progress_front_right",
+      "foot_tread_progress_rear_left",
+      "foot_tread_progress_rear_right",
+      "next_foot_target_front_left",
+      "next_foot_target_front_right",
+      "next_foot_target_rear_left",
+      "next_foot_target_rear_right",
+      "placement_phase_weight_shift",
+      "placement_phase_lift",
+      "placement_phase_advance",
+      "placement_phase_lower",
+      "placement_phase_hold",
+      "placement_desired_swing_height_normalized",
+      "placement_measured_swing_height_normalized",
+      "placement_swing_x_error_normalized",
+      "placement_swing_z_error_normalized",
+      "placement_tread_normal_load_normalized",
+      "placement_support_contact_fraction",
+      "placement_support_margin_normalized",
+      "placement_maximum_support_slip_normalized"
+    ],
+    "observation_size": 81,
+    "action_size": 12,
+    "imu_fields": [
+      "angular_velocity_x_rad_s",
+      "angular_velocity_y_rad_s",
+      "angular_velocity_z_rad_s",
+      "projected_gravity_x",
+      "projected_gravity_y",
+      "projected_gravity_z",
+      "linear_acceleration_x_g",
+      "linear_acceleration_y_g",
+      "linear_acceleration_z_g"
+    ],
+    "rated_effort_cap_nm": 0.980665,
+    "applied_effort_cap_nm": 0.8825985,
+    "applied_joint_lower_limits_rad": [
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -2.094395160675049,
+      -2.094395160675049,
+      -2.094395160675049,
+      -2.094395160675049
+    ],
+    "applied_joint_upper_limits_rad": [
+      0.7853981852531433,
+      0.7853981852531433,
+      0.7853981852531433,
+      0.7853981852531433,
+      1.5707963705062866,
+      1.5707963705062866,
+      1.5707963705062866,
+      1.5707963705062866,
+      2.094395160675049,
+      2.094395160675049,
+      2.094395160675049,
+      2.094395160675049
+    ],
+    "robot_hardware_profile": {
+      "id": "one-leg-real-test-2026-07-28",
+      "evidence": [
+        "hardware/one-leg-testbed/leg.toml",
+        "hardware/one-leg-testbed/calibration.json",
+        "conversations/2026-07-28-one-leg-wall-isaac-revisit.md"
+      ],
+      "center_tick": 2048,
+      "encoder_directions": {
+        "hip_abduction": 1,
+        "hip_flexion": -1,
+        "knee": -1
+      },
+      "joint_limits_deg": {
+        "hip_abduction": [
+          -45.0,
+          45.0
+        ],
+        "hip_flexion": [
+          -90.0,
+          90.0
+        ],
+        "knee": [
+          -120.0,
+          120.0
+        ]
+      },
+      "torque_limit_register": 300,
+      "torque_limit_register_full_scale": 1000,
+      "torque_limit_fraction": 0.3,
+      "stall_torque_nm": 2.941995,
+      "effort_cap_nm": 0.8825985,
+      "speed_register": 350,
+      "speed_register_applied_as_rad_s": false
+    },
+    "control_hz": 60,
+    "physics_hz": 120,
+    "task_id": "Drobot-Quadruped-Stairs-v10-180mm-Front-Right-Placement",
+    "walking_observation_size": 48,
+    "include_navigation_observation": true,
+    "include_foot_progress_observation": true,
+    "include_placement_reference_observation": true,
+    "foot_placement_sequence": [
+      "front_right",
+      "front_left",
+      "rear_right",
+      "rear_left"
+    ],
+    "terrain_perception_mode": "analytic_height_profile",
+    "terrain_perception": {
+      "mode": "analytic_height_profile"
+    },
+    "terrain_input_note": "Analytic forward terrain profile; replace with a hardware-reproducible estimator before deployment.",
+    "rgb_camera_policy_input": false,
+    "foot_contact_material": {
+      "enabled": false,
+      "source": "authored_world_material"
+    },
+    "foot_contact_patch": {
+      "enabled": false
+    },
+    "terrain_sensor_runtime": null,
+    "physics_steps_per_control": 2,
+    "control_action_mode": "placement_reference_plus_ppo_residual",
+    "residual_policy": null,
+    "staircase": {
+      "start_x_m": 0.55,
+      "step_count": 4,
+      "tread_depth_m": 0.25,
+      "rise_m": 0.18,
+      "width_m": 1.0,
+      "top_platform_depth_m": 0.5,
+      "terrain_sample_offsets_m": [
+        -0.15,
+        0.0,
+        0.08,
+        0.16,
+        0.25,
+        0.375,
+        0.5,
+        0.75
+      ],
+      "terrain_height_normalization_m": 0.36,
+      "goal_distance_normalization_m": 2.0,
+      "goal_margin_m": 0.1
+    },
+    "curriculum_levels": [
+      {
+        "start_fraction": 0.0,
+        "active_steps": 1
+      }
+    ],
+    "placement_reference": {
+      "enabled": true,
+      "swing_leg": "front_right",
+      "timing": {
+        "shift_start_seconds": 0.25,
+        "shift_duration_seconds": 2.0,
+        "lift_start_seconds": 2.5,
+        "lift_duration_seconds": 3.0,
+        "advance_start_seconds": 5.5,
+        "advance_duration_seconds": 4.0,
+        "lower_start_seconds": 9.5,
+        "lower_duration_seconds": 1.5
+      },
+      "weight_shift": {
+        "forward_m": 0.045,
+        "lateral_m": 0.045
+      },
+      "target_x_tolerance_m": 0.065,
+      "target_z_tolerance_m": 0.018,
+      "contact_on_threshold_n": 1.0,
+      "contact_load_normalization_n": 50.0,
+      "minimum_success_upright_cosine": 0.9781476,
+      "measurable_slip_threshold_m": 0.025,
+      "touchdown_support_regulation": {
+        "enabled": true,
+        "legs": [
+          "front_right"
+        ],
+        "phases": [
+          "lower",
+          "hold"
+        ],
+        "contact_threshold_n": 1.0,
+        "release_duration_seconds": 1.0,
+        "forward_release_fraction": 1.0,
+        "lateral_release_fraction": 0.5
+      },
+      "touchdown_load_regulation": {
+        "enabled": true,
+        "legs": [
+          "front_right"
+        ],
+        "phases": [
+          "lower",
+          "hold"
+        ],
+        "target_tread_load_n": 10.0,
+        "proportional_gain_m_per_n": 0.0005,
+        "maximum_lift_correction_m": 0.02,
+        "attack_smoothing_factor": 0.5,
+        "release_smoothing_factor": 0.05
+      },
+      "contact_filter_paths": [
+        "/World/Ground",
+        "/World/Stairs/StepLayer_01",
+        "/World/Stairs/StepLayer_02",
+        "/World/Stairs/StepLayer_03",
+        "/World/Stairs/StepLayer_04"
+      ],
+      "contact_force_verified_success": true,
+      "inter_leg_transfer_enabled": false,
+      "observation_fields": [
+        "placement_phase_weight_shift",
+        "placement_phase_lift",
+        "placement_phase_advance",
+        "placement_phase_lower",
+        "placement_phase_hold",
+        "placement_desired_swing_height_normalized",
+        "placement_measured_swing_height_normalized",
+        "placement_swing_x_error_normalized",
+        "placement_swing_z_error_normalized",
+        "placement_tread_normal_load_normalized",
+        "placement_support_contact_fraction",
+        "placement_support_margin_normalized",
+        "placement_maximum_support_slip_normalized"
+      ]
+    },
+    "placement_curriculum": {
+      "mode": "timesteps",
+      "levels": [
+        {
+          "id": "near-edge-touch",
+          "start_fraction": 0.0,
+          "apex_lift_m": 0.195,
+          "landing_lift_m": 0.11,
+          "lift_forward_offset_m": 0.08,
+          "swing_forward_offset_m": 0.13,
+          "landing_forward_offset_m": 0.125,
+          "target_tread_fraction": 0.12,
+          "contact_hold_seconds": 0.25
+        },
+        {
+          "id": "quarter-tread-load",
+          "start_fraction": 0.35,
+          "apex_lift_m": 0.2,
+          "landing_lift_m": 0.11,
+          "lift_forward_offset_m": 0.08,
+          "swing_forward_offset_m": 0.165,
+          "landing_forward_offset_m": 0.15,
+          "target_tread_fraction": 0.25,
+          "contact_hold_seconds": 0.5
+        },
+        {
+          "id": "center-tread-load",
+          "start_fraction": 0.7,
+          "apex_lift_m": 0.205,
+          "landing_lift_m": 0.11,
+          "lift_forward_offset_m": 0.08,
+          "swing_forward_offset_m": 0.18,
+          "landing_forward_offset_m": 0.16,
+          "target_tread_fraction": 0.24,
+          "contact_hold_seconds": 0.75
+        }
+      ]
+    },
+    "success_requirements": {
+      "minimum_base_elevation_fraction": 0.0,
+      "required_feet_on_goal_tread": 0,
+      "hold_seconds": 0.75
+    }
+  },
+  "curriculum_transitions": [],
+  "progress_watchdog": {
+    "status": "RUNNING",
+    "timesteps": 4096,
+    "curriculum_mode": "timesteps",
+    "active_step_count": 1,
+    "pending_active_step_count": 1,
+    "placement_curriculum_mode": "timesteps",
+    "placement_mastery_level_id": "quarter-tread-load",
+    "placement_mastery_successes": 0,
+    "placement_mastery_successes_required": 2,
+    "fixed_placement_level": "quarter-tread-load",
+    "completed_episodes": 5,
+    "successful_episodes": 1,
+    "first_step_climb_episodes": 0,
+    "first_step_climb_rate": 0.0,
+    "maximum_step_reached": 0,
+    "maximum_base_elevation_gain_m": 0.005010664463043213,
+    "last_progress_step": 2300,
+    "initial_gate_evaluated": false,
+    "initial_gate_passed": false,
+    "abort_reason": null,
+    "watchdog_config": {
+      "enabled": false
+    },
+    "curriculum_transitions": []
+  },
+  "recent_completed_episodes": [
+    {
+      "return": 13324.740910519642,
+      "length_steps": 840,
+      "duration_s": 14.0,
+      "active_step_count": 1,
+      "highest_step_reached": 0,
+      "stairs_completed": false,
+      "placement_completed": false,
+      "placement_swing_leg": "front_right",
+      "placement_sequence_legs": [
+        "front_right"
+      ],
+      "completed_placement_legs": [],
+      "completed_inter_leg_transfers": [],
+      "last_completed_inter_leg_transfer_metrics": {},
+      "final_placement_transfer_gate_failures": [],
+      "final_placement_pre_unload_gate_failures": [],
+      "pre_unload_gate_enabled": false,
+      "pre_unload_gate_hold_steps": 0,
+      "advance_clearance_gate_enabled": false,
+      "advance_clearance_gate_legs": [
+        "front_right"
+      ],
+      "advance_clearance_gate_minimum_m": 0.19,
+      "advance_clearance_gate_maximum_hold_steps": 120,
+      "maximum_advance_clearance_gate_hold_steps": 0,
+      "final_advance_clearance_gate_released": false,
+      "final_advance_clearance_gate_timeout": false,
+      "final_placement_transfer_support_margin_m": 0.04785298751031062,
+      "final_placement_transfer_base_target_error_m": 0.0,
+      "final_placement_transfer_base_speed_m_s": 0.0,
+      "final_placement_transfer_body_rate_rad_s": 0.0,
+      "final_placement_transfer_upright_cosine": 0.9901999831199646,
+      "final_placement_transfer_completed_tread_min_load_n": 0.0,
+      "final_placement_transfer_swing_total_load_n": 0.0,
+      "placement_transfer_target_base_position_m": null,
+      "balance_point": "base_origin",
+      "final_balance_position_m": [
+        0.30421385169029236,
+        0.013385063037276268,
+        0.36782288551330566
+      ],
+      "final_com_position_m": [
+        0.3191189924511651,
+        0.006583023406234967,
+        0.3264602178698535
+      ],
+      "placement_transfer_target_balance_position_m": null,
+      "placement_curriculum_level": "quarter-tread-load",
+      "forward_displacement_m": -0.04469168186187744,
+      "lateral_displacement_m": 0.017042016610503197,
+      "elevation_gain_m": 0.004820764064788818,
+      "maximum_base_elevation_gain_m": 0.005010664463043213,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.01737978495657444,
+        "front_right": 0.20145779848098755,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 0,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_foot_step_by_leg": {
+        "front_left": 0,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "maximum_foot_tread_progress_by_leg": {
+        "front_left": 0.13933950662612915,
+        "front_right": 1.0,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "final_terrain_height_m": 0.0,
+      "maximum_terrain_height_m": 0.0,
+      "minimum_base_clearance_m": 0.36250630021095276,
+      "maximum_body_tilt_deg": 8.084952818036129,
+      "final_projected_gravity_xyz": [
+        -0.1394769698381424,
+        -0.007098279893398285,
+        -0.9901999831199646
+      ],
+      "goal_hold_duration_s": 0.0,
+      "maximum_swing_tread_normal_load_n": 13.800390243530273,
+      "maximum_tread_normal_load_n_by_leg": {
+        "front_left": 0.0,
+        "front_right": 13.800390243530273,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "tread_contact_sample_fraction": 0.0,
+      "minimum_support_contact_fraction": 0.6666666666666666,
+      "minimum_placement_support_margin_m": -0.002079409538243245,
+      "maximum_abs_support_load_sharing_correction_m": 0.0,
+      "maximum_abs_support_load_sharing_correction_m_by_leg": {
+        "front_left": 0.0,
+        "front_right": 0.0,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "support_load_sharing_saturated_sample_fraction": 0.0,
+      "maximum_support_slip_m": 0.016192898154258728,
+      "maximum_support_slip_m_by_leg": {
+        "front_left": 0.016192898154258728,
+        "front_right": 0.0,
+        "rear_left": 0.0031552016735076904,
+        "rear_right": 0.0039687431417405605
+      },
+      "placement_reference_reach_clip_count": 0,
+      "maximum_placement_reference_reach_excess_m": 0.0,
+      "maximum_placement_desired_lift_m": 0.2,
+      "maximum_swing_reference_tracking_error_rad": 0.1781257539987564,
+      "maximum_balance_lateral_deviation_m": 0.05014311149716377,
+      "joint_effort_metrics": {
+        "effort_cap_nm": 0.8825985,
+        "maximum_abs_joint_tracking_error_rad": 0.18053559958934784,
+        "maximum_abs_joint_tracking_error_rad_by_joint": {
+          "front_left_hip_abduction": 0.021495774388313293,
+          "rear_left_hip_abduction": 0.02614150196313858,
+          "front_right_hip_abduction": 0.1733858287334442,
+          "rear_right_hip_abduction": 0.027227163314819336,
+          "front_left_hip_flexion": 0.032839640974998474,
+          "rear_left_hip_flexion": 0.052122563123703,
+          "front_right_hip_flexion": 0.18053559958934784,
+          "rear_right_hip_flexion": 0.06760790944099426,
+          "front_left_knee": 0.11445343494415283,
+          "rear_left_knee": 0.1411321759223938,
+          "front_right_knee": 0.09410017728805542,
+          "rear_right_knee": 0.15152853727340698
+        },
+        "drive_stiffness_nm_rad_by_joint": {
+          "front_left_hip_abduction": 30.000001907348633,
+          "rear_left_hip_abduction": 30.000001907348633,
+          "front_right_hip_abduction": 30.000001907348633,
+          "rear_right_hip_abduction": 30.000001907348633,
+          "front_left_hip_flexion": 30.000001907348633,
+          "rear_left_hip_flexion": 30.000001907348633,
+          "front_right_hip_flexion": 30.000001907348633,
+          "rear_right_hip_flexion": 30.000001907348633,
+          "front_left_knee": 30.000001907348633,
+          "rear_left_knee": 30.000001907348633,
+          "front_right_knee": 30.000001907348633,
+          "rear_right_knee": 30.000001907348633
+        },
+        "drive_damping_nm_s_rad_by_joint": {
+          "front_left_hip_abduction": 4.583662509918213,
+          "rear_left_hip_abduction": 4.583662509918213,
+          "front_right_hip_abduction": 4.583662509918213,
+          "rear_right_hip_abduction": 4.583662509918213,
+          "front_left_hip_flexion": 4.583662509918213,
+          "rear_left_hip_flexion": 4.583662509918213,
+          "front_right_hip_flexion": 4.583662509918213,
+          "rear_right_hip_flexion": 4.583662509918213,
+          "front_left_knee": 4.583662509918213,
+          "rear_left_knee": 4.583662509918213,
+          "front_right_knee": 4.583662509918213,
+          "rear_right_knee": 4.583662509918213
+        },
+        "requested_pd_effort_sample_count": 840,
+        "peak_abs_requested_pd_effort_nm": 12.293075561523438,
+        "peak_abs_requested_pd_effort_nm_by_joint": {
+          "front_left_hip_abduction": 0.9043227434158325,
+          "rear_left_hip_abduction": 1.5489659309387207,
+          "front_right_hip_abduction": 6.9774041175842285,
+          "rear_right_hip_abduction": 1.7840087413787842,
+          "front_left_hip_flexion": 1.4815523624420166,
+          "rear_left_hip_flexion": 2.584120750427246,
+          "front_right_hip_flexion": 6.48459529876709,
+          "rear_right_hip_flexion": 2.7089691162109375,
+          "front_left_knee": 8.677019119262695,
+          "rear_left_knee": 12.293075561523438,
+          "front_right_knee": 5.4758148193359375,
+          "rear_right_knee": 10.495777130126953
+        },
+        "peak_requested_pd_effort_to_cap_ratio": 13.928276063831332,
+        "requested_pd_effort_95pct_cap_sample_fraction": 0.2869047619047619,
+        "reported_actuation_effort_sample_count": 840,
+        "peak_abs_reported_actuation_effort_nm": 0.0,
+        "peak_abs_reported_actuation_effort_nm_by_joint": {
+          "front_left_hip_abduction": 0.0,
+          "rear_left_hip_abduction": 0.0,
+          "front_right_hip_abduction": 0.0,
+          "rear_right_hip_abduction": 0.0,
+          "front_left_hip_flexion": 0.0,
+          "rear_left_hip_flexion": 0.0,
+          "front_right_hip_flexion": 0.0,
+          "rear_right_hip_flexion": 0.0,
+          "front_left_knee": 0.0,
+          "rear_left_knee": 0.0,
+          "front_right_knee": 0.0,
+          "rear_right_knee": 0.0
+        },
+        "projected_joint_reaction_load_sample_count": 840,
+        "peak_abs_projected_joint_reaction_load_nm": 1.3321036100387573,
+        "peak_abs_projected_joint_reaction_load_nm_by_joint": {
+          "front_left_hip_abduction": 0.7383703589439392,
+          "rear_left_hip_abduction": 0.8830316066741943,
+          "front_right_hip_abduction": 1.2224007844924927,
+          "rear_right_hip_abduction": 1.0558640956878662,
+          "front_left_hip_flexion": 1.0652697086334229,
+          "rear_left_hip_flexion": 1.239811897277832,
+          "front_right_hip_flexion": 1.2202616930007935,
+          "rear_right_hip_flexion": 1.3321036100387573,
+          "front_left_knee": 0.6543514728546143,
+          "rear_left_knee": 0.8231339454650879,
+          "front_right_knee": 0.7667933106422424,
+          "rear_right_knee": 0.8215081691741943
+        }
+      },
+      "final_swing_reference_joint_positions_rad": [
+        0.14222078025341034,
+        0.11593464761972427,
+        1.2462522983551025
+      ],
+      "final_swing_actual_joint_positions_rad": [
+        0.15244273841381073,
+        0.24175067245960236,
+        1.314257264137268
+      ],
+      "measurable_support_slip_detected": false,
+      "measurable_support_slip_detected_by_leg": {
+        "front_left": false,
+        "front_right": false,
+        "rear_left": false,
+        "rear_right": false
+      },
+      "final_foot_tip_positions_m": [
+        [
+          0.4331298768520355,
+          0.18858005106449127,
+          0.02469891868531704
+        ],
+        [
+          0.5966142416000366,
+          -0.21296566724777222,
+          0.19582735002040863
+        ],
+        [
+          0.24411925673484802,
+          0.19178001582622528,
+          0.0073091452941298485
+        ],
+        [
+          0.2608743906021118,
+          -0.20498046278953552,
+          0.007660520728677511
+        ]
+      ],
+      "initial_foot_tip_positions_m": [
+        [
+          0.43107834458351135,
+          0.19808438420295715,
+          0.007701326161623001
+        ],
+        [
+          0.44904932379722595,
+          -0.1985284835100174,
+          0.007617534603923559
+        ],
+        [
+          0.24524341523647308,
+          0.19121423363685608,
+          0.007664721924811602
+        ],
+        [
+          0.2624112367630005,
+          -0.20564202964305878,
+          0.007815681397914886
+        ]
+      ],
+      "terminated": false,
+      "truncated": true,
+      "failure_reasons": []
+    },
+    {
+      "return": 10457.2542966079,
+      "length_steps": 715,
+      "duration_s": 11.916666666666666,
+      "active_step_count": 1,
+      "highest_step_reached": 0,
+      "stairs_completed": false,
+      "placement_completed": false,
+      "placement_swing_leg": "front_right",
+      "placement_sequence_legs": [
+        "front_right"
+      ],
+      "completed_placement_legs": [],
+      "completed_inter_leg_transfers": [],
+      "last_completed_inter_leg_transfer_metrics": {},
+      "final_placement_transfer_gate_failures": [],
+      "final_placement_pre_unload_gate_failures": [],
+      "pre_unload_gate_enabled": false,
+      "pre_unload_gate_hold_steps": 0,
+      "advance_clearance_gate_enabled": false,
+      "advance_clearance_gate_legs": [
+        "front_right"
+      ],
+      "advance_clearance_gate_minimum_m": 0.19,
+      "advance_clearance_gate_maximum_hold_steps": 120,
+      "maximum_advance_clearance_gate_hold_steps": 0,
+      "final_advance_clearance_gate_released": false,
+      "final_advance_clearance_gate_timeout": false,
+      "final_placement_transfer_support_margin_m": -0.19888240133491653,
+      "final_placement_transfer_base_target_error_m": 0.0,
+      "final_placement_transfer_base_speed_m_s": 0.0,
+      "final_placement_transfer_body_rate_rad_s": 0.0,
+      "final_placement_transfer_upright_cosine": 0.7858107089996338,
+      "final_placement_transfer_completed_tread_min_load_n": 0.0,
+      "final_placement_transfer_swing_total_load_n": 0.0,
+      "placement_transfer_target_base_position_m": null,
+      "balance_point": "base_origin",
+      "final_balance_position_m": [
+        0.046485282480716705,
+        -0.00794161669909954,
+        0.29062825441360474
+      ],
+      "final_com_position_m": [
+        0.08687164168778182,
+        -0.01378212547845519,
+        0.2691758400718111
+      ],
+      "placement_transfer_target_balance_position_m": null,
+      "placement_curriculum_level": "quarter-tread-load",
+      "forward_displacement_m": -0.29925280809402466,
+      "lateral_displacement_m": -0.0067516821436584,
+      "elevation_gain_m": -0.07259997725486755,
+      "maximum_base_elevation_gain_m": 0.0008225440979003906,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.10318969935178757,
+        "front_right": 0.20305851101875305,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 0,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_foot_step_by_leg": {
+        "front_left": 0,
+        "front_right": 0,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "maximum_foot_tread_progress_by_leg": {
+        "front_left": 0.27789542078971863,
+        "front_right": 1.0,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "final_terrain_height_m": 0.0,
+      "maximum_terrain_height_m": 0.0,
+      "minimum_base_clearance_m": 0.29062825441360474,
+      "maximum_body_tilt_deg": 38.20427877891072,
+      "final_projected_gravity_xyz": [
+        -0.6091540455818176,
+        -0.10692592710256577,
+        -0.7858107089996338
+      ],
+      "goal_hold_duration_s": 0.0,
+      "maximum_swing_tread_normal_load_n": 8.49579906463623,
+      "maximum_tread_normal_load_n_by_leg": {
+        "front_left": 0.0,
+        "front_right": 8.49579906463623,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "tread_contact_sample_fraction": 0.0,
+      "minimum_support_contact_fraction": 0.6666666666666666,
+      "minimum_placement_support_margin_m": -0.19888240133491653,
+      "maximum_abs_support_load_sharing_correction_m": 0.0,
+      "maximum_abs_support_load_sharing_correction_m_by_leg": {
+        "front_left": 0.0,
+        "front_right": 0.0,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "support_load_sharing_saturated_sample_fraction": 0.0,
+      "maximum_support_slip_m": 0.06709282845258713,
+      "maximum_support_slip_m_by_leg": {
+        "front_left": 0.06709282845258713,
+        "front_right": 0.0,
+        "rear_left": 0.008936961181461811,
+        "rear_right": 0.007171069271862507
+      },
+      "placement_reference_reach_clip_count": 0,
+      "maximum_placement_reference_reach_excess_m": 0.0,
+      "maximum_placement_desired_lift_m": 0.2,
+      "maximum_swing_reference_tracking_error_rad": 0.18926425278186798,
+      "maximum_balance_lateral_deviation_m": 0.051474276930093765,
+      "joint_effort_metrics": {
+        "effort_cap_nm": 0.8825985,
+        "maximum_abs_joint_tracking_error_rad": 0.38160350918769836,
+        "maximum_abs_joint_tracking_error_rad_by_joint": {
+          "front_left_hip_abduction": 0.02457207441329956,
+          "rear_left_hip_abduction": 0.03312890976667404,
+          "front_right_hip_abduction": 0.18984992802143097,
+          "rear_right_hip_abduction": 0.024486064910888672,
+          "front_left_hip_flexion": 0.10010924190282822,
+          "rear_left_hip_flexion": 0.12725317478179932,
+          "front_right_hip_flexion": 0.16379806399345398,
+          "rear_right_hip_flexion": 0.38160350918769836,
+          "front_left_knee": 0.11435288190841675,
+          "rear_left_knee": 0.14026278257369995,
+          "front_right_knee": 0.09306585788726807,
+          "rear_right_knee": 0.2848431468009949
+        },
+        "drive_stiffness_nm_rad_by_joint": {
+          "front_left_hip_abduction": 30.000001907348633,
+          "rear_left_hip_abduction": 30.000001907348633,
+          "front_right_hip_abduction": 30.000001907348633,
+          "rear_right_hip_abduction": 30.000001907348633,
+          "front_left_hip_flexion": 30.000001907348633,
+          "rear_left_hip_flexion": 30.000001907348633,
+          "front_right_hip_flexion": 30.000001907348633,
+          "rear_right_hip_flexion": 30.000001907348633,
+          "front_left_knee": 30.000001907348633,
+          "rear_left_knee": 30.000001907348633,
+          "front_right_knee": 30.000001907348633,
+          "rear_right_knee": 30.000001907348633
+        },
+        "drive_damping_nm_s_rad_by_joint": {
+          "front_left_hip_abduction": 4.583662509918213,
+          "rear_left_hip_abduction": 4.583662509918213,
+          "front_right_hip_abduction": 4.583662509918213,
+          "rear_right_hip_abduction": 4.583662509918213,
+          "front_left_hip_flexion": 4.583662509918213,
+          "rear_left_hip_flexion": 4.583662509918213,
+          "front_right_hip_flexion": 4.583662509918213,
+          "rear_right_hip_flexion": 4.583662509918213,
+          "front_left_knee": 4.583662509918213,
+          "rear_left_knee": 4.583662509918213,
+          "front_right_knee": 4.583662509918213,
+          "rear_right_knee": 4.583662509918213
+        },
+        "requested_pd_effort_sample_count": 715,
+        "peak_abs_requested_pd_effort_nm": 18.2857666015625,
+        "peak_abs_requested_pd_effort_nm_by_joint": {
+          "front_left_hip_abduction": 1.0480605363845825,
+          "rear_left_hip_abduction": 1.7791000604629517,
+          "front_right_hip_abduction": 8.122884750366211,
+          "rear_right_hip_abduction": 1.5146514177322388,
+          "front_left_hip_flexion": 5.579870223999023,
+          "rear_left_hip_flexion": 5.4503583908081055,
+          "front_right_hip_flexion": 7.0030903816223145,
+          "rear_right_hip_flexion": 17.94426918029785,
+          "front_left_knee": 8.26313591003418,
+          "rear_left_knee": 18.2857666015625,
+          "front_right_knee": 6.054216384887695,
+          "rear_right_knee": 17.58449363708496
+        },
+        "peak_requested_pd_effort_to_cap_ratio": 20.718102967048438,
+        "requested_pd_effort_95pct_cap_sample_fraction": 0.3037296037296037,
+        "reported_actuation_effort_sample_count": 715,
+        "peak_abs_reported_actuation_effort_nm": 0.0,
+        "peak_abs_reported_actuation_effort_nm_by_joint": {
+          "front_left_hip_abduction": 0.0,
+          "rear_left_hip_abduction": 0.0,
+          "front_right_hip_abduction": 0.0,
+          "rear_right_hip_abduction": 0.0,
+          "front_left_hip_flexion": 0.0,
+          "rear_left_hip_flexion": 0.0,
+          "front_right_hip_flexion": 0.0,
+          "rear_right_hip_flexion": 0.0,
+          "front_left_knee": 0.0,
+          "rear_left_knee": 0.0,
+          "front_right_knee": 0.0,
+          "rear_right_knee": 0.0
+        },
+        "projected_joint_reaction_load_sample_count": 715,
+        "peak_abs_projected_joint_reaction_load_nm": 2.4021129608154297,
+        "peak_abs_projected_joint_reaction_load_nm_by_joint": {
+          "front_left_hip_abduction": 0.61678546667099,
+          "rear_left_hip_abduction": 0.8833813667297363,
+          "front_right_hip_abduction": 0.8949062824249268,
+          "rear_right_hip_abduction": 1.386833906173706,
+          "front_left_hip_flexion": 0.9301626086235046,
+          "rear_left_hip_flexion": 2.4021129608154297,
+          "front_right_hip_flexion": 1.488830327987671,
+          "rear_right_hip_flexion": 1.7199167013168335,
+          "front_left_knee": 0.6544088125228882,
+          "rear_left_knee": 0.856619656085968,
+          "front_right_knee": 0.6651950478553772,
+          "rear_right_knee": 0.8656493425369263
+        }
+      },
+      "final_swing_reference_joint_positions_rad": [
+        0.09075741469860077,
+        0.1589116007089615,
+        1.204626202583313
+      ],
+      "final_swing_actual_joint_positions_rad": [
+        0.1349446326494217,
+        0.16753257811069489,
+        1.1585593223571777
+      ],
+      "measurable_support_slip_detected": true,
+      "measurable_support_slip_detected_by_leg": {
+        "front_left": true,
+        "front_right": false,
+        "rear_left": false,
+        "rear_right": false
+      },
+      "final_foot_tip_positions_m": [
+        [
+          0.36094409227371216,
+          0.18359357118606567,
+          0.12392685562372208
+        ],
+        [
+          0.3909081220626831,
+          -0.23429007828235626,
+          0.23850256204605103
+        ],
+        [
+          0.23044918477535248,
+          0.19322438538074493,
+          0.007759838830679655
+        ],
+        [
+          0.26116281747817993,
+          -0.20516875386238098,
+          0.008363060653209686
+        ]
+      ],
+      "initial_foot_tip_positions_m": [
+        [
+          0.42581382393836975,
+          0.20072148740291595,
+          0.007824823260307312
+        ],
+        [
+          0.4517633616924286,
+          -0.193707674741745,
+          0.007527898997068405
+        ],
+        [
+          0.2393796145915985,
+          0.19288277626037598,
+          0.007601979188621044
+        ],
+        [
+          0.26819485425949097,
+          -0.2062959522008896,
+          0.007660760078579187
+        ]
+      ],
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped",
+        "moved_too_far_backward"
+      ]
+    },
+    {
+      "return": 13228.871293946315,
+      "length_steps": 745,
+      "duration_s": 12.416666666666666,
+      "active_step_count": 1,
+      "highest_step_reached": 0,
+      "stairs_completed": true,
+      "placement_completed": true,
+      "placement_swing_leg": "front_right",
+      "placement_sequence_legs": [
+        "front_right"
+      ],
+      "completed_placement_legs": [
+        "front_right"
+      ],
+      "completed_inter_leg_transfers": [],
+      "last_completed_inter_leg_transfer_metrics": {},
+      "final_placement_transfer_gate_failures": [],
+      "final_placement_pre_unload_gate_failures": [],
+      "pre_unload_gate_enabled": false,
+      "pre_unload_gate_hold_steps": 0,
+      "advance_clearance_gate_enabled": false,
+      "advance_clearance_gate_legs": [
+        "front_right"
+      ],
+      "advance_clearance_gate_minimum_m": 0.19,
+      "advance_clearance_gate_maximum_hold_steps": 120,
+      "maximum_advance_clearance_gate_hold_steps": 0,
+      "final_advance_clearance_gate_released": false,
+      "final_advance_clearance_gate_timeout": false,
+      "final_placement_transfer_support_margin_m": 0.04924999917809425,
+      "final_placement_transfer_base_target_error_m": 0.0,
+      "final_placement_transfer_base_speed_m_s": 0.0,
+      "final_placement_transfer_body_rate_rad_s": 0.0,
+      "final_placement_transfer_upright_cosine": 0.9917429685592651,
+      "final_placement_transfer_completed_tread_min_load_n": 0.0,
+      "final_placement_transfer_swing_total_load_n": 0.0,
+      "placement_transfer_target_base_position_m": null,
+      "balance_point": "base_origin",
+      "final_balance_position_m": [
+        0.329062819480896,
+        0.02544744685292244,
+        0.3616231679916382
+      ],
+      "final_com_position_m": [
+        0.34174185640451465,
+        0.017546832514340013,
+        0.32012308895629515
+      ],
+      "placement_transfer_target_balance_position_m": null,
+      "placement_curriculum_level": "quarter-tread-load",
+      "forward_displacement_m": -0.022233158349990845,
+      "lateral_displacement_m": 0.022909587249159813,
+      "elevation_gain_m": -0.0015102624893188477,
+      "maximum_base_elevation_gain_m": 0.0031807422637939453,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.012349708937108517,
+        "front_right": 0.19947326183319092,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 0,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_foot_step_by_leg": {
+        "front_left": 0,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "maximum_foot_tread_progress_by_leg": {
+        "front_left": 0.11095571517944336,
+        "front_right": 1.0,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "final_terrain_height_m": 0.0,
+      "maximum_terrain_height_m": 0.0,
+      "minimum_base_clearance_m": 0.36132675409317017,
+      "maximum_body_tilt_deg": 7.977399941527026,
+      "final_projected_gravity_xyz": [
+        -0.12549221515655518,
+        0.02642105519771576,
+        -0.9917429685592651
+      ],
+      "goal_hold_duration_s": 0.5,
+      "maximum_swing_tread_normal_load_n": 17.394977569580078,
+      "maximum_tread_normal_load_n_by_leg": {
+        "front_left": 0.0,
+        "front_right": 17.394977569580078,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "tread_contact_sample_fraction": 0.050335570469798654,
+      "minimum_support_contact_fraction": 0.6666666666666666,
+      "minimum_placement_support_margin_m": 0.0004345785576555832,
+      "maximum_abs_support_load_sharing_correction_m": 0.0,
+      "maximum_abs_support_load_sharing_correction_m_by_leg": {
+        "front_left": 0.0,
+        "front_right": 0.0,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "support_load_sharing_saturated_sample_fraction": 0.0,
+      "maximum_support_slip_m": 0.03936956077814102,
+      "maximum_support_slip_m_by_leg": {
+        "front_left": 0.03936956077814102,
+        "front_right": 0.0,
+        "rear_left": 0.0030760846566408873,
+        "rear_right": 0.003838255302980542
+      },
+      "placement_reference_reach_clip_count": 0,
+      "maximum_placement_reference_reach_excess_m": 0.0,
+      "maximum_placement_desired_lift_m": 0.2,
+      "maximum_swing_reference_tracking_error_rad": 0.19074732065200806,
+      "maximum_balance_lateral_deviation_m": 0.0609053298830986,
+      "joint_effort_metrics": {
+        "effort_cap_nm": 0.8825985,
+        "maximum_abs_joint_tracking_error_rad": 0.32883840799331665,
+        "maximum_abs_joint_tracking_error_rad_by_joint": {
+          "front_left_hip_abduction": 0.024147793650627136,
+          "rear_left_hip_abduction": 0.04140713810920715,
+          "front_right_hip_abduction": 0.14132753014564514,
+          "rear_right_hip_abduction": 0.04419368878006935,
+          "front_left_hip_flexion": 0.03203795850276947,
+          "rear_left_hip_flexion": 0.051552608609199524,
+          "front_right_hip_flexion": 0.19044217467308044,
+          "rear_right_hip_flexion": 0.08677983283996582,
+          "front_left_knee": 0.11423400044441223,
+          "rear_left_knee": 0.32883840799331665,
+          "front_right_knee": 0.08066236972808838,
+          "rear_right_knee": 0.14461630582809448
+        },
+        "drive_stiffness_nm_rad_by_joint": {
+          "front_left_hip_abduction": 30.000001907348633,
+          "rear_left_hip_abduction": 30.000001907348633,
+          "front_right_hip_abduction": 30.000001907348633,
+          "rear_right_hip_abduction": 30.000001907348633,
+          "front_left_hip_flexion": 30.000001907348633,
+          "rear_left_hip_flexion": 30.000001907348633,
+          "front_right_hip_flexion": 30.000001907348633,
+          "rear_right_hip_flexion": 30.000001907348633,
+          "front_left_knee": 30.000001907348633,
+          "rear_left_knee": 30.000001907348633,
+          "front_right_knee": 30.000001907348633,
+          "rear_right_knee": 30.000001907348633
+        },
+        "drive_damping_nm_s_rad_by_joint": {
+          "front_left_hip_abduction": 4.583662509918213,
+          "rear_left_hip_abduction": 4.583662509918213,
+          "front_right_hip_abduction": 4.583662509918213,
+          "rear_right_hip_abduction": 4.583662509918213,
+          "front_left_hip_flexion": 4.583662509918213,
+          "rear_left_hip_flexion": 4.583662509918213,
+          "front_right_hip_flexion": 4.583662509918213,
+          "rear_right_hip_flexion": 4.583662509918213,
+          "front_left_knee": 4.583662509918213,
+          "rear_left_knee": 4.583662509918213,
+          "front_right_knee": 4.583662509918213,
+          "rear_right_knee": 4.583662509918213
+        },
+        "requested_pd_effort_sample_count": 745,
+        "peak_abs_requested_pd_effort_nm": 15.818426132202148,
+        "peak_abs_requested_pd_effort_nm_by_joint": {
+          "front_left_hip_abduction": 0.7929593324661255,
+          "rear_left_hip_abduction": 1.680471420288086,
+          "front_right_hip_abduction": 5.677095890045166,
+          "rear_right_hip_abduction": 2.103925943374634,
+          "front_left_hip_flexion": 1.9684171676635742,
+          "rear_left_hip_flexion": 3.30356502532959,
+          "front_right_hip_flexion": 6.605339050292969,
+          "rear_right_hip_flexion": 3.1481106281280518,
+          "front_left_knee": 8.201008796691895,
+          "rear_left_knee": 15.818426132202148,
+          "front_right_knee": 3.599388599395752,
+          "rear_right_knee": 15.30483341217041
+        },
+        "peak_requested_pd_effort_to_cap_ratio": 17.92256176755586,
+        "requested_pd_effort_95pct_cap_sample_fraction": 0.3448545861297539,
+        "reported_actuation_effort_sample_count": 745,
+        "peak_abs_reported_actuation_effort_nm": 0.0,
+        "peak_abs_reported_actuation_effort_nm_by_joint": {
+          "front_left_hip_abduction": 0.0,
+          "rear_left_hip_abduction": 0.0,
+          "front_right_hip_abduction": 0.0,
+          "rear_right_hip_abduction": 0.0,
+          "front_left_hip_flexion": 0.0,
+          "rear_left_hip_flexion": 0.0,
+          "front_right_hip_flexion": 0.0,
+          "rear_right_hip_flexion": 0.0,
+          "front_left_knee": 0.0,
+          "rear_left_knee": 0.0,
+          "front_right_knee": 0.0,
+          "rear_right_knee": 0.0
+        },
+        "projected_joint_reaction_load_sample_count": 745,
+        "peak_abs_projected_joint_reaction_load_nm": 1.7116690874099731,
+        "peak_abs_projected_joint_reaction_load_nm_by_joint": {
+          "front_left_hip_abduction": 0.816771924495697,
+          "rear_left_hip_abduction": 1.0119681358337402,
+          "front_right_hip_abduction": 0.883767306804657,
+          "rear_right_hip_abduction": 1.2663567066192627,
+          "front_left_hip_flexion": 1.3100849390029907,
+          "rear_left_hip_flexion": 0.9305365681648254,
+          "front_right_hip_flexion": 1.3580073118209839,
+          "rear_right_hip_flexion": 1.7116690874099731,
+          "front_left_knee": 0.6355828642845154,
+          "rear_left_knee": 0.8945285677909851,
+          "front_right_knee": 0.8747304081916809,
+          "rear_right_knee": 0.8142111301422119
+        }
+      },
+      "final_swing_reference_joint_positions_rad": [
+        0.025282783433794975,
+        0.10718625783920288,
+        1.267978549003601
+      ],
+      "final_swing_actual_joint_positions_rad": [
+        0.04681159928441048,
+        0.25758305191993713,
+        1.331265926361084
+      ],
+      "measurable_support_slip_detected": true,
+      "measurable_support_slip_detected_by_leg": {
+        "front_left": true,
+        "front_right": false,
+        "rear_left": false,
+        "rear_right": false
+      },
+      "final_foot_tip_positions_m": [
+        [
+          0.4752545654773712,
+          0.16632898151874542,
+          0.011916792951524258
+        ],
+        [
+          0.5860013365745544,
+          -0.22206240892410278,
+          0.19354559481143951
+        ],
+        [
+          0.26074326038360596,
+          0.2059309035539627,
+          0.010761420242488384
+        ],
+        [
+          0.25155720114707947,
+          -0.19137142598628998,
+          0.008387909270823002
+        ]
+      ],
+      "initial_foot_tip_positions_m": [
+        [
+          0.4490591883659363,
+          0.19571885466575623,
+          0.007622319273650646
+        ],
+        [
+          0.4382358193397522,
+          -0.20151536166667938,
+          0.007726436946541071
+        ],
+        [
+          0.26226332783699036,
+          0.2055351436138153,
+          0.007832723669707775
+        ],
+        [
+          0.25409337878227234,
+          -0.19158965349197388,
+          0.007508102338761091
+        ]
+      ],
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": []
+    },
+    {
+      "return": 10048.47835820447,
+      "length_steps": 708,
+      "duration_s": 11.8,
+      "active_step_count": 1,
+      "highest_step_reached": 0,
+      "stairs_completed": false,
+      "placement_completed": false,
+      "placement_swing_leg": "front_right",
+      "placement_sequence_legs": [
+        "front_right"
+      ],
+      "completed_placement_legs": [],
+      "completed_inter_leg_transfers": [],
+      "last_completed_inter_leg_transfer_metrics": {},
+      "final_placement_transfer_gate_failures": [],
+      "final_placement_pre_unload_gate_failures": [],
+      "pre_unload_gate_enabled": false,
+      "pre_unload_gate_hold_steps": 0,
+      "advance_clearance_gate_enabled": false,
+      "advance_clearance_gate_legs": [
+        "front_right"
+      ],
+      "advance_clearance_gate_minimum_m": 0.19,
+      "advance_clearance_gate_maximum_hold_steps": 120,
+      "maximum_advance_clearance_gate_hold_steps": 0,
+      "final_advance_clearance_gate_released": false,
+      "final_advance_clearance_gate_timeout": false,
+      "final_placement_transfer_support_margin_m": -0.18122255921348535,
+      "final_placement_transfer_base_target_error_m": 0.0,
+      "final_placement_transfer_base_speed_m_s": 0.0,
+      "final_placement_transfer_body_rate_rad_s": 0.0,
+      "final_placement_transfer_upright_cosine": 0.7830794453620911,
+      "final_placement_transfer_completed_tread_min_load_n": 0.0,
+      "final_placement_transfer_swing_total_load_n": 0.0,
+      "placement_transfer_target_base_position_m": null,
+      "balance_point": "base_origin",
+      "final_balance_position_m": [
+        0.07823607325553894,
+        0.006459258496761322,
+        0.3056338131427765
+      ],
+      "final_com_position_m": [
+        0.11650140544706267,
+        0.0013410165896426901,
+        0.2815422299574086
+      ],
+      "placement_transfer_target_balance_position_m": null,
+      "placement_curriculum_level": "quarter-tread-load",
+      "forward_displacement_m": -0.2813616991043091,
+      "lateral_displacement_m": 0.004801387898623943,
+      "elevation_gain_m": -0.05810520052909851,
+      "maximum_base_elevation_gain_m": 0.0018026232719421387,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.11886925995349884,
+        "front_right": 0.2021780014038086,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 0,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_foot_step_by_leg": {
+        "front_left": 0,
+        "front_right": 0,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "maximum_foot_tread_progress_by_leg": {
+        "front_left": 0.3638145923614502,
+        "front_right": 1.0,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "final_terrain_height_m": 0.0,
+      "maximum_terrain_height_m": 0.0,
+      "minimum_base_clearance_m": 0.3056338131427765,
+      "maximum_body_tilt_deg": 38.45660229329953,
+      "final_projected_gravity_xyz": [
+        -0.615576446056366,
+        -0.08861257880926132,
+        -0.7830794453620911
+      ],
+      "goal_hold_duration_s": 0.0,
+      "maximum_swing_tread_normal_load_n": 10.578349113464355,
+      "maximum_tread_normal_load_n_by_leg": {
+        "front_left": 0.0,
+        "front_right": 10.578349113464355,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "tread_contact_sample_fraction": 0.0,
+      "minimum_support_contact_fraction": 0.6666666666666666,
+      "minimum_placement_support_margin_m": -0.18122255921348535,
+      "maximum_abs_support_load_sharing_correction_m": 0.0,
+      "maximum_abs_support_load_sharing_correction_m_by_leg": {
+        "front_left": 0.0,
+        "front_right": 0.0,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "support_load_sharing_saturated_sample_fraction": 0.0,
+      "maximum_support_slip_m": 0.059661366045475006,
+      "maximum_support_slip_m_by_leg": {
+        "front_left": 0.059661366045475006,
+        "front_right": 0.0,
+        "rear_left": 0.00978168100118637,
+        "rear_right": 0.008414426818490028
+      },
+      "placement_reference_reach_clip_count": 0,
+      "maximum_placement_reference_reach_excess_m": 0.0,
+      "maximum_placement_desired_lift_m": 0.2,
+      "maximum_swing_reference_tracking_error_rad": 0.16363897919654846,
+      "maximum_balance_lateral_deviation_m": 0.05775325745344162,
+      "joint_effort_metrics": {
+        "effort_cap_nm": 0.8825985,
+        "maximum_abs_joint_tracking_error_rad": 0.32596296072006226,
+        "maximum_abs_joint_tracking_error_rad_by_joint": {
+          "front_left_hip_abduction": 0.020528554916381836,
+          "rear_left_hip_abduction": 0.027073785662651062,
+          "front_right_hip_abduction": 0.15839168429374695,
+          "rear_right_hip_abduction": 0.026812180876731873,
+          "front_left_hip_flexion": 0.08487673103809357,
+          "rear_left_hip_flexion": 0.08955973386764526,
+          "front_right_hip_flexion": 0.1653634011745453,
+          "rear_right_hip_flexion": 0.2990434765815735,
+          "front_left_knee": 0.1084119975566864,
+          "rear_left_knee": 0.13801485300064087,
+          "front_right_knee": 0.08133620023727417,
+          "rear_right_knee": 0.32596296072006226
+        },
+        "drive_stiffness_nm_rad_by_joint": {
+          "front_left_hip_abduction": 30.000001907348633,
+          "rear_left_hip_abduction": 30.000001907348633,
+          "front_right_hip_abduction": 30.000001907348633,
+          "rear_right_hip_abduction": 30.000001907348633,
+          "front_left_hip_flexion": 30.000001907348633,
+          "rear_left_hip_flexion": 30.000001907348633,
+          "front_right_hip_flexion": 30.000001907348633,
+          "rear_right_hip_flexion": 30.000001907348633,
+          "front_left_knee": 30.000001907348633,
+          "rear_left_knee": 30.000001907348633,
+          "front_right_knee": 30.000001907348633,
+          "rear_right_knee": 30.000001907348633
+        },
+        "drive_damping_nm_s_rad_by_joint": {
+          "front_left_hip_abduction": 4.583662509918213,
+          "rear_left_hip_abduction": 4.583662509918213,
+          "front_right_hip_abduction": 4.583662509918213,
+          "rear_right_hip_abduction": 4.583662509918213,
+          "front_left_hip_flexion": 4.583662509918213,
+          "rear_left_hip_flexion": 4.583662509918213,
+          "front_right_hip_flexion": 4.583662509918213,
+          "rear_right_hip_flexion": 4.583662509918213,
+          "front_left_knee": 4.583662509918213,
+          "rear_left_knee": 4.583662509918213,
+          "front_right_knee": 4.583662509918213,
+          "rear_right_knee": 4.583662509918213
+        },
+        "requested_pd_effort_sample_count": 708,
+        "peak_abs_requested_pd_effort_nm": 20.388404846191406,
+        "peak_abs_requested_pd_effort_nm_by_joint": {
+          "front_left_hip_abduction": 0.8490245342254639,
+          "rear_left_hip_abduction": 1.425661325454712,
+          "front_right_hip_abduction": 6.087568759918213,
+          "rear_right_hip_abduction": 1.365582823753357,
+          "front_left_hip_flexion": 4.224502086639404,
+          "rear_left_hip_flexion": 4.784129619598389,
+          "front_right_hip_flexion": 6.500558853149414,
+          "rear_right_hip_flexion": 14.874894142150879,
+          "front_left_knee": 8.130692481994629,
+          "rear_left_knee": 11.788233757019043,
+          "front_right_knee": 6.392047882080078,
+          "rear_right_knee": 20.388404846191406
+        },
+        "peak_requested_pd_effort_to_cap_ratio": 23.100429976021267,
+        "requested_pd_effort_95pct_cap_sample_fraction": 0.3086158192090395,
+        "reported_actuation_effort_sample_count": 708,
+        "peak_abs_reported_actuation_effort_nm": 0.0,
+        "peak_abs_reported_actuation_effort_nm_by_joint": {
+          "front_left_hip_abduction": 0.0,
+          "rear_left_hip_abduction": 0.0,
+          "front_right_hip_abduction": 0.0,
+          "rear_right_hip_abduction": 0.0,
+          "front_left_hip_flexion": 0.0,
+          "rear_left_hip_flexion": 0.0,
+          "front_right_hip_flexion": 0.0,
+          "rear_right_hip_flexion": 0.0,
+          "front_left_knee": 0.0,
+          "rear_left_knee": 0.0,
+          "front_right_knee": 0.0,
+          "rear_right_knee": 0.0
+        },
+        "projected_joint_reaction_load_sample_count": 708,
+        "peak_abs_projected_joint_reaction_load_nm": 2.0195493698120117,
+        "peak_abs_projected_joint_reaction_load_nm_by_joint": {
+          "front_left_hip_abduction": 0.6470235586166382,
+          "rear_left_hip_abduction": 0.8827118873596191,
+          "front_right_hip_abduction": 0.8837549686431885,
+          "rear_right_hip_abduction": 1.188263177871704,
+          "front_left_hip_flexion": 1.298715591430664,
+          "rear_left_hip_flexion": 2.0195493698120117,
+          "front_right_hip_flexion": 1.4616661071777344,
+          "rear_right_hip_flexion": 1.7145625352859497,
+          "front_left_knee": 0.5995926260948181,
+          "rear_left_knee": 0.7779449820518494,
+          "front_right_knee": 0.6028721332550049,
+          "rear_right_knee": 0.8673171401023865
+        }
+      },
+      "final_swing_reference_joint_positions_rad": [
+        0.04483518749475479,
+        0.1098923534154892,
+        1.2641421556472778
+      ],
+      "final_swing_actual_joint_positions_rad": [
+        0.06397436559200287,
+        0.09508416801691055,
+        1.2495967149734497
+      ],
+      "measurable_support_slip_detected": true,
+      "measurable_support_slip_detected_by_leg": {
+        "front_left": true,
+        "front_right": false,
+        "rear_left": false,
+        "rear_right": false
+      },
+      "final_foot_tip_positions_m": [
+        [
+          0.3920896351337433,
+          0.18592959642410278,
+          0.12648729979991913
+        ],
+        [
+          0.40782132744789124,
+          -0.21292930841445923,
+          0.25463616847991943
+        ],
+        [
+          0.25694066286087036,
+          0.20020131766796112,
+          0.0063141933642327785
+        ],
+        [
+          0.2621269226074219,
+          -0.19640864431858063,
+          0.006219441536813974
+        ]
+      ],
+      "initial_foot_tip_positions_m": [
+        [
+          0.4500051736831665,
+          0.200256809592247,
+          0.007618038449436426
+        ],
+        [
+          0.4530441462993622,
+          -0.19783256947994232,
+          0.007567745633423328
+        ],
+        [
+          0.26672089099884033,
+          0.20003272593021393,
+          0.0075565422885119915
+        ],
+        [
+          0.2705249488353729,
+          -0.19693374633789062,
+          0.007538818754255772
+        ]
+      ],
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ]
+    },
+    {
+      "return": 9989.95021664786,
+      "length_steps": 704,
+      "duration_s": 11.733333333333333,
+      "active_step_count": 1,
+      "highest_step_reached": 0,
+      "stairs_completed": false,
+      "placement_completed": false,
+      "placement_swing_leg": "front_right",
+      "placement_sequence_legs": [
+        "front_right"
+      ],
+      "completed_placement_legs": [],
+      "completed_inter_leg_transfers": [],
+      "last_completed_inter_leg_transfer_metrics": {},
+      "final_placement_transfer_gate_failures": [],
+      "final_placement_pre_unload_gate_failures": [],
+      "pre_unload_gate_enabled": false,
+      "pre_unload_gate_hold_steps": 0,
+      "advance_clearance_gate_enabled": false,
+      "advance_clearance_gate_legs": [
+        "front_right"
+      ],
+      "advance_clearance_gate_minimum_m": 0.19,
+      "advance_clearance_gate_maximum_hold_steps": 120,
+      "maximum_advance_clearance_gate_hold_steps": 0,
+      "final_advance_clearance_gate_released": false,
+      "final_advance_clearance_gate_timeout": false,
+      "final_placement_transfer_support_margin_m": -0.18346529735378034,
+      "final_placement_transfer_base_target_error_m": 0.0,
+      "final_placement_transfer_base_speed_m_s": 0.0,
+      "final_placement_transfer_body_rate_rad_s": 0.0,
+      "final_placement_transfer_upright_cosine": 0.7835577130317688,
+      "final_placement_transfer_completed_tread_min_load_n": 0.0,
+      "final_placement_transfer_swing_total_load_n": 0.0,
+      "placement_transfer_target_base_position_m": null,
+      "balance_point": "base_origin",
+      "final_balance_position_m": [
+        0.0751648023724556,
+        0.003879595547914505,
+        0.3025802969932556
+      ],
+      "final_com_position_m": [
+        0.11380227629206223,
+        -0.0011352142781620494,
+        0.27904908381866483
+      ],
+      "placement_transfer_target_balance_position_m": null,
+      "placement_curriculum_level": "quarter-tread-load",
+      "forward_displacement_m": -0.2880619764328003,
+      "lateral_displacement_m": 0.0033029986079782248,
+      "elevation_gain_m": -0.06085318326950073,
+      "maximum_base_elevation_gain_m": 0.001463562250137329,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.11775209754705429,
+        "front_right": 0.20098042488098145,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 0,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_foot_step_by_leg": {
+        "front_left": 0,
+        "front_right": 0,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "maximum_foot_tread_progress_by_leg": {
+        "front_left": 0.35752442479133606,
+        "front_right": 1.0,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "final_terrain_height_m": 0.0,
+      "maximum_terrain_height_m": 0.0,
+      "minimum_base_clearance_m": 0.3025802969932556,
+      "maximum_body_tilt_deg": 38.412519570233066,
+      "final_projected_gravity_xyz": [
+        -0.6152092218399048,
+        -0.08692136406898499,
+        -0.7835577130317688
+      ],
+      "goal_hold_duration_s": 0.0,
+      "maximum_swing_tread_normal_load_n": 10.815184593200684,
+      "maximum_tread_normal_load_n_by_leg": {
+        "front_left": 0.0,
+        "front_right": 10.815184593200684,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "tread_contact_sample_fraction": 0.0,
+      "minimum_support_contact_fraction": 0.6666666666666666,
+      "minimum_placement_support_margin_m": -0.18346529735378034,
+      "maximum_abs_support_load_sharing_correction_m": 0.0,
+      "maximum_abs_support_load_sharing_correction_m_by_leg": {
+        "front_left": 0.0,
+        "front_right": 0.0,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "support_load_sharing_saturated_sample_fraction": 0.0,
+      "maximum_support_slip_m": 0.06260120123624802,
+      "maximum_support_slip_m_by_leg": {
+        "front_left": 0.06260120123624802,
+        "front_right": 0.0,
+        "rear_left": 0.010277505964040756,
+        "rear_right": 0.008762896060943604
+      },
+      "placement_reference_reach_clip_count": 0,
+      "maximum_placement_reference_reach_excess_m": 0.0,
+      "maximum_placement_desired_lift_m": 0.2,
+      "maximum_swing_reference_tracking_error_rad": 0.165635347366333,
+      "maximum_balance_lateral_deviation_m": 0.05636586621403694,
+      "joint_effort_metrics": {
+        "effort_cap_nm": 0.8825985,
+        "maximum_abs_joint_tracking_error_rad": 0.348649799823761,
+        "maximum_abs_joint_tracking_error_rad_by_joint": {
+          "front_left_hip_abduction": 0.020292550325393677,
+          "rear_left_hip_abduction": 0.02668990194797516,
+          "front_right_hip_abduction": 0.16327491402626038,
+          "rear_right_hip_abduction": 0.02725452184677124,
+          "front_left_hip_flexion": 0.0944957435131073,
+          "rear_left_hip_flexion": 0.10654637217521667,
+          "front_right_hip_flexion": 0.16669607162475586,
+          "rear_right_hip_flexion": 0.3184124231338501,
+          "front_left_knee": 0.11051666736602783,
+          "rear_left_knee": 0.13647782802581787,
+          "front_right_knee": 0.08259069919586182,
+          "rear_right_knee": 0.348649799823761
+        },
+        "drive_stiffness_nm_rad_by_joint": {
+          "front_left_hip_abduction": 30.000001907348633,
+          "rear_left_hip_abduction": 30.000001907348633,
+          "front_right_hip_abduction": 30.000001907348633,
+          "rear_right_hip_abduction": 30.000001907348633,
+          "front_left_hip_flexion": 30.000001907348633,
+          "rear_left_hip_flexion": 30.000001907348633,
+          "front_right_hip_flexion": 30.000001907348633,
+          "rear_right_hip_flexion": 30.000001907348633,
+          "front_left_knee": 30.000001907348633,
+          "rear_left_knee": 30.000001907348633,
+          "front_right_knee": 30.000001907348633,
+          "rear_right_knee": 30.000001907348633
+        },
+        "drive_damping_nm_s_rad_by_joint": {
+          "front_left_hip_abduction": 4.583662509918213,
+          "rear_left_hip_abduction": 4.583662509918213,
+          "front_right_hip_abduction": 4.583662509918213,
+          "rear_right_hip_abduction": 4.583662509918213,
+          "front_left_hip_flexion": 4.583662509918213,
+          "rear_left_hip_flexion": 4.583662509918213,
+          "front_right_hip_flexion": 4.583662509918213,
+          "rear_right_hip_flexion": 4.583662509918213,
+          "front_left_knee": 4.583662509918213,
+          "rear_left_knee": 4.583662509918213,
+          "front_right_knee": 4.583662509918213,
+          "rear_right_knee": 4.583662509918213
+        },
+        "requested_pd_effort_sample_count": 704,
+        "peak_abs_requested_pd_effort_nm": 22.698543548583984,
+        "peak_abs_requested_pd_effort_nm_by_joint": {
+          "front_left_hip_abduction": 1.0726460218429565,
+          "rear_left_hip_abduction": 1.267754316329956,
+          "front_right_hip_abduction": 6.574808120727539,
+          "rear_right_hip_abduction": 1.334391713142395,
+          "front_left_hip_flexion": 4.702980041503906,
+          "rear_left_hip_flexion": 3.4088664054870605,
+          "front_right_hip_flexion": 6.553900718688965,
+          "rear_right_hip_flexion": 16.984432220458984,
+          "front_left_knee": 8.085844993591309,
+          "rear_left_knee": 15.909761428833008,
+          "front_right_knee": 6.281630039215088,
+          "rear_right_knee": 22.698543548583984
+        },
+        "peak_requested_pd_effort_to_cap_ratio": 25.71785874164072,
+        "requested_pd_effort_95pct_cap_sample_fraction": 0.3103693181818182,
+        "reported_actuation_effort_sample_count": 704,
+        "peak_abs_reported_actuation_effort_nm": 0.0,
+        "peak_abs_reported_actuation_effort_nm_by_joint": {
+          "front_left_hip_abduction": 0.0,
+          "rear_left_hip_abduction": 0.0,
+          "front_right_hip_abduction": 0.0,
+          "rear_right_hip_abduction": 0.0,
+          "front_left_hip_flexion": 0.0,
+          "rear_left_hip_flexion": 0.0,
+          "front_right_hip_flexion": 0.0,
+          "rear_right_hip_flexion": 0.0,
+          "front_left_knee": 0.0,
+          "rear_left_knee": 0.0,
+          "front_right_knee": 0.0,
+          "rear_right_knee": 0.0
+        },
+        "projected_joint_reaction_load_sample_count": 704,
+        "peak_abs_projected_joint_reaction_load_nm": 2.2614004611968994,
+        "peak_abs_projected_joint_reaction_load_nm_by_joint": {
+          "front_left_hip_abduction": 0.7365009188652039,
+          "rear_left_hip_abduction": 0.9284121990203857,
+          "front_right_hip_abduction": 0.8836579918861389,
+          "rear_right_hip_abduction": 1.1026389598846436,
+          "front_left_hip_flexion": 1.2696787118911743,
+          "rear_left_hip_flexion": 2.2614004611968994,
+          "front_right_hip_flexion": 1.4878779649734497,
+          "rear_right_hip_flexion": 1.5967960357666016,
+          "front_left_knee": 0.5954179167747498,
+          "rear_left_knee": 0.7966057062149048,
+          "front_right_knee": 0.6122932434082031,
+          "rear_right_knee": 0.869280219078064
+        }
+      },
+      "final_swing_reference_joint_positions_rad": [
+        0.05560348555445671,
+        0.11139774322509766,
+        1.261810541152954
+      ],
+      "final_swing_actual_joint_positions_rad": [
+        0.07699891179800034,
+        0.10044778883457184,
+        1.2413709163665771
+      ],
+      "measurable_support_slip_detected": true,
+      "measurable_support_slip_detected_by_leg": {
+        "front_left": true,
+        "front_right": false,
+        "rear_left": false,
+        "rear_right": false
+      },
+      "final_foot_tip_positions_m": [
+        [
+          0.3888516426086426,
+          0.18712592124938965,
+          0.12531603872776031
+        ],
+        [
+          0.40782636404037476,
+          -0.21526192128658295,
+          0.25230440497398376
+        ],
+        [
+          0.2558233141899109,
+          0.19941407442092896,
+          0.006252836901694536
+        ],
+        [
+          0.2615641951560974,
+          -0.19781240820884705,
+          0.006381222978234291
+        ]
+      ],
+      "initial_foot_tip_positions_m": [
+        [
+          0.4503606855869293,
+          0.19876843690872192,
+          0.007563942112028599
+        ],
+        [
+          0.4542144536972046,
+          -0.19806095957756042,
+          0.007523196749389172
+        ],
+        [
+          0.266096830368042,
+          0.19912774860858917,
+          0.007700867019593716
+        ],
+        [
+          0.2703203558921814,
+          -0.19815590977668762,
+          0.007709176745265722
+        ]
+      ],
+      "terminated": true,
+      "truncated": false,
+      "failure_reasons": [
+        "body_tipped"
+      ]
+    }
+  ],
+  "phase_training": null,
+  "elapsed_seconds": 116.68217929988168,
+  "scope": "Single-environment stair PPO training",
+  "terrain_input": "Analytic height profile used for simulation learning; not a hardware sensor pipeline."
+}

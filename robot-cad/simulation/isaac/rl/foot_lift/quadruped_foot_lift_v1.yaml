@@ -1,0 +1,125 @@
+schema_version: 1
+task:
+  id: Drobot-Quadruped-Foot-Lift-v1-190mm-Supported
+  world: exports/isaac/quadruped_robot_manual_world.usda
+  world_dependencies:
+    - exports/isaac/quadruped_robot_floating.usdc
+  robot_prim: /World/Robot
+  imu_prim: /World/Robot/Geometry/base_link/body_imu
+  # RGB is used only to record evaluation video.
+  camera_prim: /World/Robot/Geometry/base_link/lekiwi_camera
+  target_velocity_body_m_s: [0.0, 0.0, 0.0]
+  physics_hz: 120
+  control_hz: 60
+  episode_seconds: 6.0
+  success_hold_seconds: 0.75
+  reset_settle_seconds: 0.75
+  reset_start_z_m: 0.46
+  reset_joint_noise_rad: 0.004
+  foot_lift:
+    swing_leg: front_left
+    target_lift_m: 0.19
+    # Command 10 mm extra so measured clearance remains at least 190 mm under
+    # the real-test effort cap and position tracking error.
+    reference_lift_m: 0.20
+    # Pure vertical lift would need about 135 deg knee bend. The forward arc
+    # preserves the requested height within the measured 120 deg knee limit.
+    target_forward_offset_m: 0.11
+    ramp_start_seconds: 0.50
+    ramp_duration_seconds: 2.50
+  base_support:
+    # Stage 1 deliberately isolates leg authority. Stage 2 removes this hold.
+    mode: pose_hold
+  weight_shift:
+    # For a front-left swing, shift the body toward the rear-right support
+    # triangle before lift begins.
+    start_seconds: 0.25
+    duration_seconds: 1.25
+    forward_m: 0.0
+    lateral_m: 0.0
+  success:
+    minimum_lift_m: 0.19
+    minimum_upright_cosine: 0.9781476  # 12 degrees maximum tilt
+    maximum_base_height_error_m: 0.01
+    maximum_base_displacement_m: 0.01
+    maximum_support_foot_lift_m: 0.025
+  robot_hardware_profile:
+    id: one-leg-real-test-2026-07-28
+    evidence:
+      - hardware/one-leg-testbed/leg.toml
+      - hardware/one-leg-testbed/calibration.json
+      - conversations/2026-07-28-one-leg-wall-isaac-revisit.md
+    center_tick: 2048
+    encoder_directions:
+      hip_abduction: 1
+      hip_flexion: -1
+      knee: -1
+    joint_limits_deg:
+      hip_abduction: [-45.0, 45.0]
+      hip_flexion: [-90.0, 90.0]
+      knee: [-120.0, 120.0]
+    torque_limit_register: 300
+    torque_limit_register_full_scale: 1000
+    torque_limit_fraction: 0.30
+    stall_torque_nm: 2.941995
+    effort_cap_nm: 0.8825985
+    speed_register: 350
+    speed_register_applied_as_rad_s: false
+  nominal_stance:
+    # A 290 mm crouch leaves kinematic room for the 45 mm diagonal body shift.
+    down_m: 0.290
+    fore_aft_m: 0.025
+    abduction_deg: 0.0
+  # Base class fallback; role-specific values below are applied at runtime.
+  action_scale_rad:
+    hip_abduction: 0.12
+    hip_flexion: 0.30
+    knee: 0.40
+  residual_action_scale_rad:
+    support:
+      hip_abduction: 0.12
+      hip_flexion: 0.30
+      knee: 0.40
+    swing:
+      hip_abduction: 0.12
+      hip_flexion: 0.30
+      knee: 0.40
+  termination:
+    minimum_base_height_m: 0.25
+    minimum_upright_cosine: 0.90
+    maximum_base_displacement_m: 0.05
+    maximum_support_foot_lift_m: 0.06
+  reward:
+    lift_tracking_sigma_m: 0.025
+    lift_tracking: 1.50
+    lift_progress: 700.0
+    target_hold: 2.50
+    upright_deviation: -12.0
+    alive: 0.05
+    base_height: -15.0
+    base_drift: -8.0
+    support_foot_lift: -30.0
+    roll_pitch_rate: -0.08
+    yaw_rate: -0.08
+    action_rate: -0.02
+    action_magnitude: -0.01
+    joint_velocity: -0.004
+    failure: -250.0
+    success: 500.0
+ppo:
+  total_timesteps: 100000
+  learning_rate: 0.00005
+  target_kl: 0.03
+  rollout_steps: 1024
+  batch_size: 128
+  epochs: 8
+  gamma: 0.995
+  gae_lambda: 0.95
+  clip_range: 0.20
+  entropy_coefficient: 0.001
+  value_coefficient: 0.50
+  max_gradient_norm: 0.50
+  policy_hidden_layers: [256, 256]
+  initial_log_std: -2.30
+  zero_action_mean_init: true
+  checkpoint_frequency_steps: 10000

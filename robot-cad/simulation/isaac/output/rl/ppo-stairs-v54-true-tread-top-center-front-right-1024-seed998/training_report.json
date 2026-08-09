@@ -1,0 +1,6579 @@
+{
+  "status": "PASS",
+  "task_id": "Drobot-Quadruped-Stairs-v10-180mm-Front-Right-Placement",
+  "config": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\rl\\stairs\\quadruped_stairs_v10_front_right_single_tread_placement.yaml",
+  "config_sha256": "f2d06eca4aeb1aa2e75a04f16f7a73d2fe4afc32d0c8b331444a932a8b48c9b0",
+  "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_stairs_v6_180mm_world.usda",
+  "world_sha256": "ba1b7a8335be38bbc32d68f87dbd5c48a5bcc266f16649b1d499b01b626a43b4",
+  "world_dependencies": [
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_manual_world.usda",
+      "sha256": "30c773a88564c21b87bb3da8fb0762f0d63f7350e2a31fc6d7ab7fae1542e3d9"
+    },
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_floating.usdc",
+      "sha256": "71b639bd877913bffeac47a1cfcb6f3dcabbbd1e25c6fba90b8b87e7ea96c6b8"
+    }
+  ],
+  "output_dir": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\ppo-stairs-v54-true-tread-top-center-front-right-1024-seed998",
+  "smoke_test": false,
+  "initialize_only": false,
+  "training_mode": "full",
+  "algorithm_contract_requested": {
+    "algorithm": "stable_baselines3.PPO",
+    "policy_class": "ActorCriticPolicy",
+    "training_mode": "full",
+    "observation_shape": [
+      81
+    ],
+    "action_shape": [
+      12
+    ],
+    "policy_hidden_layers": [
+      256,
+      256
+    ],
+    "activation": "ELU",
+    "rollout_steps": 1024,
+    "batch_size": 128,
+    "epochs": 8,
+    "learning_rate": 3e-05,
+    "gamma": 0.997,
+    "gae_lambda": 0.95,
+    "clip_range": 0.2,
+    "entropy_coefficient": 0.0005,
+    "value_coefficient": 0.5,
+    "maximum_gradient_norm": 0.5,
+    "normalize_advantage": true,
+    "target_kl": 0.03
+  },
+  "requested_total_timesteps": 1024,
+  "ppo_run_overrides": {
+    "learning_rate": 3e-05,
+    "initial_log_std": -3.5,
+    "entropy_coefficient": 0.0005
+  },
+  "curriculum_total_timesteps": 1024,
+  "requested_seed": 998,
+  "height_stage": null,
+  "fixed_active_steps": null,
+  "placement_start_level": null,
+  "fixed_placement_level": "center-tread-load",
+  "phase_train_leg": null,
+  "phase_train_transfer": false,
+  "phase_transfer_post_hold_seconds": 0.0,
+  "phase_transfer_residual_action_scale": null,
+  "phase_post_transfer_hold_only": false,
+  "precursor_leg_models": {},
+  "phase_base_model": null,
+  "phase_base_swing_only": false,
+  "phase_base_residual_model": null,
+  "phase_base_residual_scale": 0.5,
+  "phase_base_residual_mode": null,
+  "phase_base_residual_compact_action": false,
+  "phase_residual_scale": 0.25,
+  "phase_residual_support_only": false,
+  "phase_residual_swing_only": false,
+  "phase_residual_support_abduction_only": false,
+  "phase_residual_swing_support_abduction": false,
+  "phase_compact_residual_action": false,
+  "phase_snapshot_cache_enabled": true,
+  "phase_snapshot": null,
+  "initial_action_bias_requested": null,
+  "terrain_perception_mode": "analytic_height_profile",
+  "terrain_perception": {
+    "mode": "analytic_height_profile"
+  },
+  "device_request": "cpu",
+  "isaac_sim_version": "6.0.1",
+  "torch_version": "2.10.0+cu128",
+  "stable_baselines3_version": "2.9.0",
+  "cuda_available": true,
+  "cuda_device": "NVIDIA GeForce RTX 5090",
+  "zero_action_mean_initialization": {
+    "weight": "all_zero",
+    "bias": "all_zero"
+  },
+  "training_seed": 998,
+  "ppo_algorithm_verification": {
+    "status": "PASS",
+    "verified_fields": [
+      "algorithm",
+      "policy_class",
+      "training_mode",
+      "observation_shape",
+      "action_shape",
+      "policy_hidden_layers",
+      "activation",
+      "rollout_steps",
+      "batch_size",
+      "epochs",
+      "learning_rate",
+      "gamma",
+      "gae_lambda",
+      "clip_range",
+      "entropy_coefficient",
+      "value_coefficient",
+      "maximum_gradient_norm",
+      "normalize_advantage",
+      "target_kl"
+    ],
+    "contract": {
+      "algorithm": "stable_baselines3.PPO",
+      "policy_class": "ActorCriticPolicy",
+      "training_mode": "full",
+      "observation_shape": [
+        81
+      ],
+      "action_shape": [
+        12
+      ],
+      "policy_hidden_layers": [
+        256,
+        256
+      ],
+      "activation": "ELU",
+      "rollout_steps": 1024,
+      "batch_size": 128,
+      "epochs": 8,
+      "learning_rate": 3e-05,
+      "gamma": 0.997,
+      "gae_lambda": 0.95,
+      "clip_range": 0.2,
+      "entropy_coefficient": 0.0005,
+      "value_coefficient": 0.5,
+      "maximum_gradient_norm": 0.5,
+      "normalize_advantage": true,
+      "target_kl": 0.03
+    }
+  },
+  "actual_total_timesteps": 1024,
+  "model": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\ppo-stairs-v54-true-tread-top-center-front-right-1024-seed998\\drobot_stairs_ppo_final.zip",
+  "model_bytes": 2155679,
+  "model_manifest": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\simulation\\isaac\\output\\rl\\ppo-stairs-v54-true-tread-top-center-front-right-1024-seed998\\drobot_stairs_ppo_final.zip.contract.json",
+  "model_parameter_count": 176921,
+  "ppo": {
+    "algorithm": "stable_baselines3.PPO",
+    "policy_class": "ActorCriticPolicy",
+    "training_mode": "full",
+    "observation_shape": [
+      81
+    ],
+    "action_shape": [
+      12
+    ],
+    "policy_hidden_layers": [
+      256,
+      256
+    ],
+    "activation": "ELU",
+    "rollout_steps": 1024,
+    "batch_size": 128,
+    "epochs": 8,
+    "learning_rate": 3e-05,
+    "gamma": 0.997,
+    "gae_lambda": 0.95,
+    "clip_range": 0.2,
+    "entropy_coefficient": 0.0005,
+    "value_coefficient": 0.5,
+    "maximum_gradient_norm": 0.5,
+    "normalize_advantage": true,
+    "target_kl": 0.03
+  },
+  "initial_curriculum_progress": 0.0,
+  "environment_contract": {
+    "world": "C:\\Users\\roman\\Documents\\dev\\drobot2\\robot-cad\\exports\\isaac\\quadruped_robot_stairs_v6_180mm_world.usda",
+    "dof_names": [
+      "front_left_hip_abduction",
+      "rear_left_hip_abduction",
+      "front_right_hip_abduction",
+      "rear_right_hip_abduction",
+      "front_left_hip_flexion",
+      "rear_left_hip_flexion",
+      "front_right_hip_flexion",
+      "rear_right_hip_flexion",
+      "front_left_knee",
+      "rear_left_knee",
+      "front_right_knee",
+      "rear_right_knee"
+    ],
+    "nominal_joint_positions_rad": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.2610241174697876,
+      0.2610241174697876,
+      -0.2610241174697876,
+      0.2610241174697876,
+      0.6883306503295898,
+      -0.6883306503295898,
+      0.6883306503295898,
+      -0.6883306503295898
+    ],
+    "action_scale_rad": [
+      0.10000000149011612,
+      0.10000000149011612,
+      0.03999999910593033,
+      0.10000000149011612,
+      0.2199999988079071,
+      0.2199999988079071,
+      0.07999999821186066,
+      0.2199999988079071,
+      0.30000001192092896,
+      0.30000001192092896,
+      0.11999999731779099,
+      0.30000001192092896
+    ],
+    "observation_fields": [
+      "command_forward_velocity_m_s",
+      "command_lateral_velocity_m_s",
+      "command_yaw_rate_rad_s",
+      "imu_angular_velocity_x_rad_s",
+      "imu_angular_velocity_y_rad_s",
+      "imu_angular_velocity_z_rad_s",
+      "imu_projected_gravity_x",
+      "imu_projected_gravity_y",
+      "imu_projected_gravity_z",
+      "imu_linear_acceleration_x_g",
+      "imu_linear_acceleration_y_g",
+      "imu_linear_acceleration_z_g",
+      "joint_position_error_0",
+      "joint_position_error_1",
+      "joint_position_error_2",
+      "joint_position_error_3",
+      "joint_position_error_4",
+      "joint_position_error_5",
+      "joint_position_error_6",
+      "joint_position_error_7",
+      "joint_position_error_8",
+      "joint_position_error_9",
+      "joint_position_error_10",
+      "joint_position_error_11",
+      "joint_velocity_normalized_0",
+      "joint_velocity_normalized_1",
+      "joint_velocity_normalized_2",
+      "joint_velocity_normalized_3",
+      "joint_velocity_normalized_4",
+      "joint_velocity_normalized_5",
+      "joint_velocity_normalized_6",
+      "joint_velocity_normalized_7",
+      "joint_velocity_normalized_8",
+      "joint_velocity_normalized_9",
+      "joint_velocity_normalized_10",
+      "joint_velocity_normalized_11",
+      "previous_action_0",
+      "previous_action_1",
+      "previous_action_2",
+      "previous_action_3",
+      "previous_action_4",
+      "previous_action_5",
+      "previous_action_6",
+      "previous_action_7",
+      "previous_action_8",
+      "previous_action_9",
+      "previous_action_10",
+      "previous_action_11",
+      "terrain_height_delta_at_-0.150_m",
+      "terrain_height_delta_at_+0.000_m",
+      "terrain_height_delta_at_+0.080_m",
+      "terrain_height_delta_at_+0.160_m",
+      "terrain_height_delta_at_+0.250_m",
+      "terrain_height_delta_at_+0.375_m",
+      "terrain_height_delta_at_+0.500_m",
+      "terrain_height_delta_at_+0.750_m",
+      "goal_distance_normalized",
+      "lateral_offset_normalized",
+      "heading_error_sin",
+      "heading_error_cos",
+      "foot_tread_progress_front_left",
+      "foot_tread_progress_front_right",
+      "foot_tread_progress_rear_left",
+      "foot_tread_progress_rear_right",
+      "next_foot_target_front_left",
+      "next_foot_target_front_right",
+      "next_foot_target_rear_left",
+      "next_foot_target_rear_right",
+      "placement_phase_weight_shift",
+      "placement_phase_lift",
+      "placement_phase_advance",
+      "placement_phase_lower",
+      "placement_phase_hold",
+      "placement_desired_swing_height_normalized",
+      "placement_measured_swing_height_normalized",
+      "placement_swing_x_error_normalized",
+      "placement_swing_z_error_normalized",
+      "placement_tread_normal_load_normalized",
+      "placement_support_contact_fraction",
+      "placement_support_margin_normalized",
+      "placement_maximum_support_slip_normalized"
+    ],
+    "observation_size": 81,
+    "action_size": 12,
+    "imu_fields": [
+      "angular_velocity_x_rad_s",
+      "angular_velocity_y_rad_s",
+      "angular_velocity_z_rad_s",
+      "projected_gravity_x",
+      "projected_gravity_y",
+      "projected_gravity_z",
+      "linear_acceleration_x_g",
+      "linear_acceleration_y_g",
+      "linear_acceleration_z_g"
+    ],
+    "rated_effort_cap_nm": 0.980665,
+    "applied_effort_cap_nm": 0.8825985,
+    "applied_joint_lower_limits_rad": [
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -0.7853981852531433,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -1.5707963705062866,
+      -2.094395160675049,
+      -2.094395160675049,
+      -2.094395160675049,
+      -2.094395160675049
+    ],
+    "applied_joint_upper_limits_rad": [
+      0.7853981852531433,
+      0.7853981852531433,
+      0.7853981852531433,
+      0.7853981852531433,
+      1.5707963705062866,
+      1.5707963705062866,
+      1.5707963705062866,
+      1.5707963705062866,
+      2.094395160675049,
+      2.094395160675049,
+      2.094395160675049,
+      2.094395160675049
+    ],
+    "robot_hardware_profile": {
+      "id": "one-leg-real-test-2026-07-28",
+      "evidence": [
+        "hardware/one-leg-testbed/leg.toml",
+        "hardware/one-leg-testbed/calibration.json",
+        "conversations/2026-07-28-one-leg-wall-isaac-revisit.md"
+      ],
+      "center_tick": 2048,
+      "encoder_directions": {
+        "hip_abduction": 1,
+        "hip_flexion": -1,
+        "knee": -1
+      },
+      "joint_limits_deg": {
+        "hip_abduction": [
+          -45.0,
+          45.0
+        ],
+        "hip_flexion": [
+          -90.0,
+          90.0
+        ],
+        "knee": [
+          -120.0,
+          120.0
+        ]
+      },
+      "torque_limit_register": 300,
+      "torque_limit_register_full_scale": 1000,
+      "torque_limit_fraction": 0.3,
+      "stall_torque_nm": 2.941995,
+      "effort_cap_nm": 0.8825985,
+      "speed_register": 350,
+      "speed_register_applied_as_rad_s": false
+    },
+    "control_hz": 60,
+    "physics_hz": 120,
+    "task_id": "Drobot-Quadruped-Stairs-v10-180mm-Front-Right-Placement",
+    "walking_observation_size": 48,
+    "include_navigation_observation": true,
+    "include_foot_progress_observation": true,
+    "include_placement_reference_observation": true,
+    "foot_placement_sequence": [
+      "front_right",
+      "front_left",
+      "rear_right",
+      "rear_left"
+    ],
+    "terrain_perception_mode": "analytic_height_profile",
+    "terrain_perception": {
+      "mode": "analytic_height_profile"
+    },
+    "terrain_input_note": "Analytic forward terrain profile; replace with a hardware-reproducible estimator before deployment.",
+    "rgb_camera_policy_input": false,
+    "foot_contact_material": {
+      "enabled": false,
+      "source": "authored_world_material"
+    },
+    "foot_contact_patch": {
+      "enabled": false
+    },
+    "terrain_sensor_runtime": null,
+    "physics_steps_per_control": 2,
+    "control_action_mode": "placement_reference_plus_ppo_residual",
+    "residual_policy": null,
+    "staircase": {
+      "start_x_m": 0.55,
+      "step_count": 4,
+      "tread_depth_m": 0.25,
+      "rise_m": 0.18,
+      "width_m": 1.0,
+      "top_platform_depth_m": 0.5,
+      "terrain_sample_offsets_m": [
+        -0.15,
+        0.0,
+        0.08,
+        0.16,
+        0.25,
+        0.375,
+        0.5,
+        0.75
+      ],
+      "terrain_height_normalization_m": 0.36,
+      "goal_distance_normalization_m": 2.0,
+      "goal_margin_m": 0.1
+    },
+    "curriculum_levels": [
+      {
+        "start_fraction": 0.0,
+        "active_steps": 1
+      }
+    ],
+    "placement_reference": {
+      "enabled": true,
+      "swing_leg": "front_right",
+      "timing": {
+        "shift_start_seconds": 0.25,
+        "shift_duration_seconds": 2.0,
+        "lift_start_seconds": 2.5,
+        "lift_duration_seconds": 3.0,
+        "advance_start_seconds": 5.5,
+        "advance_duration_seconds": 4.0,
+        "lower_start_seconds": 9.5,
+        "lower_duration_seconds": 1.5
+      },
+      "weight_shift": {
+        "forward_m": 0.045,
+        "lateral_m": 0.045
+      },
+      "target_x_tolerance_m": 0.065,
+      "target_z_tolerance_m": 0.018,
+      "contact_on_threshold_n": 1.0,
+      "contact_load_normalization_n": 50.0,
+      "minimum_success_upright_cosine": 0.9781476,
+      "measurable_slip_threshold_m": 0.025,
+      "contact_filter_paths": [
+        "/World/Ground",
+        "/World/Stairs/StepLayer_01",
+        "/World/Stairs/StepLayer_02",
+        "/World/Stairs/StepLayer_03",
+        "/World/Stairs/StepLayer_04"
+      ],
+      "contact_force_verified_success": true,
+      "inter_leg_transfer_enabled": false,
+      "observation_fields": [
+        "placement_phase_weight_shift",
+        "placement_phase_lift",
+        "placement_phase_advance",
+        "placement_phase_lower",
+        "placement_phase_hold",
+        "placement_desired_swing_height_normalized",
+        "placement_measured_swing_height_normalized",
+        "placement_swing_x_error_normalized",
+        "placement_swing_z_error_normalized",
+        "placement_tread_normal_load_normalized",
+        "placement_support_contact_fraction",
+        "placement_support_margin_normalized",
+        "placement_maximum_support_slip_normalized"
+      ]
+    },
+    "placement_curriculum": {
+      "mode": "timesteps",
+      "levels": [
+        {
+          "id": "near-edge-touch",
+          "start_fraction": 0.0,
+          "apex_lift_m": 0.195,
+          "landing_lift_m": 0.145,
+          "lift_forward_offset_m": 0.11,
+          "swing_forward_offset_m": 0.16,
+          "landing_forward_offset_m": 0.155,
+          "target_tread_fraction": 0.12,
+          "contact_hold_seconds": 0.25
+        },
+        {
+          "id": "quarter-tread-load",
+          "start_fraction": 0.35,
+          "apex_lift_m": 0.2,
+          "landing_lift_m": 0.145,
+          "lift_forward_offset_m": 0.11,
+          "swing_forward_offset_m": 0.195,
+          "landing_forward_offset_m": 0.18,
+          "target_tread_fraction": 0.25,
+          "contact_hold_seconds": 0.5
+        },
+        {
+          "id": "center-tread-load",
+          "start_fraction": 0.7,
+          "apex_lift_m": 0.205,
+          "landing_lift_m": 0.145,
+          "lift_forward_offset_m": 0.11,
+          "swing_forward_offset_m": 0.21,
+          "landing_forward_offset_m": 0.19,
+          "target_tread_fraction": 0.24,
+          "contact_hold_seconds": 0.75
+        }
+      ]
+    },
+    "success_requirements": {
+      "minimum_base_elevation_fraction": 0.0,
+      "required_feet_on_goal_tread": 0,
+      "hold_seconds": 0.75
+    }
+  },
+  "curriculum_transitions": [
+    {
+      "progress_fraction": 0.0,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.001953125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0029296875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.00390625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0048828125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.005859375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0068359375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0078125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0087890625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.009765625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0107421875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.01171875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0126953125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.013671875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0146484375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.015625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0166015625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.017578125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0185546875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.01953125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0205078125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.021484375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0224609375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0234375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0244140625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.025390625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0263671875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.02734375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0283203125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.029296875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0302734375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.03125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0322265625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.033203125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0341796875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.03515625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0361328125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.037109375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0380859375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0390625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0400390625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.041015625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0419921875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.04296875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0439453125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.044921875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0458984375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.046875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0478515625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.048828125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0498046875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.05078125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0517578125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.052734375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0537109375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0546875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0556640625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.056640625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0576171875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.05859375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0595703125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.060546875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0615234375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0634765625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.064453125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0654296875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.06640625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0673828125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.068359375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0693359375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0703125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0712890625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.072265625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0732421875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.07421875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0751953125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.076171875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0771484375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.078125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0791015625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.080078125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0810546875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.08203125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0830078125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.083984375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0849609375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0859375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0869140625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.087890625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0888671875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.08984375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0908203125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.091796875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0927734375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.09375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0947265625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.095703125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0966796875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.09765625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.0986328125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.099609375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1005859375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1015625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1025390625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.103515625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1044921875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.10546875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1064453125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.107421875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1083984375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.109375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1103515625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.111328125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1123046875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.11328125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1142578125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.115234375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1162109375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1171875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1181640625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.119140625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1201171875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.12109375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1220703125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.123046875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1240234375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1259765625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.126953125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1279296875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.12890625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1298828125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.130859375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1318359375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1328125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1337890625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.134765625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1357421875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.13671875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1376953125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.138671875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1396484375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.140625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1416015625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.142578125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1435546875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.14453125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1455078125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.146484375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1474609375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1484375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1494140625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.150390625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1513671875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.15234375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1533203125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.154296875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1552734375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.15625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1572265625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.158203125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1591796875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.16015625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1611328125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.162109375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1630859375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1640625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1650390625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.166015625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1669921875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.16796875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1689453125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.169921875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1708984375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.171875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1728515625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.173828125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1748046875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.17578125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1767578125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.177734375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1787109375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1796875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1806640625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.181640625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1826171875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.18359375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1845703125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.185546875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1865234375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1884765625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.189453125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1904296875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.19140625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1923828125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.193359375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1943359375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1953125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1962890625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.197265625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.1982421875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.19921875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2001953125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.201171875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2021484375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.203125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2041015625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.205078125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2060546875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.20703125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2080078125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.208984375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2099609375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2109375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2119140625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.212890625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2138671875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.21484375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2158203125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.216796875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2177734375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.21875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2197265625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.220703125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2216796875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.22265625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2236328125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.224609375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2255859375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2265625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2275390625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.228515625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2294921875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.23046875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2314453125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.232421875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2333984375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.234375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2353515625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.236328125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2373046875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.23828125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2392578125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.240234375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2412109375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2421875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2431640625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.244140625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2451171875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.24609375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2470703125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.248046875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2490234375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.25,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2509765625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.251953125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2529296875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.25390625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2548828125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.255859375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2568359375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2578125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2587890625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.259765625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2607421875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.26171875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2626953125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.263671875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2646484375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.265625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2666015625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.267578125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2685546875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.26953125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2705078125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.271484375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2724609375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2734375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2744140625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.275390625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2763671875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.27734375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2783203125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.279296875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2802734375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.28125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2822265625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.283203125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2841796875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.28515625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2861328125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.287109375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2880859375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2890625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2900390625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.291015625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2919921875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.29296875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2939453125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.294921875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2958984375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.296875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2978515625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.298828125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.2998046875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.30078125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3017578125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.302734375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3037109375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3046875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3056640625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.306640625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3076171875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.30859375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3095703125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.310546875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3115234375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3134765625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.314453125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3154296875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.31640625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3173828125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.318359375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3193359375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3203125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3212890625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.322265625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3232421875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.32421875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3251953125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.326171875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3271484375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.328125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3291015625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.330078125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3310546875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.33203125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3330078125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.333984375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3349609375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3359375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3369140625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.337890625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3388671875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.33984375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3408203125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.341796875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3427734375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.34375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3447265625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.345703125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3466796875,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.34765625,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3486328125,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.349609375,
+      "placement_level": "near-edge-touch"
+    },
+    {
+      "progress_fraction": 0.3505859375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3515625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3525390625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.353515625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3544921875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.35546875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3564453125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.357421875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3583984375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.359375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3603515625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.361328125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3623046875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.36328125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3642578125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.365234375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3662109375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3671875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3681640625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.369140625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3701171875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.37109375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3720703125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.373046875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3740234375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3759765625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.376953125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3779296875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.37890625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3798828125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.380859375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3818359375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3828125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3837890625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.384765625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3857421875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.38671875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3876953125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.388671875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3896484375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.390625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3916015625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.392578125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3935546875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.39453125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3955078125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.396484375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3974609375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3984375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.3994140625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.400390625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4013671875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.40234375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4033203125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.404296875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4052734375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.40625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4072265625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.408203125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4091796875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.41015625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4111328125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.412109375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4130859375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4140625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4150390625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.416015625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4169921875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.41796875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4189453125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.419921875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4208984375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.421875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4228515625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.423828125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4248046875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.42578125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4267578125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.427734375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4287109375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4296875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4306640625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.431640625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4326171875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.43359375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4345703125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.435546875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4365234375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4384765625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.439453125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4404296875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.44140625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4423828125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.443359375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4443359375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4453125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4462890625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.447265625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4482421875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.44921875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4501953125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.451171875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4521484375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.453125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4541015625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.455078125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4560546875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.45703125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4580078125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.458984375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4599609375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4609375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4619140625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.462890625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4638671875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.46484375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4658203125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.466796875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4677734375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.46875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4697265625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.470703125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4716796875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.47265625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4736328125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.474609375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4755859375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4765625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4775390625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.478515625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4794921875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.48046875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4814453125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.482421875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4833984375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.484375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4853515625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.486328125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4873046875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.48828125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4892578125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.490234375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4912109375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4921875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4931640625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.494140625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4951171875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.49609375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4970703125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.498046875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.4990234375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5009765625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.501953125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5029296875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.50390625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5048828125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.505859375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5068359375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5078125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5087890625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.509765625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5107421875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.51171875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5126953125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.513671875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5146484375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.515625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5166015625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.517578125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5185546875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.51953125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5205078125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.521484375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5224609375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5234375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5244140625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.525390625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5263671875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.52734375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5283203125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.529296875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5302734375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.53125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5322265625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.533203125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5341796875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.53515625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5361328125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.537109375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5380859375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5390625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5400390625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.541015625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5419921875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.54296875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5439453125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.544921875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5458984375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.546875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5478515625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.548828125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5498046875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.55078125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5517578125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.552734375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5537109375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5546875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5556640625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.556640625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5576171875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.55859375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5595703125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.560546875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5615234375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5634765625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.564453125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5654296875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.56640625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5673828125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.568359375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5693359375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5703125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5712890625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.572265625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5732421875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.57421875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5751953125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.576171875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5771484375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.578125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5791015625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.580078125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5810546875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.58203125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5830078125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.583984375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5849609375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5859375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5869140625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.587890625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5888671875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.58984375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5908203125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.591796875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5927734375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.59375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5947265625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.595703125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5966796875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.59765625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.5986328125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.599609375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6005859375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6015625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6025390625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.603515625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6044921875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.60546875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6064453125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.607421875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6083984375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.609375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6103515625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.611328125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6123046875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.61328125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6142578125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.615234375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6162109375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6171875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6181640625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.619140625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6201171875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.62109375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6220703125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.623046875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6240234375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6259765625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.626953125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6279296875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.62890625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6298828125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.630859375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6318359375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6328125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6337890625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.634765625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6357421875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.63671875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6376953125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.638671875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6396484375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.640625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6416015625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.642578125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6435546875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.64453125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6455078125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.646484375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6474609375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6484375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6494140625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.650390625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6513671875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.65234375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6533203125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.654296875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6552734375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.65625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6572265625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.658203125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6591796875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.66015625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6611328125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.662109375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6630859375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6640625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6650390625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.666015625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6669921875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.66796875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6689453125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.669921875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6708984375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.671875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6728515625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.673828125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6748046875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.67578125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6767578125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.677734375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6787109375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6796875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6806640625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.681640625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6826171875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.68359375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6845703125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.685546875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6865234375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6884765625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.689453125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6904296875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.69140625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6923828125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.693359375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6943359375,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6953125,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6962890625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.697265625,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.6982421875,
+      "placement_level": "quarter-tread-load"
+    },
+    {
+      "progress_fraction": 0.69921875,
+      "placement_level": "quarter-tread-load"
+    }
+  ],
+  "progress_watchdog": {
+    "status": "RUNNING",
+    "timesteps": 1024,
+    "curriculum_mode": "timesteps",
+    "active_step_count": 1,
+    "pending_active_step_count": 1,
+    "placement_curriculum_mode": "timesteps",
+    "placement_mastery_level_id": "center-tread-load",
+    "placement_mastery_successes": 0,
+    "placement_mastery_successes_required": 2,
+    "fixed_placement_level": "center-tread-load",
+    "completed_episodes": 1,
+    "successful_episodes": 0,
+    "first_step_climb_episodes": 0,
+    "first_step_climb_rate": 0.0,
+    "maximum_step_reached": 0,
+    "maximum_base_elevation_gain_m": 0.0012167394161224365,
+    "last_progress_step": 0,
+    "initial_gate_evaluated": false,
+    "initial_gate_passed": false,
+    "abort_reason": null,
+    "watchdog_config": {
+      "enabled": false
+    },
+    "curriculum_transitions": [
+      {
+        "progress_fraction": 0.0,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.001953125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0029296875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.00390625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0048828125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.005859375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0068359375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0078125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0087890625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.009765625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0107421875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.01171875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0126953125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.013671875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0146484375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.015625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0166015625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.017578125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0185546875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.01953125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0205078125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.021484375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0224609375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0234375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0244140625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.025390625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0263671875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.02734375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0283203125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.029296875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0302734375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.03125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0322265625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.033203125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0341796875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.03515625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0361328125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.037109375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0380859375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0390625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0400390625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.041015625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0419921875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.04296875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0439453125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.044921875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0458984375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.046875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0478515625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.048828125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0498046875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.05078125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0517578125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.052734375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0537109375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0546875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0556640625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.056640625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0576171875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.05859375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0595703125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.060546875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0615234375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0634765625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.064453125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0654296875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.06640625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0673828125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.068359375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0693359375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0703125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0712890625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.072265625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0732421875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.07421875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0751953125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.076171875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0771484375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.078125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0791015625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.080078125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0810546875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.08203125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0830078125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.083984375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0849609375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0859375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0869140625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.087890625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0888671875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.08984375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0908203125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.091796875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0927734375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.09375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0947265625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.095703125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0966796875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.09765625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.0986328125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.099609375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1005859375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1015625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1025390625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.103515625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1044921875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.10546875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1064453125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.107421875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1083984375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.109375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1103515625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.111328125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1123046875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.11328125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1142578125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.115234375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1162109375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1171875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1181640625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.119140625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1201171875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.12109375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1220703125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.123046875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1240234375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1259765625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.126953125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1279296875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.12890625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1298828125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.130859375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1318359375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1328125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1337890625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.134765625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1357421875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.13671875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1376953125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.138671875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1396484375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.140625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1416015625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.142578125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1435546875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.14453125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1455078125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.146484375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1474609375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1484375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1494140625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.150390625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1513671875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.15234375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1533203125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.154296875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1552734375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.15625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1572265625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.158203125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1591796875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.16015625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1611328125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.162109375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1630859375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1640625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1650390625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.166015625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1669921875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.16796875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1689453125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.169921875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1708984375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.171875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1728515625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.173828125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1748046875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.17578125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1767578125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.177734375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1787109375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1796875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1806640625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.181640625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1826171875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.18359375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1845703125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.185546875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1865234375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1884765625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.189453125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1904296875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.19140625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1923828125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.193359375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1943359375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1953125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1962890625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.197265625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.1982421875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.19921875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2001953125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.201171875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2021484375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.203125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2041015625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.205078125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2060546875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.20703125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2080078125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.208984375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2099609375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2109375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2119140625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.212890625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2138671875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.21484375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2158203125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.216796875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2177734375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.21875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2197265625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.220703125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2216796875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.22265625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2236328125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.224609375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2255859375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2265625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2275390625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.228515625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2294921875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.23046875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2314453125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.232421875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2333984375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.234375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2353515625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.236328125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2373046875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.23828125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2392578125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.240234375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2412109375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2421875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2431640625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.244140625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2451171875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.24609375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2470703125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.248046875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2490234375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.25,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2509765625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.251953125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2529296875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.25390625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2548828125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.255859375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2568359375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2578125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2587890625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.259765625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2607421875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.26171875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2626953125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.263671875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2646484375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.265625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2666015625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.267578125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2685546875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.26953125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2705078125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.271484375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2724609375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2734375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2744140625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.275390625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2763671875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.27734375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2783203125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.279296875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2802734375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.28125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2822265625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.283203125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2841796875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.28515625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2861328125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.287109375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2880859375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2890625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2900390625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.291015625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2919921875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.29296875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2939453125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.294921875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2958984375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.296875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2978515625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.298828125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.2998046875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.30078125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3017578125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.302734375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3037109375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3046875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3056640625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.306640625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3076171875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.30859375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3095703125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.310546875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3115234375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3134765625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.314453125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3154296875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.31640625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3173828125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.318359375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3193359375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3203125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3212890625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.322265625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3232421875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.32421875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3251953125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.326171875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3271484375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.328125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3291015625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.330078125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3310546875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.33203125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3330078125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.333984375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3349609375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3359375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3369140625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.337890625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3388671875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.33984375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3408203125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.341796875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3427734375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.34375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3447265625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.345703125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3466796875,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.34765625,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3486328125,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.349609375,
+        "placement_level": "near-edge-touch"
+      },
+      {
+        "progress_fraction": 0.3505859375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3515625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3525390625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.353515625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3544921875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.35546875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3564453125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.357421875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3583984375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.359375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3603515625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.361328125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3623046875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.36328125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3642578125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.365234375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3662109375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3671875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3681640625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.369140625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3701171875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.37109375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3720703125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.373046875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3740234375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3759765625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.376953125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3779296875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.37890625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3798828125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.380859375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3818359375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3828125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3837890625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.384765625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3857421875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.38671875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3876953125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.388671875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3896484375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.390625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3916015625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.392578125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3935546875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.39453125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3955078125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.396484375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3974609375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3984375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.3994140625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.400390625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4013671875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.40234375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4033203125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.404296875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4052734375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.40625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4072265625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.408203125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4091796875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.41015625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4111328125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.412109375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4130859375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4140625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4150390625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.416015625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4169921875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.41796875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4189453125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.419921875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4208984375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.421875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4228515625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.423828125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4248046875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.42578125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4267578125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.427734375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4287109375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4296875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4306640625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.431640625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4326171875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.43359375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4345703125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.435546875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4365234375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4384765625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.439453125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4404296875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.44140625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4423828125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.443359375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4443359375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4453125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4462890625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.447265625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4482421875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.44921875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4501953125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.451171875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4521484375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.453125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4541015625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.455078125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4560546875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.45703125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4580078125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.458984375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4599609375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4609375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4619140625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.462890625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4638671875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.46484375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4658203125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.466796875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4677734375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.46875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4697265625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.470703125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4716796875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.47265625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4736328125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.474609375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4755859375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4765625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4775390625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.478515625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4794921875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.48046875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4814453125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.482421875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4833984375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.484375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4853515625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.486328125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4873046875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.48828125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4892578125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.490234375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4912109375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4921875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4931640625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.494140625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4951171875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.49609375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4970703125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.498046875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.4990234375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5009765625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.501953125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5029296875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.50390625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5048828125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.505859375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5068359375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5078125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5087890625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.509765625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5107421875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.51171875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5126953125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.513671875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5146484375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.515625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5166015625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.517578125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5185546875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.51953125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5205078125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.521484375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5224609375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5234375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5244140625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.525390625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5263671875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.52734375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5283203125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.529296875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5302734375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.53125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5322265625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.533203125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5341796875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.53515625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5361328125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.537109375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5380859375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5390625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5400390625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.541015625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5419921875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.54296875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5439453125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.544921875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5458984375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.546875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5478515625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.548828125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5498046875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.55078125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5517578125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.552734375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5537109375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5546875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5556640625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.556640625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5576171875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.55859375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5595703125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.560546875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5615234375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5634765625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.564453125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5654296875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.56640625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5673828125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.568359375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5693359375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5703125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5712890625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.572265625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5732421875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.57421875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5751953125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.576171875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5771484375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.578125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5791015625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.580078125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5810546875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.58203125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5830078125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.583984375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5849609375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5859375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5869140625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.587890625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5888671875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.58984375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5908203125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.591796875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5927734375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.59375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5947265625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.595703125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5966796875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.59765625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.5986328125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.599609375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6005859375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6015625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6025390625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.603515625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6044921875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.60546875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6064453125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.607421875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6083984375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.609375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6103515625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.611328125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6123046875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.61328125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6142578125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.615234375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6162109375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6171875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6181640625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.619140625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6201171875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.62109375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6220703125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.623046875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6240234375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6259765625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.626953125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6279296875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.62890625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6298828125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.630859375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6318359375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6328125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6337890625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.634765625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6357421875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.63671875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6376953125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.638671875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6396484375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.640625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6416015625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.642578125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6435546875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.64453125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6455078125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.646484375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6474609375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6484375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6494140625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.650390625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6513671875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.65234375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6533203125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.654296875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6552734375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.65625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6572265625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.658203125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6591796875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.66015625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6611328125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.662109375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6630859375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6640625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6650390625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.666015625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6669921875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.66796875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6689453125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.669921875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6708984375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.671875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6728515625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.673828125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6748046875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.67578125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6767578125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.677734375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6787109375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6796875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6806640625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.681640625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6826171875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.68359375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6845703125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.685546875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6865234375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6884765625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.689453125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6904296875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.69140625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6923828125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.693359375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6943359375,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6953125,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6962890625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.697265625,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.6982421875,
+        "placement_level": "quarter-tread-load"
+      },
+      {
+        "progress_fraction": 0.69921875,
+        "placement_level": "quarter-tread-load"
+      }
+    ]
+  },
+  "recent_completed_episodes": [
+    {
+      "return": 14780.095587940834,
+      "length_steps": 840,
+      "duration_s": 14.0,
+      "active_step_count": 1,
+      "highest_step_reached": 0,
+      "stairs_completed": false,
+      "placement_completed": false,
+      "placement_swing_leg": "front_right",
+      "placement_sequence_legs": [
+        "front_right"
+      ],
+      "completed_placement_legs": [],
+      "completed_inter_leg_transfers": [],
+      "last_completed_inter_leg_transfer_metrics": {},
+      "final_placement_transfer_gate_failures": [],
+      "final_placement_pre_unload_gate_failures": [],
+      "pre_unload_gate_enabled": false,
+      "pre_unload_gate_hold_steps": 0,
+      "advance_clearance_gate_enabled": false,
+      "advance_clearance_gate_legs": [
+        "front_right"
+      ],
+      "advance_clearance_gate_minimum_m": 0.19,
+      "advance_clearance_gate_maximum_hold_steps": 120,
+      "maximum_advance_clearance_gate_hold_steps": 0,
+      "final_advance_clearance_gate_released": false,
+      "final_advance_clearance_gate_timeout": false,
+      "final_placement_transfer_support_margin_m": 0.05086391847514075,
+      "final_placement_transfer_base_target_error_m": 0.0,
+      "final_placement_transfer_base_speed_m_s": 0.0,
+      "final_placement_transfer_body_rate_rad_s": 0.0,
+      "final_placement_transfer_upright_cosine": 0.9995431303977966,
+      "final_placement_transfer_completed_tread_min_load_n": 0.0,
+      "final_placement_transfer_swing_total_load_n": 0.0,
+      "placement_transfer_target_base_position_m": null,
+      "balance_point": "base_origin",
+      "final_balance_position_m": [
+        0.26956504583358765,
+        0.04355018213391304,
+        0.3634245991706848
+      ],
+      "final_com_position_m": [
+        0.2912871488980516,
+        0.029894851520439622,
+        0.3248246718857689
+      ],
+      "placement_transfer_target_balance_position_m": null,
+      "placement_curriculum_level": "center-tread-load",
+      "forward_displacement_m": -0.0496574342250824,
+      "lateral_displacement_m": 0.046181704849004745,
+      "elevation_gain_m": 0.0009525418281555176,
+      "maximum_base_elevation_gain_m": 0.0012167394161224365,
+      "maximum_foot_lift_m_by_leg": {
+        "front_left": 0.004380321130156517,
+        "front_right": 0.2004450559616089,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "highest_foot_step_by_leg": {
+        "front_left": 0,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "final_foot_step_by_leg": {
+        "front_left": 0,
+        "front_right": 1,
+        "rear_left": 0,
+        "rear_right": 0
+      },
+      "maximum_foot_tread_progress_by_leg": {
+        "front_left": 0.06725942343473434,
+        "front_right": 1.0,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "final_terrain_height_m": 0.0,
+      "maximum_terrain_height_m": 0.0,
+      "minimum_base_clearance_m": 0.36211755871772766,
+      "maximum_body_tilt_deg": 3.4704004402069106,
+      "final_projected_gravity_xyz": [
+        -0.014828198589384556,
+        -0.0263376422226429,
+        -0.9995431303977966
+      ],
+      "goal_hold_duration_s": 0.0,
+      "maximum_swing_tread_normal_load_n": 0.0,
+      "maximum_tread_normal_load_n_by_leg": {
+        "front_left": 0.0,
+        "front_right": 0.0,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "tread_contact_sample_fraction": 0.0,
+      "minimum_support_contact_fraction": 1.0,
+      "minimum_placement_support_margin_m": -0.0032864053468261603,
+      "maximum_abs_support_load_sharing_correction_m": 0.0,
+      "maximum_abs_support_load_sharing_correction_m_by_leg": {
+        "front_left": 0.0,
+        "front_right": 0.0,
+        "rear_left": 0.0,
+        "rear_right": 0.0
+      },
+      "support_load_sharing_saturated_sample_fraction": 0.0,
+      "maximum_support_slip_m": 0.0034100476186722517,
+      "maximum_support_slip_m_by_leg": {
+        "front_left": 0.0021400016266852617,
+        "front_right": 0.0,
+        "rear_left": 0.0029596227686852217,
+        "rear_right": 0.0034100476186722517
+      },
+      "placement_reference_reach_clip_count": 0,
+      "maximum_placement_reference_reach_excess_m": 0.0,
+      "maximum_placement_desired_lift_m": 0.205,
+      "maximum_swing_reference_tracking_error_rad": 0.09542608261108398,
+      "maximum_balance_lateral_deviation_m": 0.05248590558767319,
+      "joint_effort_metrics": {
+        "effort_cap_nm": 0.8825985,
+        "maximum_abs_joint_tracking_error_rad": 0.19746607542037964,
+        "maximum_abs_joint_tracking_error_rad_by_joint": {
+          "front_left_hip_abduction": 0.030497685074806213,
+          "rear_left_hip_abduction": 0.026162520051002502,
+          "front_right_hip_abduction": 0.0908760130405426,
+          "rear_right_hip_abduction": 0.03067833185195923,
+          "front_left_hip_flexion": 0.03332193195819855,
+          "rear_left_hip_flexion": 0.052330389618873596,
+          "front_right_hip_flexion": 0.10021448135375977,
+          "rear_right_hip_flexion": 0.06134986877441406,
+          "front_left_knee": 0.14272847771644592,
+          "rear_left_knee": 0.11635047197341919,
+          "front_right_knee": 0.09298479557037354,
+          "rear_right_knee": 0.19746607542037964
+        },
+        "drive_stiffness_nm_rad_by_joint": {
+          "front_left_hip_abduction": 30.000001907348633,
+          "rear_left_hip_abduction": 30.000001907348633,
+          "front_right_hip_abduction": 30.000001907348633,
+          "rear_right_hip_abduction": 30.000001907348633,
+          "front_left_hip_flexion": 30.000001907348633,
+          "rear_left_hip_flexion": 30.000001907348633,
+          "front_right_hip_flexion": 30.000001907348633,
+          "rear_right_hip_flexion": 30.000001907348633,
+          "front_left_knee": 30.000001907348633,
+          "rear_left_knee": 30.000001907348633,
+          "front_right_knee": 30.000001907348633,
+          "rear_right_knee": 30.000001907348633
+        },
+        "drive_damping_nm_s_rad_by_joint": {
+          "front_left_hip_abduction": 4.583662509918213,
+          "rear_left_hip_abduction": 4.583662509918213,
+          "front_right_hip_abduction": 4.583662509918213,
+          "rear_right_hip_abduction": 4.583662509918213,
+          "front_left_hip_flexion": 4.583662509918213,
+          "rear_left_hip_flexion": 4.583662509918213,
+          "front_right_hip_flexion": 4.583662509918213,
+          "rear_right_hip_flexion": 4.583662509918213,
+          "front_left_knee": 4.583662509918213,
+          "rear_left_knee": 4.583662509918213,
+          "front_right_knee": 4.583662509918213,
+          "rear_right_knee": 4.583662509918213
+        },
+        "requested_pd_effort_sample_count": 840,
+        "peak_abs_requested_pd_effort_nm": 10.256978988647461,
+        "peak_abs_requested_pd_effort_nm_by_joint": {
+          "front_left_hip_abduction": 0.8699077367782593,
+          "rear_left_hip_abduction": 1.5597697496414185,
+          "front_right_hip_abduction": 4.295281410217285,
+          "rear_right_hip_abduction": 1.247471809387207,
+          "front_left_hip_flexion": 1.9903359413146973,
+          "rear_left_hip_flexion": 2.5633559226989746,
+          "front_right_hip_flexion": 4.510053634643555,
+          "rear_right_hip_flexion": 2.552694320678711,
+          "front_left_knee": 9.944764137268066,
+          "rear_left_knee": 9.99622631072998,
+          "front_right_knee": 5.330659866333008,
+          "rear_right_knee": 10.256978988647461
+        },
+        "peak_requested_pd_effort_to_cap_ratio": 11.621341967664188,
+        "requested_pd_effort_95pct_cap_sample_fraction": 0.2935515873015873,
+        "reported_actuation_effort_sample_count": 840,
+        "peak_abs_reported_actuation_effort_nm": 0.0,
+        "peak_abs_reported_actuation_effort_nm_by_joint": {
+          "front_left_hip_abduction": 0.0,
+          "rear_left_hip_abduction": 0.0,
+          "front_right_hip_abduction": 0.0,
+          "rear_right_hip_abduction": 0.0,
+          "front_left_hip_flexion": 0.0,
+          "rear_left_hip_flexion": 0.0,
+          "front_right_hip_flexion": 0.0,
+          "rear_right_hip_flexion": 0.0,
+          "front_left_knee": 0.0,
+          "rear_left_knee": 0.0,
+          "front_right_knee": 0.0,
+          "rear_right_knee": 0.0
+        },
+        "projected_joint_reaction_load_sample_count": 840,
+        "peak_abs_projected_joint_reaction_load_nm": 1.6822601556777954,
+        "peak_abs_projected_joint_reaction_load_nm_by_joint": {
+          "front_left_hip_abduction": 0.7035414576530457,
+          "rear_left_hip_abduction": 0.8094525933265686,
+          "front_right_hip_abduction": 0.9961205124855042,
+          "rear_right_hip_abduction": 1.6822601556777954,
+          "front_left_hip_flexion": 1.0885251760482788,
+          "rear_left_hip_flexion": 0.9297041893005371,
+          "front_right_hip_flexion": 1.2777775526046753,
+          "rear_right_hip_flexion": 1.3812520503997803,
+          "front_left_knee": 0.8235659003257751,
+          "rear_left_knee": 0.6805647015571594,
+          "front_right_knee": 0.642288327217102,
+          "rear_right_knee": 0.8841404914855957
+        }
+      },
+      "final_swing_reference_joint_positions_rad": [
+        0.28255495429039,
+        0.720717191696167,
+        0.5890552401542664
+      ],
+      "final_swing_actual_joint_positions_rad": [
+        0.30869656801223755,
+        0.8113197088241577,
+        0.6550872325897217
+      ],
+      "measurable_support_slip_detected": false,
+      "measurable_support_slip_detected_by_leg": {
+        "front_left": false,
+        "front_right": false,
+        "rear_left": false,
+        "rear_right": false
+      },
+      "final_foot_tip_positions_m": [
+        [
+          0.4070982336997986,
+          0.19811837375164032,
+          0.012022111564874649
+        ],
+        [
+          0.6164533495903015,
+          -0.207002192735672,
+          0.1957232803106308
+        ],
+        [
+          0.21638977527618408,
+          0.1959277093410492,
+          0.008789528161287308
+        ],
+        [
+          0.22236520051956177,
+          -0.19900117814540863,
+          0.009529677219688892
+        ]
+      ],
+      "initial_foot_tip_positions_m": [
+        [
+          0.4074772298336029,
+          0.19654355943202972,
+          0.007726375013589859
+        ],
+        [
+          0.41254135966300964,
+          -0.20179325342178345,
+          0.007647763472050428
+        ],
+        [
+          0.2184135913848877,
+          0.1941811740398407,
+          0.007875670678913593
+        ],
+        [
+          0.22442986071109772,
+          -0.20054692029953003,
+          0.007880765944719315
+        ]
+      ],
+      "terminated": false,
+      "truncated": true,
+      "failure_reasons": []
+    }
+  ],
+  "phase_training": null,
+  "elapsed_seconds": 30.630790800089017,
+  "scope": "Single-environment stair PPO training",
+  "terrain_input": "Analytic height profile used for simulation learning; not a hardware sensor pipeline."
+}

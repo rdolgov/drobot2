@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "task": "Drobot-Pure-Stairs-Direct",
+  "result": "partial_exploration_not_climb",
+  "task_success": false,
+  "stair": {
+    "rise_m": 0.18,
+    "tread_depth_m": 0.25,
+    "step_count": 4
+  },
+  "parallel_environments": 128,
+  "control_hz": 30,
+  "physics_hz": 120,
+  "policy_observation_size": 70,
+  "policy_inputs": [
+    "imu_body_angular_velocity",
+    "imu_projected_gravity",
+    "joint_position",
+    "joint_velocity",
+    "previous_action",
+    "foot_contact_load",
+    "vl53l5cx_depth_8x8_compressed_to_24"
+  ],
+  "excluded_policy_inputs": [
+    "rgb_camera",
+    "simulator_root_position",
+    "simulator_stair_coordinates",
+    "gait_phase",
+    "scripted_leg_order",
+    "inverse_kinematics_reference"
+  ],
+  "actuator_effort_cap_nm": 0.8825985,
+  "network": {
+    "actor_hidden_dims": [256, 256],
+    "critic_hidden_dims": [256, 256],
+    "activation": "elu"
+  },
+  "training": {
+    "initial_reward_chain_transitions": 1474560,
+    "physical_tip_reward_iterations": 308,
+    "physical_tip_reward_transitions": 946176,
+    "lift_hold_continuation_iterations": 400,
+    "lift_hold_continuation_transitions": 1228800,
+    "total_transitions_all_pure_parallel_runs": 3649536,
+    "observed_throughput_env_steps_per_second_range": [2001, 2635]
+  },
+  "best_training_metrics": {
+    "best_tread_contacts": 2.0,
+    "best_tread_contacts_iterations": [399, 606],
+    "success_rate": 0.0,
+    "max_forward_progress_m": 0.4791288376,
+    "max_base_height_gain_m": 0.1676492393,
+    "max_physical_foot_tip_clearance_m": 0.6790479422
+  },
+  "selected_checkpoint": {
+    "iteration": 600,
+    "file": "model.pt",
+    "sha256": "cae4b58692f319615c798a8c8b34885e4007e3d5cd58ba77bb66ad7edc0f3c61"
+  },
+  "nearest_first_two_contact_checkpoint": {
+    "iteration": 400,
+    "file": "model-nearest-first-two-contact-event.pt",
+    "sha256": "a1508947a36f89c52f8c90d53623104c32c25e73ffecefd2fcf71ed5fb3f7a6b"
+  },
+  "review_video": {
+    "seed": 1061,
+    "frames": 240,
+    "duration_s": 8.0,
+    "file": "reviews/ppo-stairs-pure-parallel-v1-model600-seed1061.mp4",
+    "sha256": "236320e7412887072d8b78081eec460782f20c4c69ff63d0407f0b3b2b7fa625",
+    "result": "approaches_and_lifts_but_does_not_climb"
+  },
+  "software": {
+    "isaac_lab_version": "3.0.0",
+    "isaac_lab_commit": "90ee100616d9b77eb8e28f171252dc58e39181d7"
+  },
+  "limitations": [
+    "No deterministic first-step landing was demonstrated.",
+    "No full stair climb occurred.",
+    "Training maxima are stochastic exploration events, not fresh-seed pass rates.",
+    "Simulation results have not been validated on hardware."
+  ]
+}

@@ -7,3 +7,31 @@ sheets here. Prefer names that include the target and intent, for example:
 
 The `legacy/` folder retains design intent brought from the source project.
 Generated verification snapshots belong under `exports/renders/` instead.
+
+Simulator review media may also be committed here when it is an intentional
+handoff rather than bulk run output. `ppo-stairs-v5-10mm-four-step-success.mp4`
+and its PNG/JSON companions record the verified stochastic shallow-stair
+episode; the JSON states the deterministic and sim-to-real limitations.
+The same reviewed clip is available on the private Sites handoff at
+https://drobot-stairs-v3-smoke-20260731.romka.chatgpt.site.
+
+`ppo-stairs-v6-180mm-25cm-small-training.mp4` and its PNG/JSON companions
+record the bounded full-size evaluation: four `180 mm` rises, fixed `250 mm`
+treads, and `0/10` deterministic successes. The recording reached only the
+first stair and is intentionally presented as an objective failure. The
+private Sites URL above now serves this v6 review and retains downloadable
+machine-readable results.
+
+`ppo-stairs-v12-front-right-190mm-lift-evaluation.mp4` and its PNG/JSON
+companions show the exact composed `2,048`-step mixed-height experiment on a
+`250 mm` tread. The selected checkpoint retains all three support contacts and
+has no measurable slip, but stops at `142.08 mm` lift after exceeding the
+strict `200 mm` lateral corridor by `2.12 mm`. This is an intentional failure
+handoff, not a claimed 190 mm success.
+
+`ppo-stairs-v13-front-right-190mm-lift-success.mp4` and its PNG/JSON
+companions show the simplified direct front-right lift beside the same
+`180 mm` rise / `250 mm` tread staircase. The learned PPO residual passes
+`3/3` deterministic episodes, reaches `204.61-205.05 mm`, holds for `0.50 s`,
+keeps all three support contacts, and records at most `3.42 mm` support slip.
+This proves the isolated lift capability, not tread placement or stair ascent.

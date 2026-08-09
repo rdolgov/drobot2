@@ -240,6 +240,15 @@ def validate_model_manifest(
     }
     actual = {key: manifest.get(key) for key in expected}
     if actual != expected:
+        if allow_unverified:
+            return {
+                "status": "SKIPPED",
+                "reason": "manifest_mismatch_and_override_enabled",
+                "manifest": str(path),
+                "actual": actual,
+                "expected": expected,
+                "algorithm_contract": manifest.get("algorithm_contract"),
+            }
         raise RuntimeError(
             f"Model contract mismatch: actual={actual}, expected={expected}"
         )
@@ -261,6 +270,14 @@ def validate_model_manifest(
         if saved_contract.get(field) != environment_contract.get(field)
     }
     if mismatches:
+        if allow_unverified:
+            return {
+                "status": "SKIPPED",
+                "reason": "environment_mismatch_and_override_enabled",
+                "manifest": str(path),
+                "mismatches": mismatches,
+                "algorithm_contract": manifest.get("algorithm_contract"),
+            }
         raise RuntimeError(f"Saved/runtime environment contract differs: {mismatches}")
     saved_algorithm_contract = dict(manifest.get("algorithm_contract", {}))
     if not saved_algorithm_contract:

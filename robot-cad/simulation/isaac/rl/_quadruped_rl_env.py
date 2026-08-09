@@ -21,6 +21,7 @@ from _quadruped_runtime import (
     EXPECTED_DOF_NAMES,
     MAX_NO_LOAD_VELOCITY_RAD_S,
     RATED_TORQUE_NM,
+    STALL_TORQUE_NM,
     stance_by_name,
     targets_for_order,
 )
@@ -49,6 +50,15 @@ def _finite_flat(value, label: str) -> np.ndarray:
     if not np.all(np.isfinite(result)):
         raise RuntimeError(f"{label} contains non-finite values: {result}")
     return result
+
+
+def _joint_kind(name: str, values_by_kind: Mapping[str, object]) -> str:
+    matches = [kind for kind in values_by_kind if name.endswith(kind)]
+    if len(matches) != 1:
+        raise ValueError(
+            f"Could not resolve one joint kind for {name!r}: {matches}"
+        )
+    return matches[0]
 
 
 class QuadrupedWalkEnv(gym.Env):
@@ -128,6 +138,7 @@ class QuadrupedWalkEnv(gym.Env):
             reset_xform_op_properties=True,
         )
         self.imu_sensor = IMUSensor(imu_prim_path)
+        self._before_physics_play()
         app_utils.play()
         self._update(10)
         self.dof_names = list(self.robot.dof_names)
@@ -139,6 +150,50 @@ class QuadrupedWalkEnv(gym.Env):
             raise RuntimeError(
                 "Unexpected articulation contract: "
                 f"dofs={self.dof_names}, links={self.robot.num_links}"
+            )
+
+        self.robot_hardware_profile = dict(
+            self.config.get("robot_hardware_profile", {})
+        )
+        self.effort_cap_nm = float(
+            self.robot_hardware_profile.get(
+                "effort_cap_nm",
+                RATED_TORQUE_NM,
+            )
+        )
+        if not 0.0 < self.effort_cap_nm <= STALL_TORQUE_NM:
+            raise ValueError(
+                "robot_hardware_profile.effort_cap_nm must be positive and "
+                f"no greater than stall torque ({STALL_TORQUE_NM} N*m)"
+            )
+        limits_by_kind = dict(
+            self.robot_hardware_profile.get("joint_limits_deg", {})
+        )
+        if limits_by_kind:
+            expected_kinds = {
+                "hip_abduction",
+                "hip_flexion",
+                "knee",
+            }
+            if set(limits_by_kind) != expected_kinds:
+                raise ValueError(
+                    "robot_hardware_profile.joint_limits_deg must define "
+                    f"{sorted(expected_kinds)}"
+                )
+            lower_limits: list[float] = []
+            upper_limits: list[float] = []
+            for name in self.dof_names:
+                kind = _joint_kind(name, limits_by_kind)
+                limits_deg = tuple(float(value) for value in limits_by_kind[kind])
+                if len(limits_deg) != 2 or not limits_deg[0] < limits_deg[1]:
+                    raise ValueError(
+                        f"Invalid joint limit for {kind}: {limits_deg}"
+                    )
+                lower_limits.append(np.deg2rad(limits_deg[0]))
+                upper_limits.append(np.deg2rad(limits_deg[1]))
+            self.robot.set_dof_limits(
+                lower=np.asarray(lower_limits, dtype=np.float32),
+                upper=np.asarray(upper_limits, dtype=np.float32),
             )
 
         self.lower_limits = _finite_flat(
@@ -159,7 +214,7 @@ class QuadrupedWalkEnv(gym.Env):
                 f"{self.max_velocities}"
             )
         self.robot.set_dof_max_efforts(
-            np.full(12, RATED_TORQUE_NM, dtype=np.float32)
+            np.full(12, self.effort_cap_nm, dtype=np.float32)
         )
         stance = dict(self.config["nominal_stance"])
         self.nominal_positions = np.asarray(
@@ -204,6 +259,9 @@ class QuadrupedWalkEnv(gym.Env):
         self.maximum_tilt_deg = 0.0
         self.completed_episode_metrics: list[dict[str, object]] = []
         self._closed = False
+
+    def _before_physics_play(self) -> None:
+        """Allow specialized tasks to register physics tensor views."""
 
     def _update(self, count: int = 1) -> None:
         for _ in range(count):
@@ -293,6 +351,9 @@ class QuadrupedWalkEnv(gym.Env):
     ) -> tuple[np.ndarray, dict]:
         del options
         super().reset(seed=seed)
+        # Recreate the C++ sensor so filter/history state cannot leak across
+        # teleported Gym episodes.
+        self.imu_sensor.reset()
         self._reset_robot()
         self.episode_step = 0
         self.episode_return = 0.0
@@ -422,6 +483,12 @@ class QuadrupedWalkEnv(gym.Env):
             "action_size": 12,
             "imu_fields": list(IMU_OBSERVATION_FIELDS),
             "rated_effort_cap_nm": RATED_TORQUE_NM,
+            "applied_effort_cap_nm": self.effort_cap_nm,
+            "applied_joint_lower_limits_rad": self.lower_limits.tolist(),
+            "applied_joint_upper_limits_rad": self.upper_limits.tolist(),
+            "robot_hardware_profile": (
+                self.robot_hardware_profile or None
+            ),
             "control_hz": self.control_hz,
             "physics_hz": self.physics_hz,
         }

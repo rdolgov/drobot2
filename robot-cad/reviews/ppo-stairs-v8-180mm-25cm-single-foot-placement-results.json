@@ -1,0 +1,31 @@
+{
+  "status": "PASS",
+  "task_id": "Drobot-Quadruped-Stairs-v8-180mm-Single-Tread-Placement",
+  "scope": "2048-step PPO pipeline run around an explicit five-phase IK reference; not converged training or hardware validation",
+  "stair_geometry": {
+    "rise_m": 0.18,
+    "tread_depth_m": 0.25
+  },
+  "policy_inputs": "IMU, joint state, previous action, analytic fixed-terrain profile, placement phase/error/contact state; no RGB or range pixels",
+  "deterministic_evaluation": {
+    "episodes": 5,
+    "successes": 5,
+    "success_rate": 1.0,
+    "swing_leg": "front_left",
+    "maximum_swing_foot_lift_range_m": [0.2052174210548401, 0.20735673606395721],
+    "maximum_tread_normal_load_range_n": [8.903458595275879, 9.50029468536377],
+    "minimum_support_contact_fraction": 1.0,
+    "maximum_support_slip_m": 0.003393221413716674,
+    "measurable_support_slip_detected": false,
+    "maximum_body_tilt_deg": 2.9549908056904957,
+    "contact_hold_seconds": 0.75,
+    "failure_reason_counts": {}
+  },
+  "recording": {
+    "status": "PASS",
+    "seed": 170,
+    "frames": 323,
+    "video": "reviews/ppo-stairs-v8-180mm-25cm-single-foot-placement.mp4",
+    "thumbnail": "reviews/ppo-stairs-v8-180mm-25cm-single-foot-placement.png"
+  }
+}

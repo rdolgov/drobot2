@@ -117,7 +117,7 @@ def test_tray_and_lid_mount_holes_are_open() -> None:
     tray = generated_tray()
     lid = generated_lid()
 
-    for x_mm, y_mm in quadruped_body.TRAY_STANDOFF_CENTERS_XY_MM:
+    for x_mm, y_mm in quadruped_body.TRAY_MOUNT_CENTERS_XY_MM:
         assert not tray.is_inside(Vector(x_mm, y_mm, 1.5))
     for x_mm, y_mm in quadruped_body.LID_BOSS_CENTERS_XY_MM:
         assert not lid.is_inside(Vector(x_mm, y_mm, 2.0))
@@ -168,12 +168,17 @@ def test_symmetric_side_service_ports_are_open_between_hip_fields() -> None:
 
     for side in (-1.0, 1.0):
         wall_y = side * wall_center_offset
+        assert quadruped_body.SIDE_CABLE_PORT_LENGTH_X_MM == pytest.approx(32.0)
+        assert quadruped_body.SIDE_CABLE_PORT_HEIGHT_Z_MM == pytest.approx(20.0)
         assert not base.is_inside(
             Vector(
                 quadruped_body.SIDE_CABLE_PORT_CENTER_X_MM,
                 wall_y,
                 quadruped_body.SIDE_CABLE_PORT_CENTER_Z_MM,
             )
+        )
+        assert not base.is_inside(
+            Vector(15.0, wall_y, quadruped_body.SIDE_CABLE_PORT_CENTER_Z_MM)
         )
         assert base.is_inside(
             Vector(
@@ -182,11 +187,102 @@ def test_symmetric_side_service_ports_are_open_between_hip_fields() -> None:
                 quadruped_body.SIDE_CABLE_PORT_CENTER_Z_MM,
             )
         )
+        assert base.is_inside(
+            Vector(
+                quadruped_body.SIDE_CABLE_PORT_CENTER_X_MM,
+                wall_y,
+                quadruped_body.SIDE_CABLE_PORT_CENTER_Z_MM
+                + quadruped_body.SIDE_CABLE_PORT_HEIGHT_Z_MM / 2.0
+                + 2.0,
+            )
+        )
 
 
-def test_bottom_utility_mounting_holes_are_open_and_clear_battery_rail() -> None:
+def test_body_walls_have_dense_10_mm_pitch_m3_mounting_grids() -> None:
+    base = generated_base()
+    front_rear_centers = (
+        quadruped_body.front_rear_mounting_grid_centers_yz_mm()
+    )
+    side_centers = quadruped_body.side_mounting_grid_centers_xz_mm()
+    wall_x = (
+        quadruped_body.BODY_LENGTH_X_MM / 2.0
+        - quadruped_body.BODY_WALL_MM / 2.0
+    )
+    wall_y = (
+        quadruped_body.BODY_WIDTH_Y_MM / 2.0
+        - quadruped_body.BODY_WALL_MM / 2.0
+    )
+
+    assert len(front_rear_centers) == 83
+    assert len(side_centers) == 12
+    assert quadruped_body.BODY_WALL_MOUNTING_GRID_PITCH_MM == pytest.approx(10.0)
+
+    for side in (-1.0, 1.0):
+        for y_mm, z_mm in front_rear_centers:
+            assert not base.is_inside(Vector(side * wall_x, y_mm, z_mm))
+        for x_mm, z_mm in side_centers:
+            assert not base.is_inside(Vector(x_mm, side * wall_y, z_mm))
+
+    # The former fixed-height tray posts must be absent from the open interior.
+    former_post_centers = (
+        (-80.0, -55.0),
+        (-80.0, 55.0),
+        (80.0, -55.0),
+        (80.0, 55.0),
+    )
+    for x_mm, y_mm in former_post_centers:
+        assert not base.is_inside(Vector(x_mm, y_mm, 30.0))
+
+
+def test_dense_floor_grid_is_open_centered_and_tray_compatible() -> None:
     base = generated_base()
     test_z = quadruped_body.BODY_FLOOR_MM / 2.0
+    grid_centers = quadruped_body.floor_mounting_grid_centers_xy_mm()
+
+    assert len(grid_centers) == 255
+    assert quadruped_body.FLOOR_MOUNTING_GRID_PITCH_MM == pytest.approx(10.0)
+    assert set(quadruped_body.TRAY_MOUNT_CENTERS_XY_MM).issubset(grid_centers)
+
+    rail_opening_half_x = (
+        quadruped_body.BATTERY_CLEAR_LENGTH_X_MM
+        + 2.0 * quadruped_body.BATTERY_RAIL_CLEARANCE_PER_SIDE_MM
+    ) / 2.0
+    rail_opening_half_y = (
+        quadruped_body.BATTERY_CLEAR_WIDTH_Y_MM
+        + 2.0 * quadruped_body.BATTERY_RAIL_CLEARANCE_PER_SIDE_MM
+    ) / 2.0
+    rail_outer_half_x = (
+        rail_opening_half_x + quadruped_body.BATTERY_RAIL_THICKNESS_MM
+    )
+    rail_outer_half_y = (
+        rail_opening_half_y + quadruped_body.BATTERY_RAIL_THICKNESS_MM
+    )
+    protected_offset = (
+        quadruped_body.FLOOR_MOUNTING_GRID_M3_CLEARANCE_DIAMETER_MM / 2.0
+        + quadruped_body.FLOOR_MOUNTING_GRID_MIN_WEB_MM
+    )
+
+    for x_mm, y_mm in grid_centers:
+        assert not base.is_inside(Vector(x_mm, y_mm, test_z))
+        assert (
+            (
+                abs(x_mm) < rail_opening_half_x - protected_offset
+                and abs(y_mm) < rail_opening_half_y - protected_offset
+            )
+            or (
+                abs(x_mm) > rail_outer_half_x + protected_offset
+                or abs(y_mm) > rail_outer_half_y + protected_offset
+            )
+        )
+
+    # Center mounting points are open while the raised retaining rail survives.
+    assert not base.is_inside(Vector(0.0, 0.0, test_z))
+    rail_test_z = (
+        quadruped_body.BODY_FLOOR_MM
+        + quadruped_body.BATTERY_RAIL_HEIGHT_Z_MM / 2.0
+    )
+    assert base.is_inside(Vector(0.0, rail_opening_half_y + 1.5, rail_test_z))
+    assert base.is_inside(Vector(rail_opening_half_x + 1.5, 0.0, rail_test_z))
 
     for x_mm in quadruped_body.BASE_UTILITY_M2_X_MM:
         for y_mm in quadruped_body.BASE_UTILITY_Y_MM:
@@ -216,6 +312,27 @@ def test_lid_leg_ports_and_utility_mounting_holes_are_open() -> None:
         + quadruped_body_lid.LEKIWI_CAMERA_MOUNT_HOLE_CENTERS_XY_MM
     ):
         assert not lid.is_inside(Vector(x_mm, y_mm, test_z))
+
+
+def test_lid_has_dense_10_mm_pitch_m3_mounting_grid_with_keepouts() -> None:
+    lid = generated_lid()
+    test_z = quadruped_body.BODY_LID_THICKNESS_Z_MM / 2.0
+    grid_centers = quadruped_body_lid.lid_mounting_grid_centers_xy_mm()
+
+    assert len(grid_centers) == 215
+    assert min(x_mm for x_mm, _ in grid_centers) == pytest.approx(-90.0)
+    assert max(x_mm for x_mm, _ in grid_centers) == pytest.approx(90.0)
+    assert min(y_mm for _, y_mm in grid_centers) == pytest.approx(-60.0)
+    assert max(y_mm for _, y_mm in grid_centers) == pytest.approx(60.0)
+    assert quadruped_body_lid.LID_MOUNTING_GRID_PITCH_MM == pytest.approx(10.0)
+
+    for x_mm, y_mm in grid_centers:
+        assert not lid.is_inside(Vector(x_mm, y_mm, test_z))
+
+    # The grid preserves usable material immediately beside representative
+    # ventilation and camera-cable keep-outs.
+    assert lid.is_inside(Vector(-76.5, -42.0, test_z))
+    assert lid.is_inside(Vector(76.5, 0.0, test_z))
 
 
 def test_lid_lekiwi_camera_interface_is_open_and_on_20_mm_pitch() -> None:
