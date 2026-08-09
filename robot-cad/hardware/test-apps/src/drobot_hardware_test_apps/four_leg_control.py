@@ -559,7 +559,7 @@ class FourLegSession:
             self.crawl_started_at = now
             self.crawl_target_reached_at = None
             self.crawl_progress = 0.0
-            self.last_event = "Slow crawl started; rear-right foot moves first"
+            self.last_event = "Long crawl started; rear-right foot moves first"
             return
 
         duration_s = config.period_s * config.cycles
@@ -675,7 +675,7 @@ class FourLegSession:
 
             self.last_heartbeat = self.clock()
             self.fault = None
-            self.last_event = "All 12 motors moving to the slow-crawl stance"
+            self.last_event = "All 12 motors moving to the lower long-crawl stance"
 
     def stop_crawl(self) -> None:
         with self.lock:
@@ -1121,6 +1121,11 @@ class FourLegSession:
                 ),
                 "stride_mm": self.dashboard.crawl.stride_m * 1000.0,
                 "lift_mm": self.dashboard.crawl.lift_m * 1000.0,
+                "stance_down_mm": self.dashboard.crawl.stance_down_m * 1000.0,
+                "stance_fore_aft_mm": (self.dashboard.crawl.stance_fore_aft_m * 1000.0),
+                "weight_shift_forward_mm": (
+                    self.dashboard.crawl.weight_shift_forward_m * 1000.0
+                ),
                 "corner_map": {
                     str(profile.number): profile.corner for profile in self.profiles
                 },

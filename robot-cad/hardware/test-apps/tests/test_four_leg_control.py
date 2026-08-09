@@ -66,8 +66,14 @@ def test_manifest_loads_verified_ids_and_directions() -> None:
         "rear_left",
         "rear_right",
     ]
+    assert dashboard.server.ramp_rate_deg_s == 45.0
     assert dashboard.crawl.period_s == 20.0
-    assert dashboard.crawl.cycles == 2
+    assert dashboard.crawl.cycles == 4
+    assert dashboard.crawl.stride_m == pytest.approx(0.025)
+    assert dashboard.crawl.lift_m == pytest.approx(0.013)
+    assert dashboard.crawl.stance_down_m == pytest.approx(0.305)
+    assert dashboard.crawl.stance_fore_aft_m == pytest.approx(0.035)
+    assert dashboard.crawl.weight_shift_forward_m == pytest.approx(0.020)
 
 
 def test_dashboard_crawl_matches_isaac_reference_and_motor_limits(
@@ -158,7 +164,7 @@ def test_joint_arm_requires_ack_and_large_target_is_ramped() -> None:
         motor = session.snapshot()["legs"][1]["motors"][0]
 
         assert motor["desired_deg"] == 20.0
-        assert motor["commanded_deg"] == pytest.approx(1.5)
+        assert motor["commanded_deg"] == pytest.approx(2.25)
         assert motor["armed"] is True
     finally:
         session.close()
@@ -174,8 +180,8 @@ def test_same_joint_names_on_different_legs_do_not_collide() -> None:
         session.advance_once()
         state = session.snapshot()
 
-        assert state["legs"][1]["motors"][1]["commanded_deg"] == pytest.approx(1.5)
-        assert state["legs"][2]["motors"][1]["commanded_deg"] == pytest.approx(-1.5)
+        assert state["legs"][1]["motors"][1]["commanded_deg"] == pytest.approx(2.25)
+        assert state["legs"][2]["motors"][1]["commanded_deg"] == pytest.approx(-2.25)
     finally:
         session.close()
 
@@ -253,6 +259,12 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
             "3": "rear_left",
             "4": "rear_right",
         }
+        assert state["crawl"]["duration_s"] == 80.0
+        assert state["crawl"]["stride_mm"] == pytest.approx(25.0)
+        assert state["crawl"]["lift_mm"] == pytest.approx(13.0)
+        assert state["crawl"]["stance_down_mm"] == pytest.approx(305.0)
+        assert state["crawl"]["stance_fore_aft_mm"] == pytest.approx(35.0)
+        assert state["crawl"]["weight_shift_forward_mm"] == pytest.approx(20.0)
         assert state["summary"]["armed_count"] == 12
         assert bus.torque == set(range(1, 13))
         with pytest.raises(RuntimeError, match="Stop the active crawl"):
@@ -295,7 +307,7 @@ def test_crawl_completes_configured_cycles_and_holds_stance() -> None:
             safety_ack=True,
             confirmation="WALK FORWARD",
         )
-        for tick in range(1100):
+        for tick in range(2000):
             if tick % 10 == 0:
                 session.heartbeat()
             clock.advance(0.05)
@@ -304,7 +316,7 @@ def test_crawl_completes_configured_cycles_and_holds_stance() -> None:
                 break
 
         state = session.snapshot()
-        assert tick < 1099
+        assert tick < 1999
         assert state["crawl"]["stage"] == "complete"
         assert state["crawl"]["phase"] == "holding_stance"
         assert state["crawl"]["progress"] == 1.0

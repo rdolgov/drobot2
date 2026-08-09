@@ -20,7 +20,7 @@ The local dashboard provides:
   command, and a persistent **DISARM ALL 12** control;
 - guarded capture of the current torque-free pose as calibrated zero for all
   twelve motors, with timestamped backups of all four calibration files;
-- a guarded **WALK FORWARD** command that runs two deterministic, slow,
+- a guarded **WALK FORWARD** command that runs four deterministic, lower-stance,
   four-beat crawl cycles with visible phase/progress and a dedicated
   **STOP + DISARM** control;
 - voltage, temperature, diagnostic current, raw encoder, speed, torque state,
@@ -127,14 +127,16 @@ port with another dashboard process.
    structure, support, and complete-robot collision behavior have separate
    validation.
 
-## Slow crawl-forward command
+## Long crawl-forward command
 
-**WALK FORWARD** is a fixed two-cycle choreography, not an AI policy. It uses
+**WALK FORWARD** is a fixed four-cycle choreography, not an AI policy. It uses
 the same quasi-static target equations and physical dimensions as the tracked
 Isaac crawl: rear-right, front-right, rear-left, then front-left. Each foot is
-unloaded, lifted 10 mm, advanced through a 15 mm stride, lowered, and returned
-to support before the next foot moves. Each cycle takes 20 seconds, for a
-40-second default command.
+unloaded, lifted 13 mm, advanced through a 25 mm stride, lowered, and returned
+to support before the next foot moves. The body begins from a lower 305 mm
+stance with the front and rear feet spread 35 mm from the hip plane. Each cycle
+takes 20 seconds, for an 80-second default command. The joint-command ramp is
+45 degrees per second; the servo torque cap remains unchanged at 30%.
 
 Before the command is accepted, the server requires:
 
@@ -144,13 +146,14 @@ Before the command is accepted, the server requires:
 - every sampled gait target inside that motor's configured range;
 - the support/clearance/corner-map/cutoff checkbox and a second confirmation.
 
-For the first physical attempt, support the body on blocks with the feet barely
-touching or just clear of the floor. Confirm the displayed corner map, press
-**WALK FORWARD**, and be ready to use **STOP + DISARM** or the physical power
-cutoff. The app first ramps to the crawl stance, settles, then runs two cycles.
-It finishes holding the crawl stance with torque still enabled; support the
-robot before pressing **STOP + DISARM**. Increase stride, lift, cycle count, or
-speed only after the default motion is confirmed on the assembled robot.
+For the first physical attempt with this stronger profile, support the body on
+blocks with the feet barely touching or just clear of the floor. Confirm the
+displayed corner map, press **WALK FORWARD**, and be ready to use **STOP +
+DISARM** or the physical power cutoff. The app first ramps to the lower crawl
+stance, settles, then runs four cycles. It finishes holding the crawl stance
+with torque still enabled; support the robot before pressing **STOP + DISARM**.
+Stop on rear-left support loss, dragging, slip, unexpected direction, current
+warning, heat, noise, or supply sag.
 
 The tracked defaults live in `[crawl]` in `config/four-leg.toml`. They are
 deliberately capped to a 5-30 mm stride, 5-20 mm lift, 12-60 second period, and
@@ -161,37 +164,45 @@ to remove torque from all 12 motors.
 
 ## Isaac validation
 
-The dashboard gait was validated on 2026-08-08 against the tracked floating
-quadruped USD and the rated `0.980665 Nm` ST3215 torque profile. The dashboard
-equations are parity-tested against
-`simulation/isaac/_quadruped_runtime.py` over 81 samples per cycle. The full
-physics reproduction command, run from the repository root, is:
+The stronger long-crawl profile was evaluated on 2026-08-08 against the tracked
+floating quadruped USD and rated `0.980665 Nm` ST3215 torque profile. The
+dashboard equations are parity-tested against
+`simulation/isaac/_quadruped_runtime.py` over 81 samples per cycle. The exact
+four-cycle physics reproduction command, run from the repository root, is:
 
 ```powershell
 & C:\isaacsim\python.bat robot-cad\simulation\isaac\run_crawl.py `
   --usd robot-cad\exports\isaac\quadruped_robot_floating.usdc `
   --headless --gait-mode quasi-static --torque-cap rated `
-  --cycles 2 --period 20 --stride 0.015 --lift 0.010 `
-  --weight-shift-forward 0.030 --weight-shift-lateral 0 `
-  --stance-down 0.310 --stance-fore-aft 0.025 `
-  --abduction-deg 0 --start-z 0.460 --review-phase 0.11 `
-  --report robot-cad\hardware\test-apps\validation\isaac-slow-crawl.json `
-  --screenshot robot-cad\reviews\isaac-dashboard-slow-crawl.png
+  --cycles 4 --period 20 --stride 0.025 --lift 0.013 `
+  --weight-shift-forward 0.020 --weight-shift-lateral 0 `
+  --stance-down 0.305 --stance-fore-aft 0.035 `
+  --abduction-deg 0 --start-z 0.455 --review-phase 0.11 `
+  --report robot-cad\hardware\test-apps\validation\isaac-long-crawl.json `
+  --screenshot robot-cad\reviews\isaac-dashboard-long-crawl.png
 ```
 
-The rated-torque run passed the existing, unchanged crawl thresholds: 21.97 mm
-forward travel, 1.28 mm lateral drift, 2.00 degrees maximum body tilt, 6.27 mm
-maximum loaded support-tip slip, 99.64% expected support contact, 0.097 rad
-maximum joint tracking error, and completed rear-right, front-right,
-rear-left, and front-left steps. The machine-readable report is
-[`validation/isaac-slow-crawl.json`](validation/isaac-slow-crawl.json), and the
+The rated-torque run moved forward `39.61 mm` with `4.03 mm` lateral drift,
+`2.14 deg` maximum body tilt, `3.93 mm` maximum loaded support-tip slip,
+`98.91%` expected support contact, `0.106 rad` maximum joint tracking error,
+and `1.873 rad/s` maximum joint speed. Those results clear their existing
+distance, drift, tilt, slip, support-contact, tracking-error, and speed limits.
+The strict overall status remains **FAIL** because the rear-left swing did not
+keep all three expected support feet simultaneously loaded for the required
+fraction; the other three swing legs completed their contact evidence. Treat
+this as a bounded hardware trial, not a fully simulation-qualified gait. The
+machine-readable report is
+[`validation/isaac-long-crawl.json`](validation/isaac-long-crawl.json), and the
 review image is
-[`../../reviews/isaac-dashboard-slow-crawl.png`](../../reviews/isaac-dashboard-slow-crawl.png).
+[`../../reviews/isaac-dashboard-long-crawl.png`](../../reviews/isaac-dashboard-long-crawl.png).
 
-An initial one-cycle trial moved forward 11.12 mm and completed all four steps
-with similarly stable contact, but correctly failed the unchanged 20 mm
-forward-distance gate. The production button therefore runs two cycles instead
-of weakening the acceptance threshold or increasing stride/lift authority.
+The prior conservative 15 mm stride, 10 mm lift, 310 mm stance, two-cycle run
+remains the fully passing rated-torque reference at
+[`validation/isaac-slow-crawl.json`](validation/isaac-slow-crawl.json). It
+moved forward `21.97 mm` and completed all four contact-verified steps. The
+longer profile was selected because the assembled robot completed the original
+leg sequence without producing useful forward travel; no torque-limit increase
+was made.
 
 ## Center all twelve joints
 

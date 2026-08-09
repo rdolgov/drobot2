@@ -353,7 +353,9 @@ function updateSummary(state) {
   gaitProgress.style.width = `${Math.max(0, Math.min(100, crawl.progress * 100))}%`;
   gaitDetail.textContent =
     `${crawl.stride_mm.toFixed(0)} mm stride / ` +
-    `${crawl.lift_mm.toFixed(0)} mm lift / ${crawl.duration_s.toFixed(0)} s`;
+    `${crawl.lift_mm.toFixed(0)} mm lift / ` +
+    `${crawl.stance_down_mm.toFixed(0)} mm stance / ` +
+    `${crawl.duration_s.toFixed(0)} s`;
 
   walkForward.disabled =
     crawl.active ||
@@ -457,7 +459,8 @@ walkForward.addEventListener("click", () => {
     return;
   }
   const accepted = window.confirm(
-    "WALK FORWARD will arm all 12 motors and run two slow crawl cycles " +
+    `WALK FORWARD will arm all 12 motors and run ${latestState.crawl.cycles} ` +
+      `long crawl cycles (${latestState.crawl.duration_s.toFixed(0)} seconds) ` +
       "using the displayed corner map. Start on blocks for the first test, " +
       "keep the physical cutoff ready, and stop on slip or unexpected motion. Continue?",
   );
@@ -467,7 +470,7 @@ walkForward.addEventListener("click", () => {
   postAction(
     "/api/crawl-forward",
     { safety_ack: true, confirmation: "WALK FORWARD" },
-    "Moving to crawl stance; rear-right foot will move first",
+    "Moving to lower long-crawl stance; rear-right foot will move first",
   );
 });
 
