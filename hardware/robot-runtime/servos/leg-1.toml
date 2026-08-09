@@ -1,7 +1,7 @@
 [bus]
 baudrate = 1000000
-torque_limit = 300
-speed = 350
+torque_limit = 900
+speed = 700
 acceleration = 10
 max_command_step_deg = 5.0
 

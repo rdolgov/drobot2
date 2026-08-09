@@ -74,8 +74,9 @@ forward/down path instead of an arc that can kick the body.
 | Open-loop forward transfer | 16 mm |
 | Open-loop lateral transfer | 12 mm |
 | First swing leg | front-left |
-| Servo torque setting | 30% |
-| Command ramp | 45 degrees/s |
+| Servo torque setting | 60% |
+| Servo speed setting | 700 |
+| Command ramp | 90 degrees/s |
 
 Joint targets use the ST3215 signed extended-position coordinate across the
 encoder seam. The current Leg 1 knee center (`1005`) maps the front stance
@@ -133,9 +134,12 @@ supported hardware testing instead of further simulation.
 5. If the feet are going to take weight, lower the external support gradually;
    do not drop the full body mass onto the servos. Keep the tether able to catch
    a fall. Record whether the stance holds and the loaded current values.
-6. Disarm, re-support the body, and only then use **TEST COORDINATED MOTION**.
-   Verify the front-left, rear-right, front-right, rear-left swing order and
-   stop on sag, pitch, collision, cable pull, or supply warning.
+6. Disarm, re-support the body, and only then use **TEST GAIT SEQUENCE**.
+   Verify Leg 1 hip flexion reaches `+90 degrees`, Leg 2 hip flexion reaches
+   `+70 degrees`, Leg 4 knee reaches `+20 degrees`, and all joints return to
+   stance before the sequence repeats. Stop on sag, pitch, collision, cable
+   pull, or supply warning. See `hardware-gait-sequence-v1.md` for the exact
+   phase table.
 7. Do not run untethered repeated cycles until one real cycle holds body height,
    moves all four feet as intended, and produces acceptable telemetry.
 

@@ -8,7 +8,13 @@ const connectionText = document.querySelector("#connectionText");
 const modeBadge = document.querySelector("#modeBadge");
 const alertPanel = document.querySelector("#alertPanel");
 const alertList = document.querySelector("#alertList");
+const errorLog = document.querySelector("#errorLog");
+const errorList = document.querySelector("#errorList");
 const disarmAll = document.querySelector("#disarmAll");
+const settingsButton = document.querySelector("#settingsButton");
+const settingsDialog = document.querySelector("#settingsDialog");
+const settingsClose = document.querySelector("#settingsClose");
+const clearErrorLog = document.querySelector("#clearErrorLog");
 const zeroAll = document.querySelector("#zeroAll");
 const centerAll = document.querySelector("#centerAll");
 const captureZeroAll = document.querySelector("#captureZeroAll");
@@ -26,6 +32,8 @@ const sliderTimers = new Map();
 let latestState = null;
 let connected = false;
 let refreshing = false;
+const errorStorageKey = "drobot-four-leg-permanent-errors-v1";
+let permanentErrors = loadPermanentErrors();
 
 async function api(path, method = "GET", body = undefined, keepalive = false) {
   const response = await fetch(path, {
@@ -45,11 +53,55 @@ async function api(path, method = "GET", body = undefined, keepalive = false) {
   return payload;
 }
 
+function loadPermanentErrors() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(errorStorageKey) || "[]");
+    return Array.isArray(stored)
+      ? stored.filter((entry) => entry && typeof entry.message === "string")
+      : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function storePermanentErrors() {
+  try {
+    localStorage.setItem(errorStorageKey, JSON.stringify(permanentErrors));
+  } catch (_error) {
+    // The on-screen log still remains permanent for this page session.
+  }
+}
+
+function renderPermanentErrors() {
+  errorList.innerHTML = "";
+  permanentErrors.forEach((entry) => {
+    const item = document.createElement("li");
+    const time = document.createElement("time");
+    time.dateTime = entry.createdAt;
+    time.textContent = new Date(entry.createdAt).toLocaleTimeString();
+    const message = document.createElement("span");
+    message.textContent = entry.message;
+    item.append(time, message);
+    errorList.append(item);
+  });
+  errorLog.hidden = permanentErrors.length === 0;
+}
+
+function addPermanentError(message) {
+  const text = String(message || "Unknown dashboard error").trim();
+  if (permanentErrors.some((entry) => entry.message === text)) return;
+  permanentErrors.push({ message: text, createdAt: new Date().toISOString() });
+  storePermanentErrors();
+  renderPermanentErrors();
+}
+
 function showNotice(message, isError = false) {
+  if (isError) {
+    notice.textContent = "";
+    addPermanentError(message);
+    return;
+  }
   notice.textContent = message;
-  notice.classList.toggle("error", isError);
-  notice.setAttribute("role", isError ? "alert" : "status");
-  notice.setAttribute("aria-live", isError ? "assertive" : "polite");
 }
 
 function formatAngle(value) {
@@ -337,6 +389,7 @@ function updateSummary(state) {
     item.textContent = warning;
     alertList.appendChild(item);
   });
+  if (state.fault) addPermanentError(state.fault);
 
   document.body.classList.toggle("has-warning", summary.health === "warning");
   document.body.classList.toggle("has-armed", state.any_armed);
@@ -356,17 +409,19 @@ function updateSummary(state) {
       : "READY / DISARMED";
   gaitPhase.textContent = `${phaseText}${swingText}${pushText}`;
   gaitProgress.style.width = `${Math.max(0, Math.min(100, crawl.progress * 100))}%`;
-  gaitDetail.textContent =
-    `${crawl.stride_mm.toFixed(0)} mm stride / ` +
-    `${crawl.lift_mm.toFixed(0)} mm lift / ` +
-    `${crawl.stance_fore_aft_mm.toFixed(0)} mm front/rear splay / ` +
-    `${crawl.abduction_deg.toFixed(0)} deg outward / ` +
-    `${crawl.duration_s.toFixed(0)} s`;
+  gaitDetail.textContent = crawl.pattern === "hardware_joint_sequence_v1"
+    ? `${crawl.sequence_repetitions} passes / ` +
+      `L1 hip 90 / L2 hip 70 / L4 knee 20 / ` +
+      `${crawl.duration_s.toFixed(0)} s`
+    : `${crawl.stride_mm.toFixed(0)} mm stride / ` +
+      `${crawl.lift_mm.toFixed(0)} mm lift / ` +
+      `${crawl.stance_fore_aft_mm.toFixed(0)} mm front/rear splay / ` +
+      `${crawl.abduction_deg.toFixed(0)} deg outward / ` +
+      `${crawl.duration_s.toFixed(0)} s`;
 
   walkForward.disabled =
     crawl.active ||
-    state.any_armed ||
-    summary.health !== "nominal";
+    state.any_armed;
   setCrawlStance.disabled =
     crawl.active;
   stopWalk.disabled = !state.any_armed;
@@ -407,30 +462,32 @@ disarmAll.addEventListener("click", () => {
   postAction("/api/disarm-all", {}, "All 12 motors disarmed");
 });
 
+settingsButton.addEventListener("click", () => {
+  settingsDialog.showModal();
+});
+
+settingsClose.addEventListener("click", () => {
+  settingsDialog.close();
+});
+
+clearErrorLog.addEventListener("click", () => {
+  permanentErrors = [];
+  storePermanentErrors();
+  renderPermanentErrors();
+});
+
 zeroAll.addEventListener("click", () => {
+  settingsDialog.close();
   postAction("/api/zero-all", {}, "All armed motors returning to zero");
 });
 
 centerAll.addEventListener("click", () => {
+  settingsDialog.close();
   postAction(
     "/api/center-all",
     { safety_ack: true, confirmation: "CENTER ALL 12" },
     "All 12 motors returning to calibrated zero; torque remains armed",
   );
-  /* Legacy confirmation removed: command is sent immediately.
-  const accepted = window.confirm(
-    "CENTER ALL 12 will arm every motor and ramp every joint to calibrated 0°. " +
-      "Keep the robot supported and the power cutoff ready. Continue?",
-  );
-  if (!accepted) {
-    return;
-  }
-  postAction(
-    "/api/center-all",
-    { safety_ack: true, confirmation: "CENTER ALL 12" },
-    "All 12 motors returning to calibrated zero; torque remains armed",
-  );
-  */
 });
 
 captureZeroAll.addEventListener("click", () => {
@@ -438,6 +495,7 @@ captureZeroAll.addEventListener("click", () => {
     showNotice("Disarm all 12 motors before capturing zero", true);
     return;
   }
+  settingsDialog.close();
   postAction(
     "/api/capture-zero-all",
     { safety_ack: true, confirmation: "CAPTURE ZERO ALL" },
@@ -455,18 +513,18 @@ setCrawlStance.addEventListener("click", () => {
 
 walkForward.addEventListener("click", () => {
   if (latestState?.any_armed) {
-    showNotice("Disarm all 12 motors before starting the crawl", true);
+    showNotice("Disarm all 12 motors before starting the gait sequence", true);
     return;
   }
   postAction(
     "/api/crawl-forward",
-    { safety_ack: true, confirmation: "TEST COORDINATED MOTION" },
-    "Moving to the wide mirrored stance; front-left swings first",
+    { safety_ack: true, confirmation: "TEST GAIT SEQUENCE" },
+    "Moving to wide stance, then starting the two-pass gait sequence",
   );
 });
 
 stopWalk.addEventListener("click", () => {
-  postAction("/api/crawl-stop", {}, "Crawl stopped; all 12 motors disarmed");
+  postAction("/api/crawl-stop", {}, "Gait sequence stopped; all 12 motors disarmed");
 });
 
 setInterval(() => {
@@ -489,4 +547,5 @@ window.addEventListener("pagehide", () => {
   }).catch(() => {});
 });
 
+renderPermanentErrors();
 refresh();

@@ -70,7 +70,6 @@ button {
 .brand,
 .top-actions,
 .connection,
-.safety-check,
 .leg-title,
 .leg-summary,
 .leg-actions,
@@ -199,6 +198,8 @@ h1 {
 .center-button,
 .calibration-button,
 .stop-button,
+.dialog-close,
+.clear-errors-button,
 .walk-button,
 .gait-stop-button,
 .leg-actions button,
@@ -238,20 +239,6 @@ h1 {
   color: #241600;
 }
 
-.safety-actions {
-  display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto;
-  align-items: center;
-  gap: 7px 10px;
-}
-
-.safety-actions small {
-  grid-column: 2;
-  color: var(--muted);
-  font-size: 0.67rem;
-  text-align: center;
-}
-
 .calibration-button {
   min-height: 42px;
   padding: 0 15px;
@@ -289,70 +276,11 @@ main {
   padding: 22px 0 38px;
 }
 
-.safety-panel {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 18px 21px;
-  border: 1px solid #33474b;
-  border-radius: 13px;
-  background: linear-gradient(105deg, #142428, #0d171a);
-  box-shadow: var(--shadow);
-}
-
-.safety-copy h2 {
-  margin-bottom: 4px;
-  font-size: 1.16rem;
-}
-
-.safety-copy p:last-child {
-  margin-bottom: 0;
-  color: var(--muted);
-  font-size: 0.88rem;
-}
-
-.safety-check {
-  position: relative;
-  gap: 11px;
-  max-width: 380px;
-  padding: 12px 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  background: rgba(0, 0, 0, 0.2);
-  cursor: pointer;
-  user-select: none;
-  font-size: 0.86rem;
-  font-weight: 700;
-}
-
-.safety-check input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.check-box {
-  width: 21px;
-  height: 21px;
-  flex: 0 0 auto;
-  border: 2px solid #63777b;
-  border-radius: 5px;
-}
-
-.safety-check input:checked + .check-box {
-  border-color: var(--lime);
-  background:
-    linear-gradient(135deg, transparent 43%, #142309 43% 57%, transparent 57%),
-    var(--lime);
-}
-
 .gait-panel {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
   gap: 26px;
   align-items: center;
-  margin-top: 16px;
   padding: 21px;
   border: 1px solid rgba(185, 242, 113, 0.42);
   border-radius: 14px;
@@ -924,10 +852,81 @@ input:disabled {
   opacity: 0.34;
 }
 
-.notice {
+.permanent-errors {
   position: sticky;
   top: 92px;
   z-index: 19;
+  display: grid;
+  grid-template-columns: minmax(170px, auto) 1fr;
+  gap: 16px;
+  max-height: 190px;
+  padding: 13px 16px;
+  border: 1px solid rgba(255, 102, 94, 0.78);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  background: rgba(69, 20, 20, 0.98);
+  color: #ffd6d3;
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.4),
+    inset 0 0 28px rgba(255, 102, 94, 0.09);
+  backdrop-filter: blur(18px);
+}
+
+.permanent-errors[hidden] {
+  display: none;
+}
+
+.permanent-errors-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 2px;
+}
+
+.permanent-errors-heading strong {
+  color: var(--red);
+  font-size: 0.7rem;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+}
+
+.permanent-errors-heading small {
+  color: #cf9692;
+  font-size: 0.62rem;
+}
+
+.permanent-errors ol {
+  min-width: 0;
+  max-height: 150px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.permanent-errors li {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 102, 94, 0.17);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.permanent-errors li:last-child {
+  border-bottom: 0;
+}
+
+.permanent-errors time {
+  color: #cf9692;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.notice {
+  position: relative;
+  z-index: 1;
   display: none;
   align-items: center;
   gap: 12px;
@@ -960,17 +959,83 @@ input:disabled {
   letter-spacing: 0.12em;
 }
 
-.notice.error {
-  border-color: rgba(255, 102, 94, 0.72);
-  background: rgba(69, 20, 20, 0.98);
-  color: var(--red);
-  box-shadow:
-    0 14px 34px rgba(0, 0, 0, 0.38),
-    inset 0 0 24px rgba(255, 102, 94, 0.08);
+.settings-dialog {
+  width: min(760px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  color: var(--text);
+  background: rgba(14, 25, 28, 0.98);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.68);
 }
 
-.notice.error::before {
-  content: "COMMAND ERROR";
+.settings-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(5px);
+}
+
+.settings-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-dialog-header h2 {
+  margin-bottom: 0;
+}
+
+.dialog-close,
+.clear-errors-button {
+  min-height: 42px;
+  padding: 0 15px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.clear-errors-button {
+  border-color: rgba(255, 102, 94, 0.5);
+  background: rgba(255, 102, 94, 0.08);
+  color: #ffaaa5;
+}
+
+.settings-dialog-copy {
+  margin: 0;
+  padding: 16px 22px 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.rare-command-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 22px 22px;
+}
+
+.rare-command-grid > div {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.rare-command-grid button {
+  width: 100%;
+}
+
+.rare-command-grid small {
+  color: var(--muted);
+  font-size: 0.65rem;
+  line-height: 1.4;
 }
 
 footer {
@@ -999,7 +1064,7 @@ footer {
     position: static;
   }
 
-  .notice {
+  .permanent-errors {
     top: 0;
   }
 
@@ -1042,7 +1107,6 @@ footer {
   }
 
   .topbar,
-  .safety-panel,
   footer {
     align-items: stretch;
     flex-direction: column;
@@ -1050,6 +1114,23 @@ footer {
 
   .topbar {
     padding: 17px 0;
+  }
+
+  .permanent-errors {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .permanent-errors li {
+    grid-template-columns: 74px minmax(0, 1fr);
+  }
+
+  .settings-dialog-header {
+    align-items: flex-start;
+  }
+
+  .rare-command-grid {
+    grid-template-columns: 1fr;
   }
 
   .top-actions {
@@ -1070,19 +1151,6 @@ footer {
 
   .stop-button {
     grid-column: 1 / -1;
-  }
-
-  .safety-check {
-    max-width: none;
-  }
-
-  .safety-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .safety-actions small {
-    grid-column: 1;
-    text-align: left;
   }
 
   .corner-map {

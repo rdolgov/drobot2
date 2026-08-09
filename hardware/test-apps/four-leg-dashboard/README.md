@@ -17,19 +17,21 @@ The local dashboard provides:
   tests;
 - explicit per-joint arming and disarming;
 - intentional three-motor leg arming, zeroing, and disarming;
-- global return-to-zero for already armed motors, a guarded **CENTER ALL 12**
-  command, and a persistent **DISARM ALL 12** control;
+- directly accessible toolbar **CENTER ALL 12** and **DISARM ALL 12** commands,
+  plus a **SETTINGS** dialog for infrequent **ZERO ARMED** and
+  **CAPTURE ZERO ALL** maintenance commands;
 - guarded capture of the current torque-free pose as calibrated zero for all
   twelve motors, with timestamped backups of all four calibration files;
-- guarded **SET WIDE WALK STANCE** and **TEST COORDINATED MOTION** commands
+- guarded **SET WIDE WALK STANCE** and **TEST GAIT SEQUENCE** commands
   with visible phase/progress and a dedicated
   **STOP + DISARM** control;
-- a sticky status banner directly below the page header, with command failures
-  highlighted immediately in red;
+- a permanent red error log directly below the toolbar; command, connection,
+  and server faults remain in browser storage until explicitly cleared from
+  **SETTINGS**;
 - voltage, temperature, diagnostic current, raw encoder, speed, torque state,
   model, and per-leg current summaries;
-- a three-second browser-heartbeat auto-disarm;
-- best-effort disarm on page close, telemetry/motion fault, `Ctrl+C`, or normal
+- a 1.5-second browser-heartbeat auto-disarm;
+- best-effort disarm on page close, telemetry read/motion fault, `Ctrl+C`, or normal
   server exit; and
 - a complete simulated mode that never opens a serial port.
 
@@ -47,8 +49,8 @@ service.
   encoder ticks.
 - `src/drobot_hardware_test_apps/four_leg_control.py` owns bus/session safety,
   HTTP endpoints, telemetry summaries, and demo behavior.
-- `src/drobot_hardware_test_apps/crawl_gait.py` owns the dependency-free,
-  deterministic crawl target equations mirrored from the Isaac runtime.
+- `src/drobot_hardware_test_apps/crawl_gait.py` owns the dependency-free
+  hardware joint sequence and the retained deterministic crawl equations.
 - `src/drobot_hardware_test_apps/four_leg_static/` owns the browser UI.
 
 The walking manifest currently maps Leg 1 to front-left, Leg 2 to front-right,
@@ -130,7 +132,7 @@ port with another dashboard process.
    structure, support, and complete-robot collision behavior have separate
    validation.
 
-## Wide mirrored stance and coordinated motion test
+## Wide mirrored stance and hardware gait sequence
 
 The V3 common-direction posture fell backward on its first physical floor
 move. V4 commands the assembled robot's corrected signs directly: front hip
@@ -161,12 +163,15 @@ joint directions, then gradually let the feet accept load only while a tether
 or support can catch the chassis. Watch current, voltage, temperature, sag,
 noise, and backward pitch; press **STOP + DISARM** on any abnormal behavior.
 
-**TEST COORDINATED MOTION** runs one 20-second open-loop sequence. It uses a
-35 mm stride, 16 mm lift, 16 mm forward transfer, and 12 mm lateral transfer.
-During each swing the diagonal support foot contributes 17.5 mm of rearward
-push and the adjacent supports contribute 8.75 mm each. The swing order is
-front-left, rear-right, front-right, rear-left, so all four hip-flexion motors
-participate during every step.
+**TEST GAIT SEQUENCE** runs one 20-second joint-space experiment containing two
+identical passes. From stance it smoothly moves Leg 1 hip flexion to `+90
+degrees`, then Leg 2 hip flexion to `+70 degrees`, then Leg 4 knee to `+20
+degrees`, and returns every joint to stance. Targets accumulate within each
+pass; joints not named by a transition continue holding their prior target.
+Each of the eight transitions receives 2.5 seconds.
+
+The exact phase table and target semantics are in
+[`specs/hardware-gait-sequence-v1.md`](specs/hardware-gait-sequence-v1.md).
 
 This remains a supported commissioning test, not a validated untethered floor
 walk. An earlier 30 mm / 8-degree intermediate profile stayed upright in
@@ -187,10 +192,11 @@ The tracked defaults live in `[crawl]` in `../../robot-runtime/four-leg.toml`.
 The parser permits a 5-75 mm stride, 5-25 mm lift, 10-60 second period, and one
 to four cycles. Keep `cycles = 1` during commissioning.
 
-## Isaac validation status
+## Prior Isaac validation status
 
-The exact dashboard equations are parity-tested against
-`simulation/isaac/_quadruped_runtime.py`. The intermediate 30 mm / 8-degree
+The current hardware-derived joint sequence has not been run in simulation.
+The previous coordinated-support-push equations were parity-tested against
+`simulation/isaac/_quadruped_runtime.py`. Its intermediate 30 mm / 8-degree
 profile was run for one cycle against the floating 4.526 kg Isaac robot at the
 rated `0.980665 Nm` joint cap:
 
@@ -223,10 +229,10 @@ overrides direct supported hardware verification of the assembled joint axes.
 
 ## Center all twelve joints
 
-**CENTER ALL 12** is the whole-robot neutral-position command. A click sends
-the command immediately. The server then
+Press **CENTER ALL 12** in the toolbar for the whole-robot neutral-position
+command. A click sends the command immediately. The server then
 arms every configured motor at its measured position and ramps all twelve
-joints to calibrated `0°` using the normal 30-degree-per-second motion limit.
+joints to calibrated `0°` using the configured 90-degree-per-second motion limit.
 
 Calibrated `0°` comes from each `calibration-leg-N.json` center; it is not an
 unconditional raw tick `2048` command. Torque remains armed after the motion so
@@ -244,7 +250,7 @@ after reinstalling horns or rewiring mirrored legs:
 1. Press **DISARM ALL 12** and verify the dashboard shows `0 / 12` armed.
 2. Keep the robot supported and manually place all four legs in the desired
    neutral pose.
-3. Check the support/clearance/cutoff box.
+3. Open **SETTINGS** in the toolbar.
 4. Press **CAPTURE ZERO ALL**. The command starts immediately.
 5. Verify every displayed current angle changes to approximately `0.00°` while
    torque remains off.
@@ -256,23 +262,36 @@ timestamped `config/backups/` directory. It does not change servo EEPROM,
 direction signs, IDs, speed, torque limit, or angle ranges. Demo mode exercises
 the interaction in memory and never changes calibration files.
 
+## Permanent error history
+
+Dashboard command failures, connection failures, and reported server faults are
+listed in red immediately below the toolbar. A later successful command does not
+replace them, and the browser retains the list across page refreshes. Open
+**SETTINGS** and press **CLEAR ERROR LOG** after the underlying problem has been
+resolved. Repeated identical messages are stored once so a disconnected server
+does not flood the panel.
+
 ## Understanding “power OK”
 
 The dashboard uses attention thresholds from `../../robot-runtime/four-leg.toml`:
 
 | Signal | Dashboard attention threshold | Meaning |
 | --- | ---: | --- |
-| Servo voltage | below 10.5 V | Repository's conservative 3S light-load warning |
+| Servo voltage | below 11.0 V | Earlier warning for supply sag under the higher torque cap |
 | Servo voltage | above 12.6 V | Above the documented 12 V ST3215 supply maximum |
-| Voltage spread | above 0.5 V | Inspect branch wiring, connectors, and voltage drop |
-| Servo temperature | 60 C or above | Conservative pause-and-inspect UI threshold |
-| Per-leg diagnostic current | 3000 mA or above | Inspect load and the first leg connector |
+| Voltage spread | above 0.3 V | Earlier branch-wiring and voltage-drop warning |
+| Servo temperature | 55 C or above | Earlier pause-and-inspect threshold |
+| Per-leg diagnostic current | 2500 mA or above | Earlier load and connector warning |
 
-These are UI warnings, not firmware protection settings. Servo voltage does not
-show individual LiPo cell balance. Servo current feedback is diagnostic and is
-not a calibrated battery, branch, force, or joint-torque measurement. Use an
-inline watt meter or clamp meter and per-cell checker for electrical validation.
-The dashboard never declares the entire power system certified.
+These are display-only software thresholds, not firmware protection settings.
+Temperature, voltage, voltage-spread, and diagnostic-current warnings remain
+visible but do not block a command or automatically disarm motors. Actual
+telemetry read exceptions, motion exceptions, the browser heartbeat watchdog,
+and explicit stop/disarm commands still disarm. Servo voltage does not show
+individual LiPo cell balance. Servo current feedback is diagnostic and is not
+a calibrated battery, branch, force, or joint-torque measurement. Use an inline
+watt meter or clamp meter and per-cell checker for electrical validation. The
+dashboard never declares the entire power system certified.
 
 ## Motion behavior
 

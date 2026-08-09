@@ -13,6 +13,7 @@ from drobot_hardware_test_apps.crawl_gait import (
     COORDINATED_PUSH_SWING_ORDER,
     coordinated_push_crawl_degrees,
     coordinated_push_stance_degrees,
+    hardware_joint_sequence_degrees,
     outward_bent_crawl_stance_degrees,
 )
 from drobot_hardware_test_apps.four_leg_control import (
@@ -65,15 +66,20 @@ def test_manifest_loads_verified_ids_and_directions() -> None:
 
     assert ids == list(range(1, 13))
     assert directions == [(-1, 1, 1), (1, 1, 1), (-1, -1, -1), (1, 1, 1)]
-    assert dashboard.bus.torque_limit == 300
-    assert dashboard.bus.speed == 350
+    assert dashboard.bus.torque_limit == 900
+    assert dashboard.bus.speed == 700
     assert [profile.corner for profile in dashboard.legs] == [
         "front_left",
         "front_right",
         "rear_left",
         "rear_right",
     ]
-    assert dashboard.server.ramp_rate_deg_s == 45.0
+    assert dashboard.server.ramp_rate_deg_s == 90.0
+    assert dashboard.server.heartbeat_timeout_s == 1.5
+    assert dashboard.monitoring.voltage_warning_low_v == pytest.approx(11.0)
+    assert dashboard.monitoring.voltage_spread_warning_v == pytest.approx(0.3)
+    assert dashboard.monitoring.temperature_warning_c == 55
+    assert dashboard.monitoring.leg_current_warning_ma == pytest.approx(2500.0)
     assert dashboard.crawl.period_s == 20.0
     assert dashboard.crawl.cycles == 1
     assert dashboard.crawl.stride_m == pytest.approx(0.035)
@@ -254,6 +260,39 @@ def test_walking_stance_opens_front_and_rear_legs_away_from_body() -> None:
     assert pose[("rear_left", "knee")] == pytest.approx(45.0, abs=0.01)
 
 
+def test_hardware_joint_sequence_runs_requested_targets_twice() -> None:
+    config = load_dashboard_config(MANIFEST).crawl
+
+    def pose_at(seconds: float) -> dict[tuple[str, str], float]:
+        pose, _state = hardware_joint_sequence_degrees(
+            seconds,
+            period_s=config.period_s,
+            down_m=config.stance_down_m,
+            fore_aft_m=config.stance_fore_aft_m,
+            abduction_deg=config.abduction_deg,
+        )
+        return pose
+
+    stance = pose_at(0.0)
+    first_leg_1 = pose_at(2.5)
+    first_leg_2 = pose_at(5.0)
+    first_leg_4 = pose_at(7.5)
+    second_stance = pose_at(10.0)
+    second_leg_1 = pose_at(12.5)
+    second_leg_2 = pose_at(15.0)
+    second_leg_4 = pose_at(17.5)
+    final_stance = pose_at(20.0)
+
+    assert first_leg_1[("front_left", "hip_flexion")] == pytest.approx(90.0)
+    assert first_leg_2[("front_right", "hip_flexion")] == pytest.approx(70.0)
+    assert first_leg_4[("rear_right", "knee")] == pytest.approx(20.0)
+    assert second_stance == pytest.approx(stance)
+    assert second_leg_1 == pytest.approx(first_leg_1)
+    assert second_leg_2 == pytest.approx(first_leg_2)
+    assert second_leg_4 == pytest.approx(first_leg_4)
+    assert final_stance == pytest.approx(stance)
+
+
 def test_start_requires_all_motors_and_disarms_every_id() -> None:
     session, bus, _clock = _session()
     try:
@@ -409,7 +448,7 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
         with pytest.raises(ValueError, match="supported"):
             session.start_crawl_forward(
                 safety_ack=False,
-                confirmation="TEST COORDINATED MOTION",
+                confirmation="TEST GAIT SEQUENCE",
             )
         with pytest.raises(ValueError, match="confirmation"):
             session.start_crawl_forward(safety_ack=True, confirmation="")
@@ -418,13 +457,13 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
         with pytest.raises(RuntimeError, match="Disarm all 12"):
             session.start_crawl_forward(
                 safety_ack=True,
-                confirmation="TEST COORDINATED MOTION",
+                confirmation="TEST GAIT SEQUENCE",
             )
         session.disarm_all()
 
         session.start_crawl_forward(
             safety_ack=True,
-            confirmation="TEST COORDINATED MOTION",
+            confirmation="TEST GAIT SEQUENCE",
         )
         state = session.snapshot()
 
@@ -437,7 +476,8 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
             "4": "rear_right",
         }
         assert state["crawl"]["duration_s"] == 20.0
-        assert state["crawl"]["pattern"] == "coordinated_support_push"
+        assert state["crawl"]["pattern"] == "hardware_joint_sequence_v1"
+        assert state["crawl"]["sequence_repetitions"] == 2
         assert state["crawl"]["supported_test_only"] is True
         assert state["crawl"]["stride_mm"] == pytest.approx(35.0)
         assert state["crawl"]["lift_mm"] == pytest.approx(16.0)
@@ -460,23 +500,26 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
         session.close()
 
 
-def test_crawl_preflight_rejects_off_center_pose_and_telemetry_warning() -> None:
+def test_crawl_preflight_rejects_off_center_pose_but_allows_telemetry_warning() -> None:
     session, bus, _clock = _session()
     try:
         bus.positions[1] += 500
         with pytest.raises(RuntimeError, match="Center the robot"):
             session.start_crawl_forward(
                 safety_ack=True,
-                confirmation="TEST COORDINATED MOTION",
+                confirmation="TEST GAIT SEQUENCE",
             )
 
         bus.positions[1] -= 500
         bus.voltage_v[12] = 10.4
-        with pytest.raises(RuntimeError, match="telemetry warnings"):
-            session.start_crawl_forward(
-                safety_ack=True,
-                confirmation="TEST COORDINATED MOTION",
-            )
+        session.start_crawl_forward(
+            safety_ack=True,
+            confirmation="TEST GAIT SEQUENCE",
+        )
+        state = session.snapshot()
+        assert state["crawl"]["active"] is True
+        assert state["summary"]["health"] == "warning"
+        assert any("Low servo voltage" in item for item in state["summary"]["warnings"])
     finally:
         session.close()
 
@@ -486,7 +529,7 @@ def test_crawl_completes_configured_cycles_and_holds_stance() -> None:
     try:
         session.start_crawl_forward(
             safety_ack=True,
-            confirmation="TEST COORDINATED MOTION",
+            confirmation="TEST GAIT SEQUENCE",
         )
         for tick in range(2000):
             if tick % 10 == 0:
@@ -585,5 +628,22 @@ def test_monitoring_thresholds_create_visible_warnings() -> None:
         assert any("Low servo voltage" in item for item in state["summary"]["warnings"])
         assert any("temperature" in item for item in state["summary"]["warnings"])
         assert any("Leg 2" in item for item in state["summary"]["warnings"])
+    finally:
+        session.close()
+
+
+def test_live_telemetry_warning_does_not_interrupt_armed_motors() -> None:
+    session, bus, _clock = _session()
+    try:
+        session.arm_leg(2, safety_ack=True)
+        bus.current_ma[4] = 2600.0
+
+        state = session.snapshot()
+
+        assert state["any_armed"] is True
+        assert state["summary"]["armed_count"] == 3
+        assert bus.torque == {4, 5, 6}
+        assert state["summary"]["health"] == "warning"
+        assert state["fault"] is None
     finally:
         session.close()

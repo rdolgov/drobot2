@@ -26,9 +26,10 @@ The centers were last captured from the assembled whole-robot neutral pose on
 2026-08-09. They are specific to this robot and must be revalidated after horn,
 servo, wiring, or linkage changes.
 
-All profiles use 1,000,000 baud, 30% torque limit, speed 350, acceleration 10,
-and a five-degree maximum interactive command step. Software limits do not
-replace physical stops or collision checks.
+All profiles use 1,000,000 baud, 90% torque limit, speed 700, acceleration 10,
+and a five-degree maximum interactive command step. The dashboard motion ramp
+is 90 degrees/s. Software limits do not replace physical stops or collision
+checks.
 
 ## Setup and guarded commands
 

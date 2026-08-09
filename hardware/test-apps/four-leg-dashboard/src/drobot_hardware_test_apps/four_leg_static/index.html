@@ -23,8 +23,8 @@
             <span class="status-dot" aria-hidden="true"></span>
             <span id="connectionText">Connecting…</span>
           </div>
-          <button class="secondary-button" id="zeroAll" type="button">
-            ZERO ARMED
+          <button class="secondary-button settings-button" id="settingsButton" type="button">
+            SETTINGS
           </button>
           <button class="center-button" id="centerAll" type="button">
             CENTER ALL 12
@@ -35,6 +35,21 @@
         </div>
       </header>
 
+      <section
+        class="permanent-errors"
+        id="errorLog"
+        aria-labelledby="errorLogTitle"
+        aria-live="assertive"
+        aria-atomic="false"
+        hidden
+      >
+        <div class="permanent-errors-heading">
+          <strong id="errorLogTitle">PERMANENT ERROR LOG</strong>
+          <small>Stored until cleared from Settings</small>
+        </div>
+        <ol id="errorList"></ol>
+      </section>
+
       <div
         class="notice"
         id="notice"
@@ -44,36 +59,16 @@
       ></div>
 
       <main>
-        <section class="safety-panel" aria-labelledby="safetyTitle">
-          <div class="safety-copy">
-            <p class="eyebrow">SAFETY STATUS</p>
-            <h2 id="safetyTitle">Robot supported and sweep clear?</h2>
-            <p>
-              Use blocks for first gait motion. Keep the physical power cutoff
-              within reach and verify the corner map shown below.
-            </p>
-          </div>
-          <div class="safety-actions">
-            <button class="calibration-button" id="captureZeroAll" type="button">
-              CAPTURE ZERO ALL
-            </button>
-            <small>Torque must be OFF on all 12 motors</small>
-          </div>
-        </section>
-
         <section class="gait-panel" aria-labelledby="gaitTitle">
           <div class="gait-copy">
             <p class="eyebrow">SUPPORTED COMMISSIONING / FEET CLEAR</p>
-            <h2 id="gaitTitle">Coordinated support-push test</h2>
+            <h2 id="gaitTitle">Hardware joint-sequence gait</h2>
             <p>
-              Front hips move forward and rear hips move backward to 45
-              degrees. Every knee starts at -90 degrees relative, placing the
-              distal link near -45 degrees absolute on the front legs. Hip
-              abduction widens the left/right footprint.
-              One foot lifts at a time while all three planted legs push
-              rearward; the opposite diagonal support leg contributes the
-              largest push. A four-feet-down preload happens before front-left
-              lifts first. Test the static stance before testing motion.
+              Starting from the wide stance, Leg 1 hip flexion moves to 90
+              degrees, then Leg 2 hip flexion moves to 70 degrees, then Leg 4
+              knee moves to 20 degrees. The robot returns to stance and repeats
+              the same sequence once. Each transition is smooth and all
+              unmentioned joints hold their current stance target.
             </p>
             <div class="corner-map" aria-label="Configured body corner map">
               <span><b>1</b> FRONT LEFT</span>
@@ -87,7 +82,7 @@
               <span id="gaitStage">READY / DISARMED</span>
               <strong id="gaitPhase">Waiting for command</strong>
             </div>
-            <div class="gait-progress" aria-label="Crawl progress">
+            <div class="gait-progress" aria-label="Gait sequence progress">
               <i id="gaitProgress"></i>
             </div>
             <div class="gait-buttons">
@@ -95,13 +90,13 @@
                 SET WIDE WALK STANCE
               </button>
               <button class="walk-button" id="walkForward" type="button">
-                TEST COORDINATED MOTION
+                TEST GAIT SEQUENCE
               </button>
               <button class="gait-stop-button" id="stopWalk" type="button">
                 STOP + DISARM
               </button>
             </div>
-            <small id="gaitDetail">35 mm stride / 16 mm lift / 45-degree splayed stance</small>
+            <small id="gaitDetail">2 passes / 4 smooth transitions per pass / 20 seconds</small>
           </div>
         </section>
 
@@ -148,6 +143,36 @@
 
         <section class="leg-grid" id="legGrid" aria-live="polite"></section>
       </main>
+
+      <dialog class="settings-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
+        <div class="settings-dialog-header">
+          <div>
+            <p class="eyebrow">INFREQUENT WHOLE-ROBOT COMMANDS</p>
+            <h2 id="settingsTitle">Settings and maintenance</h2>
+          </div>
+          <button class="dialog-close" id="settingsClose" type="button" aria-label="Close settings">
+            CLOSE
+          </button>
+        </div>
+        <p class="settings-dialog-copy">
+          These commands are intentionally kept away from the primary motion
+          controls. They still execute immediately when clicked.
+        </p>
+        <div class="rare-command-grid">
+          <div>
+            <button class="secondary-button" id="zeroAll" type="button">ZERO ARMED</button>
+            <small>Return only currently armed motors to calibrated zero.</small>
+          </div>
+          <div>
+            <button class="calibration-button" id="captureZeroAll" type="button">CAPTURE ZERO ALL</button>
+            <small>Torque must be off; save the current pose as zero.</small>
+          </div>
+          <div>
+            <button class="clear-errors-button" id="clearErrorLog" type="button">CLEAR ERROR LOG</button>
+            <small>Remove the permanent browser error history.</small>
+          </div>
+        </div>
+      </dialog>
 
       <footer>
         <span>Local machine only · one shared ST3215 bus</span>

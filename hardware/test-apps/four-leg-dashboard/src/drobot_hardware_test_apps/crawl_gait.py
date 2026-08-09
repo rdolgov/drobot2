@@ -54,6 +54,13 @@ COORDINATED_PUSH_SWING_ORDER = (
     "front_right",
     "rear_left",
 )
+HARDWARE_SEQUENCE_REPETITIONS = 2
+HARDWARE_SEQUENCE_PHASES = (
+    "leg_1_hip_flexion_to_90",
+    "leg_2_hip_flexion_to_70",
+    "leg_4_knee_to_20",
+    "return_to_stance",
+)
 
 
 def _front_sign(corner: str) -> float:
@@ -179,6 +186,60 @@ def outward_bent_crawl_stance_degrees(
             knees_outward=True,
         )
     )
+
+
+def hardware_joint_sequence_degrees(
+    gait_time_s: float,
+    *,
+    period_s: float,
+    down_m: float,
+    fore_aft_m: float,
+    abduction_deg: float,
+) -> tuple[dict[tuple[str, str], float], dict[str, object]]:
+    """Run the first hardware-derived gait sequence twice from wide stance."""
+    if period_s <= 0.0:
+        raise ValueError("period_s must be positive")
+
+    stance = outward_bent_crawl_stance_degrees(
+        down_m=down_m,
+        fore_aft_m=fore_aft_m,
+        abduction_deg=abduction_deg,
+    )
+    leg_1 = dict(stance)
+    leg_1[("front_left", "hip_flexion")] = 90.0
+    leg_2 = dict(leg_1)
+    leg_2[("front_right", "hip_flexion")] = 70.0
+    leg_4 = dict(leg_2)
+    leg_4[("rear_right", "knee")] = 20.0
+
+    starts = (stance, leg_1, leg_2, leg_4)
+    ends = (leg_1, leg_2, leg_4, stance)
+    phase_count = len(HARDWARE_SEQUENCE_PHASES)
+    total_segments = phase_count * HARDWARE_SEQUENCE_REPETITIONS
+    sequence_phase = (max(0.0, float(gait_time_s)) % period_s) / period_s
+    segment_position = sequence_phase * total_segments
+    segment_index = min(int(segment_position), total_segments - 1)
+    phase_index = segment_index % phase_count
+    repetition = segment_index // phase_count
+    phase_progress = segment_position - segment_index
+    blend = _smoothstep(phase_progress)
+    start = starts[phase_index]
+    end = ends[phase_index]
+    pose = {
+        key: float(start[key]) + (float(end[key]) - float(start[key])) * blend
+        for key in stance
+    }
+    return pose, {
+        "cycle_phase": sequence_phase,
+        "phase": (
+            f"pass_{repetition + 1}_"
+            f"{HARDWARE_SEQUENCE_PHASES[phase_index]}"
+        ),
+        "phase_progress": phase_progress,
+        "sequence_pass": repetition + 1,
+        "swing_corner": None,
+        "push_partner": None,
+    }
 
 
 def coordinated_push_crawl_degrees(

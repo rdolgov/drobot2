@@ -36,8 +36,9 @@ from drobot_leg_testbed.ports import resolve_port
 from drobot_leg_testbed.transport import MotorStatus, STSBus
 
 from drobot_hardware_test_apps.crawl_gait import (
+    HARDWARE_SEQUENCE_REPETITIONS,
     LEG_CORNERS,
-    coordinated_push_crawl_degrees,
+    hardware_joint_sequence_degrees,
     outward_bent_crawl_stance_degrees,
 )
 
@@ -505,13 +506,9 @@ class FourLegSession:
         gait_time_s: float,
     ) -> tuple[dict[tuple[int, str], float], dict[str, object]]:
         config = self.dashboard.crawl
-        pose, state = coordinated_push_crawl_degrees(
+        pose, state = hardware_joint_sequence_degrees(
             gait_time_s,
             period_s=config.period_s,
-            stride_m=config.stride_m,
-            lift_m=config.lift_m,
-            weight_shift_forward_m=config.weight_shift_forward_m,
-            weight_shift_lateral_m=config.weight_shift_lateral_m,
             down_m=config.stance_down_m,
             fore_aft_m=config.stance_fore_aft_m,
             abduction_deg=config.abduction_deg,
@@ -594,7 +591,7 @@ class FourLegSession:
             self.crawl_target_reached_at = None
             self.crawl_progress = 0.0
             self.last_event = (
-                "All four feet preloading the first front-left support geometry"
+                "Wide stance settled; preparing the hardware joint sequence"
             )
             return
 
@@ -615,7 +612,7 @@ class FourLegSession:
             self.crawl_started_at = now
             self.crawl_target_reached_at = None
             self.last_event = (
-                "Coordinated support-push test started; front-left swings first"
+                "Hardware gait sequence started; running two passes"
             )
             return
 
@@ -638,7 +635,7 @@ class FourLegSession:
             self.crawl_phase = "holding_wide_mirrored_stance"
             self.crawl_progress = 1.0
             self.last_event = (
-                "Forward crawl complete; all 12 motors holding crawl stance"
+                "Hardware gait sequence complete; all motors holding stance"
             )
 
     def _cancel_crawl_locked(self) -> None:
@@ -664,8 +661,8 @@ class FourLegSession:
             raise ValueError(
                 "Confirm the body is supported with every foot clear before testing"
             )
-        if confirmation != "TEST COORDINATED MOTION":
-            raise ValueError("TEST COORDINATED MOTION confirmation is required")
+        if confirmation != "TEST GAIT SEQUENCE":
+            raise ValueError("TEST GAIT SEQUENCE confirmation is required")
 
         with self.lock:
             if self.crawl_active:
@@ -676,12 +673,6 @@ class FourLegSession:
                 raise RuntimeError("Clear the reported fault before starting a crawl")
 
             preflight = self._snapshot_locked()
-            warnings = preflight["summary"]["warnings"]
-            if warnings:
-                raise RuntimeError(
-                    "Resolve telemetry warnings before walking: " + "; ".join(warnings)
-                )
-
             out_of_start_range: list[str] = []
             for leg in preflight["legs"]:
                 for motor in leg["motors"]:
@@ -1203,8 +1194,9 @@ class FourLegSession:
                 "port": getattr(self.bus, "port_name", None),
             },
             "crawl": {
-                "pattern": "coordinated_support_push",
+                "pattern": "hardware_joint_sequence_v1",
                 "supported_test_only": True,
+                "sequence_repetitions": HARDWARE_SEQUENCE_REPETITIONS,
                 "active": self.crawl_active,
                 "stage": self.crawl_stage,
                 "phase": self.crawl_phase,
