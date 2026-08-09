@@ -244,9 +244,13 @@ class STSBus:
             bus_config.torque_limit,
         )
         packet = self._require_open()
+        # The Python SDK writes the supplied 16-bit word verbatim. Match
+        # Feetech's official C++ WritePosEx implementation by converting a
+        # negative extended position to its bit-15 sign-magnitude wire value.
+        encoded_position = packet.scs_toscs(raw_position, 15)
         result, error = packet.WritePosEx(
             servo_id,
-            raw_position,
+            encoded_position,
             bus_config.speed,
             bus_config.acceleration,
         )

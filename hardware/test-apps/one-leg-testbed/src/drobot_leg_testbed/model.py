@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 ENCODER_TICKS = 4096
+MAX_EXTENDED_POSITION = (1 << 15) - 1
 MIN_SERVO_ID = 0
 MAX_SERVO_ID = 253
 
@@ -293,14 +294,17 @@ def degrees_to_raw(
             f"{motor.name} target {degrees:.2f} deg is outside "
             f"[{motor.min_deg:.2f}, {motor.max_deg:.2f}]"
         )
+    # Keep the calibrated coordinate continuous across the 0/4095 seam.
+    # STS/SMS servos support signed extended positions, so values such as -19
+    # and 4101 are valid adjacent targets rather than reasons to clamp a joint.
     raw = calibration.center_tick + round(
         motor.direction * degrees * ENCODER_TICKS / 360.0
     )
-    if not 0 <= raw < ENCODER_TICKS:
+    if not -MAX_EXTENDED_POSITION <= raw <= MAX_EXTENDED_POSITION:
         raise ValueError(
-            f"{motor.name} target {degrees:.2f} deg crosses the encoder "
-            f"0/{ENCODER_TICKS - 1} boundary (raw {raw}). Re-center the "
-            "servo near raw 2048 before using this range."
+            f"{motor.name} target {degrees:.2f} deg produces raw {raw}, outside "
+            f"the servo's signed extended-position range "
+            f"[-{MAX_EXTENDED_POSITION}, {MAX_EXTENDED_POSITION}]"
         )
     return raw
 
@@ -310,6 +314,12 @@ def raw_to_degrees(
     motor: MotorConfig,
     calibration: MotorCalibration,
 ) -> float:
-    if not 0 <= raw < ENCODER_TICKS:
-        raise ValueError(f"Raw position must be in [0, {ENCODER_TICKS - 1}]")
-    return motor.direction * (raw - calibration.center_tick) * 360.0 / ENCODER_TICKS
+    if not -MAX_EXTENDED_POSITION <= raw <= MAX_EXTENDED_POSITION:
+        raise ValueError(
+            "Raw position must be in the signed extended-position range "
+            f"[-{MAX_EXTENDED_POSITION}, {MAX_EXTENDED_POSITION}]"
+        )
+    delta = raw - calibration.center_tick
+    half_turn = ENCODER_TICKS // 2
+    nearest_delta = (delta + half_turn) % ENCODER_TICKS - half_turn
+    return motor.direction * nearest_delta * 360.0 / ENCODER_TICKS

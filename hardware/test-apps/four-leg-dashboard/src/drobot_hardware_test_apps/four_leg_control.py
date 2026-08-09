@@ -37,7 +37,8 @@ from drobot_leg_testbed.transport import MotorStatus, STSBus
 
 from drobot_hardware_test_apps.crawl_gait import (
     LEG_CORNERS,
-    distributed_push_crawl_degrees,
+    coordinated_push_crawl_degrees,
+    outward_bent_crawl_stance_degrees,
 )
 
 LOCAL_HOST = "127.0.0.1"
@@ -210,14 +211,14 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             "crawl.start_tolerance_deg",
         ),
     )
-    if not 12.0 <= crawl.period_s <= 60.0:
-        raise ValueError("crawl.period_s must be in [12, 60]")
+    if not 10.0 <= crawl.period_s <= 60.0:
+        raise ValueError("crawl.period_s must be in [10, 60]")
     if not 1 <= crawl.cycles <= 4:
         raise ValueError("crawl.cycles must be in [1, 4]")
     if not 0.5 <= crawl.stance_settle_s <= 5.0:
         raise ValueError("crawl.stance_settle_s must be in [0.5, 5]")
-    if not 0.005 <= crawl.stride_m <= 0.050:
-        raise ValueError("crawl.stride_m must be in [0.005, 0.050]")
+    if not 0.005 <= crawl.stride_m <= 0.075:
+        raise ValueError("crawl.stride_m must be in [0.005, 0.075]")
     if not 0.005 <= crawl.lift_m <= 0.025:
         raise ValueError("crawl.lift_m must be in [0.005, 0.025]")
     if not 0.0 <= crawl.weight_shift_forward_m <= 0.040:
@@ -226,10 +227,10 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("crawl.weight_shift_lateral_m must be in [0, 0.030]")
     if not 0.250 <= crawl.stance_down_m <= 0.315:
         raise ValueError("crawl.stance_down_m must be in [0.250, 0.315]")
-    if not 0.0 <= crawl.stance_fore_aft_m <= 0.060:
-        raise ValueError("crawl.stance_fore_aft_m must be in [0, 0.060]")
-    if not 0.0 <= crawl.abduction_deg <= 12.0:
-        raise ValueError("crawl.abduction_deg must be in [0, 12]")
+    if not 0.0 <= crawl.stance_fore_aft_m <= 0.120:
+        raise ValueError("crawl.stance_fore_aft_m must be in [0, 0.120]")
+    if not 0.0 <= crawl.abduction_deg <= 20.0:
+        raise ValueError("crawl.abduction_deg must be in [0, 20]")
     if not 10.0 <= crawl.start_tolerance_deg <= 45.0:
         raise ValueError("crawl.start_tolerance_deg must be in [10, 45]")
 
@@ -389,6 +390,7 @@ class FourLegSession:
         self.crawl_stage = "idle"
         self.crawl_phase = "idle"
         self.crawl_swing_corner: str | None = None
+        self.crawl_push_partner: str | None = None
         self.crawl_started_at: float | None = None
         self.crawl_target_reached_at: float | None = None
         self.crawl_progress = 0.0
@@ -491,14 +493,19 @@ class FourLegSession:
 
     @property
     def crawl_active(self) -> bool:
-        return self.crawl_stage in {"preparing", "walking", "finishing"}
+        return self.crawl_stage in {
+            "preparing",
+            "preloading",
+            "walking",
+            "finishing",
+        }
 
     def _crawl_pose_locked(
         self,
         gait_time_s: float,
     ) -> tuple[dict[tuple[int, str], float], dict[str, object]]:
         config = self.dashboard.crawl
-        pose, state = distributed_push_crawl_degrees(
+        pose, state = coordinated_push_crawl_degrees(
             gait_time_s,
             period_s=config.period_s,
             stride_m=config.stride_m,
@@ -521,12 +528,40 @@ class FourLegSession:
                 targets[(profile.number, motor.name)] = degrees
         return targets, state
 
+    def _crawl_stance_targets_locked(self) -> dict[tuple[int, str], float]:
+        config = self.dashboard.crawl
+        pose = outward_bent_crawl_stance_degrees(
+            down_m=config.stance_down_m,
+            fore_aft_m=config.stance_fore_aft_m,
+            abduction_deg=config.abduction_deg,
+        )
+        targets: dict[tuple[int, str], float] = {}
+        for profile in self.profiles:
+            for motor in profile.config.motors:
+                degrees = pose[(profile.corner, motor.name)]
+                calibration = profile.calibration.motor(motor)
+                degrees_to_raw(
+                    degrees,
+                    motor,
+                    calibration,
+                )
+                targets[(profile.number, motor.name)] = degrees
+        return targets
+
+    def _set_crawl_stance_locked(self, phase: str) -> None:
+        self.desired_deg.update(self._crawl_stance_targets_locked())
+        self.crawl_phase = phase
+        self.crawl_swing_corner = None
+        self.crawl_push_partner = None
+
     def _set_crawl_pose_locked(self, gait_time_s: float) -> None:
         targets, state = self._crawl_pose_locked(gait_time_s)
         self.desired_deg.update(targets)
         self.crawl_phase = str(state["phase"])
         swing_corner = state["swing_corner"]
         self.crawl_swing_corner = None if swing_corner is None else str(swing_corner)
+        push_partner = state["push_partner"]
+        self.crawl_push_partner = None if push_partner is None else str(push_partner)
 
     def _crawl_targets_reached_locked(self, tolerance_deg: float = 0.3) -> bool:
         for profile in self.profiles:
@@ -546,8 +581,28 @@ class FourLegSession:
         now = self.clock()
         config = self.dashboard.crawl
         if self.crawl_stage == "preparing":
+            self._set_crawl_stance_locked("settling_wide_mirrored_stance")
+            if not self._crawl_targets_reached_locked():
+                self.crawl_target_reached_at = None
+                return
+            if self.crawl_target_reached_at is None:
+                self.crawl_target_reached_at = now
+                return
+            if now - self.crawl_target_reached_at < config.stance_settle_s:
+                return
+            self.crawl_stage = "preloading"
+            self.crawl_target_reached_at = None
+            self.crawl_progress = 0.0
+            self.last_event = (
+                "All four feet preloading the first front-left support geometry"
+            )
+            return
+
+        if self.crawl_stage == "preloading":
             self._set_crawl_pose_locked(0.0)
-            self.crawl_phase = "settling_stance"
+            self.crawl_phase = "four_feet_down_preload"
+            self.crawl_swing_corner = None
+            self.crawl_push_partner = None
             if not self._crawl_targets_reached_locked():
                 self.crawl_target_reached_at = None
                 return
@@ -559,9 +614,8 @@ class FourLegSession:
             self.crawl_stage = "walking"
             self.crawl_started_at = now
             self.crawl_target_reached_at = None
-            self.crawl_progress = 0.0
             self.last_event = (
-                "Distributed-push crawl started; rear-right foot moves first"
+                "Coordinated support-push test started; front-left swings first"
             )
             return
 
@@ -575,17 +629,13 @@ class FourLegSession:
                 self._set_crawl_pose_locked(elapsed)
                 return
             self.crawl_stage = "finishing"
-            self.crawl_phase = "returning_to_stance"
-            self.crawl_swing_corner = None
-            self._set_crawl_pose_locked(0.0)
-            self.crawl_phase = "returning_to_stance"
+            self._set_crawl_stance_locked("returning_to_wide_mirrored_stance")
             return
 
-        self._set_crawl_pose_locked(0.0)
-        self.crawl_phase = "holding_stance"
+        self._set_crawl_stance_locked("holding_wide_mirrored_stance")
         if self._crawl_targets_reached_locked():
             self.crawl_stage = "complete"
-            self.crawl_phase = "holding_stance"
+            self.crawl_phase = "holding_wide_mirrored_stance"
             self.crawl_progress = 1.0
             self.last_event = (
                 "Forward crawl complete; all 12 motors holding crawl stance"
@@ -595,6 +645,7 @@ class FourLegSession:
         self.crawl_stage = "idle"
         self.crawl_phase = "idle"
         self.crawl_swing_corner = None
+        self.crawl_push_partner = None
         self.crawl_started_at = None
         self.crawl_target_reached_at = None
         self.crawl_progress = 0.0
@@ -611,10 +662,10 @@ class FourLegSession:
     ) -> None:
         if not safety_ack:
             raise ValueError(
-                "Confirm floor clearance, corner map, and cutoff before walking"
+                "Confirm the body is supported with every foot clear before testing"
             )
-        if confirmation != "WALK FORWARD":
-            raise ValueError("WALK FORWARD confirmation is required")
+        if confirmation != "TEST COORDINATED MOTION":
+            raise ValueError("TEST COORDINATED MOTION confirmation is required")
 
         with self.lock:
             if self.crawl_active:
@@ -649,6 +700,7 @@ class FourLegSession:
 
             sample_count = 80
             duration_s = self.dashboard.crawl.period_s
+            self._crawl_stance_targets_locked()
             for sample in range(sample_count + 1):
                 self._crawl_pose_locked(duration_s * sample / sample_count)
 
@@ -663,10 +715,11 @@ class FourLegSession:
                 self.crawl_stage = "preparing"
                 self.crawl_phase = "moving_to_stance"
                 self.crawl_swing_corner = None
+                self.crawl_push_partner = None
                 self.crawl_started_at = None
                 self.crawl_target_reached_at = None
                 self.crawl_progress = 0.0
-                self._set_crawl_pose_locked(0.0)
+                self._set_crawl_stance_locked("moving_to_wide_mirrored_stance")
             except Exception:
                 for profile, motor in newly_armed:
                     try:
@@ -679,7 +732,7 @@ class FourLegSession:
             self.last_heartbeat = self.clock()
             self.fault = None
             self.last_event = (
-                "All 12 motors moving to the distributed-push crawl stance"
+                "All 12 motors moving to the wide mirrored crawl stance"
             )
 
     def stop_crawl(self) -> None:
@@ -836,6 +889,42 @@ class FourLegSession:
             self.last_heartbeat = self.clock()
             self.fault = None
             self.last_event = "All 12 motors returning to calibrated zero"
+
+    def set_crawl_stance(
+        self,
+        *,
+        safety_ack: bool,
+        confirmation: str,
+    ) -> None:
+        if not safety_ack:
+            raise ValueError("Confirm full support, clearance, and cutoff")
+        if confirmation != "SET WIDE WALK STANCE":
+            raise ValueError("SET WIDE WALK STANCE confirmation is required")
+
+        with self.lock:
+            self._require_manual_control_locked()
+            targets = self._crawl_stance_targets_locked()
+            try:
+                for profile in self.profiles:
+                    controller = self.controllers[profile.number]
+                    for motor in profile.config.motors:
+                        if motor.servo_id not in controller.armed_ids:
+                            state = controller.arm(motor)
+                            self.desired_deg[(profile.number, motor.name)] = (
+                                state.degrees
+                            )
+                self.desired_deg.update(targets)
+            except Exception:
+                self._disarm_all_locked(raise_errors=False)
+                self.last_event = "Walk-stance command failed; all motors disarmed"
+                raise
+
+            self.last_heartbeat = self.clock()
+            self.fault = None
+            self.last_event = (
+                "All 12 motors moving to wide walk stance; encoder seams use "
+                "signed extended positions"
+            )
 
     def capture_zero_all(
         self,
@@ -1114,11 +1203,13 @@ class FourLegSession:
                 "port": getattr(self.bus, "port_name", None),
             },
             "crawl": {
-                "pattern": "distributed_push",
+                "pattern": "coordinated_support_push",
+                "supported_test_only": True,
                 "active": self.crawl_active,
                 "stage": self.crawl_stage,
                 "phase": self.crawl_phase,
                 "swing_corner": self.crawl_swing_corner,
+                "push_partner": self.crawl_push_partner,
                 "progress": self.crawl_progress,
                 "period_s": self.dashboard.crawl.period_s,
                 "cycles": self.dashboard.crawl.cycles,
@@ -1129,8 +1220,12 @@ class FourLegSession:
                 "lift_mm": self.dashboard.crawl.lift_m * 1000.0,
                 "stance_down_mm": self.dashboard.crawl.stance_down_m * 1000.0,
                 "stance_fore_aft_mm": (self.dashboard.crawl.stance_fore_aft_m * 1000.0),
+                "abduction_deg": self.dashboard.crawl.abduction_deg,
                 "weight_shift_forward_mm": (
                     self.dashboard.crawl.weight_shift_forward_m * 1000.0
+                ),
+                "weight_shift_lateral_mm": (
+                    self.dashboard.crawl.weight_shift_lateral_m * 1000.0
                 ),
                 "corner_map": {
                     str(profile.number): profile.corner for profile in self.profiles
@@ -1312,6 +1407,11 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
                 self.server.session.zero_all_armed()
             elif self.path == "/api/center-all":
                 self.server.session.center_all(
+                    safety_ack=payload.get("safety_ack") is True,
+                    confirmation=str(payload.get("confirmation", "")),
+                )
+            elif self.path == "/api/crawl-stance":
+                self.server.session.set_crawl_stance(
                     safety_ack=payload.get("safety_ack") is True,
                     confirmation=str(payload.get("confirmation", "")),
                 )

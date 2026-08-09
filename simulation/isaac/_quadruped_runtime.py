@@ -59,6 +59,19 @@ DISTRIBUTED_PUSH_SWING_ORDER = (
     "rear_left",
     "front_left",
 )
+COORDINATED_PUSH_PHASES = (
+    ("lift", 0.22),
+    ("swing_push", 0.36),
+    ("lower", 0.22),
+    ("touchdown", 0.10),
+    ("step_settle", 0.10),
+)
+COORDINATED_PUSH_SWING_ORDER = (
+    "front_left",
+    "rear_right",
+    "front_right",
+    "rear_left",
+)
 
 QUASISTATIC_SWING_ORDER = (
     "rear_right",
@@ -148,12 +161,25 @@ def _side_sign(leg: str) -> float:
     raise ValueError(f"Unknown leg name: {leg!r}")
 
 
+def _is_diagonal(first: str, second: str) -> bool:
+    return _front_sign(first) != _front_sign(second) and _side_sign(
+        first
+    ) != _side_sign(second)
+
+
 def smoothstep(value: float) -> float:
     value = min(max(float(value), 0.0), 1.0)
     return value * value * (3.0 - 2.0 * value)
 
 
-def leg_ik(leg: str, down_m: float, world_forward_m: float) -> tuple[float, float]:
+def leg_ik(
+    leg: str,
+    down_m: float,
+    world_forward_m: float,
+    *,
+    same_bend_direction: bool = False,
+    knees_outward: bool = False,
+) -> tuple[float, float]:
     """Solve one leg in the URDF joint frame.
 
     At zero, each printable arm points down along its local +X.  The generated
@@ -177,7 +203,13 @@ def leg_ik(leg: str, down_m: float, world_forward_m: float) -> tuple[float, floa
             f"cos(knee)={cosine_knee:.6f}"
         )
 
-    knee = front_sign * math.acos(min(max(cosine_knee, -1.0), 1.0))
+    if same_bend_direction and knees_outward:
+        raise ValueError("IK branch cannot be both same-direction and knees-outward")
+    if knees_outward:
+        knee_sign = -front_sign
+    else:
+        knee_sign = 1.0 if same_bend_direction else front_sign
+    knee = knee_sign * math.acos(min(max(cosine_knee, -1.0), 1.0))
     hip_flexion = math.atan2(sagittal_y_m, down_m) - math.atan2(
         LINK_LENGTH_M * math.sin(knee),
         LINK_LENGTH_M + LINK_LENGTH_M * math.cos(knee),
@@ -191,6 +223,8 @@ def pose_by_name(
     forward_by_leg_m: Mapping[str, float],
     abduction_deg: float = DEFAULT_ABDUCTION_DEG,
     abduction_by_leg_deg: Mapping[str, float] | None = None,
+    same_bend_direction: bool = False,
+    knees_outward: bool = False,
 ) -> dict[str, float]:
     """Build a complete 12-joint pose keyed by the exact URDF joint names."""
     result: dict[str, float] = {}
@@ -204,11 +238,184 @@ def pose_by_name(
             leg,
             float(down_by_leg_m[leg]),
             float(forward_by_leg_m[leg]),
+            same_bend_direction=same_bend_direction,
+            knees_outward=knees_outward,
         )
-        result[f"{leg}_hip_abduction"] = math.radians(leg_abduction_deg)
+        result[f"{leg}_hip_abduction"] = (
+            -_side_sign(leg) * math.radians(leg_abduction_deg)
+        )
         result[f"{leg}_hip_flexion"] = hip_flexion
         result[f"{leg}_knee"] = knee
     return result
+
+
+def _command_knees_downward(pose: Mapping[str, float]) -> dict[str, float]:
+    """Map front/rear knees to their mirrored physical downward directions."""
+    result: dict[str, float] = {}
+    for name, value in pose.items():
+        if not name.endswith("_knee"):
+            result[name] = float(value)
+            continue
+        bend = abs(float(value))
+        result[name] = bend if name.startswith("rear_") else -bend
+    return result
+
+
+def coordinated_push_stance_by_name(
+    *,
+    down_m: float,
+    abduction_deg: float = 0.0,
+) -> dict[str, float]:
+    """Return the common-direction, approximately 45-degree ready stance."""
+    return pose_by_name(
+        down_by_leg_m={leg: down_m for leg in LEGS},
+        forward_by_leg_m={leg: 0.0 for leg in LEGS},
+        abduction_deg=abduction_deg,
+        same_bend_direction=True,
+    )
+
+
+def outward_bent_crawl_stance_by_name(
+    *,
+    down_m: float,
+    fore_aft_m: float,
+    abduction_deg: float,
+) -> dict[str, float]:
+    """Return the wide stance with front/rear knee pivots opening outward."""
+    return _command_knees_downward(
+        pose_by_name(
+            down_by_leg_m={leg: down_m for leg in LEGS},
+            forward_by_leg_m={
+                leg: _front_sign(leg) * fore_aft_m for leg in LEGS
+            },
+            abduction_deg=abduction_deg,
+            knees_outward=True,
+        )
+    )
+
+
+def coordinated_push_crawl_by_name(
+    gait_time_s: float,
+    *,
+    period_s: float,
+    stride_m: float,
+    lift_m: float,
+    weight_shift_forward_m: float,
+    weight_shift_lateral_m: float,
+    down_m: float,
+    fore_aft_m: float,
+    abduction_deg: float,
+) -> tuple[dict[str, float], dict[str, object]]:
+    """Move one swing foot and all three support feet on every step."""
+    if period_s <= 0.0:
+        raise ValueError("Coordinated-push period must be positive")
+    if stride_m <= 0.0 or lift_m <= 0.0:
+        raise ValueError("Coordinated-push stride and lift must be positive")
+    if weight_shift_forward_m < 0.0 or weight_shift_lateral_m < 0.0:
+        raise ValueError("Coordinated-push weight shifts must be non-negative")
+    if not math.isclose(sum(value for _name, value in COORDINATED_PUSH_PHASES), 1.0):
+        raise AssertionError("Coordinated-push phase fractions must total one step")
+
+    cycle_phase = (max(0.0, gait_time_s) / period_s) % 1.0
+    step_count = len(COORDINATED_PUSH_SWING_ORDER)
+    step_fraction = 1.0 / step_count
+    step_index = min(int(cycle_phase / step_fraction), step_count - 1)
+    step_u = (cycle_phase - step_index * step_fraction) / step_fraction
+    swing_leg = COORDINATED_PUSH_SWING_ORDER[step_index]
+
+    phase_name = COORDINATED_PUSH_PHASES[-1][0]
+    phase_u = 1.0
+    phase_start = 0.0
+    for candidate_name, candidate_fraction in COORDINATED_PUSH_PHASES:
+        phase_end = phase_start + candidate_fraction
+        if step_u < phase_end or candidate_name == COORDINATED_PUSH_PHASES[-1][0]:
+            phase_name = candidate_name
+            phase_u = min(
+                max((step_u - phase_start) / candidate_fraction, 0.0),
+                1.0,
+            )
+            break
+        phase_start = phase_end
+
+    def step_delta(leg: str, selected: str) -> float:
+        if leg == selected:
+            return stride_m
+        if _is_diagonal(leg, selected):
+            return -stride_m / 2.0
+        return -stride_m / 4.0
+
+    histories = {leg: [0.0] for leg in LEGS}
+    cumulative = {leg: 0.0 for leg in LEGS}
+    for selected in COORDINATED_PUSH_SWING_ORDER:
+        for leg in LEGS:
+            cumulative[leg] += step_delta(leg, selected)
+            histories[leg].append(cumulative[leg])
+    offsets = {
+        leg: -(min(history) + max(history)) / 2.0 for leg, history in histories.items()
+    }
+
+    for completed_swing in COORDINATED_PUSH_SWING_ORDER[:step_index]:
+        for leg in LEGS:
+            offsets[leg] += step_delta(leg, completed_swing)
+
+    motion_progress = smoothstep(phase_u) if phase_name == "swing_push" else 0.0
+    if phase_name in ("lower", "touchdown", "step_settle"):
+        motion_progress = 1.0
+    for leg in LEGS:
+        offsets[leg] += motion_progress * step_delta(leg, swing_leg)
+
+    down_by_leg = {leg: down_m for leg in LEGS}
+    if phase_name == "lift":
+        down_by_leg[swing_leg] = down_m - lift_m * smoothstep(phase_u)
+    elif phase_name == "swing_push":
+        down_by_leg[swing_leg] = down_m - lift_m
+    elif phase_name == "lower":
+        down_by_leg[swing_leg] = down_m - lift_m * (1.0 - smoothstep(phase_u))
+
+    active_support = phase_name in ("lift", "swing_push", "lower")
+    transfer = 1.0 if active_support else 0.0
+    body_shift_forward_m = -_front_sign(swing_leg) * weight_shift_forward_m * transfer
+    body_shift_lateral_m = -_side_sign(swing_leg) * weight_shift_lateral_m * transfer
+    forward_by_leg = {
+        leg: (
+            _front_sign(leg) * fore_aft_m
+            + offsets[leg]
+            - body_shift_forward_m
+        )
+        for leg in LEGS
+    }
+
+    nominal_abduction = math.radians(abduction_deg)
+    foot_delta_lateral_m = -body_shift_lateral_m
+    abduction_by_leg: dict[str, float] = {}
+    for leg in LEGS:
+        nominal_leg_down = down_by_leg[leg]
+        vertical = nominal_leg_down * math.cos(nominal_abduction)
+        outward = nominal_leg_down * math.sin(nominal_abduction)
+        shifted_outward = outward + _side_sign(leg) * foot_delta_lateral_m
+        down_by_leg[leg] = math.hypot(vertical, shifted_outward)
+        abduction_by_leg[leg] = math.degrees(math.atan2(shifted_outward, vertical))
+
+    pose = _command_knees_downward(
+        pose_by_name(
+            down_by_leg_m=down_by_leg,
+            forward_by_leg_m=forward_by_leg,
+            abduction_by_leg_deg=abduction_by_leg,
+            knees_outward=True,
+        )
+    )
+    push_partner = next(
+        leg for leg in LEGS if leg != swing_leg and _is_diagonal(leg, swing_leg)
+    )
+    return pose, {
+        "cycle_phase": cycle_phase,
+        "phase": phase_name,
+        "phase_progress": phase_u,
+        "swing_leg": swing_leg,
+        "push_partner": push_partner,
+        "expected_support_legs": [leg for leg in LEGS if leg != swing_leg],
+        "foot_offsets_m": dict(offsets),
+    }
 
 
 def stance_by_name(

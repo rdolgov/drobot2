@@ -35,10 +35,18 @@
         </div>
       </header>
 
+      <div
+        class="notice"
+        id="notice"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      ></div>
+
       <main>
         <section class="safety-panel" aria-labelledby="safetyTitle">
           <div class="safety-copy">
-            <p class="eyebrow">ARMING INTERLOCK</p>
+            <p class="eyebrow">SAFETY STATUS</p>
             <h2 id="safetyTitle">Robot supported and sweep clear?</h2>
             <p>
               Use blocks for first gait motion. Keep the physical power cutoff
@@ -46,11 +54,6 @@
             </p>
           </div>
           <div class="safety-actions">
-            <label class="safety-check">
-              <input id="safetyAck" type="checkbox">
-              <span class="check-box" aria-hidden="true"></span>
-              <span>I confirm support, clearance, corner map, and cutoff</span>
-            </label>
             <button class="calibration-button" id="captureZeroAll" type="button">
               CAPTURE ZERO ALL
             </button>
@@ -60,12 +63,17 @@
 
         <section class="gait-panel" aria-labelledby="gaitTitle">
           <div class="gait-copy">
-            <p class="eyebrow">SCRIPTED MOTION / ONE GUARDED CYCLE</p>
-            <h2 id="gaitTitle">Distributed-push crawl</h2>
+            <p class="eyebrow">SUPPORTED COMMISSIONING / FEET CLEAR</p>
+            <h2 id="gaitTitle">Coordinated support-push test</h2>
             <p>
-              A deterministic 20-second sequence advances one foot at a time,
-              then uses all four planted feet for a short rearward push after
-              every footfall. It finishes holding the crawl stance.
+              Front hips move forward and rear hips move backward to 45
+              degrees. Every knee starts at -90 degrees relative, placing the
+              distal link near -45 degrees absolute on the front legs. Hip
+              abduction widens the left/right footprint.
+              One foot lifts at a time while all three planted legs push
+              rearward; the opposite diagonal support leg contributes the
+              largest push. A four-feet-down preload happens before front-left
+              lifts first. Test the static stance before testing motion.
             </p>
             <div class="corner-map" aria-label="Configured body corner map">
               <span><b>1</b> FRONT LEFT</span>
@@ -83,14 +91,17 @@
               <i id="gaitProgress"></i>
             </div>
             <div class="gait-buttons">
+              <button class="walk-button" id="setCrawlStance" type="button">
+                SET WIDE WALK STANCE
+              </button>
               <button class="walk-button" id="walkForward" type="button">
-                WALK FORWARD
+                TEST COORDINATED MOTION
               </button>
               <button class="gait-stop-button" id="stopWalk" type="button">
                 STOP + DISARM
               </button>
             </div>
-            <small id="gaitDetail">28 mm stride / 14 mm lift / 305 mm stance</small>
+            <small id="gaitDetail">35 mm stride / 16 mm lift / 45-degree splayed stance</small>
           </div>
         </section>
 
@@ -136,7 +147,6 @@
         </section>
 
         <section class="leg-grid" id="legGrid" aria-live="polite"></section>
-        <div class="notice" id="notice" role="status" aria-live="polite"></div>
       </main>
 
       <footer>

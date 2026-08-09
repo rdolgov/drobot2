@@ -925,15 +925,52 @@ input:disabled {
 }
 
 .notice {
-  min-height: 23px;
-  margin-top: 14px;
+  position: sticky;
+  top: 92px;
+  z-index: 19;
+  display: none;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 11px 16px;
+  border: 1px solid rgba(255, 196, 92, 0.58);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  background: rgba(57, 42, 12, 0.97);
   color: var(--amber);
-  font-size: 0.82rem;
-  text-align: center;
+  font-size: 0.86rem;
+  font-weight: 720;
+  line-height: 1.4;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(18px);
+}
+
+.notice:not(:empty) {
+  display: flex;
+}
+
+.notice::before {
+  flex: 0 0 auto;
+  content: "STATUS";
+  padding: 3px 7px;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
 }
 
 .notice.error {
+  border-color: rgba(255, 102, 94, 0.72);
+  background: rgba(69, 20, 20, 0.98);
   color: var(--red);
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.38),
+    inset 0 0 24px rgba(255, 102, 94, 0.08);
+}
+
+.notice.error::before {
+  content: "COMMAND ERROR";
 }
 
 footer {
@@ -960,6 +997,10 @@ footer {
 @media (max-width: 1080px) {
   .topbar {
     position: static;
+  }
+
+  .notice {
+    top: 0;
   }
 
   .metrics {

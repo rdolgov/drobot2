@@ -227,12 +227,14 @@ to the ignored `calibration.json`. They are not written into the servo's EEPROM.
 If a commanded positive direction moves the wrong way, stop, set that motor's
 `direction` in `leg.toml` to `-1`, and capture centers again.
 
-### Persistently center a servo near raw 2048
+### Optional: persistently center a servo near raw 2048
 
-`capture-centers` changes only `calibration.json`; it does not move an encoder
-boundary. If a required joint range would cross raw 0/4095, support the
-torque-off leg at neutral and use Feetech's persistent middle-position function
-on one addressed motor:
+`capture-centers` changes only `calibration.json`. Software commands and
+telemetry use Feetech signed extended positions when a calibrated range crosses
+raw 0/4095, so crossing that seam does not by itself require an EEPROM change.
+For a more conventional calibration with maximum range on both sides of
+neutral, support the torque-off leg at neutral and use Feetech's persistent
+middle-position function on one addressed motor:
 
 ```powershell
 .\.venv\Scripts\drobot-leg.exe --config .\leg.toml --port COM5 `

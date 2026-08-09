@@ -21,9 +21,11 @@ The local dashboard provides:
   command, and a persistent **DISARM ALL 12** control;
 - guarded capture of the current torque-free pose as calibrated zero for all
   twelve motors, with timestamped backups of all four calibration files;
-- a guarded **WALK FORWARD** command that runs deterministic distributed-push
-  crawl cycles with visible phase/progress and a dedicated
+- guarded **SET WIDE WALK STANCE** and **TEST COORDINATED MOTION** commands
+  with visible phase/progress and a dedicated
   **STOP + DISARM** control;
+- a sticky status banner directly below the page header, with command failures
+  highlighted immediately in red;
 - voltage, temperature, diagnostic current, raw encoder, speed, torque state,
   model, and per-leg current summaries;
 - a three-second browser-heartbeat auto-disarm;
@@ -112,7 +114,7 @@ port with another dashboard process.
    .\start-four-leg-web.ps1 -Port COM4
    ```
 
-5. Type `CONNECT-12`. Startup requires all twelve configured IDs to respond
+5. Startup opens COM4 directly, requires all twelve configured IDs to respond,
    and then writes torque OFF to every ID before opening the dashboard.
 6. Before arming, confirm the header shows **HARDWARE / COM4**, then confirm
    the page shows `12 / 12`, `0 / 12` armed, no unexpected-torque warning,
@@ -128,90 +130,101 @@ port with another dashboard process.
    structure, support, and complete-robot collision behavior have separate
    validation.
 
-## Distributed-push crawl-forward command
+## Wide mirrored stance and coordinated motion test
 
-**WALK FORWARD** is a fixed choreography, not an AI policy. The tracked first
-hardware trial runs one cycle. It uses
-the same analytic leg IK and target equations as the Isaac runtime. The order
-is rear-right, front-right, rear-left, then front-left. After each 28 mm foot
-step, all four planted feet make a 7 mm rearward push, distributing propulsion
-across four intervals instead of one short end-of-cycle reset. Foot lift is
-14 mm, stance height is 305 mm, and the nominal front/rear footprint offset is
-25 mm. Each cycle takes 20 seconds, for a 20-second guarded default command. The
-joint-command ramp remains 45 degrees per second and the servo torque setting
-remains 30%.
+The V3 common-direction posture fell backward on its first physical floor
+move. V4 commands the assembled robot's corrected signs directly: front hip
+flexion is `+45 degrees`, rear hip flexion is `-45 degrees`, front knees start
+at relative `-45 degrees`, rear knees start at relative `+45 degrees`,
+left hip-abduction joints (Legs 1 and 3) use `-15 degrees`, and right
+hip-abduction joints (Legs 2 and 4) use `+15 degrees`. The rear sign correction
+comes from the supported hardware observation that `-90 degrees` lifted the
+rear lower links; the rear target is therefore positive. Both knee magnitudes
+were reduced to `45 degrees` after the supported stance showed excessive bend.
+The lower links continue away from the chassis instead of folding back toward
+vertical, making the stance visibly wider and longer.
 
-The full IK derivation, phase schedule, 45-degree stance investigation,
-diagonal-pair tradeoff, simulation results, and hardware test ladder are in
-[`specs/crawl-walk-v2.md`](specs/crawl-walk-v2.md).
+**SET WIDE WALK STANCE** is the isolated real-hardware torque check. It arms
+any currently disarmed motors and ramps all twelve to the static V4 posture
+without starting gait. It can be clicked while motors are already or partially
+armed; those motors remain armed and receive the new stance targets.
+The servo conversion uses Feetech signed extended positions across the encoder
+seam. The current Leg 1 front-knee stance target is `-45 degrees` / raw `493`,
+so the stance itself no longer crosses the seam. If that knee is manually
+commanded to its configured `-90 degrees` range, it becomes raw `-19` and is
+sign-encoded rather than clamped or rejected. Telemetry normalizes either
+signed `-19` or wrapped single-turn `4077` feedback to the nearest calibrated
+angle, so both are displayed as `-90 degrees` rather than an angle one full
+turn away.
+Use it first with the body fully supported and all feet clear. Verify the four
+joint directions, then gradually let the feet accept load only while a tether
+or support can catch the chassis. Watch current, voltage, temperature, sag,
+noise, and backward pitch; press **STOP + DISARM** on any abnormal behavior.
 
-Before the command is accepted, the server requires:
+**TEST COORDINATED MOTION** runs one 20-second open-loop sequence. It uses a
+35 mm stride, 16 mm lift, 16 mm forward transfer, and 12 mm lateral transfer.
+During each swing the diagonal support foot contributes 17.5 mm of rearward
+push and the adjacent supports contribute 8.75 mm each. The swing order is
+front-left, rear-right, front-right, rear-left, so all four hip-flexion motors
+participate during every step.
 
-- all 12 IDs online and all motors disarmed;
-- no voltage, temperature, current, or unexpected-torque warning;
-- every measured joint within 35 degrees of calibrated zero;
-- every sampled gait target inside that motor's configured range;
-- the support/clearance/corner-map/cutoff checkbox and a second confirmation.
+This remains a supported commissioning test, not a validated untethered floor
+walk. An earlier 30 mm / 8-degree intermediate profile stayed upright in
+Isaac, but still failed tracking, slip, and swing-unloading gates. The exact
+45-degree / 15-degree posture is being evaluated on supported real hardware at
+the user's request. Full geometry, prior simulation results,
+and the physical test ladder are in
+[`specs/crawl-walk-v4.md`](specs/crawl-walk-v4.md). V2 and V3 remain historical
+evidence.
 
-For the first physical attempt with this profile, leave the tracked
-`cycles = 1` unchanged and support the body on blocks with the feet barely
-touching or just clear of the floor. Confirm the
-displayed corner map, press **WALK FORWARD**, and be ready to use **STOP +
-DISARM** or the physical power cutoff. The app first ramps to the crawl stance,
-settles, then runs the configured cycle count. It finishes holding the stance
-with torque still enabled; support the robot before pressing **STOP + DISARM**.
-Stop on rear-left support loss, dragging, slip, unexpected direction, current
-warning, heat, noise, or supply sag.
+Before either whole-robot command is accepted, the server requires all 12 IDs
+online, all motors disarmed, nominal telemetry, and targets inside configured
+limits. Browser-heartbeat loss,
+a telemetry fault, any disarm request, page close, or **STOP + DISARM** cancels
+motion and attempts to remove torque from all twelve motors.
 
 The tracked defaults live in `[crawl]` in `../../robot-runtime/four-leg.toml`.
-The parser permits a 5-50 mm stride, 5-25 mm lift, 12-60 second period, and one
-to four cycles, but only the tracked 28 mm geometry is currently validated.
-Raise `cycles` only after one physical cycle succeeds.
-Manual joint, zero, and centering commands are locked while
-the crawl is active. Browser-heartbeat loss, a motion/telemetry fault, any
-disarm request, page close, or **STOP + DISARM** cancels the gait and attempts
-to remove torque from all 12 motors.
+The parser permits a 5-75 mm stride, 5-25 mm lift, 10-60 second period, and one
+to four cycles. Keep `cycles = 1` during commissioning.
 
-## Isaac validation
+## Isaac validation status
 
-The distributed-push profile was evaluated on 2026-08-09 against the tracked
-floating quadruped USD and rated `0.980665 Nm` ST3215 torque profile. The
-dashboard equations are parity-tested against
-`simulation/isaac/_quadruped_runtime.py` over 81 samples per cycle. The exact
-two-cycle physics reproduction command, run from the repository root, is:
+The exact dashboard equations are parity-tested against
+`simulation/isaac/_quadruped_runtime.py`. The intermediate 30 mm / 8-degree
+profile was run for one cycle against the floating 4.526 kg Isaac robot at the
+rated `0.980665 Nm` joint cap:
 
 ```powershell
 & C:\isaacsim\python.bat simulation\isaac\run_crawl.py `
   --usd simulation\exports\isaac\quadruped_robot_floating.usdc `
-  --headless --gait-mode distributed-push --torque-cap rated `
-  --cycles 2 --period 20 --stride 0.028 --lift 0.014 `
-  --weight-shift-forward 0.016 --weight-shift-lateral 0 `
-  --stance-down 0.305 --stance-fore-aft 0.025 `
-  --abduction-deg 0 --start-z 0.455 `
-  --min-forward-displacement 0.010 `
-  --report hardware\test-apps\four-leg-dashboard\validation\isaac-distributed-push-crawl.json `
-  --screenshot hardware\test-apps\four-leg-dashboard\validation\isaac-distributed-push-crawl.png
+  --headless --gait-mode coordinated-push --torque-cap rated `
+  --cycles 1 --period 20 --stride 0.035 --lift 0.016 `
+  --weight-shift-forward 0.016 --weight-shift-lateral 0.012 `
+  --stance-down 0.29392 --stance-fore-aft 0.030 `
+  --abduction-deg 8 --start-z 0.455 `
+  --min-forward-displacement 0.005 `
+  --report hardware\test-apps\four-leg-dashboard\validation\isaac-coordinated-support-push.json `
+  --screenshot hardware\test-apps\four-leg-dashboard\validation\isaac-coordinated-support-push.png
 ```
 
-The rated-torque run passed with `19.35 mm` forward travel, `1.94 mm` lateral
-drift, `2.18 deg` maximum body tilt, `5.32 mm` maximum loaded support-tip slip,
-`99.92%` expected support contact, `0.144 rad` maximum joint tracking error,
-`1.663 rad/s` maximum joint speed, and all four contact-verified foot steps
-complete. The machine-readable report is
-[`validation/isaac-distributed-push-crawl.json`](validation/isaac-distributed-push-crawl.json).
+Result: **FAIL for floor walking, but stable enough for the guarded hardware
+ladder**. The run stayed above `0.3429 m`, reached only `6.31 degrees` maximum
+tilt, maintained `99.89%` expected support contact, and moved forward `26.4
+mm`. It failed because maximum joint error was `0.267 rad`, support slip was
+`19.0 mm`, and the provisional fork-tip contacts did not remain unloaded long
+enough to verify a complete step. This report is retained at
+[`validation/isaac-coordinated-support-push.json`](validation/isaac-coordinated-support-push.json)
+so the supported-only decision is auditable.
 
-The prior conservative 15 mm stride, 10 mm lift, 310 mm stance, two-cycle run
-remains available as the original quasi-static reference at
-[`validation/isaac-slow-crawl.json`](validation/isaac-slow-crawl.json). It
-moved forward `21.97 mm` and completed all four contact-verified steps. The
-longer profile was selected because the assembled robot completed the original
-leg sequence without producing useful forward travel; no torque-limit increase
-was made.
+The earlier V2 profile remains a passing simulation reference at
+[`validation/isaac-distributed-push-crawl.json`](validation/isaac-distributed-push-crawl.json),
+but its motion amplitude was too small in the physical trial. Neither result
+overrides direct supported hardware verification of the assembled joint axes.
 
 ## Center all twelve joints
 
-**CENTER ALL 12** is the whole-robot neutral-position command. It requires the
-support/clearance/cutoff checkbox and a second confirmation. The server then
+**CENTER ALL 12** is the whole-robot neutral-position command. A click sends
+the command immediately. The server then
 arms every configured motor at its measured position and ramps all twelve
 joints to calibrated `0°` using the normal 30-degree-per-second motion limit.
 
@@ -232,7 +245,7 @@ after reinstalling horns or rewiring mirrored legs:
 2. Keep the robot supported and manually place all four legs in the desired
    neutral pose.
 3. Check the support/clearance/cutoff box.
-4. Press **CAPTURE ZERO ALL** and approve the second confirmation.
+4. Press **CAPTURE ZERO ALL**. The command starts immediately.
 5. Verify every displayed current angle changes to approximately `0.00°` while
    torque remains off.
 6. Arm and test one affected joint at `+15°` before using **CENTER ALL 12**.

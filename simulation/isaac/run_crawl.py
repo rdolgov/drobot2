@@ -20,6 +20,7 @@ import traceback
 
 import numpy as np
 from _quadruped_runtime import (
+    COORDINATED_PUSH_SWING_ORDER,
     CRAWL_DUTY_FACTOR,
     DEFAULT_ABDUCTION_DEG,
     DEFAULT_STANCE_DOWN_M,
@@ -32,6 +33,7 @@ from _quadruped_runtime import (
     QUASISTATIC_SWING_ORDER,
     add_robot_reference,
     body_tilt_deg,
+    coordinated_push_crawl_by_name,
     crawl_by_name,
     distributed_push_crawl_by_name,
     quasistatic_crawl_by_name,
@@ -55,6 +57,7 @@ parser.add_argument(
         "crawl",
         "quasi-static",
         "distributed-push",
+        "coordinated-push",
     ),
     default="crawl",
 )
@@ -111,12 +114,13 @@ if (
     in (
         "quasi-static",
         "distributed-push",
+        "coordinated-push",
     )
     and args.period < 8.0
 ):
     parser.error("Guarded crawl periods must be at least 8 seconds")
-if not 0.005 <= args.stride <= 0.060:
-    parser.error("Stride must be between 0.005 and 0.060 meters")
+if not 0.005 <= args.stride <= 0.075:
+    parser.error("Stride must be between 0.005 and 0.075 meters")
 if not 0.003 <= args.lift <= 0.025:
     parser.error("Lift must be between 0.003 and 0.025 meters")
 if (
@@ -157,7 +161,10 @@ import isaacsim.core.experimental.utils.stage as stage_utils  # noqa: E402
 from isaacsim.core.experimental.objects import GroundPlane  # noqa: E402
 from isaacsim.core.experimental.prims import Articulation, RigidPrim  # noqa: E402
 from isaacsim.core.utils.viewports import set_camera_view  # noqa: E402
-from omni.kit.viewport.utility import capture_viewport_to_file, get_active_viewport  # noqa: E402
+from omni.kit.viewport.utility import (  # noqa: E402
+    capture_viewport_to_file,
+    get_active_viewport,
+)
 from pxr import Gf, PhysxSchema, Sdf, UsdGeom, UsdPhysics, UsdShade  # noqa: E402
 
 EARTH_GRAVITY_M_S2 = 9.81
@@ -330,6 +337,18 @@ def _gait_pose_and_state(gait_time_s: float) -> tuple[dict[str, float], dict]:
         )
     if args.gait_mode == "distributed-push":
         return distributed_push_crawl_by_name(
+            gait_time_s,
+            period_s=args.period,
+            stride_m=args.stride,
+            lift_m=args.lift,
+            weight_shift_forward_m=args.weight_shift_forward,
+            weight_shift_lateral_m=args.weight_shift_lateral,
+            down_m=args.stance_down,
+            fore_aft_m=args.stance_fore_aft,
+            abduction_deg=args.abduction_deg,
+        )
+    if args.gait_mode == "coordinated-push":
+        return coordinated_push_crawl_by_name(
             gait_time_s,
             period_s=args.period,
             stride_m=args.stride,
@@ -692,7 +711,7 @@ try:
 
     initial_pose = (
         _gait_pose_and_state(0.0)[0]
-        if args.gait_mode == "distributed-push"
+        if args.gait_mode in ("distributed-push", "coordinated-push")
         else stance_by_name(
             down_m=args.stance_down,
             fore_aft_m=args.stance_fore_aft,
@@ -769,6 +788,7 @@ try:
         if args.gait_mode in (
             "quasi-static",
             "distributed-push",
+            "coordinated-push",
         ):
             target = gait.copy()
         else:
@@ -887,24 +907,33 @@ try:
 
     foot_step_evidence: dict[str, dict[str, object]] = {}
     completed_foot_steps: list[str] = []
-    contact_verified_mode = args.gait_mode in ("quasi-static", "distributed-push")
-    contact_verified_order = (
-        DISTRIBUTED_PUSH_SWING_ORDER
-        if args.gait_mode == "distributed-push"
-        else QUASISTATIC_SWING_ORDER
+    contact_verified_mode = args.gait_mode in (
+        "quasi-static",
+        "distributed-push",
+        "coordinated-push",
     )
+    contact_verified_order = (
+        COORDINATED_PUSH_SWING_ORDER
+        if args.gait_mode == "coordinated-push"
+        else (
+            DISTRIBUTED_PUSH_SWING_ORDER
+            if args.gait_mode == "distributed-push"
+            else QUASISTATIC_SWING_ORDER
+        )
+    )
+    swing_phase_name = "swing_push" if args.gait_mode == "coordinated-push" else "swing"
     if contact_verified_mode:
         for leg in contact_verified_order:
             swing_records = [
                 record
                 for record in contact_samples
-                if record["swing_leg"] == leg and record["phase"] == "swing"
+                if record["swing_leg"] == leg and record["phase"] == swing_phase_name
             ]
             three_support_records = [
                 record
                 for record in contact_samples
                 if record["swing_leg"] == leg
-                and record["phase"] in ("lift", "swing", "lower")
+                and record["phase"] in ("lift", swing_phase_name, "lower")
             ]
             airborne_records = [
                 record for record in swing_records if not record["contact_by_leg"][leg]
@@ -1011,9 +1040,13 @@ try:
                     "contact_verified_quasi_static_crawl"
                     if args.gait_mode == "quasi-static"
                     else (
-                        "distributed_four_foot_push_crawl"
-                        if args.gait_mode == "distributed-push"
-                        else "slow_four_beat_crawl"
+                        "coordinated_three_support_push_crawl"
+                        if args.gait_mode == "coordinated-push"
+                        else (
+                            "distributed_four_foot_push_crawl"
+                            if args.gait_mode == "distributed-push"
+                            else "slow_four_beat_crawl"
+                        )
                     )
                 ),
                 "mode": args.gait_mode,
@@ -1026,9 +1059,13 @@ try:
                     CRAWL_DUTY_FACTOR if args.gait_mode == "crawl" else None
                 ),
                 "swing_order": list(
-                    DISTRIBUTED_PUSH_SWING_ORDER
-                    if args.gait_mode == "distributed-push"
-                    else QUASISTATIC_SWING_ORDER
+                    COORDINATED_PUSH_SWING_ORDER
+                    if args.gait_mode == "coordinated-push"
+                    else (
+                        DISTRIBUTED_PUSH_SWING_ORDER
+                        if args.gait_mode == "distributed-push"
+                        else QUASISTATIC_SWING_ORDER
+                    )
                 ),
                 "stance_down_m": args.stance_down,
                 "stance_fore_aft_m": args.stance_fore_aft,
@@ -1039,6 +1076,7 @@ try:
                     in (
                         "quasi-static",
                         "distributed-push",
+                        "coordinated-push",
                     )
                     else 0.0
                 ),
@@ -1048,6 +1086,7 @@ try:
                     in (
                         "quasi-static",
                         "distributed-push",
+                        "coordinated-push",
                     )
                     else 0.0
                 ),
@@ -1057,10 +1096,15 @@ try:
                     in (
                         "quasi-static",
                         "distributed-push",
+                        "coordinated-push",
                     )
                     else args.startup_blend_seconds
                 ),
-                "ik": "analytic mirrored two-link sagittal IK",
+                "ik": (
+                    "analytic common-direction two-link sagittal IK"
+                    if args.gait_mode == "coordinated-push"
+                    else "analytic mirrored two-link sagittal IK"
+                ),
             },
             "settle_seconds": settle_steps / CONTROL_HZ,
             "post_gait_settle_seconds": post_settle_steps / CONTROL_HZ,

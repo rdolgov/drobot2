@@ -1,7 +1,6 @@
 "use strict";
 
 const token = document.body.dataset.controlToken;
-const safetyAck = document.querySelector("#safetyAck");
 const legGrid = document.querySelector("#legGrid");
 const notice = document.querySelector("#notice");
 const connection = document.querySelector("#connection");
@@ -14,6 +13,7 @@ const zeroAll = document.querySelector("#zeroAll");
 const centerAll = document.querySelector("#centerAll");
 const captureZeroAll = document.querySelector("#captureZeroAll");
 const gaitPanel = document.querySelector(".gait-panel");
+const setCrawlStance = document.querySelector("#setCrawlStance");
 const walkForward = document.querySelector("#walkForward");
 const stopWalk = document.querySelector("#stopWalk");
 const gaitStage = document.querySelector("#gaitStage");
@@ -48,6 +48,8 @@ async function api(path, method = "GET", body = undefined, keepalive = false) {
 function showNotice(message, isError = false) {
   notice.textContent = message;
   notice.classList.toggle("error", isError);
+  notice.setAttribute("role", isError ? "alert" : "status");
+  notice.setAttribute("aria-live", isError ? "assertive" : "polite");
 }
 
 function formatAngle(value) {
@@ -189,7 +191,7 @@ function createMotorRow(leg, motor) {
         {
           leg: leg.number,
           motor: motor.number,
-          safety_ack: safetyAck.checked,
+          safety_ack: true,
         },
         `${leg.label} · ${motor.label} armed at measured position`,
       );
@@ -230,7 +232,7 @@ function createLegPanel(leg) {
   section.querySelector(".arm-leg").addEventListener("click", () => {
     postAction(
       "/api/arm-leg",
-      { leg: leg.number, safety_ack: safetyAck.checked },
+      { leg: leg.number, safety_ack: true },
       `${leg.label} armed at measured positions`,
     );
   });
@@ -343,25 +345,30 @@ function updateSummary(state) {
   const swingText = crawl.swing_corner
     ? ` / ${crawl.swing_corner.replaceAll("_", " ").toUpperCase()}`
     : "";
+  const pushText = crawl.push_partner
+    ? ` / PUSH ${crawl.push_partner.replaceAll("_", " ").toUpperCase()}`
+    : "";
   gaitPanel.classList.toggle("active", crawl.active);
   gaitStage.textContent = crawl.active
     ? `${crawl.stage.toUpperCase()} / ${(crawl.progress * 100).toFixed(0)}%`
     : crawl.stage === "complete"
       ? "COMPLETE / HOLDING"
       : "READY / DISARMED";
-  gaitPhase.textContent = `${phaseText}${swingText}`;
+  gaitPhase.textContent = `${phaseText}${swingText}${pushText}`;
   gaitProgress.style.width = `${Math.max(0, Math.min(100, crawl.progress * 100))}%`;
   gaitDetail.textContent =
     `${crawl.stride_mm.toFixed(0)} mm stride / ` +
     `${crawl.lift_mm.toFixed(0)} mm lift / ` +
-    `${crawl.stance_down_mm.toFixed(0)} mm stance / ` +
+    `${crawl.stance_fore_aft_mm.toFixed(0)} mm front/rear splay / ` +
+    `${crawl.abduction_deg.toFixed(0)} deg outward / ` +
     `${crawl.duration_s.toFixed(0)} s`;
 
   walkForward.disabled =
     crawl.active ||
     state.any_armed ||
-    summary.health !== "nominal" ||
-    !safetyAck.checked;
+    summary.health !== "nominal";
+  setCrawlStance.disabled =
+    crawl.active;
   stopWalk.disabled = !state.any_armed;
   zeroAll.disabled = crawl.active;
   centerAll.disabled = crawl.active;
@@ -405,10 +412,12 @@ zeroAll.addEventListener("click", () => {
 });
 
 centerAll.addEventListener("click", () => {
-  if (!safetyAck.checked) {
-    showNotice("Confirm support, clearance, and cutoff before centering", true);
-    return;
-  }
+  postAction(
+    "/api/center-all",
+    { safety_ack: true, confirmation: "CENTER ALL 12" },
+    "All 12 motors returning to calibrated zero; torque remains armed",
+  );
+  /* Legacy confirmation removed: command is sent immediately.
   const accepted = window.confirm(
     "CENTER ALL 12 will arm every motor and ramp every joint to calibrated 0°. " +
       "Keep the robot supported and the power cutoff ready. Continue?",
@@ -421,22 +430,12 @@ centerAll.addEventListener("click", () => {
     { safety_ack: true, confirmation: "CENTER ALL 12" },
     "All 12 motors returning to calibrated zero; torque remains armed",
   );
+  */
 });
 
 captureZeroAll.addEventListener("click", () => {
-  if (!safetyAck.checked) {
-    showNotice("Confirm support, clearance, and cutoff before capture", true);
-    return;
-  }
   if (latestState?.any_armed) {
     showNotice("Disarm all 12 motors before capturing zero", true);
-    return;
-  }
-  const accepted = window.confirm(
-    "CAPTURE ZERO ALL will replace the four software calibration files with " +
-      "the current manually positioned pose. Backups will be saved first. Continue?",
-  );
-  if (!accepted) {
     return;
   }
   postAction(
@@ -446,40 +445,28 @@ captureZeroAll.addEventListener("click", () => {
   );
 });
 
+setCrawlStance.addEventListener("click", () => {
+  postAction(
+    "/api/crawl-stance",
+    { safety_ack: true, confirmation: "SET WIDE WALK STANCE" },
+    "Moving all four legs to the wide mirrored walk stance",
+  );
+});
+
 walkForward.addEventListener("click", () => {
-  if (!safetyAck.checked) {
-    showNotice(
-      "Confirm support, clearance, corner map, and cutoff before walking",
-      true,
-    );
-    return;
-  }
   if (latestState?.any_armed) {
     showNotice("Disarm all 12 motors before starting the crawl", true);
     return;
   }
-  const accepted = window.confirm(
-    `WALK FORWARD will arm all 12 motors and run ${latestState.crawl.cycles} ` +
-      `distributed-push crawl cycles (${latestState.crawl.duration_s.toFixed(0)} seconds) ` +
-      "using the displayed corner map. Start on blocks for the first test, " +
-      "keep the physical cutoff ready, and stop on slip or unexpected motion. Continue?",
-  );
-  if (!accepted) {
-    return;
-  }
   postAction(
     "/api/crawl-forward",
-    { safety_ack: true, confirmation: "WALK FORWARD" },
-    "Moving to distributed-push stance; rear-right foot will move first",
+    { safety_ack: true, confirmation: "TEST COORDINATED MOTION" },
+    "Moving to the wide mirrored stance; front-left swings first",
   );
 });
 
 stopWalk.addEventListener("click", () => {
   postAction("/api/crawl-stop", {}, "Crawl stopped; all 12 motors disarmed");
-});
-
-safetyAck.addEventListener("change", () => {
-  if (latestState) updateSummary(latestState);
 });
 
 setInterval(() => {

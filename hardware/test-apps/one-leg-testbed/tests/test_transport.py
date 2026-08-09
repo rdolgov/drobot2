@@ -63,3 +63,36 @@ def test_set_middle_position_disarms_unlocks_verifies_and_relocks(
         ("write1", 1, REG_TORQUE_ENABLE, SET_MIDDLE_COMMAND),
         ("lock", 1),
     ]
+
+
+def test_write_position_sign_encodes_negative_extended_target(monkeypatch) -> None:
+    class Packet:
+        def scs_toscs(self, value: int, sign_bit: int) -> int:
+            calls.append(("encode", value, sign_bit))
+            return (-value) | (1 << sign_bit) if value < 0 else value
+
+        def WritePosEx(
+            self,
+            servo_id: int,
+            position: int,
+            speed: int,
+            acceleration: int,
+        ) -> tuple[int, int]:
+            calls.append(
+                ("write", servo_id, position, speed, acceleration)
+            )
+            return 0, 0
+
+    config = load_config(ROOT / "leg.example.toml")
+    calls: list[tuple] = []
+    bus = STSBus("demo", config.bus.baudrate)
+    bus.packet = Packet()
+    bus._comm_success = 0
+    monkeypatch.setattr(bus, "_write2", lambda *_args: None)
+
+    bus.write_position(3, -19, config.bus)
+
+    assert calls == [
+        ("encode", -19, 15),
+        ("write", 3, 0x8013, config.bus.speed, config.bus.acceleration),
+    ]

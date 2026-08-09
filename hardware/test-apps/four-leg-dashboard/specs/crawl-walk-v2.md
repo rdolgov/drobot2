@@ -1,5 +1,10 @@
 # Crawl walk V2: kinematics, gait, and test plan
 
+> Historical design record: this mirrored 28 mm gait passed its Isaac model,
+> but the assembled-robot trial reported opposite visible leg directions and
+> motion that was too small. The active supported commissioning profile is
+> documented in [`crawl-walk-v3.md`](crawl-walk-v3.md).
+
 ## Goal
 
 Crawl V2 turns calibrated joint motion into deliberate foot-space motion. The

@@ -14,13 +14,13 @@ leg_current_warning_ma = 3000.0
 period_s = 20.0
 cycles = 1
 stance_settle_s = 1.5
-stride_m = 0.028
-lift_m = 0.014
+stride_m = 0.035
+lift_m = 0.016
 weight_shift_forward_m = 0.016
-weight_shift_lateral_m = 0.0
-stance_down_m = 0.305
-stance_fore_aft_m = 0.025
-abduction_deg = 0.0
+weight_shift_lateral_m = 0.012
+stance_down_m = 0.272960722
+stance_fore_aft_m = 0.113064033
+abduction_deg = 15.0
 start_tolerance_deg = 35.0
 
 [[legs]]

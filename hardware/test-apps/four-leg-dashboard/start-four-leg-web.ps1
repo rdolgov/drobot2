@@ -35,11 +35,7 @@ if ($Demo) {
 else {
     Write-Warning "Support the complete robot with every foot clear of the floor."
     Write-Warning "Confirm separate fused leg power, shared data/common ground, and physical cutoff."
-    $confirmation = Read-Host "Type CONNECT-12 to open $Port and verify IDs 1-12"
-    if ($confirmation -cne "CONNECT-12") {
-        Write-Host "Cancelled before opening the serial bus."
-        exit 1
-    }
+    Write-Host "Opening $Port and verifying configured motor IDs 1-12."
     $arguments += @("--port", $Port)
 }
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -49,7 +50,7 @@ def test_angle_conversion_round_trips_and_obeys_direction() -> None:
     )
 
 
-def test_angle_conversion_rejects_encoder_boundary_crossing() -> None:
+def test_angle_conversion_uses_signed_extended_position_across_encoder_seam() -> None:
     config = load_config(ROOT / "leg.example.toml")
     calibration = calibration_from_centers(
         config,
@@ -62,8 +63,34 @@ def test_angle_conversion_rejects_encoder_boundary_crossing() -> None:
     motor = config.motor("hip_abduction")
     motor_calibration = calibration.motor(motor)
 
-    with pytest.raises(ValueError, match="encoder"):
-        degrees_to_raw(1.0, motor, motor_calibration)
+    raw = degrees_to_raw(1.0, motor, motor_calibration)
+
+    assert raw == 4101
+    assert raw_to_degrees(raw, motor, motor_calibration) == pytest.approx(
+        1.0,
+        abs=0.05,
+    )
+
+    lower_motor = replace(motor, min_deg=-120.0, max_deg=120.0)
+    lower_calibration = calibration_from_centers(
+        config,
+        {
+            "hip_abduction": 1005,
+            "hip_flexion": 2048,
+            "knee": 2048,
+        },
+    ).motor(lower_motor)
+    lower_raw = degrees_to_raw(-90.0, lower_motor, lower_calibration)
+
+    assert lower_raw == -19
+    assert raw_to_degrees(lower_raw, lower_motor, lower_calibration) == pytest.approx(
+        -90.0,
+        abs=0.05,
+    )
+    assert raw_to_degrees(4077, lower_motor, lower_calibration) == pytest.approx(
+        -90.0,
+        abs=0.05,
+    )
 
 
 def test_angle_conversion_rejects_configured_limit() -> None:

@@ -169,9 +169,12 @@ place all joints at the intended neutral pose, and then press Enter. Encoder
 centers are stored locally in the ignored `calibration.json`; the procedure
 does not write homing offsets to servo EEPROM.
 
-If the required range crosses raw encoder boundary 0/4095, a local calibration
-file is not sufficient. With torque off and the supported joint physically at
-neutral, persistently make that motor logical tick 2048:
+Software commands and telemetry use Feetech signed extended positions when a
+calibrated range crosses raw encoder boundary 0/4095, so a boundary crossing
+does not by itself require an EEPROM update. To place neutral near the middle
+of the conventional single-turn range anyway, keep torque off and the supported
+joint physically at neutral, then persistently make that motor logical tick
+2048:
 
 ```powershell
 .\.venv\Scripts\drobot-leg.exe --config .\leg.toml --port COM5 `

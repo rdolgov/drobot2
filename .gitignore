@@ -33,6 +33,7 @@ node_modules/
 /*.tar.gz
 
 # Large reproducible runtime scratch output
+/.tmp/
 **/.pytest-tmp*/
 **/.pytest_tmp*/
 /cad/.tmp/
