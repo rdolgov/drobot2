@@ -288,5 +288,7 @@ payload capacity, or safe walking on the assembled hardware.
 - A USB disconnect, process crash, operating-system failure, or damaged data
   wire can prevent software disarm.
 - Dashboard polling adds traffic to the same bus used for motion commands.
-- Physical corner labels remain unassigned until the harness map is confirmed.
+- The configured ID-to-corner map (Leg 1 front-left, 2 front-right, 3
+  rear-left, 4 rear-right) must still be confirmed against the physical
+  harness before the first crawl.
 - Monitoring warnings are commissioning aids, not electrical certification.
