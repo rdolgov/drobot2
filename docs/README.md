@@ -13,4 +13,5 @@ instructions stay with the package that owns them.
 - [CAD and mechanical design](../cad/docs/README.md)
 - [Simulation and reinforcement learning](../simulation/docs/README.md)
 - [Hardware control](../hardware/README.md)
+- [Raspberry Pi ROS 2 onboard control](../onboard/README.md)
 - [Electrical design](../electrical/README.md)

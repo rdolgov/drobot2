@@ -1,0 +1,10 @@
+/drobot/onboard_control:
+  ros__parameters:
+    manifest_path: ""
+    serial_port: "auto"
+    http_bind: "0.0.0.0"
+    http_port: 8080
+    control_token: ""
+    demo: false
+    telemetry_period_s: 0.5
+    ramp_rate_deg_s: 270.0

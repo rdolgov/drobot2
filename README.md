@@ -16,6 +16,8 @@ can evolve without sharing one package boundary.
   simulation documentation.
 - [`hardware/`](hardware/README.md) — one-leg commissioning and four-leg
   hardware control/test applications.
+- [`onboard/`](onboard/README.md) — ROS 2 Raspberry Pi runtime, LAN browser
+  control, ROS services/topics, and boot-service setup.
 - [`electrical/`](electrical/README.md) — power distribution, fusing, wiring,
   schematics, BOM, and power-budget planning.
 

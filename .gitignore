@@ -26,6 +26,9 @@ build/
 dist/
 *.egg-info/
 node_modules/
+/onboard/ros2_ws/build/
+/onboard/ros2_ws/install/
+/onboard/ros2_ws/log/
 
 # Local deployment worktrees and packaged site handoffs
 /cad-design-review-site/

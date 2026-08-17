@@ -1,0 +1,22 @@
+[Unit]
+Description=Drobot2 ROS 2 onboard controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__DROBOT_USER__
+WorkingDirectory=__DROBOT_REPO_ROOT__
+Environment=ROS_DISTRO=jazzy
+Environment=DROBOT_SERIAL_PORT=auto
+Environment=DROBOT_HTTP_BIND=0.0.0.0
+Environment=DROBOT_HTTP_PORT=8080
+EnvironmentFile=-/etc/default/drobot-onboard
+ExecStart=/usr/bin/bash __DROBOT_REPO_ROOT__/onboard/scripts/start-onboard.sh
+Restart=on-failure
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
