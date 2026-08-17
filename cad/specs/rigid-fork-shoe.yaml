@@ -1,0 +1,60 @@
+schema_version: 1
+part_id: rigid_fork_shoe
+source: drobot_cad/parts/rigid_fork_shoe.py
+fit_preview: drobot_cad/assembly/rigid_fork_shoe_fit_preview.py
+units: mm
+
+coordinate_system:
+  origin: distal fork revolute-axis center
+  positive_x: outward from the lower leg and normal to the contact face
+  positive_y: inherited upper-arm transverse direction
+  positive_z: along the fork axis and attachment rods
+
+attachment:
+  existing_hole_diameter_mm: 3.0
+  shoe_clearance_hole_diameter_mm: 3.4
+  square_pattern_pitch_mm: 9.899494
+  available_holes: 4
+  recommended_used_holes: 2 diagonal
+  recommended_hardware: 2x M3 x 75 mm threaded rods with washers and nylon lock nuts
+  central_hub_radius_mm: 11.5
+  fork_clearance_per_side_mm: 0.4
+
+fork_saddle:
+  type: shallow_annular_nose_cup_with_central_spine
+  assumed_fork_nose_envelope_radius_mm: 13.5
+  radial_clearance_mm: 0.5
+  cup_inner_radius_mm: 14.0
+  cup_outer_radius_mm: 24.0
+  cup_depth_mm: 5.5
+  cup_back_x_mm: 8.5
+  intent: wrap_neatly_around_fork_nose_and_resist_wobble
+
+sole:
+  structural_material_intent: PETG_or_PA_CF
+  diameter_mm: 48.0
+  structural_thickness_mm: 6.0
+  rear_face_x_mm: 14.0
+  contact_lip_x_mm: 20.0
+  traction_pad_recess_diameter_mm: 44.0
+  traction_pad_recess_depth_mm: 0.8
+  recommended_pad: 1.5_mm_self_adhesive_rubber_or_TPU_sheet
+  pad_projection_beyond_lip_mm: 0.7
+
+generated_baseline:
+  status: generated_and_visually_reviewed_2026-08-11_not_geometry_verified
+
+acceptance_tests:
+  - geometry is one connected rigid structural solid
+  - four M3 clearance axes match the existing distal fork pattern
+  - central hub preserves 0.4 mm fork clearance per side
+  - annular saddle clears the assumed fork nose envelope by 0.5 mm
+  - contact face is flat and circular
+  - traction pad recess is concentric and retains a 2 mm perimeter lip
+  - installed shoe has no positive-volume collision with the existing leg
+
+limitations:
+  - fork saddle dimensions require generated fit inspection before printing
+  - hard plastic alone may slip or scratch hardwood; use the specified traction pad
+  - geometry validation does not establish payload or impact rating
+  - material, wall count, rod torque, adhesive, and pad wear need physical testing

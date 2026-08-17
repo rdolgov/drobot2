@@ -1,5 +1,8 @@
 # TPU distal-fork shoe
 
+> Superseded on 2026-08-11 by the
+> [rigid low-profile fork shoe](rigid-fork-shoe.md) for indoor hardwood use.
+
 ## Design
 
 `tpu_fork_shoe` is a one-piece, replaceable TPU foot for the free fork at the
@@ -14,13 +17,18 @@ lock nuts to lock rotation; the other diagonal remains available. Do not
 tighten until the TPU visibly crushes. Existing printed fork holes may need a
 3.0 mm hand reamer.
 
-The contact body is now a fully convex hollow ellipsoid rather than a sphere
-with a flat circular pad. Its principal radii are 30 x 24 x 24 mm, giving a
-60 x 48 mm oval rocker profile along the leg axis with no planar contact face. The changing
-curvature lets the TPU roll progressively onto the floor when the leg lands at
-different pitch or roll angles. A 4 mm principal-axis shell, four pairs of
-side vents, and an 8 mm axial core provide a first-pass compromise between
-compliance, weight, and a direct load path.
+The contact body is a fully convex hollow near-round ellipsoid rather than a
+sphere with a flat circular pad. Its principal radii are 27 x 24 x 24 mm,
+giving a 54 x 48 mm rocker profile along the leg axis with no planar contact
+face. The 1.125:1 axial/radial ratio keeps a small amount of directional
+rocker behavior while appearing substantially closer to a circle.
+
+The ellipsoid extends 5 mm rearward into the screw attachment hub and ends at
+X=60.5 mm. The earlier exposed 8 mm cylindrical load core remains removed. The
+overlapping ellipsoid and hub form the load path directly, producing a broad
+monolithic junction intended to reduce wobble without changing the fork
+interface. A 4 mm principal-axis shell and four pairs of side vents retain the
+compliant contact behavior.
 
 TPU 95A, 0.20 mm layers, four to six walls, a broad brim, and supports tuned
 for flexible filament are reasonable prototype settings. Because the contact
@@ -80,6 +88,11 @@ spec-driven measurements, snapshots, and CAD Viewer handoff:
 - `exports/3mf/tpu_fork_shoe.3mf`: slicer-ready mesh container
 - `exports/step/tpu_fork_shoe_fit_preview.step`: lower-leg installation review
 
+The STEP, STL, 3MF, and fit-preview STEP were regenerated from the near-round
+direct-fusion source on 2026-08-10. Generation completed successfully. They
+have not undergone the separate automated geometry, fit, or regression checks
+listed below.
+
 ## Known limitations
 
 The design has not been load-tested, fatigue-tested, or printed on the target
@@ -88,9 +101,10 @@ robot controller's changed contact geometry all require a physical prototype.
 This first pass is intentionally separate from the robot URDF and full
 quadruped assembly until hardware contact behavior is measured.
 
-## Validation record
+## Previous validation record
 
-Validated locally on 2026-08-08:
+The following record applies only to the superseded 2026-08-08 generated
+artifacts, not the pending direct-fusion revision:
 
 - focused shoe tests: 6 passed; 17 shoe/upper-arm/leg regression tests passed;
   Ruff passed for the part, preview, and tests
@@ -106,3 +120,8 @@ Validated locally on 2026-08-08:
 - shoe occurrence frame translation: `[65.084989, 12.0, 0.0]` mm
 - material volume: 44.60 cm3; fully dense 1.20 g/cm3 estimate: 53.5 g per shoe
 - opposed isometric, top, and front snapshots reviewed for both artifacts
+
+For the 2026-08-10 direct-fusion revision, the explicit STEP/STL/3MF generation
+and visual handoff snapshots were run. No automated geometry inspection,
+targeted measurements, collision checks, tests, linting, print validation, or
+hardware validation were run.

@@ -28,10 +28,15 @@ TORQUE_PROFILES_NM = {
 
 # Both printable upper-arm links use the same fork-axis spacing.
 LINK_LENGTH_M = 0.159896689
+RECTANGULAR_SHOE_CONTACT_EXTENSION_M = 0.031
+RECTANGULAR_SHOE_HALF_FORE_AFT_M = 0.050
+RECTANGULAR_SHOE_EFFECTIVE_DISTAL_LENGTH_M = (
+    LINK_LENGTH_M + RECTANGULAR_SHOE_CONTACT_EXTENSION_M
+)
 
-DEFAULT_STANCE_DOWN_M = 0.270
-DEFAULT_STANCE_FORE_AFT_M = 0.050
-DEFAULT_ABDUCTION_DEG = 6.0
+DEFAULT_STANCE_DOWN_M = 0.329341447
+DEFAULT_STANCE_FORE_AFT_M = 0.080
+DEFAULT_ABDUCTION_DEG = 0.0
 
 CRAWL_DUTY_FACTOR = 0.75
 CRAWL_PHASE_OFFSETS = {
@@ -44,13 +49,13 @@ CRAWL_PHASE_OFFSETS = {
 }
 
 DISTRIBUTED_PUSH_PHASES = (
-    ("weight_transfer", 0.16),
-    ("lift", 0.10),
-    ("swing", 0.20),
-    ("lower", 0.10),
-    ("touchdown", 0.08),
-    ("weight_return", 0.10),
-    ("all_feet_push", 0.24),
+    ("weight_transfer", 0.10),
+    ("lift", 0.23),
+    ("swing", 0.22),
+    ("lower", 0.23),
+    ("firm_plant", 0.06),
+    ("weight_return", 0.06),
+    ("all_feet_push", 0.08),
     ("step_settle", 0.02),
 )
 DISTRIBUTED_PUSH_SWING_ORDER = (
@@ -179,6 +184,7 @@ def leg_ik(
     *,
     same_bend_direction: bool = False,
     knees_outward: bool = False,
+    distal_length_m: float = LINK_LENGTH_M,
 ) -> tuple[float, float]:
     """Solve one leg in the URDF joint frame.
 
@@ -192,10 +198,12 @@ def leg_ik(
     front_sign = _front_sign(leg)
     sagittal_y_m = world_forward_m
 
+    if distal_length_m <= 0.0:
+        raise ValueError("Distal contact length must be positive")
     distance_sq = down_m * down_m + sagittal_y_m * sagittal_y_m
-    cosine_knee = (distance_sq - 2.0 * LINK_LENGTH_M * LINK_LENGTH_M) / (
-        2.0 * LINK_LENGTH_M * LINK_LENGTH_M
-    )
+    cosine_knee = (
+        distance_sq - LINK_LENGTH_M**2 - distal_length_m**2
+    ) / (2.0 * LINK_LENGTH_M * distal_length_m)
     if not -1.0 <= cosine_knee <= 1.0:
         raise ValueError(
             "Unreachable leg target "
@@ -211,9 +219,35 @@ def leg_ik(
         knee_sign = 1.0 if same_bend_direction else front_sign
     knee = knee_sign * math.acos(min(max(cosine_knee, -1.0), 1.0))
     hip_flexion = math.atan2(sagittal_y_m, down_m) - math.atan2(
-        LINK_LENGTH_M * math.sin(knee),
-        LINK_LENGTH_M + LINK_LENGTH_M * math.cos(knee),
+        distal_length_m * math.sin(knee),
+        LINK_LENGTH_M + distal_length_m * math.cos(knee),
     )
+    return hip_flexion, knee
+
+
+def flat_sole_down_m(world_forward_m: float) -> float:
+    """Return contact depth with the rectangular sole horizontal."""
+    world_forward_m = float(world_forward_m)
+    if abs(world_forward_m) >= LINK_LENGTH_M:
+        raise ValueError(
+            "Rectangular-shoe flat-sole target exceeds proximal reach: "
+            f"forward={world_forward_m:.6f} m"
+        )
+    return (
+        math.sqrt(LINK_LENGTH_M**2 - world_forward_m**2)
+        + RECTANGULAR_SHOE_EFFECTIVE_DISTAL_LENGTH_M
+    )
+
+
+def flat_sole_leg_ik(leg: str, world_forward_m: float) -> tuple[float, float]:
+    """Point the rectangular shoe normal down in the sagittal plane."""
+    flat_sole_down_m(world_forward_m)
+    hip_flexion = math.asin(float(world_forward_m) / LINK_LENGTH_M)
+    knee = -hip_flexion
+    if leg.startswith("front_") and knee > 0.0:
+        raise ValueError(f"Front rectangular-shoe stance crossed the chassis: {leg}")
+    if leg.startswith("rear_") and knee < 0.0:
+        raise ValueError(f"Rear rectangular-shoe stance crossed the chassis: {leg}")
     return hip_flexion, knee
 
 
@@ -225,6 +259,7 @@ def pose_by_name(
     abduction_by_leg_deg: Mapping[str, float] | None = None,
     same_bend_direction: bool = False,
     knees_outward: bool = False,
+    distal_length_m: float = LINK_LENGTH_M,
 ) -> dict[str, float]:
     """Build a complete 12-joint pose keyed by the exact URDF joint names."""
     result: dict[str, float] = {}
@@ -240,6 +275,7 @@ def pose_by_name(
             float(forward_by_leg_m[leg]),
             same_bend_direction=same_bend_direction,
             knees_outward=knees_outward,
+            distal_length_m=distal_length_m,
         )
         result[f"{leg}_hip_abduction"] = (
             -_side_sign(leg) * math.radians(leg_abduction_deg)
@@ -482,19 +518,34 @@ def distributed_push_crawl_by_name(
     period_s: float,
     stride_m: float,
     lift_m: float,
+    support_extension_m: float,
     weight_shift_forward_m: float,
     weight_shift_lateral_m: float,
     down_m: float = DEFAULT_STANCE_DOWN_M,
     fore_aft_m: float = DEFAULT_STANCE_FORE_AFT_M,
     abduction_deg: float = DEFAULT_ABDUCTION_DEG,
 ) -> tuple[dict[str, float], dict[str, object]]:
-    """Return a four-beat crawl with a four-foot push after every step."""
+    """Return a four-beat crawl with every planted rectangular sole flat."""
     if period_s <= 0.0:
         raise ValueError("Distributed-push period must be positive")
     if stride_m <= 0.0 or lift_m <= 0.0:
         raise ValueError("Distributed-push stride and lift must be positive")
+    if not math.isclose(support_extension_m, 0.0, abs_tol=1e-12):
+        raise ValueError(
+            "Rectangular flat-sole crawl requires zero support extension"
+        )
     if weight_shift_forward_m < 0.0 or weight_shift_lateral_m < 0.0:
         raise ValueError("Distributed-push weight shifts must be non-negative")
+    if not math.isclose(weight_shift_lateral_m, 0.0, abs_tol=1e-12):
+        raise ValueError("Flat-sole crawl requires zero lateral weight shift")
+    if not math.isclose(abduction_deg, 0.0, abs_tol=1e-12):
+        raise ValueError("Flat-sole crawl requires zero hip abduction")
+    nominal_flat_down_m = flat_sole_down_m(fore_aft_m)
+    if not math.isclose(down_m, nominal_flat_down_m, abs_tol=0.002):
+        raise ValueError(
+            "Flat-sole stance depth does not match its fore/aft offset: "
+            f"configured={down_m:.4f} m, expected={nominal_flat_down_m:.4f} m"
+        )
     if not math.isclose(sum(value for _name, value in DISTRIBUTED_PUSH_PHASES), 1.0):
         raise AssertionError("Distributed-push phase fractions do not total one step")
 
@@ -535,7 +586,7 @@ def distributed_push_crawl_by_name(
         offsets[swing_leg] += stride_m * smoothstep(phase_u)
     elif phase_name in (
         "lower",
-        "touchdown",
+        "firm_plant",
         "weight_return",
         "all_feet_push",
         "step_settle",
@@ -546,14 +597,6 @@ def distributed_push_crawl_by_name(
         offsets = {leg: offset - push for leg, offset in offsets.items()}
     elif phase_name == "step_settle":
         offsets = {leg: offset - push_increment for leg, offset in offsets.items()}
-
-    down_by_leg = {leg: down_m for leg in LEGS}
-    if phase_name == "lift":
-        down_by_leg[swing_leg] = down_m - lift_m * smoothstep(phase_u)
-    elif phase_name == "swing":
-        down_by_leg[swing_leg] = down_m - lift_m
-    elif phase_name == "lower":
-        down_by_leg[swing_leg] = down_m - lift_m * (1.0 - smoothstep(phase_u))
 
     if phase_name == "weight_transfer":
         transfer = smoothstep(phase_u)
@@ -570,6 +613,21 @@ def distributed_push_crawl_by_name(
         leg: _front_sign(leg) * fore_aft_m + offsets[leg] - body_shift_forward_m
         for leg in LEGS
     }
+    flat_down_by_leg = {
+        leg: flat_sole_down_m(forward_by_leg[leg]) for leg in LEGS
+    }
+    down_by_leg = dict(flat_down_by_leg)
+    swing_is_airborne = phase_name in (
+        "lift",
+        "swing",
+        "lower",
+    )
+    if phase_name == "lift":
+        down_by_leg[swing_leg] -= lift_m * smoothstep(phase_u)
+    elif phase_name == "swing":
+        down_by_leg[swing_leg] -= lift_m
+    elif phase_name == "lower":
+        down_by_leg[swing_leg] -= lift_m * (1.0 - smoothstep(phase_u))
     nominal_abduction = math.radians(abduction_deg)
     foot_delta_lateral_m = -body_shift_lateral_m
     abduction_by_leg: dict[str, float] = {}
@@ -581,17 +639,40 @@ def distributed_push_crawl_by_name(
         down_by_leg[leg] = math.hypot(vertical, shifted_outward)
         abduction_by_leg[leg] = math.degrees(math.atan2(shifted_outward, vertical))
 
-    pose = _command_knees_downward(
-        pose_by_name(
-            down_by_leg_m=down_by_leg,
-            forward_by_leg_m=forward_by_leg,
-            abduction_by_leg_deg=abduction_by_leg,
-            knees_outward=True,
+    pose: dict[str, float] = {}
+    sole_pitch_by_leg_deg: dict[str, float] = {}
+    shoe_edge_clearance_by_leg_m: dict[str, float] = {}
+    for leg in LEGS:
+        if leg == swing_leg and swing_is_airborne:
+            hip_flexion, knee = leg_ik(
+                leg,
+                down_by_leg[leg],
+                forward_by_leg[leg],
+                knees_outward=True,
+                distal_length_m=RECTANGULAR_SHOE_EFFECTIVE_DISTAL_LENGTH_M,
+            )
+        else:
+            hip_flexion, knee = flat_sole_leg_ik(leg, forward_by_leg[leg])
+        pose[f"{leg}_hip_abduction"] = (
+            -_side_sign(leg) * math.radians(abduction_by_leg[leg])
         )
-    )
+        pose[f"{leg}_hip_flexion"] = hip_flexion
+        pose[f"{leg}_knee"] = knee
+        sole_pitch_rad = hip_flexion + knee
+        sole_pitch_by_leg_deg[leg] = math.degrees(sole_pitch_rad)
+        contact_center_lift_m = max(
+            flat_down_by_leg[leg] - down_by_leg[leg],
+            0.0,
+        )
+        shoe_edge_clearance_by_leg_m[leg] = max(
+            contact_center_lift_m
+            - RECTANGULAR_SHOE_HALF_FORE_AFT_M * abs(math.sin(sole_pitch_rad)),
+            0.0,
+        )
+    pose = _command_knees_downward(pose)
     expected_support_legs = (
         [leg for leg in LEGS if leg != swing_leg]
-        if phase_name in ("lift", "swing", "lower")
+        if swing_is_airborne
         else list(LEGS)
     )
     return pose, {
@@ -601,6 +682,18 @@ def distributed_push_crawl_by_name(
         "swing_leg": swing_leg,
         "expected_support_legs": expected_support_legs,
         "foot_offsets_m": dict(offsets),
+        "planted_forward_m": dict(forward_by_leg),
+        "flat_sole_support": True,
+        "flat_sole_nominal_support": True,
+        "all_planted_soles_flat": True,
+        "support_extension_holds_contact_x": False,
+        "flat_support_down_m": dict(flat_down_by_leg),
+        "sole_pitch_deg": sole_pitch_by_leg_deg,
+        "shoe_edge_clearance_m": shoe_edge_clearance_by_leg_m,
+        "nominal_stance_down_m": down_m,
+        "support_extension_m": 0.0,
+        "support_extension_progress": 0.0,
+        "active_support_extension_m": 0.0,
     }
 
 

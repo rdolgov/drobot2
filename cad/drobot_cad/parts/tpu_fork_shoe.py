@@ -61,13 +61,14 @@ HUB_HALF_WIDTH_Z_MM = FORK_INNER_BOSS_FACE_Z_MM - FORK_CLEARANCE_PER_SIDE_MM
 ROD_PAD_FACE_Z_MM = FORK_LOCAL_ROD_FACE_Z_MM - FORK_CLEARANCE_PER_SIDE_MM
 ROD_PAD_RADIUS_MM = 2.6
 
-# The load core runs from the attachment hub into the hollow contact body
-# without extending to the compliant outer nose.
-LOAD_CORE_RADIUS_MM = 8.0
-LOAD_CORE_END_X_MM = 48.0
-
-CONTACT_CENTER_X_MM = 42.5
-CONTACT_OUTER_AXIAL_RADIUS_X_MM = 30.0
+# The near-round contact ellipsoid extends directly into the attachment hub.
+# Its rear pole remains 5 mm inside the hub while the 27:24 axial/radial ratio
+# retains a gentle rocker shape without the earlier elongated profile.
+CONTACT_HUB_OVERLAP_X_MM = 5.0
+CONTACT_BACK_X_MM = HUB_RADIUS_MM - CONTACT_HUB_OVERLAP_X_MM
+CONTACT_OUTER_AXIAL_RADIUS_X_MM = 27.0
+CONTACT_CENTER_X_MM = CONTACT_BACK_X_MM + CONTACT_OUTER_AXIAL_RADIUS_X_MM
+CONTACT_NOSE_X_MM = CONTACT_CENTER_X_MM + CONTACT_OUTER_AXIAL_RADIUS_X_MM
 CONTACT_OUTER_RADIAL_RADIUS_MM = 24.0
 SHELL_WALL_MM = 4.0
 CONTACT_INNER_AXIAL_RADIUS_X_MM = (
@@ -178,15 +179,6 @@ def make_ball_shell() -> Shape:
     return _one_valid_solid(shell - tuple(vents), "tpu_fork_shoe_ball_shell")
 
 
-def make_load_core() -> Shape:
-    """Return the axial load path from the fork hub to the contact pad."""
-    return Cylinder(
-        LOAD_CORE_RADIUS_MM,
-        LOAD_CORE_END_X_MM,
-        align=(Align.CENTER, Align.CENTER, Align.MIN),
-    ).rotate(Axis.Y, 90.0)
-
-
 def make_rod_hole_tools() -> tuple[Shape, ...]:
     """Return four overshooting M3 clearance cutters along local Z."""
     cutter_height = 2.0 * (
@@ -204,7 +196,7 @@ def make_rod_hole_tools() -> tuple[Shape, ...]:
 
 def make_tpu_fork_shoe() -> Shape:
     """Return the printable one-piece TPU shoe."""
-    blank = make_attachment_hub().fuse(make_load_core(), make_ball_shell())
+    blank = make_attachment_hub().fuse(make_ball_shell())
     finished = blank - make_rod_hole_tools()
     return _one_valid_solid(finished, "tpu_fork_shoe")
 

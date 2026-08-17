@@ -62,12 +62,13 @@
         <section class="gait-panel" aria-labelledby="gaitTitle">
           <div class="gait-copy">
             <p class="eyebrow">SUPPORTED COMMISSIONING / FEET CLEAR</p>
-            <h2 id="gaitTitle">Eight-phase distributed-push crawl</h2>
+            <h2 id="gaitTitle">Flat-sole gait tests</h2>
             <p>
-              Rear-right, front-right, rear-left, then front-left swing one at
-              a time. Each step transfers load, lifts and places one foot, then
-              uses all four planted feet for a deliberate rearward push. All 12
-              joints participate through foot-space inverse kinematics.
+              Distributed crawl moves one leg at a time on three supports.
+              Diagonal-pair mode lifts front-left with rear-right, then
+              front-right with rear-left, using the opposite diagonal as its
+              two-shoe support. Both are separate shoe-aware routines and use
+              the same flat planted-foot geometry.
             </p>
             <div class="corner-map" aria-label="Configured body corner map">
               <span><b>1</b> FRONT LEFT</span>
@@ -91,11 +92,14 @@
               <button class="walk-button" id="walkForward" type="button">
                 TEST DISTRIBUTED CRAWL
               </button>
+              <button class="walk-button" id="walkDiagonalPair" type="button">
+                TEST DIAGONAL PAIRS
+              </button>
               <button class="gait-stop-button" id="stopWalk" type="button">
                 STOP + DISARM
               </button>
             </div>
-            <small id="gaitDetail">2 cycles / 8 steps / 112 mm stride / 13.3 seconds</small>
+            <small id="gaitDetail">Continuous / 96 mm stride / 35 mm lift / STOP to end</small>
           </div>
         </section>
 

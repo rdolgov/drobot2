@@ -25,8 +25,10 @@ assemblies.
 | `exports/step/upper_arm_st3215_fit_preview.step` | `drobot_cad/assembly/upper_arm_st3215_fit_preview.py` | Complete upper arm and installed servo |
 | `exports/step/robot_arm.step` | `drobot_cad/assembly/robot_arm.py` | Two complete upper arms joined by the elbow ST3215 |
 | `exports/step/robot_leg.step` | `drobot_cad/assembly/robot_leg.py` | Body hip mount, perpendicular hip, three exact ST3215 servos, and two linked upper arms |
-| `exports/step/tpu_fork_shoe.step` | `drobot_cad/parts/tpu_fork_shoe.py` | Printable hollow TPU oval-rocker shoe using the distal fork's existing M3 pattern |
-| `exports/step/tpu_fork_shoe_fit_preview.step` | `drobot_cad/assembly/tpu_fork_shoe_fit_preview.py` | Lower-leg, TPU shoe, and two diagonal M3 rod clearance envelopes |
+| `exports/step/rigid_fork_shoe.step` | `drobot_cad/parts/rigid_fork_shoe.py` | Shallow rigid circular shoe with a fork-wrapping saddle and recessed traction pad |
+| `exports/step/rigid_fork_shoe_fit_preview.step` | `drobot_cad/assembly/rigid_fork_shoe_fit_preview.py` | Lower-leg, rigid shoe, and two diagonal M3 rod clearance envelopes |
+| `exports/step/rectangular_fork_shoe.step` | `drobot_cad/parts/rectangular_fork_shoe.step.py` | 100 x 60 mm flat PLA shoe with a raised fork attachment for increased stability and clearance |
+| `exports/step/rectangular_fork_shoe_fit_preview.step` | `drobot_cad/assembly/rectangular_fork_shoe_fit_preview.step.py` | Generated lower-leg preview with four M3 rods and bilateral driver-access envelopes |
 | `exports/step/quadruped_body_base.step` | `drobot_cad/parts/quadruped_body.py` | One-piece X2D-safe body tub with hip reinforcement, protected battery rail, four-wall M3 grid, full floor grid, and paired wire ports |
 | `exports/step/quadruped_body_lid.step` | `drobot_cad/parts/quadruped_body_lid.py` | Removable ventilated body lid with a 10 mm-pitch universal M3 grid and direct LeKiwi camera pattern |
 | `exports/step/quadruped_electronics_tray.step` | `drobot_cad/parts/quadruped_electronics_tray.py` | Optional electronics tray with four floor-grid-aligned M3 mounting locations |
@@ -45,6 +47,24 @@ The front lid interface accepts the unchanged LeKiwi
 20 x 12 mm cable opening.  The selected compatibility target is LeKiwi's
 Arducam 5 MP wide-angle USB option (ASIN `B0972KK7BC`), retained under
 `vendor/references/lekiwi/` with upstream license and checksums.
+
+### Rectangular PLA fork shoe
+
+The new rectangular fork-shoe source replaces the hollow TPU rocker with a
+fully flat `100 x 60 x 6 mm` PLA contact plate. Its upper sole face is moved to
+local `X=24 mm`, leaving `19.05 mm` from the nearest forward M3 hole center to
+the plate. A narrow raised spine connects the attachment hub while leaving the
+bottom of the fork open; the inherited outer cup was removed after it was found
+to collide with the real fork. Even the closest reinforcing rib remains `10.55 mm` outside the
+modeled `9 mm` nut-driver envelope. All four existing M3 positions remain
+available and are recommended for the longer lever arm.
+
+The owning design record is
+[`docs/rectangular-fork-shoe.md`](docs/rectangular-fork-shoe.md), and the focused
+generation entry is `scripts/generate_rectangular_fork_shoe.ps1`. The source
+and STEP/STL/3MF outputs were regenerated on 2026-08-13. A focused installed
+geometry check found zero solid overlap between the new shoe and fork; physical
+fit, slicing, and printing remain unverified.
 
 ### Universal body-wall mounting grid and wire ports
 

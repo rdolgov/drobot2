@@ -52,8 +52,8 @@ $targets = @(
     "drobot_cad/assembly/upper_arm_st3215_fit_preview.py=exports/step/upper_arm_st3215_fit_preview.step",
     "drobot_cad/assembly/robot_arm.py=exports/step/robot_arm.step",
     "drobot_cad/assembly/robot_leg.py=exports/step/robot_leg.step",
-    "drobot_cad/parts/tpu_fork_shoe.py=exports/step/tpu_fork_shoe.step",
-    "drobot_cad/assembly/tpu_fork_shoe_fit_preview.py=exports/step/tpu_fork_shoe_fit_preview.step",
+    "drobot_cad/parts/rigid_fork_shoe.py=exports/step/rigid_fork_shoe.step",
+    "drobot_cad/assembly/rigid_fork_shoe_fit_preview.py=exports/step/rigid_fork_shoe_fit_preview.step",
     "drobot_cad/assembly/lekiwi_camera_body_fit_preview.py=exports/step/lekiwi_camera_body_fit_preview.step",
     "drobot_cad/assembly/quadruped_imu_tray_fit_preview.py=exports/step/quadruped_imu_tray_fit_preview.step",
     "drobot_cad/assembly/quadruped_body_hardware_fit_preview.py=exports/step/quadruped_body_hardware_fit_preview.step",
@@ -121,11 +121,11 @@ try {
     }
 
     & $python $stepTool `
-        "drobot_cad/parts/tpu_fork_shoe.py=exports/step/tpu_fork_shoe.step" `
-        --stl "../stl/tpu_fork_shoe.stl" `
-        --3mf "../3mf/tpu_fork_shoe.3mf"
+        "drobot_cad/parts/rigid_fork_shoe.py=exports/step/rigid_fork_shoe.step" `
+        --stl "../stl/rigid_fork_shoe.stl" `
+        --3mf "../3mf/rigid_fork_shoe.3mf"
     if ($LASTEXITCODE -ne 0) {
-        throw "TPU fork-shoe mesh export failed with exit code $LASTEXITCODE."
+        throw "Rigid fork-shoe mesh export failed with exit code $LASTEXITCODE."
     }
 
     & $python $stepTool `

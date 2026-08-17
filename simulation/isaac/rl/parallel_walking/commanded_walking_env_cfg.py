@@ -16,13 +16,35 @@ from isaaclab.utils.configclass import configclass
 from isaaclab_physx.physics import PhysxCfg
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-ROBOT_USD = PROJECT_ROOT / "exports" / "isaac" / "quadruped_robot_floating.usdc"
+ROBOT_USD = (
+    PROJECT_ROOT
+    / "simulation"
+    / "exports"
+    / "isaac"
+    / "quadruped_robot_floating.usdc"
+)
 EFFORT_CAP_NM = 0.8825985
 SERVO_VELOCITY_LIMIT_RAD_S = 4.5836625
-STABLE_NEUTRAL_FRONT_HIP_RAD = -0.1544915885
-STABLE_NEUTRAL_REAR_HIP_RAD = 0.1544915885
-STABLE_NEUTRAL_FRONT_KNEE_RAD = 0.4699251950
-STABLE_NEUTRAL_REAR_KNEE_RAD = -0.4699251950
+# The rectangular shoe controller uses an 80 mm fore/aft stance.  Equal and
+# opposite hip/knee angles point the distal link (and therefore the shoe's
+# contact-face normal) vertically down instead of balancing on a pitched edge.
+RECTANGULAR_SHOE_STANCE_ANGLE_RAD = 0.5239596454
+STABLE_NEUTRAL_FRONT_HIP_RAD = RECTANGULAR_SHOE_STANCE_ANGLE_RAD
+STABLE_NEUTRAL_REAR_HIP_RAD = -RECTANGULAR_SHOE_STANCE_ANGLE_RAD
+STABLE_NEUTRAL_FRONT_KNEE_RAD = -RECTANGULAR_SHOE_STANCE_ANGLE_RAD
+STABLE_NEUTRAL_REAR_KNEE_RAD = RECTANGULAR_SHOE_STANCE_ANGLE_RAD
+
+# 2026-08-13 CAD configuration.  The thin tread is modeled separately so its
+# friction can be changed later without altering the structural shoe.
+DISTAL_LINK_LENGTH_M = 0.159896689
+RECTANGULAR_SHOE_SOLE_BACK_FROM_FORK_M = 0.024
+RECTANGULAR_SHOE_SOLE_THICKNESS_M = 0.006
+RECTANGULAR_SHOE_LENGTH_FORE_AFT_M = 0.100
+RECTANGULAR_SHOE_WIDTH_LATERAL_M = 0.060
+RECTANGULAR_SHOE_TREAD_PROJECTION_M = 0.001
+RECTANGULAR_SHOE_TREAD_LENGTH_M = 0.094
+RECTANGULAR_SHOE_TREAD_WIDTH_M = 0.054
+RECTANGULAR_SHOE_MASS_KG = 0.070237
 
 
 @configclass
@@ -43,10 +65,11 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     # 64 controller steps per PPO iteration -> 1,000 iterations to full horizon.
     episode_horizon_curriculum_steps = 64_000
     action_space = 12
-    # command 3 + IMU 9 + joint position error 12 + velocity 12 + last action 12
-    observation_space = 48
-    # policy observation 48 + privileged base velocity 3 + height 1 + contacts 4
-    state_space = 56
+    # command 3 + gait clock 2 + IMU 9 + joint position error 12 + velocity 12
+    # + last action 12.  The clock is deployable from the controller timestep.
+    observation_space = 50
+    # policy observation 50 + privileged base velocity 3 + height 1 + contacts 4
+    state_space = 58
 
     viewer: ViewerCfg = ViewerCfg(
         eye=(-1.40, -1.25, 0.65),
@@ -109,7 +132,7 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
             ),
         ),
         init_state=ArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 0.3730),
+            pos=(0.0, 0.0, 0.3750),
             joint_pos={
                 ".*_hip_abduction": 0.0,
                 "front_.*_hip_flexion": STABLE_NEUTRAL_FRONT_HIP_RAD,
@@ -175,34 +198,66 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     minimum_upright_cosine = 0.78
     base_contact_grace_steps = 10
     maximum_distance_from_origin_m = 6.5
-    target_base_height_m = 0.3730
-    velocity_tracking_sigma_m_s = 0.10
-    distance_success_fraction = 0.65
+    target_base_height_m = 0.3750
+    velocity_tracking_sigma_m_s = 0.04
+    distance_success_fraction = 0.75
+
+    # Smooth diagonal-pair trot.  Front-left/rear-right share a phase and the
+    # opposite diagonal pair is half a cycle away.  A 65% duty factor includes
+    # short four-foot support intervals around pair transitions.
+    gait_period_s = 0.80
+    gait_duty_factor = 0.65
+    gait_stride_m = 0.080
+    gait_lift_m = 0.025
+    gait_start_ramp_s = 0.60
+    gait_reference_sigma = 0.75
 
     # Deliberately reproduce quadruped_walk_v1.yaml's successful reward instead
     # of continuing to tune a novel objective.  Net displacement remains a hard
     # evaluation metric, but adding it to the reward caused unsafe lunge exploits.
-    reward_forward_velocity_tracking = 2.0
+    reward_forward_velocity_tracking = 4.0
     # A two-second trailing speed window prevents a reset-dependent burst from
     # being mistaken for sustained walking.
     sustained_speed_window_s = 2.0
-    minimum_sustained_speed_m_s = 0.04
-    reward_sustained_progress = 0.75
-    penalty_sustained_stall = 0.50
-    reward_upright = 0.50
-    # In 128-env PPO, the old 0.05 survival term let a 0.3 m lunge outscore a
-    # full stable episode.  At 0.50, standing beats an early fall while sustained
-    # velocity tracking still pays roughly 2.5x more than standing.
-    reward_alive = 0.50
-    penalty_lateral_velocity = 0.50
+    minimum_sustained_speed_m_s = 0.08
+    # The prior policy remained smooth and stable but plateaued near 0.02 m/s.
+    # Give PPO a non-vanishing linear gradient away from standing, then keep
+    # the two-second term as the stronger sustained-motion signal.
+    reward_instant_progress = 2.00
+    reward_sustained_progress = 4.00
+    penalty_sustained_stall = 4.00
+    reward_gait_reference = 2.00
+    reward_scheduled_stance = 0.50
+    reward_scheduled_swing = 1.50
+    reward_upright = 1.00
+    # Keep survival far below the motion terms so standing cannot dominate, but
+    # retain a small incentive to avoid deliberately terminating an episode.
+    reward_alive = 0.10
+    # The older baseline drifted about 1.6 m sideways over a 30-second trial.  The
+    # broad shoes make heading retention physically achievable, so V18 prices
+    # lateral and yaw motion more strongly instead of accepting the drift.
+    penalty_lateral_velocity = 5.00
+    penalty_lateral_displacement = 8.00
     penalty_vertical_velocity = 0.20
-    penalty_roll_pitch_rate = 0.05
-    penalty_yaw_rate = 0.10
+    penalty_roll_pitch_rate = 0.10
+    penalty_body_tilt = 1.50
+    penalty_yaw_rate = 5.00
     penalty_body_height = 2.0
-    penalty_action_rate = 0.02
+    penalty_action_rate = 0.03
+    penalty_action_acceleration = 0.12
+    penalty_action_saturation = 0.50
+    # Contact timing and the analytic gait reference provide the primary
+    # diagonal-pair coordination.  This stays deliberately light: forcing the
+    # normalized joint actions to match made the learned robot freeze because
+    # its mirrored joint frames and load distribution need small asymmetries.
+    penalty_diagonal_sync = 0.10
     penalty_action_magnitude = 0.002
-    penalty_joint_velocity = 0.005
-    penalty_termination = 100.0
+    penalty_joint_velocity = 0.010
+    penalty_support_foot_slip = 0.30
+    penalty_touchdown_impact = 0.05
+    touchdown_force_soft_limit_n = 18.0
+    reward_qualified_touchdown = 0.025
+    penalty_termination = 350.0
     # Keep value targets conditioned while preserving all reward ratios.
     reward_scale = 0.10
     qualified_foot_air_time_s = 0.10

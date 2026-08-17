@@ -10,7 +10,17 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
-LINK_LENGTH_M = 0.159896689
+# Both printed arm segments reach 159.896689 mm between servo axes.  The new
+# rectangular shoe has its PLA face 30 mm beyond the distal fork axis and uses
+# a 1 mm bonded tread.  Its 100 mm fore/aft length matters whenever an airborne
+# shoe pitches, because a corner sits below the contact-face centre.
+PROXIMAL_LINK_LENGTH_M = 0.159896689
+DISTAL_FORK_AXIS_LENGTH_M = 0.159896689
+RECTANGULAR_SHOE_CONTACT_EXTENSION_M = 0.031
+RECTANGULAR_SHOE_HALF_FORE_AFT_M = 0.050
+DISTAL_CONTACT_LENGTH_M = (
+    DISTAL_FORK_AXIS_LENGTH_M + RECTANGULAR_SHOE_CONTACT_EXTENSION_M
+)
 LEG_CORNERS = ("front_left", "front_right", "rear_left", "rear_right")
 JOINT_NAMES = ("hip_abduction", "hip_flexion", "knee")
 SWING_ORDER = ("rear_right", "front_right", "rear_left", "front_left")
@@ -26,13 +36,13 @@ STEP_PHASES = (
     ("weight_return", 0.10),
 )
 DISTRIBUTED_PUSH_PHASES = (
-    ("weight_transfer", 0.16),
-    ("lift", 0.10),
-    ("swing", 0.20),
-    ("lower", 0.10),
-    ("touchdown", 0.08),
-    ("weight_return", 0.10),
-    ("all_feet_push", 0.24),
+    ("weight_transfer", 0.10),
+    ("lift", 0.23),
+    ("swing", 0.22),
+    ("lower", 0.23),
+    ("firm_plant", 0.06),
+    ("weight_return", 0.06),
+    ("all_feet_push", 0.08),
     ("step_settle", 0.02),
 )
 DISTRIBUTED_PUSH_SWING_ORDER = (
@@ -40,6 +50,18 @@ DISTRIBUTED_PUSH_SWING_ORDER = (
     "front_right",
     "rear_left",
     "front_left",
+)
+DIAGONAL_PAIR_PHASES = (
+    ("lift_pair", 0.25),
+    ("swing_pair", 0.25),
+    ("lower_pair", 0.25),
+    ("firm_plant", 0.10),
+    ("all_feet_push", 0.12),
+    ("pair_settle", 0.03),
+)
+DIAGONAL_PAIR_SWING_ORDER = (
+    ("front_left", "rear_right"),
+    ("front_right", "rear_left"),
 )
 COORDINATED_PUSH_PHASES = (
     ("lift", 0.22),
@@ -91,7 +113,11 @@ def _leg_ik(
     knees_outward: bool = False,
 ) -> tuple[float, float]:
     distance_sq = down_m * down_m + forward_m * forward_m
-    cosine_knee = (distance_sq - 2.0 * LINK_LENGTH_M**2) / (2.0 * LINK_LENGTH_M**2)
+    cosine_knee = (
+        distance_sq
+        - PROXIMAL_LINK_LENGTH_M**2
+        - DISTAL_CONTACT_LENGTH_M**2
+    ) / (2.0 * PROXIMAL_LINK_LENGTH_M * DISTAL_CONTACT_LENGTH_M)
     if not -1.0 <= cosine_knee <= 1.0:
         raise ValueError(
             f"Unreachable crawl target for {corner}: "
@@ -105,9 +131,39 @@ def _leg_ik(
         knee_sign = 1.0 if same_bend_direction else _front_sign(corner)
     knee = knee_sign * math.acos(cosine_knee)
     hip_flexion = math.atan2(forward_m, down_m) - math.atan2(
-        LINK_LENGTH_M * math.sin(knee),
-        LINK_LENGTH_M + LINK_LENGTH_M * math.cos(knee),
+        DISTAL_CONTACT_LENGTH_M * math.sin(knee),
+        PROXIMAL_LINK_LENGTH_M + DISTAL_CONTACT_LENGTH_M * math.cos(knee),
     )
+    return hip_flexion, knee
+
+
+def _flat_sole_down_m(forward_m: float) -> float:
+    """Return contact depth when the rectangular sole is horizontal.
+
+    A flat sole requires the distal link to point vertically down.  With only
+    hip flexion and knee pitch, horizontal contact position then determines
+    the vertical contact position rather than leaving both independently
+    commandable.
+    """
+    forward_m = float(forward_m)
+    if abs(forward_m) >= PROXIMAL_LINK_LENGTH_M:
+        raise ValueError(
+            "Rectangular-shoe flat-sole target exceeds proximal reach: "
+            f"forward={forward_m:.4f} m"
+        )
+    proximal_down_m = math.sqrt(PROXIMAL_LINK_LENGTH_M**2 - forward_m**2)
+    return proximal_down_m + DISTAL_CONTACT_LENGTH_M
+
+
+def _flat_sole_leg_ik(corner: str, forward_m: float) -> tuple[float, float]:
+    """Point the rectangular shoe's contact-face normal down."""
+    _flat_sole_down_m(forward_m)
+    hip_flexion = math.asin(float(forward_m) / PROXIMAL_LINK_LENGTH_M)
+    knee = -hip_flexion
+    if corner.startswith("front_") and knee > 0.0:
+        raise ValueError(f"Front rectangular-shoe stance crossed the chassis: {corner}")
+    if corner.startswith("rear_") and knee < 0.0:
+        raise ValueError(f"Rear rectangular-shoe stance crossed the chassis: {corner}")
     return hip_flexion, knee
 
 
@@ -391,19 +447,42 @@ def distributed_push_crawl_degrees(
     period_s: float,
     stride_m: float,
     lift_m: float,
+    support_extension_m: float,
     weight_shift_forward_m: float,
     weight_shift_lateral_m: float,
     down_m: float,
     fore_aft_m: float,
     abduction_deg: float,
 ) -> tuple[dict[tuple[str, str], float], dict[str, object]]:
-    """Return a crawl with a smaller four-foot push after every footfall."""
+    """Return a rectangular-shoe crawl with every planted sole flat.
+
+    The three support legs use the exact flat-sole branch throughout weight
+    transfer, swing, touchdown, and propulsion.  Only the unloaded swing leg
+    uses general two-link IK, because two pitch joints cannot independently
+    command its X, Z, and sole pitch.  It rejoins the flat branch before load.
+    """
     if period_s <= 0.0:
         raise ValueError("Distributed-push period must be positive")
     if stride_m <= 0.0 or lift_m <= 0.0:
         raise ValueError("Distributed-push stride and lift must be positive")
+    if not math.isclose(support_extension_m, 0.0, abs_tol=1e-12):
+        raise ValueError(
+            "Rectangular flat-sole crawl requires zero support extension"
+        )
     if weight_shift_forward_m < 0.0 or weight_shift_lateral_m < 0.0:
         raise ValueError("Distributed-push weight shifts must be non-negative")
+    if not math.isclose(weight_shift_lateral_m, 0.0, abs_tol=1e-12):
+        raise ValueError("Flat-sole crawl requires zero lateral weight shift")
+    if not math.isclose(abduction_deg, 0.0, abs_tol=1e-12):
+        raise ValueError("Flat-sole crawl requires zero hip abduction")
+    nominal_flat_down_m = _flat_sole_down_m(fore_aft_m)
+    if not math.isclose(down_m, nominal_flat_down_m, abs_tol=0.002):
+        raise ValueError(
+            "Flat-sole stance depth does not match its fore/aft offset: "
+            f"configured={down_m:.4f} m, expected={nominal_flat_down_m:.4f} m"
+        )
+    if not math.isclose(sum(value for _name, value in DISTRIBUTED_PUSH_PHASES), 1.0):
+        raise AssertionError("Distributed-push phase fractions do not total one step")
 
     cycle_phase = (max(0.0, gait_time_s) / period_s) % 1.0
     step_count = len(DISTRIBUTED_PUSH_SWING_ORDER)
@@ -442,7 +521,7 @@ def distributed_push_crawl_degrees(
         offsets[swing_corner] += stride_m * _smoothstep(phase_u)
     elif phase_name in (
         "lower",
-        "touchdown",
+        "firm_plant",
         "weight_return",
         "all_feet_push",
         "step_settle",
@@ -455,14 +534,6 @@ def distributed_push_crawl_degrees(
         offsets = {
             corner: offset - push_increment for corner, offset in offsets.items()
         }
-
-    down_by_corner = {corner: down_m for corner in LEG_CORNERS}
-    if phase_name == "lift":
-        down_by_corner[swing_corner] = down_m - lift_m * _smoothstep(phase_u)
-    elif phase_name == "swing":
-        down_by_corner[swing_corner] = down_m - lift_m
-    elif phase_name == "lower":
-        down_by_corner[swing_corner] = down_m - lift_m * (1.0 - _smoothstep(phase_u))
 
     if phase_name == "weight_transfer":
         transfer = _smoothstep(phase_u)
@@ -483,6 +554,22 @@ def distributed_push_crawl_degrees(
         - body_shift_forward_m
         for corner in LEG_CORNERS
     }
+    flat_down_by_corner = {
+        corner: _flat_sole_down_m(forward_by_corner[corner])
+        for corner in LEG_CORNERS
+    }
+    down_by_corner = dict(flat_down_by_corner)
+    swing_is_airborne = phase_name in (
+        "lift",
+        "swing",
+        "lower",
+    )
+    if phase_name == "lift":
+        down_by_corner[swing_corner] -= lift_m * _smoothstep(phase_u)
+    elif phase_name == "swing":
+        down_by_corner[swing_corner] -= lift_m
+    elif phase_name == "lower":
+        down_by_corner[swing_corner] -= lift_m * (1.0 - _smoothstep(phase_u))
     nominal_abduction = math.radians(abduction_deg)
     foot_delta_lateral_m = -body_shift_lateral_m
     abduction_by_corner: dict[str, float] = {}
@@ -496,20 +583,235 @@ def distributed_push_crawl_degrees(
             math.atan2(shifted_outward, vertical)
         )
 
-    pose = _command_knees_downward(
-        _pose_degrees(
-            down_by_corner,
-            forward_by_corner,
-            abduction_by_corner,
-            knees_outward=True,
+    pose: dict[tuple[str, str], float] = {}
+    sole_pitch_by_corner_deg: dict[str, float] = {}
+    shoe_edge_clearance_by_corner_m: dict[str, float] = {}
+    for corner in LEG_CORNERS:
+        if corner == swing_corner and swing_is_airborne:
+            hip_flexion, knee = _leg_ik(
+                corner,
+                down_by_corner[corner],
+                forward_by_corner[corner],
+                knees_outward=True,
+            )
+        else:
+            hip_flexion, knee = _flat_sole_leg_ik(
+                corner,
+                forward_by_corner[corner],
+            )
+        pose[(corner, "hip_abduction")] = (
+            -_side_sign(corner) * abduction_by_corner[corner]
         )
-    )
+        pose[(corner, "hip_flexion")] = math.degrees(hip_flexion)
+        pose[(corner, "knee")] = math.degrees(knee)
+        sole_pitch_rad = hip_flexion + knee
+        sole_pitch_by_corner_deg[corner] = math.degrees(sole_pitch_rad)
+        contact_center_lift_m = max(
+            flat_down_by_corner[corner] - down_by_corner[corner],
+            0.0,
+        )
+        shoe_edge_clearance_by_corner_m[corner] = max(
+            contact_center_lift_m
+            - RECTANGULAR_SHOE_HALF_FORE_AFT_M * abs(math.sin(sole_pitch_rad)),
+            0.0,
+        )
+    pose = _command_knees_downward(pose)
     return pose, {
         "cycle_phase": cycle_phase,
         "phase": phase_name,
         "phase_progress": phase_u,
         "swing_corner": swing_corner,
+        "expected_support_corners": (
+            [corner for corner in LEG_CORNERS if corner != swing_corner]
+            if swing_is_airborne
+            else list(LEG_CORNERS)
+        ),
         "foot_offsets_m": dict(offsets),
+        "planted_forward_m": dict(forward_by_corner),
+        "flat_sole_support": True,
+        "flat_sole_nominal_support": True,
+        "all_planted_soles_flat": True,
+        "support_extension_holds_contact_x": False,
+        "flat_support_down_m": dict(flat_down_by_corner),
+        "sole_pitch_deg": sole_pitch_by_corner_deg,
+        "shoe_edge_clearance_m": shoe_edge_clearance_by_corner_m,
+        "nominal_stance_down_m": down_m,
+        "support_extension_m": 0.0,
+        "support_extension_progress": 0.0,
+        "active_support_extension_m": 0.0,
+    }
+
+
+def diagonal_pair_gait_degrees(
+    gait_time_s: float,
+    *,
+    period_s: float,
+    stride_m: float,
+    lift_m: float,
+    support_extension_m: float,
+    down_m: float,
+    fore_aft_m: float,
+    abduction_deg: float,
+) -> tuple[dict[tuple[str, str], float], dict[str, object]]:
+    """Return a two-beat gait that swings one diagonal leg pair at a time.
+
+    Front-left moves with rear-right, followed by front-right with rear-left.
+    The two planted diagonal shoes remain on the exact flat-sole branch.  Once
+    the moving pair is planted, all four targets push rearward by half a stride
+    so the two-pair cycle ends at its starting joint targets.
+    """
+    if period_s <= 0.0:
+        raise ValueError("Diagonal-pair period must be positive")
+    if stride_m <= 0.0 or lift_m <= 0.0:
+        raise ValueError("Diagonal-pair stride and lift must be positive")
+    if not math.isclose(support_extension_m, 0.0, abs_tol=1e-12):
+        raise ValueError("Diagonal-pair flat support requires zero extension")
+    if not math.isclose(abduction_deg, 0.0, abs_tol=1e-12):
+        raise ValueError("Diagonal-pair flat support requires zero hip abduction")
+    nominal_flat_down_m = _flat_sole_down_m(fore_aft_m)
+    if not math.isclose(down_m, nominal_flat_down_m, abs_tol=0.002):
+        raise ValueError(
+            "Flat-sole stance depth does not match its fore/aft offset: "
+            f"configured={down_m:.4f} m, expected={nominal_flat_down_m:.4f} m"
+        )
+    if not math.isclose(sum(value for _name, value in DIAGONAL_PAIR_PHASES), 1.0):
+        raise AssertionError("Diagonal-pair phase fractions do not total one step")
+
+    cycle_phase = (max(0.0, gait_time_s) / period_s) % 1.0
+    pair_count = len(DIAGONAL_PAIR_SWING_ORDER)
+    pair_fraction = 1.0 / pair_count
+    pair_index = min(int(cycle_phase / pair_fraction), pair_count - 1)
+    pair_u = (cycle_phase - pair_index * pair_fraction) / pair_fraction
+    swing_pair = DIAGONAL_PAIR_SWING_ORDER[pair_index]
+
+    phase_name = DIAGONAL_PAIR_PHASES[-1][0]
+    phase_u = 1.0
+    phase_start = 0.0
+    for candidate_name, candidate_fraction in DIAGONAL_PAIR_PHASES:
+        phase_end = phase_start + candidate_fraction
+        if pair_u < phase_end or candidate_name == DIAGONAL_PAIR_PHASES[-1][0]:
+            phase_name = candidate_name
+            phase_u = min(
+                max((pair_u - phase_start) / candidate_fraction, 0.0),
+                1.0,
+            )
+            break
+        phase_start = phase_end
+
+    half_stride = stride_m / 2.0
+    push_increment = stride_m / pair_count
+    offsets: dict[str, float] = {}
+    for index, pair in enumerate(DIAGONAL_PAIR_SWING_ORDER):
+        pair_offset = half_stride - (pair_count - index) * push_increment
+        for corner in pair:
+            offsets[corner] = pair_offset
+
+    for completed_index in range(pair_index):
+        for corner in DIAGONAL_PAIR_SWING_ORDER[completed_index]:
+            offsets[corner] += stride_m
+        for corner in LEG_CORNERS:
+            offsets[corner] -= push_increment
+
+    if phase_name == "swing_pair":
+        advance = stride_m * _smoothstep(phase_u)
+        for corner in swing_pair:
+            offsets[corner] += advance
+    elif phase_name in (
+        "lower_pair",
+        "firm_plant",
+        "all_feet_push",
+        "pair_settle",
+    ):
+        for corner in swing_pair:
+            offsets[corner] += stride_m
+
+    if phase_name == "all_feet_push":
+        push = push_increment * _smoothstep(phase_u)
+        offsets = {corner: offset - push for corner, offset in offsets.items()}
+    elif phase_name == "pair_settle":
+        offsets = {
+            corner: offset - push_increment for corner, offset in offsets.items()
+        }
+
+    forward_by_corner = {
+        corner: _front_sign(corner) * fore_aft_m + offsets[corner]
+        for corner in LEG_CORNERS
+    }
+    flat_down_by_corner = {
+        corner: _flat_sole_down_m(forward_by_corner[corner])
+        for corner in LEG_CORNERS
+    }
+    down_by_corner = dict(flat_down_by_corner)
+    pair_is_airborne = phase_name in ("lift_pair", "swing_pair", "lower_pair")
+    if phase_name == "lift_pair":
+        lift = lift_m * _smoothstep(phase_u)
+    elif phase_name == "swing_pair":
+        lift = lift_m
+    elif phase_name == "lower_pair":
+        lift = lift_m * (1.0 - _smoothstep(phase_u))
+    else:
+        lift = 0.0
+    if pair_is_airborne:
+        for corner in swing_pair:
+            down_by_corner[corner] -= lift
+
+    pose: dict[tuple[str, str], float] = {}
+    sole_pitch_by_corner_deg: dict[str, float] = {}
+    shoe_edge_clearance_by_corner_m: dict[str, float] = {}
+    for corner in LEG_CORNERS:
+        if corner in swing_pair and pair_is_airborne:
+            hip_flexion, knee = _leg_ik(
+                corner,
+                down_by_corner[corner],
+                forward_by_corner[corner],
+                knees_outward=True,
+            )
+        else:
+            hip_flexion, knee = _flat_sole_leg_ik(
+                corner,
+                forward_by_corner[corner],
+            )
+        pose[(corner, "hip_abduction")] = 0.0
+        pose[(corner, "hip_flexion")] = math.degrees(hip_flexion)
+        pose[(corner, "knee")] = math.degrees(knee)
+        sole_pitch_rad = hip_flexion + knee
+        sole_pitch_by_corner_deg[corner] = math.degrees(sole_pitch_rad)
+        contact_center_lift_m = max(
+            flat_down_by_corner[corner] - down_by_corner[corner],
+            0.0,
+        )
+        shoe_edge_clearance_by_corner_m[corner] = max(
+            contact_center_lift_m
+            - RECTANGULAR_SHOE_HALF_FORE_AFT_M * abs(math.sin(sole_pitch_rad)),
+            0.0,
+        )
+
+    pose = _command_knees_downward(pose)
+    expected_support = (
+        [corner for corner in LEG_CORNERS if corner not in swing_pair]
+        if pair_is_airborne
+        else list(LEG_CORNERS)
+    )
+    return pose, {
+        "cycle_phase": cycle_phase,
+        "phase": phase_name,
+        "phase_progress": phase_u,
+        "swing_corner": None,
+        "swing_pair": list(swing_pair),
+        "expected_support_corners": expected_support,
+        "foot_offsets_m": dict(offsets),
+        "planted_forward_m": dict(forward_by_corner),
+        "flat_sole_support": True,
+        "flat_sole_nominal_support": True,
+        "all_planted_soles_flat": True,
+        "support_extension_holds_contact_x": False,
+        "flat_support_down_m": dict(flat_down_by_corner),
+        "sole_pitch_deg": sole_pitch_by_corner_deg,
+        "shoe_edge_clearance_m": shoe_edge_clearance_by_corner_m,
+        "nominal_stance_down_m": down_m,
+        "support_extension_m": 0.0,
+        "support_extension_progress": 0.0,
+        "active_support_extension_m": 0.0,
     }
 
 

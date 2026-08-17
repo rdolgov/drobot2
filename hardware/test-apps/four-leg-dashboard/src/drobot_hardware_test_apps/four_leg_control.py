@@ -37,6 +37,7 @@ from drobot_leg_testbed.transport import MotorStatus, STSBus
 
 from drobot_hardware_test_apps.crawl_gait import (
     LEG_CORNERS,
+    diagonal_pair_gait_degrees,
     distributed_push_crawl_degrees,
 )
 
@@ -67,9 +68,11 @@ class ServerConfig:
 class CrawlConfig:
     period_s: float
     cycles: int
+    run_until_stopped: bool
     stance_settle_s: float
     stride_m: float
     lift_m: float
+    support_extension_m: float
     weight_shift_forward_m: float
     weight_shift_lateral_m: float
     stance_down_m: float
@@ -123,6 +126,9 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("Manifest requires a [monitoring] table")
     if not isinstance(crawl_data, dict):
         raise ValueError("Manifest requires a [crawl] table")
+    run_until_stopped = crawl_data.get("run_until_stopped", True)
+    if not isinstance(run_until_stopped, bool):
+        raise ValueError("crawl.run_until_stopped must be true or false")
     if not isinstance(leg_data, list) or len(leg_data) != 4:
         raise ValueError("Manifest requires exactly four [[legs]] tables")
 
@@ -178,18 +184,23 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
 
     crawl = CrawlConfig(
         period_s=_finite_float(
-            crawl_data.get("period_s", 6.666666667),
+            crawl_data.get("period_s", 4.0),
             "crawl.period_s",
         ),
         cycles=int(crawl_data.get("cycles", 2)),
+        run_until_stopped=run_until_stopped,
         stance_settle_s=_finite_float(
             crawl_data.get("stance_settle_s", 1.5),
             "crawl.stance_settle_s",
         ),
-        stride_m=_finite_float(crawl_data.get("stride_m", 0.112), "crawl.stride_m"),
-        lift_m=_finite_float(crawl_data.get("lift_m", 0.014), "crawl.lift_m"),
+        stride_m=_finite_float(crawl_data.get("stride_m", 0.096), "crawl.stride_m"),
+        lift_m=_finite_float(crawl_data.get("lift_m", 0.035), "crawl.lift_m"),
+        support_extension_m=_finite_float(
+            crawl_data.get("support_extension_m", 0.0),
+            "crawl.support_extension_m",
+        ),
         weight_shift_forward_m=_finite_float(
-            crawl_data.get("weight_shift_forward_m", 0.016),
+            crawl_data.get("weight_shift_forward_m", 0.006),
             "crawl.weight_shift_forward_m",
         ),
         weight_shift_lateral_m=_finite_float(
@@ -197,11 +208,11 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             "crawl.weight_shift_lateral_m",
         ),
         stance_down_m=_finite_float(
-            crawl_data.get("stance_down_m", 0.300),
+            crawl_data.get("stance_down_m", 0.329341447),
             "crawl.stance_down_m",
         ),
         stance_fore_aft_m=_finite_float(
-            crawl_data.get("stance_fore_aft_m", 0.025),
+            crawl_data.get("stance_fore_aft_m", 0.080),
             "crawl.stance_fore_aft_m",
         ),
         abduction_deg=_finite_float(
@@ -213,22 +224,26 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             "crawl.start_tolerance_deg",
         ),
     )
-    if not 5.0 <= crawl.period_s <= 60.0:
-        raise ValueError("crawl.period_s must be in [5, 60]")
+    if not 4.0 <= crawl.period_s <= 60.0:
+        raise ValueError("crawl.period_s must be in [4, 60]")
     if not 1 <= crawl.cycles <= 4:
         raise ValueError("crawl.cycles must be in [1, 4]")
     if not 0.5 <= crawl.stance_settle_s <= 5.0:
         raise ValueError("crawl.stance_settle_s must be in [0.5, 5]")
     if not 0.005 <= crawl.stride_m <= 0.120:
         raise ValueError("crawl.stride_m must be in [0.005, 0.120]")
-    if not 0.005 <= crawl.lift_m <= 0.025:
-        raise ValueError("crawl.lift_m must be in [0.005, 0.025]")
+    if not 0.005 <= crawl.lift_m <= 0.080:
+        raise ValueError("crawl.lift_m must be in [0.005, 0.080]")
+    if not math.isclose(crawl.support_extension_m, 0.0, abs_tol=1e-12):
+        raise ValueError(
+            "crawl.support_extension_m must be 0 for rectangular flat support"
+        )
     if not 0.0 <= crawl.weight_shift_forward_m <= 0.040:
         raise ValueError("crawl.weight_shift_forward_m must be in [0, 0.040]")
     if not 0.0 <= crawl.weight_shift_lateral_m <= 0.030:
         raise ValueError("crawl.weight_shift_lateral_m must be in [0, 0.030]")
-    if not 0.250 <= crawl.stance_down_m <= 0.315:
-        raise ValueError("crawl.stance_down_m must be in [0.250, 0.315]")
+    if not 0.250 <= crawl.stance_down_m <= 0.370:
+        raise ValueError("crawl.stance_down_m must be in [0.250, 0.370]")
     if not 0.0 <= crawl.stance_fore_aft_m <= 0.120:
         raise ValueError("crawl.stance_fore_aft_m must be in [0, 0.120]")
     if not 0.0 <= crawl.abduction_deg <= 20.0:
@@ -389,9 +404,11 @@ class FourLegSession:
         self.last_heartbeat = clock()
         self.last_event = "Starting"
         self.fault: str | None = None
+        self.crawl_mode = "distributed"
         self.crawl_stage = "idle"
         self.crawl_phase = "idle"
         self.crawl_swing_corner: str | None = None
+        self.crawl_swing_pair: tuple[str, ...] | None = None
         self.crawl_push_partner: str | None = None
         self.crawl_started_at: float | None = None
         self.crawl_target_reached_at: float | None = None
@@ -507,17 +524,30 @@ class FourLegSession:
         gait_time_s: float,
     ) -> tuple[dict[tuple[int, str], float], dict[str, object]]:
         config = self.dashboard.crawl
-        pose, state = distributed_push_crawl_degrees(
-            gait_time_s,
-            period_s=config.period_s,
-            stride_m=config.stride_m,
-            lift_m=config.lift_m,
-            weight_shift_forward_m=config.weight_shift_forward_m,
-            weight_shift_lateral_m=config.weight_shift_lateral_m,
-            down_m=config.stance_down_m,
-            fore_aft_m=config.stance_fore_aft_m,
-            abduction_deg=config.abduction_deg,
-        )
+        if self.crawl_mode == "diagonal_pair":
+            pose, state = diagonal_pair_gait_degrees(
+                gait_time_s,
+                period_s=config.period_s,
+                stride_m=config.stride_m,
+                lift_m=config.lift_m,
+                support_extension_m=config.support_extension_m,
+                down_m=config.stance_down_m,
+                fore_aft_m=config.stance_fore_aft_m,
+                abduction_deg=config.abduction_deg,
+            )
+        else:
+            pose, state = distributed_push_crawl_degrees(
+                gait_time_s,
+                period_s=config.period_s,
+                stride_m=config.stride_m,
+                lift_m=config.lift_m,
+                support_extension_m=config.support_extension_m,
+                weight_shift_forward_m=config.weight_shift_forward_m,
+                weight_shift_lateral_m=config.weight_shift_lateral_m,
+                down_m=config.stance_down_m,
+                fore_aft_m=config.stance_fore_aft_m,
+                abduction_deg=config.abduction_deg,
+            )
         targets: dict[tuple[int, str], float] = {}
         for profile in self.profiles:
             for motor in profile.config.motors:
@@ -531,35 +561,14 @@ class FourLegSession:
         return targets, state
 
     def _crawl_stance_targets_locked(self) -> dict[tuple[int, str], float]:
-        config = self.dashboard.crawl
-        pose, _state = distributed_push_crawl_degrees(
-            0.0,
-            period_s=config.period_s,
-            stride_m=config.stride_m,
-            lift_m=config.lift_m,
-            weight_shift_forward_m=config.weight_shift_forward_m,
-            weight_shift_lateral_m=config.weight_shift_lateral_m,
-            down_m=config.stance_down_m,
-            fore_aft_m=config.stance_fore_aft_m,
-            abduction_deg=config.abduction_deg,
-        )
-        targets: dict[tuple[int, str], float] = {}
-        for profile in self.profiles:
-            for motor in profile.config.motors:
-                degrees = pose[(profile.corner, motor.name)]
-                calibration = profile.calibration.motor(motor)
-                degrees_to_raw(
-                    degrees,
-                    motor,
-                    calibration,
-                )
-                targets[(profile.number, motor.name)] = degrees
+        targets, _state = self._crawl_pose_locked(0.0)
         return targets
 
     def _set_crawl_stance_locked(self, phase: str) -> None:
         self.desired_deg.update(self._crawl_stance_targets_locked())
         self.crawl_phase = phase
         self.crawl_swing_corner = None
+        self.crawl_swing_pair = None
         self.crawl_push_partner = None
 
     def _set_crawl_pose_locked(self, gait_time_s: float) -> None:
@@ -568,6 +577,12 @@ class FourLegSession:
         self.crawl_phase = str(state["phase"])
         swing_corner = state["swing_corner"]
         self.crawl_swing_corner = None if swing_corner is None else str(swing_corner)
+        swing_pair = state.get("swing_pair")
+        self.crawl_swing_pair = (
+            None
+            if not swing_pair
+            else tuple(str(corner) for corner in swing_pair)
+        )
         push_partner = state.get("push_partner")
         self.crawl_push_partner = None if push_partner is None else str(push_partner)
 
@@ -602,7 +617,9 @@ class FourLegSession:
             self.crawl_target_reached_at = None
             self.crawl_progress = 0.0
             self.last_event = (
-                "Gait start stance settled; preparing distributed push crawl"
+                "Gait start stance settled; preparing diagonal-pair gait"
+                if self.crawl_mode == "diagonal_pair"
+                else "Gait start stance settled; preparing distributed push crawl"
             )
             return
 
@@ -610,6 +627,7 @@ class FourLegSession:
             self._set_crawl_pose_locked(0.0)
             self.crawl_phase = "four_feet_down_preload"
             self.crawl_swing_corner = None
+            self.crawl_swing_pair = None
             self.crawl_push_partner = None
             if not self._crawl_targets_reached_locked():
                 self.crawl_target_reached_at = None
@@ -623,7 +641,9 @@ class FourLegSession:
             self.crawl_started_at = now
             self.crawl_target_reached_at = None
             self.last_event = (
-                "Distributed push crawl started; rear-right swings first"
+                "Diagonal-pair gait started; front-left and rear-right lift first"
+                if self.crawl_mode == "diagonal_pair"
+                else "Distributed push crawl started; rear-right swings first"
             )
             return
 
@@ -632,6 +652,10 @@ class FourLegSession:
             if self.crawl_started_at is None:
                 raise RuntimeError("Crawl clock was not initialized")
             elapsed = max(0.0, now - self.crawl_started_at)
+            if config.run_until_stopped:
+                self.crawl_progress = (elapsed % config.period_s) / config.period_s
+                self._set_crawl_pose_locked(elapsed)
+                return
             self.crawl_progress = min(elapsed / duration_s, 1.0)
             if elapsed < duration_s:
                 self._set_crawl_pose_locked(elapsed)
@@ -646,13 +670,16 @@ class FourLegSession:
             self.crawl_phase = "holding_gait_start_stance"
             self.crawl_progress = 1.0
             self.last_event = (
-                "Distributed push crawl complete; all motors holding stance"
+                "Diagonal-pair gait complete; all motors holding stance"
+                if self.crawl_mode == "diagonal_pair"
+                else "Distributed push crawl complete; all motors holding stance"
             )
 
     def _cancel_crawl_locked(self) -> None:
         self.crawl_stage = "idle"
         self.crawl_phase = "idle"
         self.crawl_swing_corner = None
+        self.crawl_swing_pair = None
         self.crawl_push_partner = None
         self.crawl_started_at = None
         self.crawl_target_reached_at = None
@@ -674,6 +701,27 @@ class FourLegSession:
             )
         if confirmation != "TEST DISTRIBUTED CRAWL":
             raise ValueError("TEST DISTRIBUTED CRAWL confirmation is required")
+
+        self._start_crawl_mode("distributed")
+
+    def start_diagonal_pair_forward(
+        self,
+        *,
+        safety_ack: bool,
+        confirmation: str,
+    ) -> None:
+        if not safety_ack:
+            raise ValueError(
+                "Confirm the body is supported with every foot clear before testing"
+            )
+        if confirmation != "TEST DIAGONAL PAIR GAIT":
+            raise ValueError("TEST DIAGONAL PAIR GAIT confirmation is required")
+
+        self._start_crawl_mode("diagonal_pair")
+
+    def _start_crawl_mode(self, mode: str) -> None:
+        if mode not in {"distributed", "diagonal_pair"}:
+            raise ValueError(f"Unknown crawl mode: {mode}")
 
         with self.lock:
             if self.crawl_active:
@@ -700,14 +748,16 @@ class FourLegSession:
                     + ", ".join(out_of_start_range)
                 )
 
-            sample_count = 80
-            duration_s = self.dashboard.crawl.period_s
-            self._crawl_stance_targets_locked()
-            for sample in range(sample_count + 1):
-                self._crawl_pose_locked(duration_s * sample / sample_count)
-
+            previous_mode = self.crawl_mode
             newly_armed: list[tuple[LegProfile, MotorConfig]] = []
             try:
+                self.crawl_mode = mode
+                sample_count = 80
+                duration_s = self.dashboard.crawl.period_s
+                self._crawl_stance_targets_locked()
+                for sample in range(sample_count + 1):
+                    self._crawl_pose_locked(duration_s * sample / sample_count)
+
                 for profile in self.profiles:
                     controller = self.controllers[profile.number]
                     for motor in profile.config.motors:
@@ -717,6 +767,7 @@ class FourLegSession:
                 self.crawl_stage = "preparing"
                 self.crawl_phase = "moving_to_stance"
                 self.crawl_swing_corner = None
+                self.crawl_swing_pair = None
                 self.crawl_push_partner = None
                 self.crawl_started_at = None
                 self.crawl_target_reached_at = None
@@ -729,12 +780,15 @@ class FourLegSession:
                     except Exception:
                         pass
                 self._disarm_all_locked(raise_errors=False)
+                self.crawl_mode = previous_mode
                 raise
 
             self.last_heartbeat = self.clock()
             self.fault = None
             self.last_event = (
-                "All 12 motors moving to the distributed-push start stance"
+                "All 12 motors moving to the diagonal-pair start stance"
+                if mode == "diagonal_pair"
+                else "All 12 motors moving to the distributed-push start stance"
             )
 
     def stop_crawl(self) -> None:
@@ -905,6 +959,7 @@ class FourLegSession:
 
         with self.lock:
             self._require_manual_control_locked()
+            self.crawl_mode = "distributed"
             targets = self._crawl_stance_targets_locked()
             try:
                 for profile in self.profiles:
@@ -1172,6 +1227,12 @@ class FourLegSession:
                 + ", ".join(str(value) for value in unexpected_torque)
             )
 
+        crawl_elapsed_s = (
+            max(0.0, self.clock() - self.crawl_started_at)
+            if self.crawl_stage == "walking" and self.crawl_started_at is not None
+            else 0.0
+        )
+
         return {
             "legs": leg_payloads,
             "summary": {
@@ -1205,21 +1266,47 @@ class FourLegSession:
                 "port": getattr(self.bus, "port_name", None),
             },
             "crawl": {
-                "pattern": "distributed_push_crawl_v5",
+                "mode": self.crawl_mode,
+                "pattern": (
+                    "diagonal_pair_flat_support_gait_v1"
+                    if self.crawl_mode == "diagonal_pair"
+                    else "rectangular_flat_support_crawl_v8"
+                ),
                 "supported_test_only": True,
                 "active": self.crawl_active,
                 "stage": self.crawl_stage,
                 "phase": self.crawl_phase,
                 "swing_corner": self.crawl_swing_corner,
+                "swing_pair": (
+                    None
+                    if self.crawl_swing_pair is None
+                    else list(self.crawl_swing_pair)
+                ),
                 "push_partner": self.crawl_push_partner,
+                "airborne_leg_count": (
+                    2 if self.crawl_mode == "diagonal_pair" else 1
+                ),
+                "planted_support_leg_count": (
+                    2 if self.crawl_mode == "diagonal_pair" else 3
+                ),
                 "progress": self.crawl_progress,
                 "period_s": self.dashboard.crawl.period_s,
                 "cycles": self.dashboard.crawl.cycles,
+                "run_until_stopped": self.dashboard.crawl.run_until_stopped,
+                "elapsed_s": crawl_elapsed_s,
+                "completed_cycles": int(
+                    crawl_elapsed_s / self.dashboard.crawl.period_s
+                ),
                 "duration_s": (
-                    self.dashboard.crawl.period_s * self.dashboard.crawl.cycles
+                    None
+                    if self.dashboard.crawl.run_until_stopped
+                    else self.dashboard.crawl.period_s * self.dashboard.crawl.cycles
                 ),
                 "stride_mm": self.dashboard.crawl.stride_m * 1000.0,
                 "lift_mm": self.dashboard.crawl.lift_m * 1000.0,
+                "support_extension_mm": (
+                    self.dashboard.crawl.support_extension_m * 1000.0
+                ),
                 "stance_down_mm": self.dashboard.crawl.stance_down_m * 1000.0,
                 "stance_fore_aft_mm": (self.dashboard.crawl.stance_fore_aft_m * 1000.0),
                 "abduction_deg": self.dashboard.crawl.abduction_deg,
@@ -1392,6 +1479,11 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
                 )
             elif self.path == "/api/crawl-forward":
                 self.server.session.start_crawl_forward(
+                    safety_ack=payload.get("safety_ack") is True,
+                    confirmation=str(payload.get("confirmation", "")),
+                )
+            elif self.path == "/api/diagonal-pair-forward":
+                self.server.session.start_diagonal_pair_forward(
                     safety_ack=payload.get("safety_ack") is True,
                     confirmation=str(payload.get("confirmation", "")),
                 )

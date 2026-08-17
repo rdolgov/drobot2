@@ -11,15 +11,17 @@ temperature_warning_c = 55
 leg_current_warning_ma = 2500.0
 
 [crawl]
-period_s = 6.666666667
+period_s = 4.0
 cycles = 2
+run_until_stopped = true
 stance_settle_s = 1.5
-stride_m = 0.112
-lift_m = 0.014
-weight_shift_forward_m = 0.016
+stride_m = 0.096
+lift_m = 0.035
+support_extension_m = 0.0
+weight_shift_forward_m = 0.006
 weight_shift_lateral_m = 0.0
-stance_down_m = 0.300
-stance_fore_aft_m = 0.025
+stance_down_m = 0.329341447
+stance_fore_aft_m = 0.080
 abduction_deg = 0.0
 start_tolerance_deg = 35.0
 

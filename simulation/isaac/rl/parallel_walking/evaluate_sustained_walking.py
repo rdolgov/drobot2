@@ -39,6 +39,7 @@ sys.path.insert(0, str(package_parent))
 
 import parallel_walking  # noqa: E402, F401
 from parallel_walking import preview_control  # noqa: E402
+from parallel_walking.commanded_walking_env import LEG_NAMES  # noqa: E402
 
 task = "Drobot-Commanded-Walk-Forward-Direct"
 env_cfg = load_cfg_from_registry(task, "env_cfg_entry_point")
@@ -68,6 +69,17 @@ for _ in range(args.episodes):
     positions = [start_x]
     lateral_positions = [start_y]
     saturated_action_sum = 0.0
+    action_rate_sum = 0.0
+    action_acceleration_sum = 0.0
+    previous_action = torch.zeros((12,), device=env.unwrapped.device)
+    older_action = torch.zeros((12,), device=env.unwrapped.device)
+    foot_names = [
+        next(leg for leg in LEG_NAMES if leg in name)
+        for name in env.unwrapped._foot_sensor_names
+    ]
+    previous_contact = env.unwrapped._foot_forces()[0] > 1.0
+    touchdown_counts = torch.zeros((4,), device=env.unwrapped.device)
+    scheduled_contact_matches = torch.zeros((4,), device=env.unwrapped.device)
     fell = False
     completed_steps = 0
     for step in range(args.seconds * 60):
@@ -79,7 +91,18 @@ for _ in range(args.episodes):
         saturated_action_sum += float(
             torch.mean((torch.abs(actions[0]) >= 0.98).float()).item()
         )
+        action_rate_sum += float(torch.mean(torch.abs(actions[0] - previous_action)).item())
+        action_acceleration_sum += float(
+            torch.mean(torch.abs(actions[0] - 2.0 * previous_action + older_action)).item()
+        )
+        older_action.copy_(previous_action)
+        previous_action.copy_(actions[0])
         obs, _, dones, _ = env.step(actions)
+        foot_contact = env.unwrapped._foot_forces()[0] > 1.0
+        touchdown_counts += (foot_contact & ~previous_contact).float()
+        previous_contact.copy_(foot_contact)
+        _, scheduled_contact = env.unwrapped._gait_targets()
+        scheduled_contact_matches += (foot_contact == scheduled_contact[0]).float()
         policy.reset(dones)
         completed_steps = step + 1
         if bool(dones[0].item()):
@@ -114,6 +137,19 @@ for _ in range(args.episodes):
             ),
             "action_saturation_fraction": saturated_action_sum
             / max(completed_steps, 1),
+            "mean_abs_action_rate_per_step": action_rate_sum
+            / max(completed_steps, 1),
+            "mean_abs_action_acceleration_per_step2": action_acceleration_sum
+            / max(completed_steps, 1),
+            "touchdowns_by_leg": {
+                name: int(touchdown_counts[index].item())
+                for index, name in enumerate(foot_names)
+            },
+            "scheduled_contact_match_by_leg": {
+                name: float(scheduled_contact_matches[index].item())
+                / max(completed_steps, 1)
+                for index, name in enumerate(foot_names)
+            },
             "fell": fell,
             "one_second_positions_m": positions,
             "one_second_lateral_positions_m": lateral_positions,

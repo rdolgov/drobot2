@@ -12,16 +12,140 @@ from isaaclab import cloner
 from isaaclab.assets import Articulation
 from isaaclab.envs import DirectRLEnv
 from isaaclab.sensors import ContactSensor, Imu
+from pxr import Gf, PhysxSchema, UsdGeom, UsdPhysics, UsdShade
 
 from . import preview_control
 from .commanded_walking_env_cfg import (
+    DISTAL_LINK_LENGTH_M,
+    RECTANGULAR_SHOE_LENGTH_FORE_AFT_M,
+    RECTANGULAR_SHOE_MASS_KG,
+    RECTANGULAR_SHOE_SOLE_BACK_FROM_FORK_M,
+    RECTANGULAR_SHOE_SOLE_THICKNESS_M,
+    RECTANGULAR_SHOE_TREAD_LENGTH_M,
+    RECTANGULAR_SHOE_TREAD_PROJECTION_M,
+    RECTANGULAR_SHOE_TREAD_WIDTH_M,
+    RECTANGULAR_SHOE_WIDTH_LATERAL_M,
     SERVO_VELOCITY_LIMIT_RAD_S,
     DrobotCommandedWalkingForwardEnvCfg,
 )
 
 
+LEG_NAMES = ("front_left", "rear_left", "front_right", "rear_right")
+
+
+def _author_rectangular_shoes(stage) -> None:
+    """Replace env-0 fork-tip spheres with the latest flat CAD shoe proxies."""
+    distal_prims = {
+        prim.GetName(): prim
+        for prim in stage.Traverse()
+        if prim.GetName() in {f"{leg}_distal_link" for leg in LEG_NAMES}
+        and str(prim.GetPath()).startswith("/World/envs/env_0/Robot")
+    }
+    if len(distal_prims) != 4:
+        raise RuntimeError(
+            "Expected four env-0 distal links before cloning rectangular shoes; "
+            f"found {tuple(distal_prims)}"
+        )
+
+    tread_material = UsdShade.Material.Define(
+        stage, "/World/Materials/RectangularShoeTreadContact"
+    )
+    material_api = UsdPhysics.MaterialAPI.Apply(tread_material.GetPrim())
+    material_api.CreateStaticFrictionAttr().Set(1.05)
+    material_api.CreateDynamicFrictionAttr().Set(0.85)
+    material_api.CreateRestitutionAttr().Set(0.02)
+    physx_api = PhysxSchema.PhysxMaterialAPI.Apply(tread_material.GetPrim())
+    physx_api.CreateCompliantContactStiffnessAttr().Set(12000.0)
+    physx_api.CreateCompliantContactDampingAttr().Set(45.0)
+
+    sole_center_x = (
+        DISTAL_LINK_LENGTH_M
+        + RECTANGULAR_SHOE_SOLE_BACK_FROM_FORK_M
+        + RECTANGULAR_SHOE_SOLE_THICKNESS_M / 2.0
+    )
+    tread_center_x = (
+        DISTAL_LINK_LENGTH_M
+        + RECTANGULAR_SHOE_SOLE_BACK_FROM_FORK_M
+        + RECTANGULAR_SHOE_SOLE_THICKNESS_M
+        + RECTANGULAR_SHOE_TREAD_PROJECTION_M / 2.0
+    )
+
+    # The imported distal arm is 215.137 g.  Add the CAD PLA estimate to the
+    # same rigid body so the shoe does not create extra articulation bodies.
+    # The diagonal inertia is a conservative box approximation around the
+    # combined center of mass; the detailed printable ribs remain visual-only.
+    original_mass = 0.215137
+    original_com = Gf.Vec3f(0.07301168, -0.000021551, -0.000924466)
+    shoe_com = Gf.Vec3f(DISTAL_LINK_LENGTH_M + 0.020, 0.0, 0.0)
+    combined_mass = original_mass + RECTANGULAR_SHOE_MASS_KG
+    combined_com = Gf.Vec3f(
+        (original_mass * original_com[0] + RECTANGULAR_SHOE_MASS_KG * shoe_com[0])
+        / combined_mass,
+        (original_mass * original_com[1] + RECTANGULAR_SHOE_MASS_KG * shoe_com[1])
+        / combined_mass,
+        (original_mass * original_com[2] + RECTANGULAR_SHOE_MASS_KG * shoe_com[2])
+        / combined_mass,
+    )
+    combined_diagonal_inertia = Gf.Vec3f(0.000155, 0.001192, 0.001178)
+
+    for distal in distal_prims.values():
+        for child in distal.GetChildren():
+            if child.GetName().startswith("simulation_only_fork_tip_contact_proxy"):
+                collision = UsdPhysics.CollisionAPI(child)
+                if collision:
+                    collision.CreateCollisionEnabledAttr().Set(False)
+
+        mass_api = UsdPhysics.MassAPI.Apply(distal)
+        mass_api.CreateMassAttr().Set(combined_mass)
+        mass_api.CreateCenterOfMassAttr().Set(combined_com)
+        mass_api.CreateDiagonalInertiaAttr().Set(combined_diagonal_inertia)
+        mass_api.CreatePrincipalAxesAttr().Set(
+            Gf.Quatf(1.0, Gf.Vec3f(0.0, 0.0, 0.0))
+        )
+
+        for label, center_x, size_xyz, color in (
+            (
+                "sole",
+                sole_center_x,
+                (
+                    RECTANGULAR_SHOE_SOLE_THICKNESS_M,
+                    RECTANGULAR_SHOE_LENGTH_FORE_AFT_M,
+                    RECTANGULAR_SHOE_WIDTH_LATERAL_M,
+                ),
+                (0.18, 0.22, 0.28),
+            ),
+            (
+                "tread",
+                tread_center_x,
+                (
+                    RECTANGULAR_SHOE_TREAD_PROJECTION_M,
+                    RECTANGULAR_SHOE_TREAD_LENGTH_M,
+                    RECTANGULAR_SHOE_TREAD_WIDTH_M,
+                ),
+                (0.12, 0.65, 0.24),
+            ),
+        ):
+            cube = UsdGeom.Cube.Define(
+                stage,
+                distal.GetPath().AppendChild(
+                    f"simulation_only_rectangular_shoe_{label}_proxy"
+                ),
+            )
+            cube.CreateSizeAttr().Set(1.0)
+            cube.CreateDisplayColorAttr().Set([Gf.Vec3f(*color)])
+            xform = UsdGeom.Xformable(cube.GetPrim())
+            xform.AddTranslateOp().Set(Gf.Vec3d(center_x, 0.0, 0.0))
+            xform.AddScaleOp().Set(Gf.Vec3d(*size_xyz))
+            UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+            UsdShade.MaterialBindingAPI.Apply(cube.GetPrim()).Bind(
+                tread_material,
+                UsdShade.Tokens.strongerThanDescendants,
+                "physics",
+            )
+
+
 class DrobotCommandedWalkingEnv(DirectRLEnv):
-    """Learn locomotion from velocity commands without a prescribed gait phase."""
+    """Learn smooth command tracking around a coordinated four-leg gait clock."""
 
     cfg: DrobotCommandedWalkingForwardEnvCfg
     def __init__(
@@ -35,6 +159,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             self.num_envs, gym.spaces.flatdim(self.single_action_space), device=self.device
         )
         self._previous_actions = torch.zeros_like(self._actions)
+        self._older_actions = torch.zeros_like(self._actions)
         self._previous_targets = self._robot.data.default_joint_pos.torch.clone()
         self._commands = torch.zeros((self.num_envs, 3), device=self.device)
         self._joint_scale = torch.tensor(
@@ -51,6 +176,27 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         )
         if len(self._robot.joint_names) != 12:
             raise RuntimeError(f"Expected 12 joints, got {self._robot.joint_names}")
+        self._leg_phase_offsets = torch.tensor(
+            (0.0, 0.5, 0.5, 0.0), dtype=torch.float32, device=self.device
+        )
+        self._leg_front_sign = torch.tensor(
+            (1.0, -1.0, 1.0, -1.0), dtype=torch.float32, device=self.device
+        )
+        self._leg_abduction_joint_ids = torch.tensor(
+            [self._robot.joint_names.index(f"{leg}_hip_abduction") for leg in LEG_NAMES],
+            dtype=torch.long,
+            device=self.device,
+        )
+        self._leg_hip_joint_ids = torch.tensor(
+            [self._robot.joint_names.index(f"{leg}_hip_flexion") for leg in LEG_NAMES],
+            dtype=torch.long,
+            device=self.device,
+        )
+        self._leg_knee_joint_ids = torch.tensor(
+            [self._robot.joint_names.index(f"{leg}_knee") for leg in LEG_NAMES],
+            dtype=torch.long,
+            device=self.device,
+        )
         self._base_sensor_ids, _ = self._contact_sensor.find_sensors("base_link")
         self._foot_sensor_ids, self._foot_sensor_names = self._contact_sensor.find_sensors(
             ".*_distal_link"
@@ -60,6 +206,23 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         if len(self._foot_sensor_ids) != 4:
             raise RuntimeError(
                 f"Expected four foot sensors, got {self._foot_sensor_names}"
+            )
+        self._foot_phase_offsets = torch.tensor(
+            [
+                self._leg_phase_offsets[
+                    next(i for i, leg in enumerate(LEG_NAMES) if leg in name)
+                ].item()
+                for name in self._foot_sensor_names
+            ],
+            dtype=torch.float32,
+            device=self.device,
+        )
+        self._foot_body_ids, self._foot_body_names = self._robot.find_bodies(
+            ".*_distal_link"
+        )
+        if len(self._foot_body_ids) != 4:
+            raise RuntimeError(
+                f"Expected four distal rigid bodies, got {self._foot_body_names}"
             )
 
         self._steps_since_reset = torch.zeros(
@@ -83,6 +246,9 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_qualified_touchdown_count = torch.zeros(
             self.num_envs, device=self.device
         )
+        self._episode_qualified_touchdown_by_foot = torch.zeros(
+            (self.num_envs, 4), device=self.device
+        )
         self._episode_command_speed_sum = torch.zeros(self.num_envs, device=self.device)
         self._episode_base_height_sum = torch.zeros(self.num_envs, device=self.device)
         self._sustained_window_steps = max(
@@ -98,18 +264,30 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_stall_step_sum = torch.zeros(self.num_envs, device=self.device)
         reward_term_names = (
             "forward_velocity_tracking",
+            "instant_progress",
             "sustained_progress",
             "sustained_stall",
+            "gait_reference",
+            "scheduled_stance",
+            "scheduled_swing",
             "upright",
             "alive",
             "lateral_velocity",
+            "lateral_displacement",
             "vertical_velocity",
             "roll_pitch_rate",
+            "body_tilt",
             "yaw_rate",
             "body_height",
             "action_rate",
+            "action_acceleration",
+            "action_saturation",
+            "diagonal_sync",
             "action_magnitude",
             "joint_velocity",
+            "support_foot_slip",
+            "touchdown_impact",
+            "qualified_touchdown",
             "termination",
         )
         self._episode_reward_term_sums = {
@@ -134,6 +312,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
         self.scene.articulations["robot"] = self._robot
+        _author_rectangular_shoes(self.scene.stage)
         self._contact_sensor = ContactSensor(self.cfg.contact_sensor)
         self.scene.sensors["contact_sensor"] = self._contact_sensor
         self._imu_sensor = Imu(self.cfg.imu_sensor)
@@ -156,6 +335,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         light.func("/World/Light", light)
 
     def _pre_physics_step(self, actions: torch.Tensor):
+        self._older_actions.copy_(self._previous_actions)
         self._previous_actions.copy_(self._actions)
         self._actions = torch.clamp(actions, -1.0, 1.0)
         desired_targets = (
@@ -184,10 +364,97 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         force = self._contact_sensor.data.net_forces_w.torch[:, self._foot_sensor_ids]
         return torch.linalg.norm(force, dim=-1)
 
+    def _gait_phase(self) -> torch.Tensor:
+        return torch.remainder(
+            self._steps_since_reset.float() * self.step_dt / self.cfg.gait_period_s,
+            1.0,
+        )
+
+    def _gait_targets(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return deployable smooth joint references and scheduled contacts."""
+        phase = self._gait_phase()
+        leg_phase = torch.remainder(
+            phase.unsqueeze(1) + self._leg_phase_offsets.unsqueeze(0), 1.0
+        )
+        duty = self.cfg.gait_duty_factor
+        stance_u = torch.clamp(leg_phase / duty, 0.0, 1.0)
+        swing_u = torch.clamp((leg_phase - duty) / (1.0 - duty), 0.0, 1.0)
+        stance_curve = stance_u * stance_u * (3.0 - 2.0 * stance_u)
+        swing_curve = swing_u * swing_u * (3.0 - 2.0 * swing_u)
+        half_stride = 0.5 * self.cfg.gait_stride_m
+        stride_offset = torch.where(
+            leg_phase < duty,
+            half_stride - self.cfg.gait_stride_m * stance_curve,
+            -half_stride + self.cfg.gait_stride_m * swing_curve,
+        )
+        lift = torch.where(
+            leg_phase < duty,
+            torch.zeros_like(leg_phase),
+            self.cfg.gait_lift_m * torch.sin(torch.pi * swing_u),
+        )
+        ramp = torch.clamp(
+            self._steps_since_reset.float() * self.step_dt / self.cfg.gait_start_ramp_s,
+            0.0,
+            1.0,
+        ).unsqueeze(1)
+        stride_offset = stride_offset * ramp
+        lift = lift * ramp
+
+        nominal_forward = 0.080 * self._leg_front_sign.unsqueeze(0)
+        world_forward = nominal_forward + stride_offset
+        default_down = (
+            (DISTAL_LINK_LENGTH_M**2 - 0.080**2) ** 0.5
+            + DISTAL_LINK_LENGTH_M
+            + 0.031
+        )
+        down = default_down - lift
+        distal_contact_length = DISTAL_LINK_LENGTH_M + 0.031
+        cosine_knee = torch.clamp(
+            (
+                torch.square(down)
+                + torch.square(world_forward)
+                - DISTAL_LINK_LENGTH_M**2
+                - distal_contact_length**2
+            )
+            / (2.0 * DISTAL_LINK_LENGTH_M * distal_contact_length),
+            -1.0,
+            1.0,
+        )
+        knee = -self._leg_front_sign.unsqueeze(0) * torch.acos(cosine_knee)
+        hip = torch.atan2(world_forward, down) - torch.atan2(
+            distal_contact_length * torch.sin(knee),
+            DISTAL_LINK_LENGTH_M + distal_contact_length * torch.cos(knee),
+        )
+
+        reference = torch.zeros_like(self._actions)
+        default = self._robot.data.default_joint_pos.torch
+        reference[:, self._leg_abduction_joint_ids] = 0.0
+        reference[:, self._leg_hip_joint_ids] = (
+            hip - default[:, self._leg_hip_joint_ids]
+        ) / self.cfg.action_scale_hip_rad
+        reference[:, self._leg_knee_joint_ids] = (
+            knee - default[:, self._leg_knee_joint_ids]
+        ) / self.cfg.action_scale_knee_rad
+        reference = torch.clamp(reference, -1.0, 1.0)
+
+        foot_phase = torch.remainder(
+            phase.unsqueeze(1) + self._foot_phase_offsets.unsqueeze(0), 1.0
+        )
+        scheduled_contact = foot_phase < duty
+        scheduled_contact = torch.where(
+            ramp < 0.999,
+            torch.ones_like(scheduled_contact),
+            scheduled_contact,
+        )
+        return reference, scheduled_contact
+
     def _get_observations(self) -> dict[str, torch.Tensor]:
+        gait_angle = 2.0 * torch.pi * self._gait_phase()
+        gait_clock = torch.stack((torch.sin(gait_angle), torch.cos(gait_angle)), dim=1)
         policy_observation = torch.cat(
             (
                 self._commands,
+                gait_clock,
                 self._imu_sensor.data.ang_vel_b.torch,
                 self._robot.data.projected_gravity_b.torch,
                 self._imu_sensor.data.lin_acc_b.torch / 9.81,
@@ -251,6 +518,12 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         net_commanded_distance = torch.sum(
             displacement[:, :2] * command_direction, dim=1
         )
+        lateral_direction = torch.stack(
+            (-command_direction[:, 1], command_direction[:, 0]), dim=1
+        )
+        net_lateral_displacement = torch.sum(
+            displacement[:, :2] * lateral_direction, dim=1
+        )
         active_translation = command_speed > 0.03
         sustained_progress = torch.where(
             active_translation,
@@ -286,7 +559,47 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         action_rate = torch.mean(
             torch.square(self._actions - self._previous_actions), dim=1
         )
+        action_acceleration = torch.mean(
+            torch.square(
+                self._actions
+                - 2.0 * self._previous_actions
+                + self._older_actions
+            ),
+            dim=1,
+        )
         action_magnitude = torch.mean(torch.square(self._actions), dim=1)
+        action_saturation = torch.mean(
+            torch.square(torch.clamp(torch.abs(self._actions) - 0.80, min=0.0)),
+            dim=1,
+        )
+        leg_actions = torch.stack(
+            (
+                self._actions[:, self._leg_abduction_joint_ids],
+                self._actions[:, self._leg_hip_joint_ids],
+                self._actions[:, self._leg_knee_joint_ids],
+            ),
+            dim=2,
+        )
+        first_diagonal_error = torch.stack(
+            (
+                leg_actions[:, 0, 0] + leg_actions[:, 3, 0],
+                leg_actions[:, 0, 1] - leg_actions[:, 3, 1],
+                leg_actions[:, 0, 2] - leg_actions[:, 3, 2],
+            ),
+            dim=1,
+        )
+        second_diagonal_error = torch.stack(
+            (
+                leg_actions[:, 1, 0] + leg_actions[:, 2, 0],
+                leg_actions[:, 1, 1] - leg_actions[:, 2, 1],
+                leg_actions[:, 1, 2] - leg_actions[:, 2, 2],
+            ),
+            dim=1,
+        )
+        diagonal_sync_error = 0.5 * (
+            torch.mean(torch.square(first_diagonal_error), dim=1)
+            + torch.mean(torch.square(second_diagonal_error), dim=1)
+        )
         joint_speed = torch.mean(
             torch.square(self._robot.data.joint_vel.torch / SERVO_VELOCITY_LIMIT_RAD_S),
             dim=1,
@@ -294,6 +607,25 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
 
         foot_forces = self._foot_forces()
         foot_contact = foot_forces > 1.0
+        gait_reference, scheduled_contact = self._gait_targets()
+        scheduled_swing = ~scheduled_contact
+        stance_count = torch.clamp(scheduled_contact.float().sum(dim=1), min=1.0)
+        swing_count = scheduled_swing.float().sum(dim=1)
+        scheduled_stance_score = (
+            (foot_contact & scheduled_contact).float().sum(dim=1) / stance_count
+        )
+        scheduled_swing_score = torch.where(
+            swing_count > 0.0,
+            ((~foot_contact) & scheduled_swing).float().sum(dim=1)
+            / torch.clamp(swing_count, min=1.0),
+            torch.ones_like(swing_count),
+        )
+        gait_reference_error = torch.mean(
+            torch.square(self._actions - gait_reference), dim=1
+        )
+        gait_reference_tracking = torch.exp(
+            -gait_reference_error / self.cfg.gait_reference_sigma**2
+        )
         last_air_time = self._contact_sensor.data.last_air_time.torch[
             :, self._foot_sensor_ids
         ]
@@ -305,6 +637,23 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         qualified_touchdown = first_contact.bool() & (
             last_air_time >= self.cfg.qualified_foot_air_time_s
         )
+        foot_velocity_xy = self._robot.data.body_lin_vel_w.torch[
+            :, self._foot_body_ids, :2
+        ]
+        support_foot_slip = torch.mean(
+            torch.sum(torch.square(foot_velocity_xy), dim=2)
+            * foot_contact.float(),
+            dim=1,
+        )
+        normalized_touchdown_overload = torch.clamp(
+            (foot_forces - self.cfg.touchdown_force_soft_limit_n)
+            / self.cfg.touchdown_force_soft_limit_n,
+            min=0.0,
+        )
+        touchdown_impact = torch.mean(
+            torch.square(normalized_touchdown_overload) * first_contact.float(),
+            dim=1,
+        )
 
         # Preserve the validated short-horizon objective, then explicitly reward
         # rolling forward progress so a policy cannot collect its return with an
@@ -314,6 +663,19 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             "forward_velocity_tracking": (
                 self.cfg.reward_forward_velocity_tracking * velocity_tracking
             ),
+            "instant_progress": (
+                self.cfg.reward_instant_progress
+                * torch.where(
+                    active_translation,
+                    torch.clamp(
+                        commanded_velocity
+                        / torch.clamp(command_speed, min=1.0e-4),
+                        min=-1.0,
+                        max=1.0,
+                    ),
+                    torch.zeros_like(commanded_velocity),
+                )
+            ),
             "sustained_progress": (
                 self.cfg.reward_sustained_progress * sustained_progress
             ),
@@ -322,10 +684,23 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                 * torch.square(normalized_stall_deficit)
                 * (rolling_window_ready & active_translation).float()
             ),
+            "gait_reference": (
+                self.cfg.reward_gait_reference * gait_reference_tracking
+            ),
+            "scheduled_stance": (
+                self.cfg.reward_scheduled_stance * scheduled_stance_score
+            ),
+            "scheduled_swing": (
+                self.cfg.reward_scheduled_swing * scheduled_swing_score
+            ),
             "upright": self.cfg.reward_upright * upright_cosine,
             "alive": torch.full_like(upright_cosine, self.cfg.reward_alive),
             "lateral_velocity": (
                 -self.cfg.penalty_lateral_velocity * torch.square(linear_velocity[:, 1])
+            ),
+            "lateral_displacement": (
+                -self.cfg.penalty_lateral_displacement
+                * torch.square(net_lateral_displacement)
             ),
             "vertical_velocity": (
                 -self.cfg.penalty_vertical_velocity * torch.square(linear_velocity[:, 2])
@@ -334,11 +709,37 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                 -self.cfg.penalty_roll_pitch_rate
                 * torch.sum(torch.square(angular_velocity[:, :2]), dim=1)
             ),
+            "body_tilt": (
+                -self.cfg.penalty_body_tilt
+                * torch.sum(
+                    torch.square(self._robot.data.projected_gravity_b.torch[:, :2]),
+                    dim=1,
+                )
+            ),
             "yaw_rate": -self.cfg.penalty_yaw_rate * torch.square(yaw_error),
             "body_height": -self.cfg.penalty_body_height * torch.square(height_error),
             "action_rate": -self.cfg.penalty_action_rate * action_rate,
+            "action_acceleration": (
+                -self.cfg.penalty_action_acceleration * action_acceleration
+            ),
+            "action_saturation": (
+                -self.cfg.penalty_action_saturation * action_saturation
+            ),
+            "diagonal_sync": (
+                -self.cfg.penalty_diagonal_sync * diagonal_sync_error
+            ),
             "action_magnitude": -self.cfg.penalty_action_magnitude * action_magnitude,
             "joint_velocity": -self.cfg.penalty_joint_velocity * joint_speed,
+            "support_foot_slip": (
+                -self.cfg.penalty_support_foot_slip * support_foot_slip
+            ),
+            "touchdown_impact": (
+                -self.cfg.penalty_touchdown_impact * touchdown_impact
+            ),
+            "qualified_touchdown": (
+                self.cfg.reward_qualified_touchdown
+                * torch.sum(qualified_touchdown.float(), dim=1)
+            ),
             "termination": -self.cfg.penalty_termination * self._failed.float(),
         }
         reward = (
@@ -357,6 +758,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_qualified_touchdown_count += torch.sum(
             qualified_touchdown.float(), dim=1
         )
+        self._episode_qualified_touchdown_by_foot += qualified_touchdown.float()
         self._episode_command_speed_sum += command_speed
         self._episode_base_height_sum += base_height
         self._episode_stall_step_sum += sustained_stall.float()
@@ -551,6 +953,13 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             log["Metrics/qualified_touchdowns_per_episode"] = (
                 self._episode_qualified_touchdown_count[env_ids].mean().item()
             )
+            for foot_index, sensor_name in enumerate(self._foot_sensor_names):
+                leg_name = next(leg for leg in LEG_NAMES if leg in sensor_name)
+                log[f"Metrics/qualified_touchdowns_{leg_name}"] = (
+                    self._episode_qualified_touchdown_by_foot[
+                        env_ids, foot_index
+                    ].mean().item()
+                )
             log["Metrics/fall_rate"] = (
                 (self._failed[env_ids] & completed).float().sum()
                 / torch.clamp(completed.float().sum(), min=1.0)
@@ -608,6 +1017,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._sample_commands(env_ids)
         self._actions[env_ids] = 0.0
         self._previous_actions[env_ids] = 0.0
+        self._older_actions[env_ids] = 0.0
         self._previous_targets[env_ids] = joint_position
         self._steps_since_reset[env_ids] = 0
         self._failed[env_ids] = False
@@ -624,6 +1034,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_swing_step_sum[env_ids] = 0.0
         self._episode_touchdown_count[env_ids] = 0.0
         self._episode_qualified_touchdown_count[env_ids] = 0.0
+        self._episode_qualified_touchdown_by_foot[env_ids] = 0.0
         self._episode_command_speed_sum[env_ids] = 0.0
         self._episode_base_height_sum[env_ids] = 0.0
         self._rolling_command_speed[env_ids] = 0.0

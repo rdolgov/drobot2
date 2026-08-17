@@ -21,6 +21,7 @@ const captureZeroAll = document.querySelector("#captureZeroAll");
 const gaitPanel = document.querySelector(".gait-panel");
 const setCrawlStance = document.querySelector("#setCrawlStance");
 const walkForward = document.querySelector("#walkForward");
+const walkDiagonalPair = document.querySelector("#walkDiagonalPair");
 const stopWalk = document.querySelector("#stopWalk");
 const gaitStage = document.querySelector("#gaitStage");
 const gaitPhase = document.querySelector("#gaitPhase");
@@ -398,29 +399,48 @@ function updateSummary(state) {
   const swingText = crawl.swing_corner
     ? ` / ${crawl.swing_corner.replaceAll("_", " ").toUpperCase()}`
     : "";
+  const swingPairText = Array.isArray(crawl.swing_pair) && crawl.swing_pair.length
+    ? ` / ${crawl.swing_pair
+        .map((corner) => corner.replaceAll("_", " ").toUpperCase())
+        .join(" + ")}`
+    : "";
   const pushText = crawl.push_partner
     ? ` / PUSH ${crawl.push_partner.replaceAll("_", " ").toUpperCase()}`
     : "";
   gaitPanel.classList.toggle("active", crawl.active);
+  const cycleText = crawl.stage === "walking"
+    ? ` / CYCLE ${crawl.completed_cycles + 1}`
+    : "";
   gaitStage.textContent = crawl.active
-    ? `${crawl.stage.toUpperCase()} / ${(crawl.progress * 100).toFixed(0)}%`
+    ? `${crawl.stage.toUpperCase()}${cycleText} / ${(crawl.progress * 100).toFixed(0)}%`
     : crawl.stage === "complete"
       ? "COMPLETE / HOLDING"
       : "READY / DISARMED";
-  gaitPhase.textContent = `${phaseText}${swingText}${pushText}`;
+  gaitPhase.textContent = `${phaseText}${swingText}${swingPairText}${pushText}`;
   gaitProgress.style.width = `${Math.max(0, Math.min(100, crawl.progress * 100))}%`;
-  gaitDetail.textContent = crawl.pattern === "distributed_push_crawl_v5"
-    ? `${crawl.cycles} cycles / ` +
-      `${(crawl.stride_mm).toFixed(0)} mm stride / ` +
-      `${(crawl.lift_mm).toFixed(0)} mm lift / ` +
-      `${crawl.duration_s.toFixed(1)} s`
-    : `${crawl.stride_mm.toFixed(0)} mm stride / ` +
+  gaitDetail.textContent = crawl.pattern === "diagonal_pair_flat_support_gait_v1"
+    ? `Continuous / 2 diagonal placements per cycle / ` +
+      `${crawl.stride_mm.toFixed(0)} mm stride / ` +
+      `${crawl.lift_mm.toFixed(0)} mm lift / 2 planted shoes / ` +
+      `STOP to end`
+    : crawl.pattern === "rectangular_flat_support_crawl_v8"
+      ? `Continuous / ` +
+        `${(crawl.stride_mm).toFixed(0)} mm stride / ` +
+        `${(crawl.lift_mm).toFixed(0)} mm lift / ` +
+        `3 planted shoes stay flat / ` +
+        `STOP to end`
+      : `${crawl.stride_mm.toFixed(0)} mm stride / ` +
       `${crawl.lift_mm.toFixed(0)} mm lift / ` +
       `${crawl.stance_fore_aft_mm.toFixed(0)} mm front/rear splay / ` +
       `${crawl.abduction_deg.toFixed(0)} deg outward / ` +
-      `${crawl.duration_s.toFixed(0)} s`;
+      (crawl.run_until_stopped
+        ? "STOP to end"
+        : `${crawl.duration_s.toFixed(0)} s`);
 
   walkForward.disabled =
+    crawl.active ||
+    state.any_armed;
+  walkDiagonalPair.disabled =
     crawl.active ||
     state.any_armed;
   setCrawlStance.disabled =
@@ -520,7 +540,19 @@ walkForward.addEventListener("click", () => {
   postAction(
     "/api/crawl-forward",
     { safety_ack: true, confirmation: "TEST DISTRIBUTED CRAWL" },
-    "Moving to the start stance, then running two distributed-push cycles",
+    "Moving to the start stance, then crawling continuously until STOP",
+  );
+});
+
+walkDiagonalPair.addEventListener("click", () => {
+  if (latestState?.any_armed) {
+    showNotice("Disarm all 12 motors before starting the gait sequence", true);
+    return;
+  }
+  postAction(
+    "/api/diagonal-pair-forward",
+    { safety_ack: true, confirmation: "TEST DIAGONAL PAIR GAIT" },
+    "Moving to the diagonal stance, then walking continuously until STOP",
   );
 });
 

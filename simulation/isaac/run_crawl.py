@@ -31,6 +31,7 @@ from _quadruped_runtime import (
     LINK_LENGTH_M,
     MAX_NO_LOAD_VELOCITY_RAD_S,
     QUASISTATIC_SWING_ORDER,
+    RECTANGULAR_SHOE_EFFECTIVE_DISTAL_LENGTH_M,
     add_robot_reference,
     body_tilt_deg,
     coordinated_push_crawl_by_name,
@@ -65,6 +66,7 @@ parser.add_argument("--cycles", type=float, default=4.0)
 parser.add_argument("--period", type=float, default=2.8)
 parser.add_argument("--stride", type=float, default=0.025)
 parser.add_argument("--lift", type=float, default=0.012)
+parser.add_argument("--support-extension", type=float, default=0.0)
 parser.add_argument("--weight-shift-forward", type=float, default=0.018)
 parser.add_argument("--weight-shift-lateral", type=float, default=0.018)
 parser.add_argument("--startup-blend-seconds", type=float, default=1.2)
@@ -100,6 +102,41 @@ parser.add_argument("--minimum-touchdown-seconds", type=float, default=0.15)
 parser.add_argument("--minimum-swing-clearance", type=float, default=0.004)
 parser.add_argument("--maximum-support-slip", type=float, default=0.015)
 parser.add_argument(
+    "--shoe-static-friction",
+    "--tpu-static-friction",
+    dest="shoe_static_friction",
+    type=float,
+    default=1.05,
+)
+parser.add_argument(
+    "--shoe-dynamic-friction",
+    "--tpu-dynamic-friction",
+    dest="shoe_dynamic_friction",
+    type=float,
+    default=0.85,
+)
+parser.add_argument(
+    "--shoe-restitution",
+    "--tpu-restitution",
+    dest="shoe_restitution",
+    type=float,
+    default=0.02,
+)
+parser.add_argument(
+    "--shoe-contact-stiffness",
+    "--tpu-contact-stiffness",
+    dest="shoe_contact_stiffness",
+    type=float,
+    default=12000.0,
+)
+parser.add_argument(
+    "--shoe-contact-damping",
+    "--tpu-contact-damping",
+    dest="shoe_contact_damping",
+    type=float,
+    default=45.0,
+)
+parser.add_argument(
     "--review-phase",
     type=float,
     default=0.875,
@@ -109,20 +146,22 @@ args, _ = parser.parse_known_args()
 
 if args.cycles <= 0.0 or args.period <= 0.5:
     parser.error("Cycles must be positive and period must exceed 0.5 seconds")
-if (
-    args.gait_mode
-    in (
-        "quasi-static",
-        "distributed-push",
-        "coordinated-push",
-    )
-    and args.period < 8.0
+if args.gait_mode == "distributed-push" and args.period < 4.0:
+    parser.error("Distributed-push crawl periods must be at least 4 seconds")
+if args.gait_mode in ("quasi-static", "coordinated-push") and args.period < 5.0:
+    parser.error("Guarded crawl periods must be at least 5 seconds")
+if not 0.005 <= args.stride <= 0.120:
+    parser.error("Stride must be between 0.005 and 0.120 meters")
+if not 0.003 <= args.lift <= 0.080:
+    parser.error("Lift must be between 0.003 and 0.080 meters")
+if not 0.0 <= args.support_extension <= 0.010:
+    parser.error("Support extension must be between 0 and 0.010 meters")
+if args.gait_mode == "distributed-push" and not math.isclose(
+    args.support_extension,
+    0.0,
+    abs_tol=1e-12,
 ):
-    parser.error("Guarded crawl periods must be at least 8 seconds")
-if not 0.005 <= args.stride <= 0.075:
-    parser.error("Stride must be between 0.005 and 0.075 meters")
-if not 0.003 <= args.lift <= 0.025:
-    parser.error("Lift must be between 0.003 and 0.025 meters")
+    parser.error("Rectangular flat-support gait requires zero support extension")
 if (
     args.startup_blend_seconds <= 0.0
     or args.settle_seconds <= 0.0
@@ -141,6 +180,12 @@ if not 0.0 < args.minimum_support_contact_fraction <= 1.0:
     parser.error("Minimum support contact fraction must be in (0, 1]")
 if args.minimum_swing_clearance <= 0.0 or args.maximum_support_slip <= 0.0:
     parser.error("Clearance and slip thresholds must be positive")
+if not 0.0 <= args.shoe_dynamic_friction <= args.shoe_static_friction:
+    parser.error("Shoe friction must satisfy 0 <= dynamic <= static")
+if not 0.0 <= args.shoe_restitution <= 1.0:
+    parser.error("Shoe restitution must be in [0, 1]")
+if args.shoe_contact_stiffness <= 0.0 or args.shoe_contact_damping < 0.0:
+    parser.error("Shoe contact stiffness must be positive and damping non-negative")
 
 torque_profile, effort_cap_nm = torque_cap_nm(
     args.torque_cap,
@@ -177,7 +222,129 @@ DYNAMIC_FRICTION = 0.75
 RESTITUTION = 0.02
 CONTACT_STIFFNESS_N_M = 12000.0
 CONTACT_DAMPING_N_S_M = 45.0
-FOOT_CONTACT_RADIUS_M = 0.0125
+VIRTUAL_FORK_TIP_RADIUS_M = 0.0125
+RECTANGULAR_SHOE_LENGTH_FORE_AFT_M = 0.100
+RECTANGULAR_SHOE_WIDTH_LATERAL_M = 0.060
+RECTANGULAR_SHOE_SOLE_BACK_FROM_FORK_M = 0.024
+RECTANGULAR_SHOE_SOLE_THICKNESS_M = 0.006
+RECTANGULAR_SHOE_TREAD_LENGTH_M = 0.094
+RECTANGULAR_SHOE_TREAD_WIDTH_M = 0.054
+RECTANGULAR_SHOE_TREAD_PROJECTION_M = 0.001
+RECTANGULAR_SHOE_SOLE_CENTER_FROM_FORK_M = (
+    RECTANGULAR_SHOE_SOLE_BACK_FROM_FORK_M
+    + RECTANGULAR_SHOE_SOLE_THICKNESS_M / 2.0
+)
+RECTANGULAR_SHOE_TREAD_CENTER_FROM_FORK_M = (
+    RECTANGULAR_SHOE_SOLE_BACK_FROM_FORK_M
+    + RECTANGULAR_SHOE_SOLE_THICKNESS_M
+    + RECTANGULAR_SHOE_TREAD_PROJECTION_M / 2.0
+)
+RECTANGULAR_SHOE_TREAD_HALF_DIAGONAL_M = math.hypot(
+    RECTANGULAR_SHOE_TREAD_LENGTH_M / 2.0,
+    RECTANGULAR_SHOE_TREAD_WIDTH_M / 2.0,
+)
+
+
+def _author_rectangular_shoe_contact_proxies() -> dict:
+    """Replace fork-tip spheres with rectangular sole and tread boxes."""
+    stage = stage_utils.get_current_stage()
+    existing_prims = list(stage.Traverse())
+    disabled_paths: list[str] = []
+    distal_paths: list[Sdf.Path] = []
+    expected_names = {f"{leg}_distal_link" for leg in LEGS}
+    for prim in existing_prims:
+        name = prim.GetName()
+        if (
+            name.startswith("simulation_only_fork_tip_contact_proxy")
+            or name.startswith("simulation_only_tpu_fork_shoe_proxy")
+            or name.startswith("simulation_only_rigid_shoe_")
+        ) and prim.HasAPI(UsdPhysics.CollisionAPI):
+            UsdPhysics.CollisionAPI(prim).CreateCollisionEnabledAttr().Set(False)
+            disabled_paths.append(str(prim.GetPath()))
+        if name in expected_names:
+            distal_paths.append(prim.GetPath())
+
+    if len(distal_paths) != len(LEGS):
+        raise AssertionError(
+            f"Expected {len(LEGS)} distal links for rigid shoes, found {distal_paths}"
+        )
+
+    proxy_paths: list[str] = []
+    for distal_path in distal_paths:
+        sole_path = distal_path.AppendChild(
+            "simulation_only_rectangular_shoe_sole_proxy"
+        )
+        sole = UsdGeom.Cube.Define(stage, sole_path)
+        sole.CreateSizeAttr().Set(1.0)
+        sole.CreateDisplayColorAttr().Set([Gf.Vec3f(0.18, 0.22, 0.28)])
+        sole_xform = UsdGeom.Xformable(sole.GetPrim())
+        sole_xform.AddTranslateOp().Set(
+            Gf.Vec3d(
+                LINK_LENGTH_M + RECTANGULAR_SHOE_SOLE_CENTER_FROM_FORK_M,
+                0.0,
+                0.0,
+            )
+        )
+        sole_xform.AddScaleOp().Set(
+            Gf.Vec3d(
+                RECTANGULAR_SHOE_SOLE_THICKNESS_M,
+                RECTANGULAR_SHOE_LENGTH_FORE_AFT_M,
+                RECTANGULAR_SHOE_WIDTH_LATERAL_M,
+            )
+        )
+        UsdPhysics.CollisionAPI.Apply(sole.GetPrim())
+        proxy_paths.append(str(sole_path))
+
+        pad_path = distal_path.AppendChild(
+            "simulation_only_rectangular_shoe_tread_proxy"
+        )
+        pad = UsdGeom.Cube.Define(stage, pad_path)
+        pad.CreateSizeAttr().Set(1.0)
+        pad.CreateDisplayColorAttr().Set([Gf.Vec3f(0.12, 0.65, 0.24)])
+        pad_xform = UsdGeom.Xformable(pad.GetPrim())
+        pad_xform.AddTranslateOp().Set(
+            Gf.Vec3d(
+                LINK_LENGTH_M + RECTANGULAR_SHOE_TREAD_CENTER_FROM_FORK_M,
+                0.0,
+                0.0,
+            )
+        )
+        pad_xform.AddScaleOp().Set(
+            Gf.Vec3d(
+                RECTANGULAR_SHOE_TREAD_PROJECTION_M,
+                RECTANGULAR_SHOE_TREAD_LENGTH_M,
+                RECTANGULAR_SHOE_TREAD_WIDTH_M,
+            )
+        )
+        UsdPhysics.CollisionAPI.Apply(pad.GetPrim())
+        proxy_paths.append(str(pad_path))
+
+    return {
+        "shape": (
+            "100 x 60 x 6 mm rectangular PLA sole plus "
+            "94 x 54 x 1 mm bonded tread"
+        ),
+        "proxy_paths": proxy_paths,
+        "disabled_legacy_proxy_paths": disabled_paths,
+        "fork_axis_to_contact_face_m": (
+            RECTANGULAR_SHOE_EFFECTIVE_DISTAL_LENGTH_M - LINK_LENGTH_M
+        ),
+        "effective_distal_contact_length_m": (
+            RECTANGULAR_SHOE_EFFECTIVE_DISTAL_LENGTH_M
+        ),
+        "sole_size_xyz_m": [
+            RECTANGULAR_SHOE_SOLE_THICKNESS_M,
+            RECTANGULAR_SHOE_LENGTH_FORE_AFT_M,
+            RECTANGULAR_SHOE_WIDTH_LATERAL_M,
+        ],
+        "tread_size_xyz_m": [
+            RECTANGULAR_SHOE_TREAD_PROJECTION_M,
+            RECTANGULAR_SHOE_TREAD_LENGTH_M,
+            RECTANGULAR_SHOE_TREAD_WIDTH_M,
+        ],
+        "cad_pla_mass_estimate_per_shoe_g": 70.237,
+        "mass_model": "approximately 70.237 g per shoe omitted",
+    }
 
 
 def _numpy(value) -> np.ndarray:
@@ -236,7 +403,7 @@ def _configure_physics() -> dict:
     }
 
 
-def _apply_contact_material() -> dict:
+def _apply_contact_material(shoe_proxy_paths: tuple[str, ...] = ()) -> dict:
     stage = stage_utils.get_current_stage()
     material = UsdShade.Material.Define(
         stage,
@@ -266,7 +433,7 @@ def _apply_contact_material() -> dict:
         raise AssertionError("No robot collision received contact material")
     if not any(path.startswith("/World/GroundPlane") for path in bound_paths):
         raise AssertionError("Ground collision did not receive contact material")
-    return {
+    result = {
         "material_path": str(material.GetPath()),
         "static_friction": STATIC_FRICTION,
         "dynamic_friction": DYNAMIC_FRICTION,
@@ -276,6 +443,44 @@ def _apply_contact_material() -> dict:
         "bound_collision_count": len(bound_paths),
         "status": "provisional_until_printed_fork_tip_and_floor_are_measured",
     }
+    if shoe_proxy_paths:
+        shoe_material = UsdShade.Material.Define(
+            stage,
+            "/World/Materials/RectangularShoeTreadContact",
+        )
+        shoe_material_api = UsdPhysics.MaterialAPI.Apply(shoe_material.GetPrim())
+        shoe_material_api.CreateStaticFrictionAttr().Set(args.shoe_static_friction)
+        shoe_material_api.CreateDynamicFrictionAttr().Set(args.shoe_dynamic_friction)
+        shoe_material_api.CreateRestitutionAttr().Set(args.shoe_restitution)
+        shoe_physx_api = PhysxSchema.PhysxMaterialAPI.Apply(shoe_material.GetPrim())
+        shoe_physx_api.CreateCompliantContactStiffnessAttr().Set(
+            args.shoe_contact_stiffness
+        )
+        shoe_physx_api.CreateCompliantContactDampingAttr().Set(
+            args.shoe_contact_damping
+        )
+        for path in shoe_proxy_paths:
+            prim = stage.GetPrimAtPath(path)
+            if not prim.IsValid() or not prim.HasAPI(UsdPhysics.CollisionAPI):
+                raise AssertionError(
+                    f"Invalid rectangular-shoe collision path: {path}"
+                )
+            UsdShade.MaterialBindingAPI.Apply(prim).Bind(
+                shoe_material,
+                UsdShade.Tokens.strongerThanDescendants,
+                "physics",
+            )
+        result["rectangular_shoe"] = {
+            "material_path": str(shoe_material.GetPath()),
+            "static_friction": args.shoe_static_friction,
+            "dynamic_friction": args.shoe_dynamic_friction,
+            "restitution": args.shoe_restitution,
+            "compliant_contact_stiffness_n_m": args.shoe_contact_stiffness,
+            "compliant_contact_damping_n_s_m": args.shoe_contact_damping,
+            "bound_collision_paths": list(shoe_proxy_paths),
+            "status": "provisional_unmeasured_bonded_tread_contact",
+        }
+    return result
 
 
 def _set_drives(robot: Articulation) -> dict:
@@ -341,6 +546,7 @@ def _gait_pose_and_state(gait_time_s: float) -> tuple[dict[str, float], dict]:
             period_s=args.period,
             stride_m=args.stride,
             lift_m=args.lift,
+            support_extension_m=args.support_extension,
             weight_shift_forward_m=args.weight_shift_forward,
             weight_shift_lateral_m=args.weight_shift_lateral,
             down_m=args.stance_down,
@@ -412,17 +618,54 @@ def _sample_feet(feet: RigidPrim) -> dict[str, np.ndarray]:
         )
     normal_loads = np.maximum(force_matrix[:, 0, 2], 0.0)
     tip_centers = np.empty((len(LEGS), 3), dtype=float)
-    local_tip = np.asarray([LINK_LENGTH_M, 0.0, 0.0], dtype=float)
+    rectangular_shoes = args.gait_mode == "distributed-push"
+    local_tip = np.asarray(
+        [
+            RECTANGULAR_SHOE_EFFECTIVE_DISTAL_LENGTH_M
+            if rectangular_shoes
+            else LINK_LENGTH_M,
+            0.0,
+            0.0,
+        ],
+        dtype=float,
+    )
+    tip_bottom_heights = np.empty(len(LEGS), dtype=float)
+    local_tread_corners = tuple(
+        np.asarray(
+            [
+                RECTANGULAR_SHOE_EFFECTIVE_DISTAL_LENGTH_M,
+                y_sign * RECTANGULAR_SHOE_TREAD_LENGTH_M / 2.0,
+                z_sign * RECTANGULAR_SHOE_TREAD_WIDTH_M / 2.0,
+            ],
+            dtype=float,
+        )
+        for y_sign in (-1.0, 1.0)
+        for z_sign in (-1.0, 1.0)
+    )
     for index in range(len(LEGS)):
         tip_centers[index] = positions[index] + _rotate_wxyz(
             orientations[index],
             local_tip,
         )
+        if rectangular_shoes:
+            tip_bottom_heights[index] = min(
+                float(
+                    (
+                        positions[index]
+                        + _rotate_wxyz(orientations[index], corner)
+                    )[2]
+                )
+                for corner in local_tread_corners
+            )
+        else:
+            tip_bottom_heights[index] = (
+                tip_centers[index, 2] - VIRTUAL_FORK_TIP_RADIUS_M
+            )
     return {
         "normal_load_n": normal_loads,
         "ground_force_world_n": force_matrix[:, 0, :],
         "tip_center_position_m": tip_centers,
-        "tip_bottom_height_m": tip_centers[:, 2] - FOOT_CONTACT_RADIUS_M,
+        "tip_bottom_height_m": tip_bottom_heights,
     }
 
 
@@ -625,7 +868,9 @@ report = {
     "servo_model": "Feetech ST-3215-C018 / Waveshare ST3215 12 V",
     "assessment_scope": (
         "Floating-base dynamics with PLA/battery/electronics inertias from the "
-        "URDF. Current distal fork-tip contacts approximate feet."
+        "URDF plus runtime boxes for each 100 x 60 x 6 mm rectangular PLA "
+        "sole and 94 x 54 x 1 mm tread. The approximately 70.237 g shoe mass, "
+        "adhesive compliance, rounded corners, and structural flex are omitted."
     ),
 }
 exit_code = 1
@@ -647,7 +892,15 @@ try:
         args.usd,
         "/World/Robot",
     )
-    report["contact_material"] = _apply_contact_material()
+    shoe_proxy_paths: tuple[str, ...] = ()
+    if args.gait_mode == "distributed-push":
+        report["rectangular_shoe_contact_proxy"] = (
+            _author_rectangular_shoe_contact_proxies()
+        )
+        shoe_proxy_paths = tuple(
+            report["rectangular_shoe_contact_proxy"]["proxy_paths"]
+        )
+    report["contact_material"] = _apply_contact_material(shoe_proxy_paths)
 
     robot = Articulation("/World/Robot", reset_xform_op_properties=True)
     link_path_by_name = dict(
@@ -691,13 +944,25 @@ try:
         "leg_order": list(LEGS),
         "distal_link_paths": distal_link_paths,
         "ground_filter_path": ground.planes.paths[0],
-        "foot_proxy_radius_m": FOOT_CONTACT_RADIUS_M,
+        "foot_proxy_radius_m": (
+            RECTANGULAR_SHOE_TREAD_HALF_DIAGONAL_M
+            if args.gait_mode == "distributed-push"
+            else VIRTUAL_FORK_TIP_RADIUS_M
+        ),
+        "effective_contact_length_m": (
+            RECTANGULAR_SHOE_EFFECTIVE_DISTAL_LENGTH_M
+            if args.gait_mode == "distributed-push"
+            else LINK_LENGTH_M
+        ),
         "contact_on_threshold_n": args.contact_on_threshold_n,
         "contact_off_threshold_n": args.contact_off_threshold_n,
         "physics_tensor_valid": bool(feet.is_physics_tensor_entity_valid()),
         "scope": (
             "Ground-filtered force on each distal link plus the transformed "
-            "fork-tip sphere center; no physical printed foot exists."
+            "center of the rectangular shoe's flat tread face for "
+            "distributed-push mode."
+            if args.gait_mode == "distributed-push"
+            else "fork-tip sphere center; no physical printed foot exists."
         ),
     }
     if not report["contact_tracking"]["physics_tensor_valid"]:
@@ -922,6 +1187,16 @@ try:
         )
     )
     swing_phase_name = "swing_push" if args.gait_mode == "coordinated-push" else "swing"
+    three_support_phase_names = (
+        ("lift", "swing", "lower")
+        if args.gait_mode == "distributed-push"
+        else ("lift", swing_phase_name, "lower")
+    )
+    touchdown_phase_names = (
+        ("firm_plant", "weight_return", "all_feet_push", "step_settle")
+        if args.gait_mode == "distributed-push"
+        else ("touchdown", "weight_return", "all_feet_push", "step_settle")
+    )
     if contact_verified_mode:
         for leg in contact_verified_order:
             swing_records = [
@@ -933,7 +1208,7 @@ try:
                 record
                 for record in contact_samples
                 if record["swing_leg"] == leg
-                and record["phase"] in ("lift", swing_phase_name, "lower")
+                and record["phase"] in three_support_phase_names
             ]
             airborne_records = [
                 record for record in swing_records if not record["contact_by_leg"][leg]
@@ -955,8 +1230,7 @@ try:
                 record
                 for record in contact_samples
                 if record["swing_leg"] == leg
-                and record["phase"]
-                in ("touchdown", "weight_return", "all_feet_push", "step_settle")
+                and record["phase"] in touchdown_phase_names
             ]
             longest_unload_s = (
                 _longest_contact_run(swing_records, leg, False) / CONTROL_HZ
@@ -1004,8 +1278,8 @@ try:
         "foot_step_evidence": foot_step_evidence,
         "evidence_scope": (
             "Force is ground-filtered per distal link. Slip is transformed "
-            "fork-tip center displacement while that leg is loaded; it is "
-            "not an optical-flow estimate."
+            "rectangular-shoe tread-face-center displacement while that leg is "
+            "loaded; it is not an optical-flow estimate."
         ),
     }
 
@@ -1055,6 +1329,11 @@ try:
                 "period_s": args.period,
                 "stride_m": args.stride,
                 "lift_m": args.lift,
+                "support_extension_m": (
+                    args.support_extension
+                    if args.gait_mode == "distributed-push"
+                    else None
+                ),
                 "duty_factor": (
                     CRAWL_DUTY_FACTOR if args.gait_mode == "crawl" else None
                 ),

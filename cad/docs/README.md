@@ -10,7 +10,9 @@ their corresponding top-level areas.
 | Imported design history | [`migration.md`](migration.md) |
 | Coordinate conventions | [`../specs/coordinate-system.md`](../specs/coordinate-system.md) |
 | Mechanical interfaces and part contracts | [`../specs/`](../specs/) |
-| TPU distal-fork shoe | [`tpu-fork-shoe.md`](tpu-fork-shoe.md) |
+| Rectangular PLA distal-fork shoe | [`rectangular-fork-shoe.md`](rectangular-fork-shoe.md) |
+| Rigid low-profile distal-fork shoe | [`rigid-fork-shoe.md`](rigid-fork-shoe.md) |
+| Superseded TPU distal-fork shoe | [`tpu-fork-shoe.md`](tpu-fork-shoe.md) |
 | CAD-derived URDF assumptions | [`../specs/quadruped-urdf-ledger.md`](../specs/quadruped-urdf-ledger.md) |
 | Purchasable/reference geometry provenance | [`../vendor/README.md`](../vendor/README.md) |
 

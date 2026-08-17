@@ -23,14 +23,14 @@ class DrobotCommandedWalkingForwardPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 64
     max_iterations = 500
     save_interval = 25
-    experiment_name = "drobot_commanded_walk_forward_v16_sustained_beta_direct"
+    experiment_name = "drobot_commanded_walk_forward_v18_coordinated_trot_selected"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
     clip_actions = 1.0
     actor = RslRlMLPModelCfg(
         hidden_dims=[256, 256],
         activation="elu",
-        # Keep the exact raw 48-value hardware observation contract used by the
-        # proven SB3 actor.  The privileged critic remains normalized.
+        # The deployable observation adds only a sine/cosine gait clock to the
+        # proven command, IMU, joint-state, and previous-action contract.
         obs_normalization=False,
         distribution_cfg=DrobotBoundedBetaDistributionCfg(),
     )
@@ -61,4 +61,4 @@ class DrobotCommandedWalkingDirectionalPPORunnerCfg(
 ):
     """Same network shape, expanded to forward/backward/turn commands."""
 
-    experiment_name = "drobot_commanded_walk_directional_v16_sustained_beta_direct"
+    experiment_name = "drobot_commanded_walk_directional_v18_coordinated_trot_selected"

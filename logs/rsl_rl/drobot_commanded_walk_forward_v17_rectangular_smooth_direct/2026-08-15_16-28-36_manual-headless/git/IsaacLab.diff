@@ -1,0 +1,16 @@
+--- git commit ---
+90ee100616d9b77eb8e28f171252dc58e39181d7
+
+
+--- git status ---
+On branch develop
+Your branch is up to date with 'origin/develop'.
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	1.0.3
+
+nothing added to commit but untracked files present (use "git add" to track) 
+
+
+--- git diff ---

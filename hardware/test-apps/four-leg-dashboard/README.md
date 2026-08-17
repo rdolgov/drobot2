@@ -132,35 +132,49 @@ port with another dashboard process.
    structure, support, and complete-robot collision behavior have separate
    validation.
 
-## Distributed-push crawl V5
+## Rectangular flat-support crawl V8
 
-The previous manually proposed three-joint sequence was not a gait: it did not
-lift and replace every foot or produce a coordinated support-leg push. V5 uses
-foot-space inverse kinematics and repeats this order:
+The current gait uses foot-space inverse kinematics and repeats this order:
 
 1. rear right;
 2. front right;
 3. rear left; and
 4. front left.
 
-Each foot step has eight phases: weight transfer, lift, swing, lower,
-touchdown, weight return, all-feet push, and settle. Only one foot is airborne.
+Each foot step has eight phases: weight transfer, lift, swing, lower, firm
+plant, weight return, all-feet push, and settle. Only one foot is airborne.
 After it lands, all four planted feet move rearward by one quarter of the
 stride. Four such pushes translate the body while returning every foot target
 to the next periodic starting position.
 
-The start stance is computed rather than hardcoded. The tracked geometry uses
-`300 mm` downward reach, `25 mm` fore/aft separation, no extra abduction, and
-the physically verified knee convention: front knees negative/downward and
-rear knees positive/downward. **SET GAIT START STANCE** moves to the exact pose
-used at gait time zero without beginning the crawl.
+The start stance is computed rather than hardcoded. The rectangular shoe's PLA
+face is `30 mm` beyond the distal fork axis, and its recommended bonded tread
+adds `1 mm`. The gait therefore uses a `159.896689 mm` proximal link and a
+`190.896689 mm` effective knee-to-contact length.
 
-**TEST DISTRIBUTED CRAWL** runs two approximately 6.67-second cycles with a
-`112 mm` stride, `14 mm` lift, and `16 mm` fore/aft body-weight transfer. This
-triples the trajectory rate from the prior 20-second baseline. The lateral
-shift is zero because the simulated robot completed every foot unload without
-it and because an unverified open-loop lateral body command adds a physical
-fall mode. The controller uses smooth interpolation throughout the phase table.
+The `100 x 60 mm` sole is flat rather than a rocker. Gait V8 keeps every planted
+leg at `hip flexion + knee = 0 degrees`, so the distal link and shoe normal
+point vertically down throughout weight transfer, swing, touchdown, and the
+four-foot push. The previous 3 mm fixed-X support extension was removed because
+it deliberately tipped the three planted soles. The swing leg returns to zero
+sole pitch before the firm-plant phase.
+
+Because the robot has only two pitch joints per leg, it cannot independently
+command swing-foot X, height, and pitch. V8 prioritizes the requested 90-degree
+flatness for every loaded shoe; only the unloaded swing shoe may pitch. Source
+sampling limits that temporary pitch to `17.25 degrees` with the selected lift,
+while the lowest long edge retains at least `20.2 mm` analytic clearance during
+the horizontal swing. Zero hip abduction and zero lateral shift preserve full
+3D flatness for support.
+
+The tracked nominal stance is `329.341 mm` deep with `80 mm` front/rear separation
+from each hip and no extra abduction. **SET GAIT START STANCE** moves to the
+exact phase-zero flat-sole pose without beginning the crawl. **TEST DISTRIBUTED
+CRAWL** repeats its 4-second cycle until **STOP + DISARM** is pressed. It uses a
+`96 mm` stride, `35 mm` contact-centre lift, zero support extension, a `24 mm`
+planted-foot push after each placement, and `6 mm` of fore/aft body transfer.
+Each horizontal swing happens only after the selected rectangular shoe has
+lifted. The controller uses smooth interpolation throughout the phase table.
 
 The exact equations, phase fractions, sign convention, simulation evidence,
 and physical trial ladder are in
@@ -178,11 +192,65 @@ voltage-spread, and diagnostic-current warnings remain visible but do not stop
 the command.
 
 The tracked defaults live in `[crawl]` in `../../robot-runtime/four-leg.toml`.
-The parser permits a 5-120 mm stride, 5-25 mm lift, 5-60 second period, and one
-to four cycles. The current `cycles = 2` setting is intentional and matches the
-two-cycle Isaac validation.
+The parser permits a 5-120 mm stride, 5-80 mm lift, 4-60 second period, and one
+to four finite-fallback cycles. `run_until_stopped = true` makes both dashboard
+walking buttons loop continuously; the retained `cycles = 2` value is used only
+if that setting is deliberately disabled.
+
+### Separate diagonal-pair mode
+
+**TEST DIAGONAL PAIRS** starts a separate `/api/diagonal-pair-forward` routine;
+it does not replace or redirect **TEST DISTRIBUTED CRAWL**. Front-left and
+rear-right lift and advance together, followed by front-right and rear-left.
+During each airborne phase the opposite diagonal remains on the exact flat-sole
+branch. After the pair plants, all four targets push rearward by half a stride.
+
+The mode continuously repeats a 4-second cycle with two diagonal placements,
+a 96 mm stride, and 35 mm lift until **STOP + DISARM** is pressed. Offline
+geometry sampling found a periodic path with a `67.25 degree` maximum
+hip-flexion target, `73.11 degree` maximum knee target, `144.1 degrees/s` peak
+requested rate, and at least `19.43 mm` of long-edge clearance during
+horizontal swing. These values fit the tracked hardware profiles and
+command-rate cap.
+
+Two diagonal contacts form a support line rather than the three-foot support
+polygon used by the original crawl. The routine is therefore more sensitive to
+center-of-mass error, compliance, and floor contact. It has not been run in
+Isaac or on hardware. The full sequence and target equations are documented in
+[`specs/diagonal-pair-gait-v1.md`](specs/diagonal-pair-gait-v1.md).
 
 ## Isaac validation status
+
+The retained Isaac result is for the previous `24 mm` V8 stride, not the active
+`96 mm` hardware profile. It used two cycles with rectangular `100 x 60 x 6
+mm` PLA collision boxes and `94 x 54 x 1 mm` tread boxes. The robot remained
+upright and moved forward, but the strict result is **FAIL**:
+peak tracking error was `0.223851 rad` and only the rear-right and rear-left
+placements passed the per-foot force/contact-duration gate. The rigid model can
+support the broad coplanar shoes on a diagonal pair, so this result is stable
+preliminary evidence rather than proof that every physical shoe is loaded.
+
+| Metric | V8 24 mm two-cycle baseline |
+| --- | ---: |
+| Forward displacement | 53.31 mm |
+| Lateral drift | 0.33 mm |
+| Maximum body tilt | 1.84 degrees |
+| Minimum base height | 0.3738 m |
+| Peak / RMS joint error | 0.2239 / 0.0416 rad |
+| Maximum joint speed | 2.269 rad/s |
+| Expected support contact | 87.56% |
+| Maximum support slip | 5.34 mm |
+| Contact-verified placements | rear right, rear left |
+
+The report and screenshot are
+[`validation/isaac-rectangular-flat-crawl-v8.json`](validation/isaac-rectangular-flat-crawl-v8.json)
+and
+[`validation/isaac-rectangular-flat-crawl-v8.png`](validation/isaac-rectangular-flat-crawl-v8.png).
+The proxy omits the CAD-estimated `70.237 g` mass of each PLA shoe, adhesive
+compliance, 2 mm corner radii, and physical backlash.
+
+The evidence below is retained historical V5/TPU evidence and must not be
+attributed to V8.
 
 The hardware and Isaac implementations use matching distributed-push
 equations. Before the physical stride was doubled, the selected two-cycle
@@ -213,10 +281,53 @@ but moved `59.73 mm` rather than farther. Its peak joint speed increased from
 `1.448` to `1.842 rad/s`; the extra simulated torque reserve did not improve
 travel. That comparison is retained at
 [`validation/isaac-distributed-push-max-power-control.json`](validation/isaac-distributed-push-max-power-control.json).
+After the shoe update, one peak/stall-cap quick check used the then-current `112 mm`
+stride, `60 mm` lift, `6.67 s` period, `357 mm` downward reach, and a rigid
+`54 x 48 x 48 mm` capsule approximation for each TPU shoe. The run stayed
+upright, moved `115.61 mm` forward, and reached `3.83 degrees` maximum tilt,
+but the result is **FAIL**, not a validated gait: maximum joint error was
+`0.481 rad`, support slip was `34.54 mm`, and the final front-left step did not
+meet the contact-duration gate. The report is
+[`validation/isaac-tpu-shoe-crawl-quick.json`](validation/isaac-tpu-shoe-crawl-quick.json).
+The proxy omits TPU compliance, shoe mass, vents, and changing rocker contact.
 Simulation remains a geometry and dynamics screen, not permission for an
-untethered first physical run. The current `112 mm`, 6.67-second physical-trial
-profile and its `300 mm` nominal downward reach have not been simulated; these
-changes were requested after this retained baseline.
+untethered first physical run.
+
+The first physical trial with the TPU shoes and `112 mm` stride fell forward.
+The subsequent `56 mm` profile fell backward. For that historical V5 work, the
+rounded shoes were treated as possible energy-storage elements and the
+simulator gave each proxy a separate provisional compliant TPU contact
+material. The selected assumptions were static friction `1.05`, dynamic
+friction `0.85`, restitution `0.03`,
+contact stiffness `8000 N/m`, and contact damping `45 N s/m`. These are tuning
+assumptions, not measured properties of the printed shoe.
+
+The comparison screened shorter strides, lower lift, slower periods, lateral
+weight transfer, and two compliance/damping ranges. The slow 12-second trials
+and the 8 mm lateral-shift trial collapsed. The least unstable result used a
+`40 mm` stride, `40 mm` lift, 8-second period, and `12 mm` fore/aft transfer.
+It stayed upright, moved `50.60 mm` forward, reached `7.10 degrees` maximum
+tilt, limited maximum joint error to `0.296 rad`, and limited support slip to
+`11.10 mm`. It is still a strict **FAIL** because `0.296 rad` exceeds the
+`0.15 rad` tracking limit and rear-left did not maintain the required
+three-foot support duration. The comparison used Isaac's short-duration
+peak/stall torque cap; the physical profiles retain their configured 90%
+limit. This was the next candidate before the rigid shoe superseded it; it was
+never a validated autonomous gait.
+
+Historical flexible-shoe evidence:
+
+- [`validation/isaac-tpu-flex-crawl-40mm-8s-moderate.json`](validation/isaac-tpu-flex-crawl-40mm-8s-moderate.json)
+- [`validation/isaac-tpu-flex-crawl-40mm-8s-moderate.png`](validation/isaac-tpu-flex-crawl-40mm-8s-moderate.png)
+
+That historical TPU comparison selected a `40 mm` profile. The active
+rectangular flat-support V8 configuration supersedes it with a `96 mm` stride,
+`24 mm` planted-foot pushes, a `35 mm` contact-centre lift, and zero support
+extension. Offline trajectory sampling keeps the largest hip-flexion target at
+`70.65 degrees`, inside the hardware profile's 90-degree limit, and the largest
+knee target at `75.71 degrees`, inside its 120-degree limit. The active 96 mm,
+4-second profile has not been run in Isaac; no result is claimed from the older
+reports.
 
 ## Center all twelve joints
 

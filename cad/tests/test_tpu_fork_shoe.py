@@ -19,7 +19,7 @@ def test_shoe_is_one_valid_printable_solid_with_expected_envelope() -> None:
     assert shoe.is_valid
     assert len(shoe.solids()) == 1
     assert tuple(bounds.min) == pytest.approx((-11.5, -24.0, -24.0), abs=0.05)
-    assert tuple(bounds.max) == pytest.approx((72.5, 24.0, 24.0), abs=0.05)
+    assert tuple(bounds.max) == pytest.approx((60.5, 24.0, 24.0), abs=0.05)
 
 
 def test_four_rod_clearances_reuse_the_existing_fork_pattern() -> None:
@@ -49,9 +49,9 @@ def test_hub_and_local_pads_preserve_fork_clearance() -> None:
 
 def test_oval_rocker_has_no_flat_contact_pad_and_keeps_shell_wall() -> None:
     shoe = generated_shoe()
-    assert tpu_fork_shoe.CONTACT_OUTER_AXIAL_RADIUS_X_MM == pytest.approx(30.0)
+    assert tpu_fork_shoe.CONTACT_OUTER_AXIAL_RADIUS_X_MM == pytest.approx(27.0)
     assert tpu_fork_shoe.CONTACT_OUTER_RADIAL_RADIUS_MM == pytest.approx(24.0)
-    assert tpu_fork_shoe.CONTACT_INNER_AXIAL_RADIUS_X_MM == pytest.approx(26.0)
+    assert tpu_fork_shoe.CONTACT_INNER_AXIAL_RADIUS_X_MM == pytest.approx(23.0)
     assert tpu_fork_shoe.CONTACT_INNER_RADIAL_RADIUS_MM == pytest.approx(20.0)
     assert tpu_fork_shoe.SHELL_WALL_MM == pytest.approx(4.0)
     assert shoe.is_inside(
@@ -78,6 +78,24 @@ def test_oval_rocker_has_no_flat_contact_pad_and_keeps_shell_wall() -> None:
         )
         for face in shoe.faces()
     )
+
+
+def test_oval_rocker_fuses_directly_into_hub_without_load_core() -> None:
+    assert tpu_fork_shoe.CONTACT_HUB_OVERLAP_X_MM == pytest.approx(5.0)
+    assert tpu_fork_shoe.CONTACT_BACK_X_MM == pytest.approx(
+        tpu_fork_shoe.HUB_RADIUS_MM
+        - tpu_fork_shoe.CONTACT_HUB_OVERLAP_X_MM
+    )
+    assert (
+        tpu_fork_shoe.CONTACT_CENTER_X_MM
+        + tpu_fork_shoe.CONTACT_OUTER_AXIAL_RADIUS_X_MM
+    ) == pytest.approx(tpu_fork_shoe.CONTACT_NOSE_X_MM)
+
+    overlap = tpu_fork_shoe.make_attachment_hub().intersect(
+        tpu_fork_shoe.make_ball_shell()
+    )
+    assert overlap is not None
+    assert sum(float(solid.volume) for solid in overlap.solids()) > 0.0
 
 
 def test_installed_shoe_clears_the_existing_lower_leg() -> None:

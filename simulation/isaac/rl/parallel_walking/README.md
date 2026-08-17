@@ -1,12 +1,14 @@
 # Parallel commanded walking
 
 This task trains a pure PPO policy across many Isaac Lab environments. It starts every
-robot in the validated symmetric, four-foot neutral stance. There is no scripted gait,
-phase clock, foot order, or motion trajectory.
+robot in the validated symmetric, four-foot neutral stance. V18 provides an analytic
+diagonal-pair gait reference and clock, while PPO remains responsible for balance and
+the final joint commands.
 
-The policy observation has 48 hardware-reproducible values:
+The policy observation has 50 hardware-reproducible values:
 
 - commanded forward velocity, lateral velocity, and yaw rate (3)
+- sine and cosine of the gait clock (2)
 - body IMU angular velocity, projected gravity, and linear acceleration (9)
 - joint position error, normalized joint velocity, and previous action (36)
 
@@ -16,7 +18,47 @@ The actor is a two-layer 256x256 MLP using deployable IMU and joint state. Durin
 only, the critic also sees simulator base velocity, base height, and foot contacts. Those
 privileged values are never required by the deployed actor.
 
-## V16 sustained-walking correction
+## V18 coordinated walking
+
+V18 fixes the stationary bent-knee behavior seen in the V17 review. Its reward makes
+commanded forward speed and sustained displacement the dominant objective, explicitly
+penalizes two-second stalls, and adds action-rate plus action-acceleration costs for
+smoothness. A 0.8-second gait clock schedules diagonal pairs: front-left with rear-right,
+then front-right with rear-left. Per-leg touchdown and scheduled-contact metrics ensure
+that a policy cannot score well by dragging or ignoring a leg.
+
+The selected `model_299.pt` completed three deterministic, uninterrupted 30-second
+trials with zero falls and zero stalled five-second windows. It averaged 4.789 m forward
+at 0.160 m/s. Every leg remained active (38--51 touchdowns per trial), with 80--95%
+scheduled-contact agreement. Mean absolute lateral displacement was 0.570 m, which is
+the main remaining weakness.
+
+The selected checkpoint is
+`simulation/isaac/models/parallel-walking-v18-coordinated/model_299.pt`. Later
+checkpoints were rejected because additional training increased drift and action
+saturation; a hard joint-action pairing experiment was also rejected because it caused
+the moving policy to freeze.
+
+## V17 rectangular-shoe smooth-walking training
+
+V17 retrains the sustained forward policy for the 2026-08-13 flat rectangular
+shoe: a 100 x 60 x 6 mm PLA sole, a 94 x 54 x 1 mm bonded tread, and a 70.237 g
+CAD mass estimate per shoe. The old spherical fork-tip collisions are disabled.
+The nominal pose uses the hardware controller's 80 mm fore/aft flat-sole stance.
+
+The actor input and output contracts remain unchanged from V16. The objective
+adds second-difference action smoothing, planted-foot slip, touchdown impact,
+qualified touchdown, and stronger lateral/yaw regulation. This makes the new
+policy deployable through the same 48-value IMU/joint interface while asking it
+to use the wider contact patch smoothly instead of learning around point feet.
+
+The superseded V17 workflow initialized from its selected rectangular-shoe
+checkpoint unless `-Fresh` was supplied. Its continuations are stored under
+`logs/rsl_rl/drobot_commanded_walk_forward_v17d_rectangular_smooth_direct/`;
+the earlier V17a/V17b/V17c experiment directories are retained as training
+evidence but are no longer searched automatically.
+
+## V16 sustained-walking baseline
 
 V15 could move during an eight-second episode but its Gaussian action mean became heavily
 saturated and it settled into a fixed pose after roughly ten seconds without a reset. V16
@@ -44,7 +86,8 @@ Start a new forward-only policy:
 ```
 
 The defaults are five visible robots and 20 PPO iterations. Omit `-Fresh` on later runs to
-continue the newest V16 checkpoint. `-Fresh` creates a separate run; it does not erase an
+continue the newest selected V18 checkpoint, falling back to the bundled coordinated
+policy for the first continuation. `-Fresh` creates a separate run; it does not erase an
 existing model. Override the defaults with `-Iterations` and `-NumEnvs`.
 
 ## 2. Headless parallel training
@@ -55,13 +98,13 @@ existing model. Override the defaults with `-Iterations` and `-NumEnvs`.
 ```
 
 This resumes the newest accepted forward checkpoint automatically. The repository bundles
-the selected V16 policy at
-`simulation/isaac/models/parallel-walking-v16/model_250.pt`, which is the clean-checkout
+the selected coordinated rectangular-shoe policy at
+`simulation/isaac/models/parallel-walking-v18-coordinated/model_299.pt`, which is the clean-checkout
 fallback. To continue that exact policy explicitly:
 
 ```powershell
 & .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
-  -Checkpoint .\simulation\isaac\models\parallel-walking-v16\model_250.pt `
+  -Checkpoint .\simulation\isaac\models\parallel-walking-v18-coordinated\model_299.pt `
   -Iterations 500 -NumEnvs 128
 ```
 
@@ -76,6 +119,7 @@ The main improvement signals are:
 - `Metrics/current_episode_horizon_s`: ramps from 8 to 32 seconds
 - `Metrics/action_saturation_rate`: should stay low rather than approach one
 - `Metrics/qualified_touchdowns_per_episode`: should be non-zero as steps emerge
+- `Metrics/qualified_touchdowns_<leg>`: all four values should remain non-zero
 - `Metrics/fall_rate`: should approach zero
 - `Mean reward`: should rise, but is secondary to physical displacement and stalls
 
@@ -83,7 +127,7 @@ Evaluate a checkpoint without reset-dependent transients:
 
 ```powershell
 & .\simulation\isaac\rl\parallel_walking\evaluate_walking_sustained.ps1 `
-  -Checkpoint .\simulation\isaac\models\parallel-walking-v16\model_250.pt `
+  -Checkpoint .\simulation\isaac\models\parallel-walking-v18-coordinated\model_299.pt `
   -Seconds 30 -Episodes 3
 ```
 
@@ -108,8 +152,9 @@ asset-following camera:
   -Command forward -NoTimeLimit -RecordSeconds 30
 ```
 
-The tracked review clip is
-`reviews/parallel-walking-v16-model250-sustained-30s.mp4` (1,800 frames at 60 fps).
+The selected coordinated review clip is
+`simulation/reviews/parallel-walking-v18-coordinated-model299-30s.mp4`
+(1,800 frames at 60 fps). The older V16 clip remains available for comparison.
 Underscore-prefixed calibration and workflow directories are ignored during automatic
 checkpoint selection.
 
@@ -120,7 +165,7 @@ Once forward walking and heading retention are stable, initialize the directiona
 ```powershell
 & .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
   -CommandSet directional `
-  -Checkpoint .\simulation\isaac\models\parallel-walking-v16\model_250.pt `
+  -Checkpoint .\simulation\isaac\models\parallel-walking-v18-coordinated\model_299.pt `
   -Iterations 500 -NumEnvs 128
 ```
 
