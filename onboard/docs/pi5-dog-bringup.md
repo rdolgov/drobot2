@@ -18,6 +18,7 @@ passwords, dashboard tokens, or Wi-Fi credentials in this repository.
 | Model SHA-256 | `3a7e31fdc7a57c9ed17e4c4090d56e870a366d87b98bd9a7e0420298816afc77` |
 | Policy runtime | ONNX Runtime 1.29.0, 60 Hz, deterministic Beta mean |
 | Motor output | Disabled; policy targets are displayed/printed only |
+| Manual/IK dashboard | Boot service on port 8080, configured in demo/no-output mode |
 | USB servo adapter | Not detected during this check |
 | ROS 2 | Not installed during this check; Lyrical is the tracked Ubuntu 26.04 target |
 
