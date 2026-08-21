@@ -1,4 +1,4 @@
-"""Localhost-only control dashboard for all four Drobot legs."""
+"""Control dashboard for all four Drobot legs."""
 
 from __future__ import annotations
 
@@ -1359,10 +1359,13 @@ class FourLegHTTPServer(ThreadingHTTPServer):
         server_address: tuple[str, int],
         session: FourLegSession,
         token: str,
+        *,
+        allow_remote: bool = False,
     ):
         super().__init__(server_address, FourLegRequestHandler)
         self.session = session
         self.token = token
+        self.allow_remote = allow_remote
 
 
 class FourLegRequestHandler(BaseHTTPRequestHandler):
@@ -1373,6 +1376,8 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
             super().log_message(format, *args)
 
     def _local_host(self) -> bool:
+        if self.server.allow_remote:
+            return True
         host = self.headers.get("Host", "").split(":", 1)[0].lower()
         return host in {"127.0.0.1", "localhost"}
 
@@ -1532,11 +1537,17 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run the localhost-only Drobot four-leg dashboard.",
+        description="Run the Drobot four-leg dashboard.",
     )
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--port", default="auto", help="Servo serial port")
+    parser.add_argument("--http-bind", default=LOCAL_HOST)
     parser.add_argument("--http-port", type=int)
+    parser.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="Allow LAN clients; use only on a trusted local network",
+    )
     parser.add_argument("--ramp-rate", type=float)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument(
@@ -1548,7 +1559,13 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args = parser.parse_args(argv)
+    if (
+        args.http_bind not in {"127.0.0.1", "localhost", "::1"}
+        and not args.allow_remote
+    ):
+        parser.error("a non-loopback --http-bind requires --allow-remote")
     dashboard = load_dashboard_config(args.manifest)
     bus: Any
     if args.demo:
@@ -1564,18 +1581,25 @@ def main(argv: list[str] | None = None) -> int:
     token = secrets.token_urlsafe(24)
     http_port = dashboard.server.http_port if args.http_port is None else args.http_port
     try:
-        server = FourLegHTTPServer((LOCAL_HOST, http_port), session, token)
+        server = FourLegHTTPServer(
+            (args.http_bind, http_port),
+            session,
+            token,
+            allow_remote=args.allow_remote,
+        )
     except OSError as exc:
         raise SystemExit(
             f"Dashboard port {http_port} is already in use. Stop the existing "
             "demo or hardware dashboard before starting another one."
         ) from exc
-    url = f"http://{LOCAL_HOST}:{server.server_port}/"
+    display_host = f"{socket.gethostname()}.local" if args.allow_remote else LOCAL_HOST
+    url = f"http://{display_host}:{server.server_port}/"
     mode = "demo" if args.demo else f"hardware on {args.port}"
     try:
         session.start()
         print(f"Drobot four-leg control ({mode}): {url}")
-        print("Local machine only. Ctrl+C disarms all motors and closes the bus.")
+        scope = "Trusted LAN enabled" if args.allow_remote else "Local machine only"
+        print(f"{scope}. Ctrl+C disarms all motors and closes the bus.")
         if not args.no_browser:
             threading.Timer(0.4, webbrowser.open, args=(url,)).start()
         server.serve_forever(poll_interval=0.2)

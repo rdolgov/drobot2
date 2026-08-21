@@ -73,8 +73,8 @@ Start the LAN dashboard:
 bash onboard/scripts/run-policy-web.sh --imu bno085
 ```
 
-Open the tokenized URL printed by the command. The default port is 8090. The
-page can start and stop inference, change the requested speed from 0 to
+Open the URL printed by the command. The default port is 8090. The page can
+start and stop inference, change the requested speed from 0 to
 0.20 m/s, and show the live IMU plus all 12 motor targets. It cannot open the
 servo bus or enable torque.
 
@@ -110,16 +110,25 @@ Raspberry Pi 5 -- USB --> Feetech servo adapter -- servo bus --> 12 servos
 ```
 
 Connect the USB servo adapter to the Pi, not simultaneously to another
-computer. Exactly one process must own the serial bus. After ROS 2 Lyrical and
-the onboard package are installed, launch the manual dashboard with:
+computer. Exactly one process must own the serial bus. The manual dashboard can
+run without ROS 2. Install and start its safe simulated version with:
 
 ```bash
-bash onboard/scripts/install-pi.sh
-DROBOT_SERIAL_PORT=/dev/ttyUSB0 bash onboard/scripts/start-onboard.sh
+bash onboard/scripts/install-manual-runtime.sh
+bash onboard/scripts/install-manual-web-service.sh --start
 ```
 
-Then open `http://pi5-dog.local:8080/`. Use `--demo` instead of the serial-port
-variable to review the page without hardware.
+Then open `http://pi5-dog.local:8080/`. The service defaults to demo mode and
+cannot command real motors. To enable hardware later, set
+`DROBOT_MANUAL_DEMO=false` and the detected `DROBOT_MANUAL_SERIAL_PORT` in
+`/etc/default/drobot-manual-web`, then restart the service while the robot is
+supported and the physical cutoff is ready.
+
+The standalone service must be stopped before starting the ROS 2 onboard node:
+
+```bash
+sudo systemctl stop drobot-manual-web
+```
 
 ## Controlled rollout to learned motor control
 

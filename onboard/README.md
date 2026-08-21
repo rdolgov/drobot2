@@ -26,6 +26,35 @@ The package does not copy calibration or gait equations. It imports:
 - `hardware/robot-runtime/four-leg.toml` plus its four tracked servo profiles
   and calibration JSON files as the physical robot source of truth.
 
+## Standalone manual/IK dashboard
+
+The previous inverse-kinematics and manual-walk page can run on the Pi before
+ROS 2 is installed. Install it once:
+
+```bash
+bash onboard/scripts/install-manual-runtime.sh
+bash onboard/scripts/install-manual-web-service.sh --start
+```
+
+Open `http://pi5-dog.local:8080/` from a phone or computer on the same trusted
+network. The tracked service starts in **DEMO / NO MOTOR OUTPUT** mode. It uses
+the real robot profiles, inverse kinematics, crawl logic, and UI with twelve
+simulated motors, but it does not open a USB serial device.
+
+After the Feetech USB adapter is connected to the Pi, the power warning is
+resolved, and the complete robot is safely supported, edit
+`/etc/default/drobot-manual-web`:
+
+```text
+DROBOT_MANUAL_DEMO=false
+DROBOT_MANUAL_SERIAL_PORT=/dev/ttyUSB0
+```
+
+Then restart it with `sudo systemctl restart drobot-manual-web`. Hardware mode
+opens the bus, requires all 12 configured IDs, and disarms them before serving
+the page. Never run this standalone service and the future ROS motor-owner node
+at the same time.
+
 ## Supported Pi baseline
 
 The current `pi5-dog` baseline is a Raspberry Pi 5 with **Ubuntu Server 26.04
@@ -48,6 +77,7 @@ interfaces.
 ```text
 onboard/
 |-- ros2_ws/src/drobot_onboard/   ROS 2 ament_python package
+|-- scripts/run-manual-web.sh     standalone manual/IK dashboard
 |-- scripts/install-pi.sh         dependency install and colcon build
 |-- scripts/start-onboard.sh      foreground launcher
 `-- systemd/                      optional boot-service template

@@ -35,8 +35,10 @@ The local dashboard provides:
   server exit; and
 - a complete simulated mode that never opens a serial port.
 
-The server binds only to `127.0.0.1`. It is not a LAN or internet remote-control
-service.
+The desktop launcher binds only to `127.0.0.1`. The Raspberry Pi launcher under
+`onboard/scripts/run-manual-web.sh` deliberately enables trusted-LAN access so
+the same page can be used from a phone or computer. Never expose this motor
+control page to the public internet.
 
 ## Source of truth
 

@@ -1,0 +1,18 @@
+[Unit]
+Description=Drobot2 manual inverse-kinematics dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__DROBOT_USER__
+WorkingDirectory=__DROBOT_REPO_ROOT__
+EnvironmentFile=/etc/default/drobot-manual-web
+ExecStart=/usr/bin/bash __DROBOT_REPO_ROOT__/onboard/scripts/run-manual-web.sh
+Restart=on-failure
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
