@@ -97,32 +97,23 @@ Start the live, print-only dashboard:
 bash onboard/scripts/run-policy-web.sh --imu bno085
 ```
 
-The command prints a tokenized URL such as
-`http://pi5-dog.local:8090/?token=...`. Open it from a computer or phone on the
-same LAN. The page shows live body-frame IMU values and all 12 policy targets,
-and can start/stop inference or adjust the requested forward speed. It also
-links to the existing manual crawl dashboard on port 8080.
+Open `http://pi5-dog.local:8090/` from a computer or phone on the same LAN. The
+page shows live body-frame IMU values and all 12 policy targets, and can
+start/stop inference or adjust the requested forward speed. It also links to
+the existing manual crawl dashboard on port 8080. The default Pi service does
+not require a token; keep it on a trusted local network.
 
-If the page says the control token is invalid, open the bare
-`http://pi5-dog.local:8090/` address, paste the current token into the unlock
-form, and press **Unlock**. Retrieve the service token on the Pi with:
-
-```bash
-sudo cat /etc/default/drobot-policy-web
-```
-
-Copy only the value after `DROBOT_POLICY_TOKEN=`. The page remembers it for the
-current browser session and removes tokens supplied in the URL from the address
-bar.
+Token protection remains optional. To enable it deliberately, add a value of
+at least 16 characters to `/etc/default/drobot-policy-web` as
+`DROBOT_POLICY_TOKEN=...` and restart the service. The page will then show its
+unlock form after an unauthorized request.
 
 For automatic startup, install the dedicated service:
 
 ```bash
 bash onboard/scripts/install-policy-web-service.sh --start
-sudo cat /etc/default/drobot-policy-web
 ```
 
-Copy the token from the protected environment file into the dashboard URL.
 The service remains print-only and does not own the servo bus.
 
 The Pi currently reports that its power supply cannot provide 5 A and is

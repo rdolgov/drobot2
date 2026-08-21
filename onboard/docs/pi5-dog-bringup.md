@@ -78,21 +78,19 @@ page can start and stop inference, change the requested speed from 0 to
 0.20 m/s, and show the live IMU plus all 12 motor targets. It cannot open the
 servo bus or enable torque.
 
-When using the boot service, open `http://pi5-dog.local:8090/` and paste the
-value after `DROBOT_POLICY_TOKEN=` from
-`sudo cat /etc/default/drobot-policy-web` into the unlock form. The token is
-remembered only for that browser session.
+When using the boot service, open `http://pi5-dog.local:8090/`. The tracked
+service configuration does not require a token and should be used only on a
+trusted local network.
 
 To run the dashboard automatically after boot:
 
 ```bash
 bash onboard/scripts/install-policy-web-service.sh --start
 sudo systemctl status drobot-policy-web
-sudo cat /etc/default/drobot-policy-web
 ```
 
-The last command shows the protected token needed in the browser URL. Do not
-commit that token.
+The service is open to the local network by default. Optional token protection
+can be enabled later through `/etc/default/drobot-policy-web`.
 
 ## Manual inverse-kinematics and crawl dashboard
 

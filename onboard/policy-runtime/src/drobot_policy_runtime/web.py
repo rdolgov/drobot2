@@ -196,6 +196,8 @@ class PolicyDashboardHandler(BaseHTTPRequestHandler):
         return
 
     def _authorized(self) -> bool:
+        if not self.server.token:
+            return True
         query_token = parse_qs(urlsplit(self.path).query).get("token", [""])[0]
         header_token = self.headers.get("X-Drobot-Token", "")
         return secrets.compare_digest(self.server.token, header_token or query_token)
@@ -290,8 +292,8 @@ def main() -> None:
 
     if not 1 <= args.port <= 65535:
         parser.error("--port must be in [1, 65535]")
-    token = args.control_token.strip() or secrets.token_urlsafe(24)
-    if len(token) < 16:
+    token = args.control_token.strip()
+    if token and len(token) < 16:
         parser.error("--control-token must contain at least 16 characters")
     imu_source: ImuSource = (
         Bno085ImuSource(args.imu_address, args.imu_axis_map)
@@ -304,7 +306,10 @@ def main() -> None:
     server = PolicyDashboardServer((args.bind, args.port), supervisor, token)
     host = socket.gethostname()
     print("PRINT-ONLY POLICY DASHBOARD: this process cannot command the servo bus.")
-    print(f"Open: http://{host}.local:{server.server_port}/?token={token}", flush=True)
+    url = f"http://{host}.local:{server.server_port}/"
+    if token:
+        url += f"?token={token}"
+    print(f"Open: {url}", flush=True)
     try:
         server.serve_forever(poll_interval=0.2)
     except KeyboardInterrupt:

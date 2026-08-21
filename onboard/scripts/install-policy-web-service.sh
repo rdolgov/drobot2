@@ -31,9 +31,10 @@ sed \
   "${SERVICE_TEMPLATE}" > "${TEMP_SERVICE}"
 
 if [[ ! -f "${ENV_TARGET}" ]]; then
-  TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
-  sed "s|__DROBOT_POLICY_TOKEN__|${TOKEN}|g" \
-    "${REPO_ROOT}/onboard/systemd/drobot-policy-web.env.example" > "${TEMP_ENV}"
+  cp "${REPO_ROOT}/onboard/systemd/drobot-policy-web.env.example" "${TEMP_ENV}"
+  sudo install -m 0600 "${TEMP_ENV}" "${ENV_TARGET}"
+elif sudo grep -q '^DROBOT_POLICY_TOKEN=' "${ENV_TARGET}"; then
+  sudo grep -v '^DROBOT_POLICY_TOKEN=' "${ENV_TARGET}" > "${TEMP_ENV}" || true
   sudo install -m 0600 "${TEMP_ENV}" "${ENV_TARGET}"
 fi
 sudo install -m 0644 "${TEMP_SERVICE}" "${SERVICE_TARGET}"
@@ -45,8 +46,8 @@ if [[ "${START_NOW}" == "true" ]]; then
 fi
 
 echo "Installed ${SERVICE_TARGET} for ${SERVICE_USER}."
-echo "Token and runtime settings: ${ENV_TARGET}"
-echo "Open http://$(hostname).local:8090/ and append ?token=<token>."
+echo "Runtime settings: ${ENV_TARGET}"
+echo "Open http://$(hostname).local:8090/."
 if [[ "${START_NOW}" != "true" ]]; then
   echo "Start it with: sudo systemctl start drobot-policy-web"
 fi
