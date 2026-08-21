@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import secrets
 import shutil
 import socket
@@ -1338,7 +1339,7 @@ class FourLegSession:
 
 class FourLegHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
-    allow_reuse_address = False
+    allow_reuse_address = os.name != "nt"
     allow_reuse_port = False
 
     def server_bind(self) -> None:

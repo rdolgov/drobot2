@@ -128,7 +128,9 @@ supported and the physical cutoff is ready.
 Keep `DROBOT_MANUAL_FALLBACK_DEMO=true`. If the adapter is unplugged, the
 service will continue serving the UI in clearly labeled demo mode instead of
 crash-restarting. Reconnect the adapter and restart the service to retry real
-hardware.
+hardware. Linux address reuse is enabled for this service so an active browser
+connection does not prevent port 8080 from reopening during a clean restart;
+Windows retains exclusive port ownership for the desktop dashboard.
 
 The standalone service must be stopped before starting the ROS 2 onboard node:
 
