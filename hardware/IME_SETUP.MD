@@ -145,6 +145,14 @@ bash onboard/scripts/install-policy-runtime.sh
 bash onboard/scripts/run-policy-print.sh --imu bno085
 ```
 
+For a phone/computer view instead of terminal JSON:
+
+```bash
+bash onboard/scripts/run-policy-web.sh --imu bno085
+```
+
+Open the tokenized `http://pi5-dog.local:8090/` URL printed by the command.
+
 This reads the same acceleration, gyro, and game quaternion reports and prints
 the resulting 12 motor targets without opening the servo bus. See
 `onboard/policy-runtime/README.md` for the observation contract, mounting-axis

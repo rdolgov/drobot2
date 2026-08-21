@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
-ROS_DISTRO_NAME="${ROS_DISTRO:-jazzy}"
+ROS_DISTRO_NAME="${ROS_DISTRO:-lyrical}"
 ROS_SETUP="/opt/ros/${ROS_DISTRO_NAME}/setup.bash"
 VENV_ACTIVATE="${REPO_ROOT}/onboard/.venv/bin/activate"
 WORKSPACE_SETUP="${REPO_ROOT}/onboard/ros2_ws/install/setup.bash"

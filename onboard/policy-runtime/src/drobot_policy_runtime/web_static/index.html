@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Drobot Policy Monitor</title>
+    <link rel="stylesheet" href="/app.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">DROBOT · RASPBERRY PI</p>
+          <h1>Walking policy monitor</h1>
+          <p class="subtitle">Live BNO085 input and V18 motor targets</p>
+        </div>
+        <div id="status" class="status stopped">Stopped</div>
+      </header>
+
+      <section class="safety">
+        <strong>Print-only safety mode</strong>
+        <span>This page cannot open the servo bus or enable motor torque.</span>
+      </section>
+
+      <section class="panel controls">
+        <div>
+          <label for="speed">Requested forward speed</label>
+          <div class="speed-row">
+            <input id="speed" type="range" min="0" max="0.20" step="0.01" value="0.15">
+            <output id="speedValue">0.15 m/s</output>
+          </div>
+        </div>
+        <div class="buttons">
+          <button id="start" class="primary">Start inference</button>
+          <button id="stop">Stop</button>
+          <a id="manual" class="button-link" href="#">Manual crawl UI</a>
+        </div>
+      </section>
+
+      <section class="metrics">
+        <article class="panel metric">
+          <span>IMU source</span><strong id="imuBackend">—</strong>
+        </article>
+        <article class="panel metric">
+          <span>Policy update</span><strong id="policyAge">—</strong>
+        </article>
+        <article class="panel metric">
+          <span>Motor output</span><strong>Disabled</strong>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="section-title"><h2>IMU body frame</h2><span>gyro · gravity · acceleration</span></div>
+        <div id="imu" class="vector-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title"><h2>Policy targets</h2><span>12 joints · degrees</span></div>
+        <div id="motors" class="motor-grid"></div>
+      </section>
+
+      <p id="error" class="error" hidden></p>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

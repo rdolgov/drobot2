@@ -20,7 +20,11 @@ bno085 = [
 
 [project.scripts]
 drobot-policy-print = "drobot_policy_runtime.cli:main"
+drobot-policy-web = "drobot_policy_runtime.web:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+drobot_policy_runtime = ["web_static/*"]
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import threading
 import time
 from dataclasses import dataclass
 from typing import Protocol
@@ -136,15 +137,21 @@ class WalkingPolicyLoop:
         self.previous_action = action
         self.previous_target_rad = target
 
-    def run(self, duration_s: float = 0.0) -> None:
+    def run(
+        self,
+        duration_s: float = 0.0,
+        stop_event: threading.Event | None = None,
+    ) -> None:
         if duration_s < 0.0:
             raise ValueError("duration_s cannot be negative")
         start_s = time.monotonic()
         deadline_s = start_s
         period_s = 1.0 / self.control_hz
-        while duration_s == 0.0 or time.monotonic() - start_s < duration_s:
+        while (
+            (duration_s == 0.0 or time.monotonic() - start_s < duration_s)
+            and (stop_event is None or not stop_event.is_set())
+        ):
             now_s = time.monotonic()
             self.step(start_s, now_s)
             deadline_s += period_s
             time.sleep(max(0.0, deadline_s - time.monotonic()))
-
