@@ -130,7 +130,9 @@ service will continue serving the UI in clearly labeled demo mode instead of
 crash-restarting. Reconnect the adapter and restart the service to retry real
 hardware. Linux address reuse is enabled for this service so an active browser
 connection does not prevent port 8080 from reopening during a clean restart;
-Windows retains exclusive port ownership for the desktop dashboard.
+Windows retains exclusive port ownership for the desktop dashboard. Open pages
+automatically reload if a service restart replaces the embedded browser-session
+token.
 
 The standalone service must be stopped before starting the ROS 2 onboard node:
 

@@ -33,6 +33,7 @@ const sliderTimers = new Map();
 let latestState = null;
 let connected = false;
 let refreshing = false;
+let reloadingAfterServerRestart = false;
 const errorStorageKey = "drobot-four-leg-permanent-errors-v1";
 let permanentErrors = loadPermanentErrors();
 
@@ -48,6 +49,11 @@ async function api(path, method = "GET", body = undefined, keepalive = false) {
     keepalive,
   });
   const payload = await response.json();
+  if (response.status === 403 && !reloadingAfterServerRestart) {
+    reloadingAfterServerRestart = true;
+    window.location.reload();
+    return new Promise(() => {});
+  }
   if (!response.ok) {
     throw new Error(payload.error || `Request failed (${response.status})`);
   }
