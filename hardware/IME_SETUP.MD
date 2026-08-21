@@ -134,6 +134,22 @@ source ~/bno085-env/bin/activate
 python bno085_test.py
 ```
 
+## Feed the walking policy
+
+After the standalone sensor check succeeds, install and run the repository's
+print-only policy pipeline:
+
+```bash
+cd ~/drobot2
+bash onboard/scripts/install-policy-runtime.sh
+bash onboard/scripts/run-policy-print.sh --imu bno085
+```
+
+This reads the same acceleration, gyro, and game quaternion reports and prints
+the resulting 12 motor targets without opening the servo bus. See
+`onboard/policy-runtime/README.md` for the observation contract, mounting-axis
+mapping, and the required joint-feedback work before motor actuation.
+
 ## Troubleshooting
 
 ### `ModuleNotFoundError: No module named 'lgpio'`

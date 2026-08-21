@@ -1,5 +1,10 @@
 # Raspberry Pi ROS 2 onboard controller
 
+The selected learned walking policy also has a standalone, print-only runtime
+under [`policy-runtime/`](policy-runtime/README.md). Use it to read the BNO085
+and print 12 bounded motor targets before connecting policy output to the servo
+bus. Its core interfaces are designed to be reused by this ROS 2 package.
+
 This area packages the existing Drobot motor session and browser dashboard as
 a ROS 2 node for an onboard Raspberry Pi. The Pi owns the USB servo bus, serves
 the control page to computers on the same network, publishes telemetry, and
