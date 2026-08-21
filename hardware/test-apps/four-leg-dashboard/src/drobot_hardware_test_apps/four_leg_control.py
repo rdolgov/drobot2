@@ -68,8 +68,6 @@ class ServerConfig:
 @dataclass(frozen=True)
 class CrawlConfig:
     period_s: float
-    cycles: int
-    run_until_stopped: bool
     stance_settle_s: float
     stride_m: float
     lift_m: float
@@ -79,7 +77,6 @@ class CrawlConfig:
     stance_down_m: float
     stance_fore_aft_m: float
     abduction_deg: float
-    start_tolerance_deg: float
 
 
 @dataclass(frozen=True)
@@ -127,9 +124,6 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("Manifest requires a [monitoring] table")
     if not isinstance(crawl_data, dict):
         raise ValueError("Manifest requires a [crawl] table")
-    run_until_stopped = crawl_data.get("run_until_stopped", True)
-    if not isinstance(run_until_stopped, bool):
-        raise ValueError("crawl.run_until_stopped must be true or false")
     if not isinstance(leg_data, list) or len(leg_data) != 4:
         raise ValueError("Manifest requires exactly four [[legs]] tables")
 
@@ -188,8 +182,6 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             crawl_data.get("period_s", 4.0),
             "crawl.period_s",
         ),
-        cycles=int(crawl_data.get("cycles", 2)),
-        run_until_stopped=run_until_stopped,
         stance_settle_s=_finite_float(
             crawl_data.get("stance_settle_s", 1.5),
             "crawl.stance_settle_s",
@@ -220,15 +212,9 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             crawl_data.get("abduction_deg", 0.0),
             "crawl.abduction_deg",
         ),
-        start_tolerance_deg=_finite_float(
-            crawl_data.get("start_tolerance_deg", 35.0),
-            "crawl.start_tolerance_deg",
-        ),
     )
     if not 4.0 <= crawl.period_s <= 60.0:
         raise ValueError("crawl.period_s must be in [4, 60]")
-    if not 1 <= crawl.cycles <= 4:
-        raise ValueError("crawl.cycles must be in [1, 4]")
     if not 0.5 <= crawl.stance_settle_s <= 5.0:
         raise ValueError("crawl.stance_settle_s must be in [0.5, 5]")
     if not 0.005 <= crawl.stride_m <= 0.120:
@@ -249,8 +235,6 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("crawl.stance_fore_aft_m must be in [0, 0.120]")
     if not 0.0 <= crawl.abduction_deg <= 20.0:
         raise ValueError("crawl.abduction_deg must be in [0, 20]")
-    if not 10.0 <= crawl.start_tolerance_deg <= 45.0:
-        raise ValueError("crawl.start_tolerance_deg must be in [10, 45]")
 
     profiles: list[LegProfile] = []
     for index, entry in enumerate(leg_data, start=1):
@@ -517,7 +501,6 @@ class FourLegSession:
             "preparing",
             "preloading",
             "walking",
-            "finishing",
         }
 
     def _crawl_pose_locked(
@@ -648,33 +631,13 @@ class FourLegSession:
             )
             return
 
-        duration_s = config.period_s * config.cycles
         if self.crawl_stage == "walking":
             if self.crawl_started_at is None:
                 raise RuntimeError("Crawl clock was not initialized")
             elapsed = max(0.0, now - self.crawl_started_at)
-            if config.run_until_stopped:
-                self.crawl_progress = (elapsed % config.period_s) / config.period_s
-                self._set_crawl_pose_locked(elapsed)
-                return
-            self.crawl_progress = min(elapsed / duration_s, 1.0)
-            if elapsed < duration_s:
-                self._set_crawl_pose_locked(elapsed)
-                return
-            self.crawl_stage = "finishing"
-            self._set_crawl_stance_locked("returning_to_gait_start_stance")
+            self.crawl_progress = (elapsed % config.period_s) / config.period_s
+            self._set_crawl_pose_locked(elapsed)
             return
-
-        self._set_crawl_stance_locked("holding_gait_start_stance")
-        if self._crawl_targets_reached_locked():
-            self.crawl_stage = "complete"
-            self.crawl_phase = "holding_gait_start_stance"
-            self.crawl_progress = 1.0
-            self.last_event = (
-                "Diagonal-pair gait complete; all motors holding stance"
-                if self.crawl_mode == "diagonal_pair"
-                else "Distributed push crawl complete; all motors holding stance"
-            )
 
     def _cancel_crawl_locked(self) -> None:
         self.crawl_stage = "idle"
@@ -731,23 +694,6 @@ class FourLegSession:
                 raise RuntimeError("Disarm all 12 motors before starting a crawl")
             if self.fault:
                 raise RuntimeError("Clear the reported fault before starting a crawl")
-
-            preflight = self._snapshot_locked()
-            out_of_start_range: list[str] = []
-            for leg in preflight["legs"]:
-                for motor in leg["motors"]:
-                    if (
-                        abs(float(motor["measured_deg"]))
-                        > self.dashboard.crawl.start_tolerance_deg
-                    ):
-                        out_of_start_range.append(
-                            f"ID {motor['id']} ({motor['measured_deg']:+.1f} deg)"
-                        )
-            if out_of_start_range:
-                raise RuntimeError(
-                    "Center the robot before walking; outside start tolerance: "
-                    + ", ".join(out_of_start_range)
-                )
 
             previous_mode = self.crawl_mode
             newly_armed: list[tuple[LegProfile, MotorConfig]] = []
@@ -1292,17 +1238,12 @@ class FourLegSession:
                 ),
                 "progress": self.crawl_progress,
                 "period_s": self.dashboard.crawl.period_s,
-                "cycles": self.dashboard.crawl.cycles,
-                "run_until_stopped": self.dashboard.crawl.run_until_stopped,
+                "run_until_stopped": True,
                 "elapsed_s": crawl_elapsed_s,
                 "completed_cycles": int(
                     crawl_elapsed_s / self.dashboard.crawl.period_s
                 ),
-                "duration_s": (
-                    None
-                    if self.dashboard.crawl.run_until_stopped
-                    else self.dashboard.crawl.period_s * self.dashboard.crawl.cycles
-                ),
+                "duration_s": None,
                 "stride_mm": self.dashboard.crawl.stride_m * 1000.0,
                 "lift_mm": self.dashboard.crawl.lift_m * 1000.0,
                 "support_extension_mm": (

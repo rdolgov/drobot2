@@ -87,8 +87,6 @@ def test_manifest_loads_verified_ids_and_directions() -> None:
     assert dashboard.monitoring.temperature_warning_c == 55
     assert dashboard.monitoring.leg_current_warning_ma == pytest.approx(2500.0)
     assert dashboard.crawl.period_s == pytest.approx(4.0)
-    assert dashboard.crawl.cycles == 2
-    assert dashboard.crawl.run_until_stopped is True
     assert dashboard.crawl.stride_m == pytest.approx(0.096)
     assert dashboard.crawl.lift_m == pytest.approx(0.035)
     assert dashboard.crawl.support_extension_m == pytest.approx(0.0)
@@ -571,17 +569,10 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
         session.close()
 
 
-def test_crawl_preflight_rejects_off_center_pose_but_allows_telemetry_warning() -> None:
+def test_crawl_accepts_off_center_pose_and_allows_telemetry_warning() -> None:
     session, bus, _clock = _session()
     try:
         bus.positions[1] += 500
-        with pytest.raises(RuntimeError, match="Center the robot"):
-            session.start_crawl_forward(
-                safety_ack=True,
-                confirmation="TEST DISTRIBUTED CRAWL",
-            )
-
-        bus.positions[1] -= 500
         bus.voltage_v[12] = 10.4
         session.start_crawl_forward(
             safety_ack=True,

@@ -439,9 +439,7 @@ function updateSummary(state) {
       `${crawl.lift_mm.toFixed(0)} mm lift / ` +
       `${crawl.stance_fore_aft_mm.toFixed(0)} mm front/rear splay / ` +
       `${crawl.abduction_deg.toFixed(0)} deg outward / ` +
-      (crawl.run_until_stopped
-        ? "STOP to end"
-        : `${crawl.duration_s.toFixed(0)} s`);
+      "STOP to end";
 
   walkForward.disabled =
     crawl.active ||

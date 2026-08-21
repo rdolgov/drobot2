@@ -60,6 +60,26 @@ the configured USB adapter is unplugged. After reconnecting the adapter,
 restart the service to retry hardware mode. The page's mode badge always shows
 whether output is simulated or connected to hardware.
 
+### Update an existing Pi dashboard
+
+From the existing clone on the Pi, update the checked-out branch and refresh
+the editable runtime installation:
+
+```bash
+cd ~/drobot2
+git pull --ff-only
+bash onboard/scripts/install-manual-runtime.sh
+sudo systemctl restart drobot-manual-web
+sudo systemctl status drobot-manual-web --no-pager
+```
+
+Reload port 8080 after the restart. Confirm the mode badge, `12 / 12` online,
+`0 / 12` armed, plausible voltage and temperature, and no fault before using a
+whole-robot control. **TEST DISTRIBUTED CRAWL** and **TEST DIAGONAL PAIRS** then
+continue until **STOP + DISARM**. A minor off-stance start is accepted and
+ramped into the computed gait stance; it is not permission to start from a
+folded, collided, unsupported, or visibly damaged pose.
+
 ## Supported Pi baseline
 
 The current `pi5-dog` baseline is a Raspberry Pi 5 with **Ubuntu Server 26.04
@@ -176,6 +196,11 @@ The browser exposes the same controls as the desktop dashboard, including:
 Walking continues until stopped. Browser-started motion also stops on browser
 heartbeat loss. ROS-started motion is kept alive by the onboard node until a
 ROS stop/disarm request, process shutdown, bus fault, or telemetry/motion fault.
+The gait start accepts a minor off-stance measured pose: all motors are armed at
+their current positions and ramped toward the computed gait stance. Only the
+old zero-centred start-tolerance rejection was removed; all 12 IDs must still
+be online, and every computed target must remain inside its calibrated joint
+limits.
 
 ## HTTP web-service API
 

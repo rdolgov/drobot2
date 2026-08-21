@@ -186,18 +186,21 @@ and older documents remain historical evidence.
 
 Before either whole-robot command is accepted, the server requires all 12 IDs
 online and every computed target inside the configured joint limits. The
-command arms any currently disarmed motors at their measured positions before
-ramping. Browser-heartbeat loss, a telemetry read or motion exception, any
-disarm request, page close, or **STOP + DISARM** cancels motion and attempts to
-remove torque from all twelve motors. Display-only voltage, temperature,
+command accepts a minor off-stance measured pose, arms all motors at their
+current measured positions, and ramps toward the computed gait-start stance.
+It no longer rejects walking solely because a measured joint is outside a
+zero-centred start-tolerance window. This does not bypass the calibrated hard
+joint-limit validation applied to every computed stance and gait target.
+Browser-heartbeat loss, a telemetry read or motion exception, any disarm
+request, page close, or **STOP + DISARM** cancels motion and attempts to remove
+torque from all twelve motors. Display-only voltage, temperature,
 voltage-spread, and diagnostic-current warnings remain visible but do not stop
 the command.
 
 The tracked defaults live in `[crawl]` in `../../robot-runtime/four-leg.toml`.
-The parser permits a 5-120 mm stride, 5-80 mm lift, 4-60 second period, and one
-to four finite-fallback cycles. `run_until_stopped = true` makes both dashboard
-walking buttons loop continuously; the retained `cycles = 2` value is used only
-if that setting is deliberately disabled.
+The parser permits a 5-120 mm stride, 5-80 mm lift, and 4-60 second period.
+Both dashboard walking buttons always loop continuously until **STOP + DISARM**,
+browser-heartbeat loss, a bus/motion fault, page close, or process shutdown.
 
 ### Separate diagonal-pair mode
 

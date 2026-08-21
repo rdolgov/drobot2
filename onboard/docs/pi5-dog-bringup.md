@@ -134,6 +134,13 @@ Windows retains exclusive port ownership for the desktop dashboard. Open pages
 automatically reload if a service restart replaces the embedded browser-session
 token.
 
+Both walking buttons run continuously until **STOP + DISARM**. Starting a gait
+from a minor off-stance pose no longer fails the old zero-centred tolerance
+check: the controller holds each measured position first and ramps to the gait
+stance. This relaxation does not remove startup ID checks, computed joint-limit
+checks, browser heartbeat disarm, telemetry/motion fault handling, or the
+physical-cutoff requirement.
+
 The standalone service must be stopped before starting the ROS 2 onboard node:
 
 ```bash
