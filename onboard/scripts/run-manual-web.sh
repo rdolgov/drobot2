@@ -9,6 +9,7 @@ SERIAL_PORT="${DROBOT_MANUAL_SERIAL_PORT:-auto}"
 HTTP_BIND="${DROBOT_MANUAL_BIND:-0.0.0.0}"
 HTTP_PORT="${DROBOT_MANUAL_PORT:-8080}"
 DEMO_MODE="${DROBOT_MANUAL_DEMO:-true}"
+FALLBACK_DEMO="${DROBOT_MANUAL_FALLBACK_DEMO:-true}"
 
 if [[ ! -x "${VENV_DIR}/bin/drobot-four-leg-web" ]]; then
   echo "Manual dashboard runtime is not installed. Run:" >&2
@@ -25,7 +26,28 @@ ARGS=(
 )
 case "${DEMO_MODE,,}" in
   true|1|yes) ARGS+=(--demo) ;;
-  false|0|no) ARGS+=(--port "${SERIAL_PORT}") ;;
+  false|0|no)
+    case "${FALLBACK_DEMO,,}" in
+      true|1|yes)
+        if [[ "${SERIAL_PORT}" == "auto" ]]; then
+          if ! compgen -G '/dev/ttyUSB*' >/dev/null \
+            && ! compgen -G '/dev/ttyACM*' >/dev/null; then
+            echo "Servo adapter is missing; keeping port ${HTTP_PORT} available in demo mode." >&2
+            ARGS+=(--demo)
+          else
+            ARGS+=(--port "${SERIAL_PORT}")
+          fi
+        elif [[ ! -e "${SERIAL_PORT}" ]]; then
+          echo "Servo adapter ${SERIAL_PORT} is missing; keeping port ${HTTP_PORT} available in demo mode." >&2
+          ARGS+=(--demo)
+        else
+          ARGS+=(--port "${SERIAL_PORT}")
+        fi
+        ;;
+      false|0|no) ARGS+=(--port "${SERIAL_PORT}") ;;
+      *) echo "DROBOT_MANUAL_FALLBACK_DEMO must be true or false." >&2; exit 2 ;;
+    esac
+    ;;
   *) echo "DROBOT_MANUAL_DEMO must be true or false." >&2; exit 2 ;;
 esac
 

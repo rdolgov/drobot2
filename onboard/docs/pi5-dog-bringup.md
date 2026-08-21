@@ -18,8 +18,8 @@ passwords, dashboard tokens, or Wi-Fi credentials in this repository.
 | Model SHA-256 | `3a7e31fdc7a57c9ed17e4c4090d56e870a366d87b98bd9a7e0420298816afc77` |
 | Policy runtime | ONNX Runtime 1.29.0, 60 Hz, deterministic Beta mean |
 | Motor output | Disabled; policy targets are displayed/printed only |
-| Manual/IK dashboard | Boot service on port 8080, configured in demo/no-output mode |
-| USB servo adapter | Not detected during this check |
+| Manual/IK dashboard | Boot service on port 8080; hardware preference with safe demo fallback |
+| USB servo adapter | QinHeng USB serial, stable by-id path when connected; currently removable |
 | ROS 2 | Not installed during this check; Lyrical is the tracked Ubuntu 26.04 target |
 
 The Pi reported that its supply could not provide 5 A and was restricting
@@ -124,6 +124,11 @@ cannot command real motors. To enable hardware later, set
 `DROBOT_MANUAL_DEMO=false` and the detected `DROBOT_MANUAL_SERIAL_PORT` in
 `/etc/default/drobot-manual-web`, then restart the service while the robot is
 supported and the physical cutoff is ready.
+
+Keep `DROBOT_MANUAL_FALLBACK_DEMO=true`. If the adapter is unplugged, the
+service will continue serving the UI in clearly labeled demo mode instead of
+crash-restarting. Reconnect the adapter and restart the service to retry real
+hardware.
 
 The standalone service must be stopped before starting the ROS 2 onboard node:
 

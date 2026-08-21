@@ -55,6 +55,11 @@ opens the bus, requires all 12 configured IDs, and disarms them before serving
 the page. Never run this standalone service and the future ROS motor-owner node
 at the same time.
 
+`DROBOT_MANUAL_FALLBACK_DEMO=true` keeps port 8080 available in demo mode if
+the configured USB adapter is unplugged. After reconnecting the adapter,
+restart the service to retry hardware mode. The page's mode badge always shows
+whether output is simulated or connected to hardware.
+
 ## Supported Pi baseline
 
 The current `pi5-dog` baseline is a Raspberry Pi 5 with **Ubuntu Server 26.04
