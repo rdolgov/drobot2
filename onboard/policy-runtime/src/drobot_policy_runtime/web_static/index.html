@@ -22,6 +22,22 @@
         <span>This page cannot open the servo bus or enable motor torque.</span>
       </section>
 
+      <section id="auth" class="panel auth" hidden>
+        <div>
+          <h2>Unlock dashboard</h2>
+          <p id="authMessage">Enter the control token generated during setup.</p>
+          <p class="auth-help">On the Pi, run <code>sudo cat /etc/default/drobot-policy-web</code> and copy the value after <code>DROBOT_POLICY_TOKEN=</code>.</p>
+        </div>
+        <form id="tokenForm">
+          <label for="tokenInput">Dashboard token</label>
+          <div class="token-row">
+            <input id="tokenInput" name="token" type="password" minlength="16" autocomplete="off" required>
+            <button class="primary" type="submit">Unlock</button>
+            <button id="forgetToken" type="button">Forget token</button>
+          </div>
+        </form>
+      </section>
+
       <section class="panel controls">
         <div>
           <label for="speed">Requested forward speed</label>

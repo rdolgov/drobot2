@@ -103,6 +103,18 @@ same LAN. The page shows live body-frame IMU values and all 12 policy targets,
 and can start/stop inference or adjust the requested forward speed. It also
 links to the existing manual crawl dashboard on port 8080.
 
+If the page says the control token is invalid, open the bare
+`http://pi5-dog.local:8090/` address, paste the current token into the unlock
+form, and press **Unlock**. Retrieve the service token on the Pi with:
+
+```bash
+sudo cat /etc/default/drobot-policy-web
+```
+
+Copy only the value after `DROBOT_POLICY_TOKEN=`. The page remembers it for the
+current browser session and removes tokens supplied in the URL from the address
+bar.
+
 For automatic startup, install the dedicated service:
 
 ```bash

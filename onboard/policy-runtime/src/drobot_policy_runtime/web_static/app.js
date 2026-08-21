@@ -1,20 +1,51 @@
-const token = new URLSearchParams(location.search).get("token") || sessionStorage.getItem("drobotToken") || "";
-if (token) sessionStorage.setItem("drobotToken", token);
+const queryToken = new URLSearchParams(location.search).get("token") || "";
+let token = queryToken || sessionStorage.getItem("drobotToken") || "";
+if (queryToken) {
+  sessionStorage.setItem("drobotToken", queryToken);
+  history.replaceState(null, "", location.pathname);
+}
 
 const byId = (id) => document.getElementById(id);
 const speed = byId("speed");
 const speedValue = byId("speedValue");
 const errorBox = byId("error");
+const authBox = byId("auth");
+const authMessage = byId("authMessage");
+const tokenInput = byId("tokenInput");
 byId("manual").href = `${location.protocol}//${location.hostname}:8080/`;
 
+function showAuth(message) {
+  authMessage.textContent = message;
+  tokenInput.value = token;
+  authBox.hidden = false;
+}
+
+function showError(message = "") {
+  errorBox.hidden = !message;
+  errorBox.textContent = message;
+}
+
 async function api(path, method = "GET", body = null) {
+  if (!token) {
+    showAuth("Enter the dashboard token to connect.");
+    const error = new Error("Dashboard token required");
+    error.authRequired = true;
+    throw error;
+  }
   const response = await fetch(path, {
     method,
     headers: {"X-Drobot-Token": token, "Content-Type": "application/json"},
     body: body ? JSON.stringify(body) : null,
   });
   const value = await response.json();
-  if (!response.ok) throw new Error(value.error || `HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(value.error || `HTTP ${response.status}`);
+    if (response.status === 403) {
+      error.authRequired = true;
+      showAuth("That token was not accepted. Copy the current token from the Pi and try again.");
+    }
+    throw error;
+  }
   return value;
 }
 
@@ -24,6 +55,8 @@ function vectorCard(label, values, unit = "") {
 }
 
 function render(state) {
+  authBox.hidden = true;
+  showError(state.error || "");
   const status = byId("status");
   status.textContent = state.status === "running" ? "Running" : state.status === "error" ? "Error" : "Stopped";
   status.className = `status ${state.status}`;
@@ -48,32 +81,49 @@ function render(state) {
       <small>${motor.joint.replaceAll("_", " ")}</small>
     </article>`).join("") || '<p class="waiting">Start inference to see targets.</p>';
 
-  errorBox.hidden = !state.error;
-  errorBox.textContent = state.error || "";
 }
 
 async function refresh() {
   try {
     render(await api("/api/state"));
   } catch (error) {
-    errorBox.hidden = false;
-    errorBox.textContent = error.message;
+    if (!error.authRequired) showError(error.message);
   }
 }
+
+byId("tokenForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const candidate = tokenInput.value.trim();
+  if (candidate.length < 16) {
+    showAuth("The dashboard token must contain at least 16 characters.");
+    return;
+  }
+  token = candidate;
+  sessionStorage.setItem("drobotToken", token);
+  await refresh();
+});
+byId("forgetToken").addEventListener("click", () => {
+  token = "";
+  sessionStorage.removeItem("drobotToken");
+  tokenInput.value = "";
+  showAuth("Saved token removed. Enter the current token from the Pi.");
+});
 
 speed.addEventListener("input", () => speedValue.textContent = `${Number(speed.value).toFixed(2)} m/s`);
 speed.addEventListener("change", async () => {
   try { render(await api("/api/command", "POST", {forward_m_s: Number(speed.value)})); }
-  catch (error) { errorBox.hidden = false; errorBox.textContent = error.message; }
+  catch (error) { if (!error.authRequired) showError(error.message); }
 });
 byId("start").addEventListener("click", async () => {
   try { render(await api("/api/start", "POST", {forward_m_s: Number(speed.value)})); }
-  catch (error) { errorBox.hidden = false; errorBox.textContent = error.message; }
+  catch (error) { if (!error.authRequired) showError(error.message); }
 });
 byId("stop").addEventListener("click", async () => {
   try { render(await api("/api/stop", "POST", {})); }
-  catch (error) { errorBox.hidden = false; errorBox.textContent = error.message; }
+  catch (error) { if (!error.authRequired) showError(error.message); }
 });
 
 refresh();
-setInterval(refresh, 300);
+setInterval(() => {
+  if (authBox.hidden) refresh();
+}, 300);

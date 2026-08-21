@@ -78,6 +78,11 @@ page can start and stop inference, change the requested speed from 0 to
 0.20 m/s, and show the live IMU plus all 12 motor targets. It cannot open the
 servo bus or enable torque.
 
+When using the boot service, open `http://pi5-dog.local:8090/` and paste the
+value after `DROBOT_POLICY_TOKEN=` from
+`sudo cat /etc/default/drobot-policy-web` into the unlock form. The token is
+remembered only for that browser session.
+
 To run the dashboard automatically after boot:
 
 ```bash
