@@ -202,6 +202,35 @@ The parser permits a 5-120 mm stride, 5-80 mm lift, and 4-60 second period.
 Both dashboard walking buttons always loop continuously until **STOP + DISARM**,
 browser-heartbeat loss, a bus/motion fault, page close, or process shutdown.
 
+### Power and battery analytics
+
+The dashboard estimates electrical power from each servo's diagnostic voltage
+and current registers. It shows instantaneous and 60-second average/peak watts,
+peak summed current, the lowest recent bus voltage, per-leg and per-motor power,
+and sampled watt-hours. The chart is populated by the browser's telemetry poll,
+so the energy figure covers observed dashboard time and is not a battery fuel
+gauge. It also excludes Raspberry Pi and converter losses.
+
+Use **RESET AT IDLE** after connecting each power source while all motors are
+disarmed. Leave the robot idle for several telemetry samples, then run the same
+supported gait with the bench supply and battery:
+
+1. A large sag from the idle reference, especially together with a current
+   spike and a stall warning, points toward battery internal resistance, BMS or
+   connector limits, wiring loss, or inadequate peak-current delivery.
+2. A high-current, low-speed motor with at least 8 degrees of tracking error is
+   marked as a possible stall. Repeated IDs or one high-power leg suggest joint
+   friction, mechanical interference, excess load, or a weak servo branch.
+3. If the robot falls without meaningful voltage sag or stall signatures, move
+   the same battery mass around while supported and inspect center of mass,
+   lateral balance, shoe contact, and traction. Electrical telemetry cannot
+   distinguish those mechanical causes by itself.
+
+The tracked warning defaults are 0.6 V sag, 1200 mA per motor, 8 degrees of
+tracking error, and raw speed at or below 20. These are diagnostic heuristics,
+not certified protection thresholds. Hard joint limits, heartbeat disarm, and
+the physical cutoff remain the actual safety layers.
+
 ### Separate diagonal-pair mode
 
 **TEST DIAGONAL PAIRS** starts a separate `/api/diagonal-pair-forward` routine;

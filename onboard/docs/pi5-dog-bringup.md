@@ -141,6 +141,14 @@ stance. This relaxation does not remove startup ID checks, computed joint-limit
 checks, browser heartbeat disarm, telemetry/motion fault handling, or the
 physical-cutoff requirement.
 
+For battery comparisons, disarm all motors, connect the selected source, press
+**RESET AT IDLE**, and allow several telemetry samples before walking. Compare
+the 60-second power chart, idle-to-load voltage sag, peak current, and possible
+stall IDs using the same supported gait. Sag plus stall flags indicates an
+electrical-delivery or mechanical-load problem; falling without those signals
+is stronger evidence for added battery mass, center-of-mass shift, or contact
+geometry. Dashboard watt-hours are sampled servo estimates and exclude the Pi.
+
 The standalone service must be stopped before starting the ROS 2 onboard node:
 
 ```bash

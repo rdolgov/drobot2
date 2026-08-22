@@ -213,6 +213,7 @@ routes are:
 | `POST /api/crawl-forward` | Start continuous distributed crawl |
 | `POST /api/diagonal-pair-forward` | Start continuous diagonal-pair gait |
 | `POST /api/crawl-stop` | Stop and disarm all motors |
+| `POST /api/power-reset` | Reset rolling power/energy data and capture a fresh idle reference |
 | `POST /api/crawl-stance` | Move to the distributed gait stance |
 | `POST /api/center-all` | Move all twelve joints to calibrated zero |
 | `POST /api/disarm-all` | Disarm all motors |

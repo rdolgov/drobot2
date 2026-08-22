@@ -84,8 +84,14 @@ def test_manifest_loads_verified_ids_and_directions() -> None:
     assert dashboard.server.heartbeat_timeout_s == 1.5
     assert dashboard.monitoring.voltage_warning_low_v == pytest.approx(11.0)
     assert dashboard.monitoring.voltage_spread_warning_v == pytest.approx(0.3)
+    assert dashboard.monitoring.voltage_sag_warning_v == pytest.approx(0.6)
     assert dashboard.monitoring.temperature_warning_c == 55
     assert dashboard.monitoring.leg_current_warning_ma == pytest.approx(2500.0)
+    assert dashboard.monitoring.motor_stall_current_warning_ma == pytest.approx(
+        1200.0
+    )
+    assert dashboard.monitoring.stall_tracking_error_deg == pytest.approx(8.0)
+    assert dashboard.monitoring.stall_speed_raw_max == 20
     assert dashboard.crawl.period_s == pytest.approx(4.0)
     assert dashboard.crawl.stride_m == pytest.approx(0.096)
     assert dashboard.crawl.lift_m == pytest.approx(0.035)
@@ -745,5 +751,39 @@ def test_live_telemetry_warning_does_not_interrupt_armed_motors() -> None:
         assert bus.torque == {4, 5, 6}
         assert state["summary"]["health"] == "warning"
         assert state["fault"] is None
+    finally:
+        session.close()
+
+
+def test_power_analytics_detect_sag_and_possible_stall() -> None:
+    session, bus, clock = _session()
+    try:
+        idle = session.snapshot()
+        assert idle["power"]["idle_reference_voltage_v"] == pytest.approx(12.2)
+
+        session.arm(1, 1, safety_ack=True)
+        stalled_position = bus.positions[1]
+        session.set_target(1, 1, 15.0)
+        session.advance_once()
+        bus.positions[1] = stalled_position
+        bus.voltage_v[1] = 11.5
+        bus.current_ma[1] = 1300.0
+        clock.advance(1.0)
+        state = session.snapshot()
+
+        assert state["power"]["instantaneous_w"] == pytest.approx(14.95)
+        assert state["power"]["voltage_sag_v"] == pytest.approx(0.7)
+        assert state["power"]["possible_stall_ids"] == [1]
+        assert state["legs"][0]["power_w"] == pytest.approx(14.95)
+        assert state["legs"][0]["motors"][0]["possible_stall"] is True
+        assert state["power"]["energy_wh"] > 0.0
+        assert any(
+            "voltage sag" in item.lower()
+            for item in state["summary"]["warnings"]
+        )
+        assert any("stall" in item.lower() for item in state["summary"]["warnings"])
+
+        with pytest.raises(RuntimeError, match="Disarm all motors"):
+            session.reset_power_analytics()
     finally:
         session.close()

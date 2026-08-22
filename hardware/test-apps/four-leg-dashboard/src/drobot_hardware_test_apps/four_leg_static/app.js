@@ -27,6 +27,8 @@ const gaitStage = document.querySelector("#gaitStage");
 const gaitPhase = document.querySelector("#gaitPhase");
 const gaitProgress = document.querySelector("#gaitProgress");
 const gaitDetail = document.querySelector("#gaitDetail");
+const resetPower = document.querySelector("#resetPower");
+const powerLine = document.querySelector("#powerLine");
 const legNodes = new Map();
 const motorNodes = new Map();
 const sliderTimers = new Map();
@@ -119,6 +121,31 @@ function formatCurrent(value) {
   return value >= 1000 ? `${(value / 1000).toFixed(2)} A` : `${value.toFixed(0)} mA`;
 }
 
+function formatPower(value) {
+  return `${Number(value).toFixed(2)} W`;
+}
+
+function renderPowerHistory(power) {
+  const history = Array.isArray(power?.history) ? power.history : [];
+  if (history.length < 2) {
+    powerLine.setAttribute("points", "");
+    document.querySelector("#powerScale").textContent = "Waiting for samples";
+    return;
+  }
+  const width = 600;
+  const height = 98;
+  const peak = Math.max(1, ...history.map((sample) => Number(sample.power_w)));
+  const windowSeconds = Number(power.window_s) || 60;
+  const points = history.map((sample) => {
+    const ageFraction = Math.min(windowSeconds, Number(sample.age_s)) / windowSeconds;
+    const x = width - ageFraction * width;
+    const y = height - Number(sample.power_w) / peak * (height - 4);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  powerLine.setAttribute("points", points.join(" "));
+  document.querySelector("#powerScale").textContent = `0–${peak.toFixed(1)} W`;
+}
+
 function motorKey(legNumber, motorNumber) {
   return `${legNumber}:${motorNumber}`;
 }
@@ -179,6 +206,9 @@ function createMotorRow(leg, motor) {
         <span><i>V</i><b class="voltage">—</b></span>
         <span><i>°C</i><b class="temperature">—</b></span>
         <span><i>mA</i><b class="current">—</b></span>
+        <span><i>W</i><b class="power">—</b></span>
+        <span><i>ERR</i><b class="tracking-error">—</b></span>
+        <span><i>SPD</i><b class="speed">—</b></span>
         <span><i>RAW</i><b class="raw">—</b></span>
       </div>
     </div>
@@ -320,6 +350,7 @@ function updateMotor(leg, motor) {
   const row = motorNodes.get(key) || createMotorRow(leg, motor);
   row.classList.toggle("armed", motor.armed);
   row.classList.toggle("torque-mismatch", motor.torque_enabled !== motor.armed);
+  row.classList.toggle("possible-stall", motor.possible_stall);
   row.querySelector(".arm-state").textContent = motor.armed ? "ARMED" : "DISARMED";
   row.querySelector(".arm-button").textContent = motor.armed ? "DISARM" : "ARM";
   row.querySelector(".measured").textContent = formatAngle(motor.measured_deg);
@@ -327,6 +358,10 @@ function updateMotor(leg, motor) {
   row.querySelector(".voltage").textContent = motor.voltage_v.toFixed(1);
   row.querySelector(".temperature").textContent = motor.temperature_c;
   row.querySelector(".current").textContent = motor.current_ma.toFixed(0);
+  row.querySelector(".power").textContent = motor.power_w.toFixed(2);
+  row.querySelector(".tracking-error").textContent =
+    `${motor.tracking_error_deg.toFixed(1)}°`;
+  row.querySelector(".speed").textContent = Math.abs(motor.speed);
   row.querySelector(".raw").textContent = motor.raw_position;
 
   row.querySelectorAll(
@@ -350,7 +385,8 @@ function updateMotor(leg, motor) {
 function updateLeg(leg) {
   const panel = legNodes.get(leg.number) || createLegPanel(leg);
   panel.classList.toggle("active", leg.armed_count > 0);
-  panel.querySelector(".leg-current").textContent = formatCurrent(leg.current_ma);
+  panel.querySelector(".leg-current").textContent =
+    `${formatCurrent(leg.current_ma)} / ${formatPower(leg.power_w)}`;
   panel.querySelector(".leg-armed").textContent = leg.armed_count;
   panel.querySelector(".arm-leg").disabled = latestState?.crawl?.active;
   panel.querySelector(".zero-leg").disabled = latestState?.crawl?.active;
@@ -358,7 +394,7 @@ function updateLeg(leg) {
 }
 
 function updateSummary(state) {
-  const { summary, settings, crawl, runtime } = state;
+  const { summary, settings, crawl, runtime, power } = state;
   const demoMode = runtime?.mode === "demo";
   modeBadge.textContent = demoMode
     ? "DEMO / NO MOTOR OUTPUT"
@@ -388,6 +424,28 @@ function updateSummary(state) {
   document.querySelector("#rampRate").textContent =
     `${settings.ramp_rate_deg_s.toFixed(0)}°/s`;
   document.querySelector("#lastEvent").textContent = state.last_event;
+  document.querySelector("#powerNow").textContent = formatPower(power.instantaneous_w);
+  document.querySelector("#powerAverage").textContent =
+    `60 s average ${formatPower(power.average_w_60s)}`;
+  document.querySelector("#powerPeak").textContent = formatPower(power.peak_w_60s);
+  document.querySelector("#currentPeak").textContent =
+    `Current peak ${power.peak_current_a_60s.toFixed(2)} A`;
+  document.querySelector("#voltageSag").textContent = power.voltage_sag_v == null
+    ? "--"
+    : `${power.voltage_sag_v.toFixed(2)} V`;
+  document.querySelector("#idleVoltage").textContent =
+    power.idle_reference_voltage_v == null
+      ? "Collecting idle reference"
+      : `Idle ${power.idle_reference_voltage_v.toFixed(2)} V / ` +
+        `60 s low ${power.minimum_voltage_v_60s.toFixed(2)} V`;
+  document.querySelector("#energyUsed").textContent =
+    `${power.energy_wh.toFixed(4)} Wh`;
+  document.querySelector("#stallWatch").textContent = power.possible_stall_ids.length
+    ? `ID ${power.possible_stall_ids.join(", ")}`
+    : "NONE";
+  document.querySelector("#powerAssessment").textContent = power.assessment;
+  resetPower.disabled = state.any_armed;
+  renderPowerHistory(power);
 
   alertPanel.hidden = summary.warnings.length === 0 && !state.fault;
   alertList.innerHTML = "";
@@ -562,6 +620,14 @@ walkDiagonalPair.addEventListener("click", () => {
 
 stopWalk.addEventListener("click", () => {
   postAction("/api/crawl-stop", {}, "Gait sequence stopped; all 12 motors disarmed");
+});
+
+resetPower.addEventListener("click", () => {
+  postAction(
+    "/api/power-reset",
+    {},
+    "Power analytics reset; collecting a fresh idle reference",
+  );
 });
 
 setInterval(() => {

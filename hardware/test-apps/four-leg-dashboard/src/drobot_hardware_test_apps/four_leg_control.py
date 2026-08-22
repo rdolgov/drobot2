@@ -13,6 +13,7 @@ import threading
 import time
 import tomllib
 import webbrowser
+from collections import deque
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from http import HTTPStatus
@@ -54,8 +55,12 @@ class MonitoringConfig:
     voltage_warning_low_v: float
     voltage_warning_high_v: float
     voltage_spread_warning_v: float
+    voltage_sag_warning_v: float
     temperature_warning_c: int
     leg_current_warning_ma: float
+    motor_stall_current_warning_ma: float
+    stall_tracking_error_deg: float
+    stall_speed_raw_max: int
 
 
 @dataclass(frozen=True)
@@ -158,11 +163,24 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             monitoring_data.get("voltage_spread_warning_v", 0.5),
             "monitoring.voltage_spread_warning_v",
         ),
+        voltage_sag_warning_v=_finite_float(
+            monitoring_data.get("voltage_sag_warning_v", 0.6),
+            "monitoring.voltage_sag_warning_v",
+        ),
         temperature_warning_c=int(monitoring_data.get("temperature_warning_c", 60)),
         leg_current_warning_ma=_finite_float(
             monitoring_data.get("leg_current_warning_ma", 3000.0),
             "monitoring.leg_current_warning_ma",
         ),
+        motor_stall_current_warning_ma=_finite_float(
+            monitoring_data.get("motor_stall_current_warning_ma", 1200.0),
+            "monitoring.motor_stall_current_warning_ma",
+        ),
+        stall_tracking_error_deg=_finite_float(
+            monitoring_data.get("stall_tracking_error_deg", 8.0),
+            "monitoring.stall_tracking_error_deg",
+        ),
+        stall_speed_raw_max=int(monitoring_data.get("stall_speed_raw_max", 20)),
     )
     if not 0 < monitoring.voltage_warning_low_v:
         raise ValueError("Low-voltage warning must be positive")
@@ -172,10 +190,18 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("Voltage warning range is invalid")
     if not 0 < monitoring.voltage_spread_warning_v <= 3.0:
         raise ValueError("Voltage-spread warning must be in (0, 3]")
+    if not 0.1 <= monitoring.voltage_sag_warning_v <= 3.0:
+        raise ValueError("Voltage-sag warning must be in [0.1, 3]")
     if not 30 <= monitoring.temperature_warning_c <= 90:
         raise ValueError("Temperature warning must be in [30, 90] C")
     if not 100 <= monitoring.leg_current_warning_ma <= 10_000:
         raise ValueError("Leg-current warning must be in [100, 10000] mA")
+    if not 100 <= monitoring.motor_stall_current_warning_ma <= 5_000:
+        raise ValueError("Motor-stall current warning must be in [100, 5000] mA")
+    if not 1.0 <= monitoring.stall_tracking_error_deg <= 45.0:
+        raise ValueError("Stall tracking-error threshold must be in [1, 45] deg")
+    if not 0 <= monitoring.stall_speed_raw_max <= 500:
+        raise ValueError("Stall raw-speed threshold must be in [0, 500]")
 
     crawl = CrawlConfig(
         period_s=_finite_float(
@@ -398,6 +424,11 @@ class FourLegSession:
         self.crawl_started_at: float | None = None
         self.crawl_target_reached_at: float | None = None
         self.crawl_progress = 0.0
+        self.power_samples: deque[tuple[float, float, float, float]] = deque()
+        self.idle_voltage_samples: deque[float] = deque(maxlen=30)
+        self.power_energy_wh = 0.0
+        self.power_last_sample_at: float | None = None
+        self.power_last_w = 0.0
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.worker: threading.Thread | None = None
@@ -1074,16 +1105,33 @@ class FourLegSession:
             len(controller.armed_ids) for controller in self.controllers.values()
         )
 
+    def reset_power_analytics(self) -> None:
+        with self.lock:
+            if self._armed_count_locked():
+                raise RuntimeError(
+                    "Disarm all motors before resetting power analytics"
+                )
+            self.power_samples.clear()
+            self.idle_voltage_samples.clear()
+            self.power_energy_wh = 0.0
+            self.power_last_sample_at = None
+            self.power_last_w = 0.0
+            self.last_event = "Power analytics reset; collect an idle reference"
+
     def _snapshot_locked(self) -> dict[str, Any]:
         leg_payloads: list[dict[str, Any]] = []
         all_statuses: list[MotorStatus] = []
         unexpected_torque: list[int] = []
         current_by_leg: dict[int, float] = {}
+        power_by_leg: dict[int, float] = {}
+        possible_stall_ids: list[int] = []
+        monitoring = self.dashboard.monitoring
 
         for profile in self.profiles:
             controller = self.controllers[profile.number]
             motors: list[dict[str, Any]] = []
             leg_current = 0.0
+            leg_power = 0.0
             for motor in profile.config.motors:
                 status = self.bus.status(motor)
                 all_statuses.append(status)
@@ -1098,6 +1146,25 @@ class FourLegSession:
                 if status.torque_enabled and not armed:
                     unexpected_torque.append(motor.servo_id)
                 leg_current += status.current_ma
+                motor_power_w = (
+                    status.voltage_v * max(0.0, status.current_ma) / 1000.0
+                )
+                leg_power += motor_power_w
+                tracking_reference = commanded if commanded is not None else desired
+                tracking_error_deg = (
+                    abs(float(tracking_reference) - measured)
+                    if tracking_reference is not None
+                    else 0.0
+                )
+                possible_stall = bool(
+                    armed
+                    and tracking_error_deg >= monitoring.stall_tracking_error_deg
+                    and status.current_ma
+                    >= monitoring.motor_stall_current_warning_ma
+                    and abs(status.raw_speed) <= monitoring.stall_speed_raw_max
+                )
+                if possible_stall:
+                    possible_stall_ids.append(motor.servo_id)
                 motors.append(
                     {
                         "number": motor.number,
@@ -1118,24 +1185,31 @@ class FourLegSession:
                         "voltage_v": status.voltage_v,
                         "temperature_c": status.temperature_c,
                         "current_ma": status.current_ma,
+                        "power_w": motor_power_w,
+                        "tracking_error_deg": tracking_error_deg,
+                        "possible_stall": possible_stall,
                         "torque_enabled": status.torque_enabled,
                         "armed": armed,
                         "model": status.model_number,
                     }
                 )
             current_by_leg[profile.number] = leg_current
+            power_by_leg[profile.number] = leg_power
             leg_payloads.append(
                 {
                     "number": profile.number,
                     "label": profile.label,
                     "corner": profile.corner,
                     "current_ma": leg_current,
+                    "power_w": leg_power,
+                    "possible_stall_ids": [
+                        motor["id"] for motor in motors if motor["possible_stall"]
+                    ],
                     "armed_count": sum(motor["armed"] for motor in motors),
                     "motors": motors,
                 }
             )
 
-        monitoring = self.dashboard.monitoring
         voltages = [status.voltage_v for status in all_statuses]
         temperatures = [status.temperature_c for status in all_statuses]
         voltage_min = min(voltages)
@@ -1143,6 +1217,46 @@ class FourLegSession:
         voltage_spread = voltage_max - voltage_min
         maximum_temperature = max(temperatures)
         total_current = sum(status.current_ma for status in all_statuses)
+        total_power_w = sum(power_by_leg.values())
+        bus_voltage_v = sum(voltages) / len(voltages)
+        armed_count = self._armed_count_locked()
+        if armed_count == 0 and not unexpected_torque and total_current <= 250.0:
+            self.idle_voltage_samples.append(voltage_min)
+        idle_reference_voltage_v = (
+            sum(self.idle_voltage_samples) / len(self.idle_voltage_samples)
+            if self.idle_voltage_samples
+            else None
+        )
+        voltage_sag_v = (
+            max(0.0, idle_reference_voltage_v - voltage_min)
+            if idle_reference_voltage_v is not None
+            else None
+        )
+
+        sample_at = self.clock()
+        if self.power_last_sample_at is not None:
+            elapsed_s = sample_at - self.power_last_sample_at
+            if 0.0 < elapsed_s <= 5.0:
+                average_interval_power_w = (self.power_last_w + total_power_w) / 2.0
+                self.power_energy_wh += average_interval_power_w * elapsed_s / 3600.0
+        self.power_last_sample_at = sample_at
+        self.power_last_w = total_power_w
+        self.power_samples.append(
+            (sample_at, total_power_w, total_current, voltage_min)
+        )
+        power_window_s = 60.0
+        while (
+            self.power_samples
+            and sample_at - self.power_samples[0][0] > power_window_s
+        ):
+            self.power_samples.popleft()
+        average_power_w = sum(sample[1] for sample in self.power_samples) / len(
+            self.power_samples
+        )
+        peak_power_w = max(sample[1] for sample in self.power_samples)
+        peak_current_ma = max(sample[2] for sample in self.power_samples)
+        minimum_voltage_v = min(sample[3] for sample in self.power_samples)
+
         warnings: list[str] = []
         if voltage_min < monitoring.voltage_warning_low_v:
             warnings.append(
@@ -1157,6 +1271,13 @@ class FourLegSession:
         if voltage_spread > monitoring.voltage_spread_warning_v:
             warnings.append(
                 f"Servo voltage spread is {voltage_spread:.1f} V; inspect wiring"
+            )
+        if (
+            voltage_sag_v is not None
+            and voltage_sag_v >= monitoring.voltage_sag_warning_v
+        ):
+            warnings.append(
+                f"Bus voltage sag is {voltage_sag_v:.1f} V from the idle reference"
             )
         if maximum_temperature >= monitoring.temperature_warning_c:
             warnings.append(
@@ -1173,6 +1294,30 @@ class FourLegSession:
                 "Unexpected torque-enable state on ID(s) "
                 + ", ".join(str(value) for value in unexpected_torque)
             )
+        if possible_stall_ids:
+            warnings.append(
+                "Possible servo stall on ID(s) "
+                + ", ".join(str(value) for value in possible_stall_ids)
+            )
+
+        sag_warning = bool(
+            voltage_sag_v is not None
+            and voltage_sag_v >= monitoring.voltage_sag_warning_v
+        )
+        if possible_stall_ids and sag_warning:
+            power_assessment = "Voltage sag and servo-stall signature detected"
+        elif possible_stall_ids:
+            power_assessment = "Possible mechanical load or servo stall detected"
+        elif sag_warning:
+            power_assessment = "Battery or wiring voltage sag detected"
+        elif idle_reference_voltage_v is None:
+            power_assessment = "Idle reference missing; disarm and reset analytics"
+        elif self.crawl_active:
+            power_assessment = (
+                "No electrical stall signature; compare battery mass and balance"
+            )
+        else:
+            power_assessment = "Start from idle, then observe during walking"
 
         crawl_elapsed_s = (
             max(0.0, self.clock() - self.crawl_started_at)
@@ -1189,6 +1334,7 @@ class FourLegSession:
                 "voltage_max_v": voltage_max,
                 "voltage_spread_v": voltage_spread,
                 "total_current_ma": total_current,
+                "total_power_w": total_power_w,
                 "max_temperature_c": maximum_temperature,
                 "health": "warning" if warnings else "nominal",
                 "warnings": warnings,
@@ -1203,8 +1349,39 @@ class FourLegSession:
                 "heartbeat_timeout_s": self.heartbeat_timeout_s,
                 "voltage_warning_low_v": monitoring.voltage_warning_low_v,
                 "voltage_warning_high_v": monitoring.voltage_warning_high_v,
+                "voltage_sag_warning_v": monitoring.voltage_sag_warning_v,
                 "temperature_warning_c": monitoring.temperature_warning_c,
                 "leg_current_warning_ma": monitoring.leg_current_warning_ma,
+                "motor_stall_current_warning_ma": (
+                    monitoring.motor_stall_current_warning_ma
+                ),
+                "stall_tracking_error_deg": monitoring.stall_tracking_error_deg,
+                "stall_speed_raw_max": monitoring.stall_speed_raw_max,
+            },
+            "power": {
+                "instantaneous_w": total_power_w,
+                "average_w_60s": average_power_w,
+                "peak_w_60s": peak_power_w,
+                "peak_current_a_60s": peak_current_ma / 1000.0,
+                "bus_voltage_v": bus_voltage_v,
+                "idle_reference_voltage_v": idle_reference_voltage_v,
+                "voltage_sag_v": voltage_sag_v,
+                "minimum_voltage_v_60s": minimum_voltage_v,
+                "energy_wh": self.power_energy_wh,
+                "possible_stall_ids": possible_stall_ids,
+                "assessment": power_assessment,
+                "window_s": power_window_s,
+                "history": [
+                    {
+                        "age_s": max(0.0, sample_at - timestamp),
+                        "power_w": power_w,
+                        "current_a": current_ma / 1000.0,
+                        "voltage_v": sample_voltage_v,
+                    }
+                    for timestamp, power_w, current_ma, sample_voltage_v in (
+                        self.power_samples
+                    )
+                ],
             },
             "runtime": {
                 "mode": (
@@ -1436,6 +1613,8 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
                 )
             elif self.path == "/api/crawl-stop":
                 self.server.session.stop_crawl()
+            elif self.path == "/api/power-reset":
+                self.server.session.reset_power_analytics()
             elif self.path == "/api/target":
                 self.server.session.set_target(
                     payload["leg"],
