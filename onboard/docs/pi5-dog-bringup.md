@@ -134,6 +134,10 @@ Windows retains exclusive port ownership for the desktop dashboard. Trusted-LAN
 Pi pages do not require a control token. Motion POSTs carry a non-secret client
 version so stale pages are told to reload rather than controlling the robot.
 
+Brief browser or Wi-Fi polling failures are shown as a live connection warning
+and are not stored in the permanent error log. Hardware faults, including a
+missing servo USB adapter, remain stored until cleared from Settings.
+
 The page sends its heartbeat every 0.7 seconds on an independent request path.
 A missing heartbeat or closed page becomes a visible warning after 20 seconds,
 but it does not stop the gait, alter targets, or remove torque. The onboard gait
