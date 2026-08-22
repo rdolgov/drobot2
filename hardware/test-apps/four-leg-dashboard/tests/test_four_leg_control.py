@@ -422,6 +422,37 @@ def test_telemetry_fault_reopens_adapter_and_returns_disarmed() -> None:
         session.close()
 
 
+def test_missing_adapter_recovery_returns_one_stable_fault() -> None:
+    session, bus, _clock = _session()
+    try:
+        def unavailable(_motor):
+            raise RuntimeError("Serial bus is not open")
+
+        def cannot_reopen() -> None:
+            raise RuntimeError("No likely USB serial adapter found")
+
+        bus.status = unavailable
+        bus.reopen = cannot_reopen
+
+        expected = (
+            "Servo bus unavailable; automatic reconnect failed: "
+            "No likely USB serial adapter found"
+        )
+        with pytest.raises(RuntimeError, match="Servo bus unavailable") as first:
+            session.snapshot()
+        with pytest.raises(RuntimeError, match="Servo bus unavailable") as second:
+            session.snapshot()
+
+        assert str(first.value) == expected
+        assert str(second.value) == expected
+        assert session.fault == expected
+        assert session.last_event == (
+            "Telemetry fault; waiting for servo bus reconnect"
+        )
+    finally:
+        session.close()
+
+
 def test_dashboard_port_is_exclusive() -> None:
     first = FourLegHTTPServer(("127.0.0.1", 0), None, "first")
     try:

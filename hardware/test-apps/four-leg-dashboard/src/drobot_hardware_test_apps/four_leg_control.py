@@ -508,7 +508,8 @@ class FourLegSession:
                         self._recover_bus_locked()
                     except Exception as recovery_exc:
                         self.fault = (
-                            f"{exc}; automatic reconnect failed: {recovery_exc}"
+                            "Servo bus unavailable; automatic reconnect failed: "
+                            f"{recovery_exc}"
                         )
                         self.last_event = (
                             "Motion fault; waiting for servo bus reconnect"
@@ -1124,9 +1125,10 @@ class FourLegSession:
             controller.targets_deg.clear()
         self.desired_deg.clear()
         if errors and raise_errors:
+            unique_errors = list(dict.fromkeys(str(error) for error in errors))
             raise RuntimeError(
                 "One or more motors could not be disarmed: "
-                + "; ".join(str(error) for error in errors)
+                + "; ".join(unique_errors)
             )
 
     def _forget_motion_state_locked(self) -> None:
@@ -1541,7 +1543,8 @@ class FourLegSession:
                     self._recover_bus_locked()
                 except Exception as recovery_exc:
                     self.fault = (
-                        f"{exc}; automatic reconnect failed: {recovery_exc}"
+                        "Servo bus unavailable; automatic reconnect failed: "
+                        f"{recovery_exc}"
                     )
                     self.last_event = (
                         "Telemetry fault; waiting for servo bus reconnect"
