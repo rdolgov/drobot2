@@ -1,7 +1,7 @@
 [server]
 http_port = 8766
 ramp_rate_deg_s = 270.0
-heartbeat_timeout_s = 1.5
+heartbeat_timeout_s = 20.0
 
 [monitoring]
 voltage_warning_low_v = 11.0

@@ -30,9 +30,11 @@ The local dashboard provides:
   **SETTINGS**;
 - voltage, temperature, diagnostic current, raw encoder, speed, torque state,
   model, and per-leg current summaries;
-- a 1.5-second browser-heartbeat auto-disarm;
-- best-effort disarm on page close, telemetry read/motion fault, `Ctrl+C`, or normal
-  server exit; and
+- a browser heartbeat sent every 0.7 seconds with a 20-second safe-hold timeout;
+- gait cancellation into the four-foot stance with torque retained when the
+  browser heartbeat is lost or the page closes;
+- best-effort disarm on telemetry read/motion fault, `Ctrl+C`, or normal server
+  exit; and
 - a complete simulated mode that never opens a serial port.
 
 The desktop launcher binds only to `127.0.0.1`. The Raspberry Pi launcher under
@@ -191,16 +193,20 @@ current measured positions, and ramps toward the computed gait-start stance.
 It no longer rejects walking solely because a measured joint is outside a
 zero-centred start-tolerance window. This does not bypass the calibrated hard
 joint-limit validation applied to every computed stance and gait target.
-Browser-heartbeat loss, a telemetry read or motion exception, any disarm
-request, page close, or **STOP + DISARM** cancels motion and attempts to remove
-torque from all twelve motors. Display-only voltage, temperature,
-voltage-spread, and diagnostic-current warnings remain visible but do not stop
-the command.
+Browser-heartbeat loss or page close waits for the tracked 20-second timeout,
+cancels the gait, ramps all feet toward the computed four-foot stance, and keeps
+all armed motors holding torque. It does not resume the gait automatically when
+the browser reconnects. A telemetry read or motion exception, an explicit
+disarm request, **STOP + DISARM**, `Ctrl+C`, or normal server shutdown still
+attempts to remove torque from all twelve motors. Display-only voltage,
+temperature, voltage-spread, and diagnostic-current warnings remain visible but
+do not stop the command.
 
 The tracked defaults live in `[crawl]` in `../../robot-runtime/four-leg.toml`.
 The parser permits a 5-120 mm stride, 5-80 mm lift, and 4-60 second period.
-Both dashboard walking buttons always loop continuously until **STOP + DISARM**,
-browser-heartbeat loss, a bus/motion fault, page close, or process shutdown.
+Both dashboard walking buttons loop continuously until **STOP + DISARM**,
+browser safe hold, a bus/motion fault, or process shutdown. Closing or
+backgrounding a mobile browser no longer sends an immediate disarm request.
 
 ### Power and battery analytics
 

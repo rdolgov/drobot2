@@ -197,9 +197,12 @@ The browser exposes the same controls as the desktop dashboard, including:
 - continuous diagonal-pair gait; and
 - **STOP + DISARM**.
 
-Walking continues until stopped. Browser-started motion also stops on browser
-heartbeat loss. ROS-started motion is kept alive by the onboard node until a
-ROS stop/disarm request, process shutdown, bus fault, or telemetry/motion fault.
+Walking continues until stopped. The browser sends a heartbeat every 0.7
+seconds. After 20 seconds without one, browser-started motion stops locally,
+ramps into the four-foot gait stance, and holds motor torque; reconnecting does
+not automatically resume walking. Page close does not immediately disarm the
+robot. ROS-started motion is kept alive by the onboard node until a ROS
+stop/disarm request, process shutdown, bus fault, or telemetry/motion fault.
 The gait start accepts a minor off-stance measured pose: all motors are armed at
 their current positions and ramped toward the computed gait stance. Only the
 old zero-centred start-tolerance rejection was removed; all 12 IDs must still

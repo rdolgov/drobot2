@@ -81,7 +81,7 @@ def test_manifest_loads_verified_ids_and_directions() -> None:
         "rear_right",
     ]
     assert dashboard.server.ramp_rate_deg_s == 270.0
-    assert dashboard.server.heartbeat_timeout_s == 1.5
+    assert dashboard.server.heartbeat_timeout_s == 20.0
     assert dashboard.monitoring.voltage_warning_low_v == pytest.approx(11.0)
     assert dashboard.monitoring.voltage_spread_warning_v == pytest.approx(0.3)
     assert dashboard.monitoring.voltage_sag_warning_v == pytest.approx(0.6)
@@ -708,17 +708,35 @@ def test_capture_zero_all_requires_disarm_and_saves_backups(tmp_path: Path) -> N
         session.close()
 
 
-def test_lost_browser_heartbeat_disarms_all_twelve() -> None:
+def test_lost_browser_heartbeat_stops_gait_in_torque_enabled_stance() -> None:
     session, bus, clock = _session()
     try:
-        session.arm_leg(4, safety_ack=True)
-        clock.advance(4.0)
+        session.start_crawl_forward(
+            safety_ack=True,
+            confirmation="TEST DISTRIBUTED CRAWL",
+        )
+        clock.advance(19.9)
+        session.advance_once()
+        assert session.snapshot()["crawl"]["active"] is True
+
+        clock.advance(0.2)
         session.advance_once()
         state = session.snapshot()
 
-        assert state["any_armed"] is False
-        assert bus.torque == set()
+        assert state["any_armed"] is True
+        assert state["heartbeat_hold_active"] is True
+        assert state["crawl"]["active"] is False
+        assert state["crawl"]["phase"] == "browser_heartbeat_safe_hold"
+        assert state["crawl"]["airborne_leg_count"] == 0
+        assert state["crawl"]["planted_support_leg_count"] == 4
+        assert state["summary"]["armed_count"] == 12
+        assert bus.torque == set(range(1, 13))
         assert "heartbeat lost" in state["last_event"].lower()
+        assert "torque held" in state["last_event"].lower()
+
+        session.heartbeat()
+        assert session.snapshot()["heartbeat_hold_active"] is True
+        assert session.snapshot()["crawl"]["active"] is False
     finally:
         session.close()
 

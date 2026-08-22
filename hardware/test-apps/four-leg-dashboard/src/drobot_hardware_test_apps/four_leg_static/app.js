@@ -416,7 +416,9 @@ function updateSummary(state) {
     `Warning at ${settings.temperature_warning_c} °C`;
   document.querySelector("#armedCount").textContent = `${summary.armed_count} / 12`;
   document.querySelector("#watchdog").textContent =
-    `${settings.heartbeat_timeout_s.toFixed(1)} s auto-disarm`;
+    state.heartbeat_hold_active
+      ? "SAFE HOLD — torque remains on"
+      : `${settings.heartbeat_timeout_s.toFixed(1)} s safe hold`;
   document.querySelector("#torqueLimit").textContent =
     `${(settings.torque_limit / 10).toFixed(0)}%`;
   document.querySelector("#servoSpeed").textContent = settings.speed;
@@ -651,18 +653,6 @@ setInterval(() => {
 }, 700);
 
 setInterval(refresh, 900);
-
-window.addEventListener("pagehide", () => {
-  fetch("/api/disarm-all", {
-    method: "POST",
-    headers: {
-      "X-Control-Token": token,
-      "Content-Type": "application/json",
-    },
-    body: "{}",
-    keepalive: true,
-  }).catch(() => {});
-});
 
 renderPermanentErrors();
 refresh();

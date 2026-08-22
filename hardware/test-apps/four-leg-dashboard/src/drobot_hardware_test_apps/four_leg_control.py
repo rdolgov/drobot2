@@ -148,8 +148,8 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("server.http_port must be in [1, 65535]")
     if not 1.0 <= server.ramp_rate_deg_s <= 270.0:
         raise ValueError("server.ramp_rate_deg_s must be in [1, 270]")
-    if not 1.0 <= server.heartbeat_timeout_s <= 10.0:
-        raise ValueError("server.heartbeat_timeout_s must be in [1, 10]")
+    if not 1.0 <= server.heartbeat_timeout_s <= 120.0:
+        raise ValueError("server.heartbeat_timeout_s must be in [1, 120]")
 
     monitoring = MonitoringConfig(
         voltage_warning_low_v=_finite_float(
@@ -402,8 +402,8 @@ class FourLegSession:
         )
         if not 1.0 <= self.ramp_rate_deg_s <= 270.0:
             raise ValueError("ramp rate must be in [1, 270] deg/s")
-        if not 1.0 <= self.heartbeat_timeout_s <= 10.0:
-            raise ValueError("heartbeat timeout must be in [1, 10] seconds")
+        if not 1.0 <= self.heartbeat_timeout_s <= 120.0:
+            raise ValueError("heartbeat timeout must be in [1, 120] seconds")
         self.tick_interval_s = tick_interval_s
         self.clock = clock
         self.persist_calibration = persist_calibration
@@ -417,6 +417,7 @@ class FourLegSession:
         }
         self.desired_deg: dict[tuple[int, str], float] = {}
         self.last_heartbeat = clock()
+        self.heartbeat_hold_active = False
         self.last_event = "Starting"
         self.fault: str | None = None
         self.crawl_mode = "distributed"
@@ -501,12 +502,10 @@ class FourLegSession:
 
     def advance_once(self) -> None:
         with self.lock:
-            if self._armed_count_locked():
+            if self._armed_count_locked() and not self.heartbeat_hold_active:
                 elapsed = self.clock() - self.last_heartbeat
                 if elapsed > self.heartbeat_timeout_s:
-                    self._disarm_all_locked(raise_errors=False)
-                    self.last_event = "Browser heartbeat lost; all motors disarmed"
-                    return
+                    self._enter_browser_hold_locked()
 
             self._advance_crawl_locked()
 
@@ -684,6 +683,30 @@ class FourLegSession:
         self.crawl_target_reached_at = None
         self.crawl_progress = 0.0
 
+    def _enter_browser_hold_locked(self) -> None:
+        if self.crawl_active:
+            self.desired_deg.update(self._crawl_stance_targets_locked())
+            self._cancel_crawl_locked()
+            self.crawl_phase = "browser_heartbeat_safe_hold"
+            self.last_event = (
+                "Browser heartbeat lost; gait stopped in four-foot stance "
+                "with motor torque held"
+            )
+        else:
+            for profile in self.profiles:
+                controller = self.controllers[profile.number]
+                for motor in profile.config.motors:
+                    if motor.servo_id not in controller.armed_ids:
+                        continue
+                    commanded = controller.targets_deg.get(motor.name)
+                    if commanded is not None:
+                        self.desired_deg[(profile.number, motor.name)] = commanded
+            self.last_event = (
+                "Browser heartbeat lost; armed motors holding their last "
+                "commanded positions"
+            )
+        self.heartbeat_hold_active = True
+
     def _require_manual_control_locked(self) -> None:
         if self.crawl_active:
             raise RuntimeError("Stop the active crawl before manual motion")
@@ -766,6 +789,7 @@ class FourLegSession:
                 raise
 
             self.last_heartbeat = self.clock()
+            self.heartbeat_hold_active = False
             self.fault = None
             self.last_event = (
                 "All 12 motors moving to the diagonal-pair start stance"
@@ -797,6 +821,7 @@ class FourLegSession:
             state = controller.arm(motor)
             self.desired_deg[(profile.number, motor.name)] = state.degrees
             self.last_heartbeat = self.clock()
+            self.heartbeat_hold_active = False
             self.fault = None
             self.last_event = (
                 f"{profile.label} / {motor.name.replace('_', ' ')} armed "
@@ -827,6 +852,7 @@ class FourLegSession:
                     self.desired_deg.pop((profile.number, motor.name), None)
                 raise
             self.last_heartbeat = self.clock()
+            self.heartbeat_hold_active = False
             self.fault = None
             self.last_event = f"{profile.label} armed at measured positions"
 
@@ -850,6 +876,7 @@ class FourLegSession:
             )
             self.desired_deg[(profile.number, motor.name)] = degrees
             self.last_heartbeat = self.clock()
+            self.heartbeat_hold_active = False
             self.last_event = (
                 f"{profile.label} / {motor.name.replace('_', ' ')} "
                 f"destination {degrees:+.2f} deg"
@@ -870,6 +897,7 @@ class FourLegSession:
             if not armed:
                 raise RuntimeError(f"{profile.label} has no armed motors")
             self.last_heartbeat = self.clock()
+            self.heartbeat_hold_active = False
             self.last_event = f"{profile.label} armed motors returning to zero"
 
     def zero_all_armed(self) -> None:
@@ -887,6 +915,7 @@ class FourLegSession:
             if not armed:
                 raise RuntimeError("No motors are armed")
             self.last_heartbeat = self.clock()
+            self.heartbeat_hold_active = False
             self.last_event = "All armed motors returning to zero"
 
     def center_all(
@@ -925,6 +954,7 @@ class FourLegSession:
                 raise
 
             self.last_heartbeat = self.clock()
+            self.heartbeat_hold_active = False
             self.fault = None
             self.last_event = "All 12 motors returning to calibrated zero"
 
@@ -959,6 +989,7 @@ class FourLegSession:
                 raise
 
             self.last_heartbeat = self.clock()
+            self.heartbeat_hold_active = False
             self.fault = None
             self.last_event = (
                 "All 12 motors moving to wide walk stance; encoder seams use "
@@ -1087,6 +1118,7 @@ class FourLegSession:
 
     def _disarm_all_locked(self, *, raise_errors: bool) -> None:
         self._cancel_crawl_locked()
+        self.heartbeat_hold_active = False
         errors: list[Exception] = []
         for profile in self.profiles:
             controller = self.controllers[profile.number]
@@ -1440,10 +1472,14 @@ class FourLegSession:
                 ),
                 "push_partner": self.crawl_push_partner,
                 "airborne_leg_count": (
-                    2 if self.crawl_mode == "diagonal_pair" else 1
+                    0
+                    if self.crawl_phase == "browser_heartbeat_safe_hold"
+                    else 2 if self.crawl_mode == "diagonal_pair" else 1
                 ),
                 "planted_support_leg_count": (
-                    2 if self.crawl_mode == "diagonal_pair" else 3
+                    4
+                    if self.crawl_phase == "browser_heartbeat_safe_hold"
+                    else 2 if self.crawl_mode == "diagonal_pair" else 3
                 ),
                 "progress": self.crawl_progress,
                 "period_s": self.dashboard.crawl.period_s,
@@ -1472,6 +1508,7 @@ class FourLegSession:
                 },
             },
             "any_armed": bool(self._armed_count_locked()),
+            "heartbeat_hold_active": self.heartbeat_hold_active,
             "last_event": self.last_event,
             "fault": self.fault,
         }

@@ -134,11 +134,17 @@ Windows retains exclusive port ownership for the desktop dashboard. Open pages
 automatically reload if a service restart replaces the embedded browser-session
 token.
 
+The page sends its heartbeat every 0.7 seconds. A missing heartbeat or closed
+page no longer removes support torque immediately. After 20 seconds the Pi
+stops the gait, commands the computed four-foot stance through the normal ramp
+limit, and keeps the motors armed. Reconnection does not restart the gait. Use
+**STOP + DISARM** or the physical cutoff when torque must be removed.
+
 Both walking buttons run continuously until **STOP + DISARM**. Starting a gait
 from a minor off-stance pose no longer fails the old zero-centred tolerance
 check: the controller holds each measured position first and ramps to the gait
 stance. This relaxation does not remove startup ID checks, computed joint-limit
-checks, browser heartbeat disarm, telemetry/motion fault handling, or the
+checks, browser heartbeat safe hold, telemetry/motion fault handling, or the
 physical-cutoff requirement.
 
 For battery comparisons, disarm all motors, connect the selected source, press
