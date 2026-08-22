@@ -84,6 +84,16 @@ function normalizeErrorMessage(message) {
     : original;
 }
 
+function isTransientNetworkError(message) {
+  const text = String(message || "").trim().toLowerCase();
+  return (
+    text === "load failed" ||
+    text === "failed to fetch" ||
+    text.includes("networkerror when attempting to fetch resource") ||
+    text.includes("the network connection was lost")
+  );
+}
+
 function loadPermanentErrors() {
   try {
     const stored = JSON.parse(localStorage.getItem(errorStorageKey) || "[]");
@@ -91,6 +101,7 @@ function loadPermanentErrors() {
     const messages = new Set();
     return stored
       .filter((entry) => entry && typeof entry.message === "string")
+      .filter((entry) => !isTransientNetworkError(entry.message))
       .map((entry) => ({
         ...entry,
         message: normalizeErrorMessage(entry.message),
@@ -129,6 +140,7 @@ function renderPermanentErrors() {
 }
 
 function addPermanentError(message) {
+  if (isTransientNetworkError(message)) return;
   const text = normalizeErrorMessage(message);
   if (permanentErrors.some((entry) => entry.message === text)) return;
   permanentErrors.push({ message: text, createdAt: new Date().toISOString() });
@@ -194,7 +206,11 @@ async function postAction(path, body, successMessage) {
     showNotice(successMessage);
     await refresh();
   } catch (error) {
-    showNotice(error.message, true);
+    if (isTransientNetworkError(error.message)) {
+      showNotice("Dashboard connection unavailable; retrying automatically.");
+    } else {
+      showNotice(error.message, true);
+    }
   }
 }
 
