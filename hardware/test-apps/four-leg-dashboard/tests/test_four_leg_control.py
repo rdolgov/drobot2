@@ -381,6 +381,32 @@ def test_start_requires_all_motors_and_disarms_every_id() -> None:
         session.close()
 
 
+def test_hardware_ui_can_start_disconnected_with_motion_disabled() -> None:
+    dashboard = load_dashboard_config(MANIFEST)
+    bus = FourLegDemoBus(dashboard)
+    session = FourLegSession(dashboard, bus, persist_calibration=False)
+    original_require_motor = bus.require_motor
+
+    def missing_motor(motor):
+        if motor.servo_id == 7:
+            raise RuntimeError("No motor answered at ID 7")
+        return original_require_motor(motor)
+
+    bus.require_motor = missing_motor
+    session.start(start_worker=False, allow_disconnected=True)
+    try:
+        assert bus.torque == set()
+        assert session.fault == (
+            "Servo bus unavailable; automatic reconnect failed: "
+            "No motor answered at ID 7"
+        )
+        assert session.last_event == (
+            "Startup fault; waiting for servo bus reconnect"
+        )
+    finally:
+        session.close()
+
+
 def test_telemetry_fault_reopens_adapter_and_returns_disarmed() -> None:
     session, bus, _clock = _session()
     try:

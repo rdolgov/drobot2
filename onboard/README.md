@@ -55,10 +55,13 @@ opens the bus, requires all 12 configured IDs, and disarms them before serving
 the page. Never run this standalone service and the future ROS motor-owner node
 at the same time.
 
-`DROBOT_MANUAL_FALLBACK_DEMO=true` keeps port 8080 available in demo mode if
-the configured USB adapter is unplugged. After reconnecting the adapter,
-restart the service to retry hardware mode. The page's mode badge always shows
-whether output is simulated or connected to hardware.
+Keep `DROBOT_MANUAL_FALLBACK_DEMO=false` for a robot configured in hardware
+mode. Port 8080 remains available as a hardware diagnostics page if the USB
+adapter or any configured motor is missing, but every motion control stays
+disabled until automatic recovery verifies all 12 IDs and disarms them. Set the
+fallback to `true` only when an intentional simulated dashboard is preferred.
+The page's mode badge always shows whether output is simulated or connected to
+hardware.
 
 ### Update an existing Pi dashboard
 

@@ -9,7 +9,7 @@ SERIAL_PORT="${DROBOT_MANUAL_SERIAL_PORT:-auto}"
 HTTP_BIND="${DROBOT_MANUAL_BIND:-0.0.0.0}"
 HTTP_PORT="${DROBOT_MANUAL_PORT:-8080}"
 DEMO_MODE="${DROBOT_MANUAL_DEMO:-true}"
-FALLBACK_DEMO="${DROBOT_MANUAL_FALLBACK_DEMO:-true}"
+FALLBACK_DEMO="${DROBOT_MANUAL_FALLBACK_DEMO:-false}"
 
 if [[ ! -x "${VENV_DIR}/bin/drobot-four-leg-web" ]]; then
   echo "Manual dashboard runtime is not installed. Run:" >&2

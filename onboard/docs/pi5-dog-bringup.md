@@ -125,10 +125,11 @@ cannot command real motors. To enable hardware later, set
 `/etc/default/drobot-manual-web`, then restart the service while the robot is
 supported and the physical cutoff is ready.
 
-Keep `DROBOT_MANUAL_FALLBACK_DEMO=true`. If the adapter is unplugged, the
-service will continue serving the UI in clearly labeled demo mode instead of
-crash-restarting. Reconnect the adapter and restart the service to retry real
-hardware. Linux address reuse is enabled for this service so an active browser
+Keep `DROBOT_MANUAL_FALLBACK_DEMO=false` on the real robot. If the adapter or a
+configured motor is missing, the service continues serving hardware diagnostics
+with motion disabled and retries recovery during telemetry polling. It enables
+controls only after verifying all 12 IDs and disarming them. Linux address reuse
+is enabled for this service so an active browser
 connection does not prevent port 8080 from reopening during a clean restart;
 Windows retains exclusive port ownership for the desktop dashboard. Trusted-LAN
 Pi pages do not require a control token. Motion POSTs carry a non-secret client
