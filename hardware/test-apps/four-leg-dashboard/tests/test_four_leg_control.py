@@ -92,6 +92,7 @@ def test_manifest_loads_verified_ids_and_directions() -> None:
     )
     assert dashboard.monitoring.stall_tracking_error_deg == pytest.approx(8.0)
     assert dashboard.monitoring.stall_speed_raw_max == 20
+    assert dashboard.monitoring.battery_series_cells == 3
     assert dashboard.crawl.period_s == pytest.approx(4.0)
     assert dashboard.crawl.stride_m == pytest.approx(0.096)
     assert dashboard.crawl.lift_m == pytest.approx(0.035)
@@ -760,6 +761,10 @@ def test_power_analytics_detect_sag_and_possible_stall() -> None:
     try:
         idle = session.snapshot()
         assert idle["power"]["idle_reference_voltage_v"] == pytest.approx(12.2)
+        assert idle["power"]["battery_charge"]["status"] == "good"
+        assert idle["power"]["battery_charge"][
+            "average_cell_voltage_v"
+        ] == pytest.approx(12.2 / 3.0)
 
         session.arm(1, 1, safety_ack=True)
         stalled_position = bus.positions[1]

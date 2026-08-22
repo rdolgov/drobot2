@@ -438,6 +438,15 @@ function updateSummary(state) {
       ? "Collecting idle reference"
       : `Idle ${power.idle_reference_voltage_v.toFixed(2)} V / ` +
         `60 s low ${power.minimum_voltage_v_60s.toFixed(2)} V`;
+  const batteryCharge = power.battery_charge;
+  const batteryChargeNode = document.querySelector("#batteryCharge");
+  batteryChargeNode.textContent = batteryCharge.status.toUpperCase();
+  batteryChargeNode.dataset.level = batteryCharge.status;
+  document.querySelector("#batteryVoltage").textContent =
+    batteryCharge.average_cell_voltage_v == null
+      ? `${batteryCharge.series_cells}S / collect idle reference`
+      : `${batteryCharge.idle_pack_voltage_v.toFixed(2)} V pack / ` +
+        `${batteryCharge.average_cell_voltage_v.toFixed(2)} V average cell`;
   document.querySelector("#energyUsed").textContent =
     `${power.energy_wh.toFixed(4)} Wh`;
   document.querySelector("#stallWatch").textContent = power.possible_stall_ids.length

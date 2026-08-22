@@ -80,6 +80,10 @@ continue until **STOP + DISARM**. A minor off-stance start is accepted and
 ramped into the computed gait stance; it is not permission to start from a
 folded, collided, unsupported, or visibly damaged pose.
 
+The power panel also shows a basic 3S charge indicator from the last disarmed
+idle-voltage reference. It is a pack-level estimate, not a substitute for
+checking all three cells through the balance connector.
+
 ## Supported Pi baseline
 
 The current `pi5-dog` baseline is a Raspberry Pi 5 with **Ubuntu Server 26.04

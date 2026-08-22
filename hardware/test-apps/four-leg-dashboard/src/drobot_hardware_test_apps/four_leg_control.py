@@ -61,6 +61,7 @@ class MonitoringConfig:
     motor_stall_current_warning_ma: float
     stall_tracking_error_deg: float
     stall_speed_raw_max: int
+    battery_series_cells: int
 
 
 @dataclass(frozen=True)
@@ -181,6 +182,7 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             "monitoring.stall_tracking_error_deg",
         ),
         stall_speed_raw_max=int(monitoring_data.get("stall_speed_raw_max", 20)),
+        battery_series_cells=int(monitoring_data.get("battery_series_cells", 3)),
     )
     if not 0 < monitoring.voltage_warning_low_v:
         raise ValueError("Low-voltage warning must be positive")
@@ -202,6 +204,8 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("Stall tracking-error threshold must be in [1, 45] deg")
     if not 0 <= monitoring.stall_speed_raw_max <= 500:
         raise ValueError("Stall raw-speed threshold must be in [0, 500]")
+    if not 2 <= monitoring.battery_series_cells <= 6:
+        raise ValueError("Battery series-cell count must be in [2, 6]")
 
     crawl = CrawlConfig(
         period_s=_finite_float(
@@ -1232,6 +1236,21 @@ class FourLegSession:
             if idle_reference_voltage_v is not None
             else None
         )
+        battery_per_cell_v = (
+            idle_reference_voltage_v / monitoring.battery_series_cells
+            if idle_reference_voltage_v is not None
+            else None
+        )
+        if battery_per_cell_v is None:
+            battery_charge_status = "unknown"
+        elif battery_per_cell_v >= 4.10:
+            battery_charge_status = "full"
+        elif battery_per_cell_v >= 3.90:
+            battery_charge_status = "good"
+        elif battery_per_cell_v >= 3.70:
+            battery_charge_status = "low"
+        else:
+            battery_charge_status = "recharge"
 
         sample_at = self.clock()
         if self.power_last_sample_at is not None:
@@ -1299,6 +1318,11 @@ class FourLegSession:
                 "Possible servo stall on ID(s) "
                 + ", ".join(str(value) for value in possible_stall_ids)
             )
+        if battery_charge_status == "recharge":
+            warnings.append(
+                f"{monitoring.battery_series_cells}S idle-voltage estimate says "
+                "RECHARGE; verify every cell at the balance connector"
+            )
 
         sag_warning = bool(
             voltage_sag_v is not None
@@ -1357,6 +1381,7 @@ class FourLegSession:
                 ),
                 "stall_tracking_error_deg": monitoring.stall_tracking_error_deg,
                 "stall_speed_raw_max": monitoring.stall_speed_raw_max,
+                "battery_series_cells": monitoring.battery_series_cells,
             },
             "power": {
                 "instantaneous_w": total_power_w,
@@ -1382,6 +1407,13 @@ class FourLegSession:
                         self.power_samples
                     )
                 ],
+                "battery_charge": {
+                    "status": battery_charge_status,
+                    "series_cells": monitoring.battery_series_cells,
+                    "idle_pack_voltage_v": idle_reference_voltage_v,
+                    "average_cell_voltage_v": battery_per_cell_v,
+                    "voltage_only_estimate": True,
+                },
             },
             "runtime": {
                 "mode": (

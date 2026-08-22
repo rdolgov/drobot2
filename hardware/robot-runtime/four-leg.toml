@@ -13,6 +13,7 @@ leg_current_warning_ma = 2500.0
 motor_stall_current_warning_ma = 1200.0
 stall_tracking_error_deg = 8.0
 stall_speed_raw_max = 20
+battery_series_cells = 3
 
 [crawl]
 period_s = 4.0

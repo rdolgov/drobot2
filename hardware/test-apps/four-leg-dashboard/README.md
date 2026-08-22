@@ -231,6 +231,13 @@ tracking error, and raw speed at or below 20. These are diagnostic heuristics,
 not certified protection thresholds. Hard joint limits, heartbeat disarm, and
 the physical cutoff remain the actual safety layers.
 
+For the tracked 3S LiPo, the same idle reference drives a deliberately coarse
+charge indicator: **FULL** at 4.10 V/cell or above, **GOOD** from 3.90 V/cell,
+**LOW** from 3.70 V/cell, and **RECHARGE** below 3.70 V/cell. The displayed cell
+value is only pack voltage divided by three; it cannot detect an imbalanced or
+failing individual cell. Confirm a low/recharge result with a balance-plug cell
+checker and follow the battery manufacturer's limits.
+
 ### Separate diagonal-pair mode
 
 **TEST DIAGONAL PAIRS** starts a separate `/api/diagonal-pair-forward` routine;

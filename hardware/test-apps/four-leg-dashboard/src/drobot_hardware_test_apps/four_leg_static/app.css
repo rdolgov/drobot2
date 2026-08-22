@@ -538,7 +538,7 @@ main {
 
 .power-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 8px;
   margin: 15px 0;
 }
@@ -564,6 +564,19 @@ main {
   color: var(--cyan);
   font-size: 1.1rem;
   font-variant-numeric: tabular-nums;
+}
+
+.battery-charge[data-level="full"],
+.battery-charge[data-level="good"] {
+  color: var(--lime);
+}
+
+.battery-charge[data-level="low"] {
+  color: var(--amber);
+}
+
+.battery-charge[data-level="recharge"] {
+  color: var(--red);
 }
 
 .power-chart-wrap {
