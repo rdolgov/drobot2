@@ -43,6 +43,7 @@ class STSBus:
     """Own one serial connection to an STS/SMS protocol bus."""
 
     def __init__(self, port: str, baudrate: int):
+        self.requested_port = port
         self.port_name = port
         self.baudrate = baudrate
         self.port: Any | None = None
@@ -66,6 +67,13 @@ class STSBus:
                 "Feetech SDK is not installed. Run "
                 "`python3 -m pip install -e .` in this folder."
             ) from exc
+        # Resolve `auto` every time the bus is opened. Linux may assign a new
+        # ttyACM/ttyUSB number after a USB disconnect while the process stays
+        # alive, so reusing the startup path would leave a permanently dead
+        # connection.
+        from .ports import resolve_port
+
+        self.port_name = resolve_port(self.requested_port)
         port = PortHandler(self.port_name)
         if not port.openPort():
             raise ConnectionError(f"Could not open serial port {self.port_name}")
@@ -83,6 +91,12 @@ class STSBus:
             self.port.closePort()
         self.port = None
         self.packet = None
+
+    def reopen(self) -> None:
+        """Close the stale handle and resolve/open the requested adapter again."""
+
+        self.close()
+        self.open()
 
     def _require_open(self) -> Any:
         if self.packet is None:

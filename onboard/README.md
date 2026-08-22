@@ -209,6 +209,12 @@ old zero-centred start-tolerance rejection was removed; all 12 IDs must still
 be online, and every computed target must remain inside its calibrated joint
 limits.
 
+With `DROBOT_MANUAL_SERIAL_PORT=auto`, the hardware dashboard also recovers
+from Linux renumbering the adapter after a USB reconnect. It re-resolves the
+current serial device, requires all twelve configured IDs, and disarms every
+motor before returning telemetry. A partial bus remains faulted and is never
+accepted as a real four-leg controller.
+
 ## HTTP web-service API
 
 The browser uses the same JSON API available to other LAN clients. Important

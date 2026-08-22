@@ -200,6 +200,13 @@ DISARM**, `Ctrl+C`, or normal server shutdown still attempts to remove torque
 from all twelve motors. Display-only voltage, temperature, voltage-spread, and
 diagnostic-current warnings remain visible but do not stop the command.
 
+When `--port auto` is used, a USB disconnect/reconnect is recovered without a
+manual service restart. The failed motion state is cleared, the adapter path is
+resolved again (including `ttyACM0`/`ttyACM1` renumbering), all twelve IDs are
+revalidated, and every motor is explicitly disarmed before telemetry resumes.
+If the complete bus is not yet available, the API stays faulted and retries on
+the next telemetry request rather than continuing with a partial robot.
+
 The tracked defaults live in `[crawl]` in `../../robot-runtime/four-leg.toml`.
 The parser permits a 5-120 mm stride, 5-80 mm lift, and 4-60 second period.
 Both dashboard walking buttons loop continuously until **STOP + DISARM**,

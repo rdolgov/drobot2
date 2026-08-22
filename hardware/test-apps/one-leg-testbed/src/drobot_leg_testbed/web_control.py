@@ -24,7 +24,6 @@ from .model import (
     load_config,
     raw_to_degrees,
 )
-from .ports import resolve_port
 from .transport import MotorStatus, STSBus
 
 LOCAL_HOST = "127.0.0.1"
@@ -451,7 +450,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.demo:
         bus = DemoBus(config, calibration)
     else:
-        bus = STSBus(resolve_port(args.port), config.bus.baudrate)
+        bus = STSBus(args.port, config.bus.baudrate)
     session = ControlSession(
         config,
         calibration,
