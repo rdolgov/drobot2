@@ -464,20 +464,35 @@ class FourLegSession:
         motor = profile.config.motor(motor_selector)
         return profile, motor, self.controllers[profile.number]
 
-    def start(self, *, start_worker: bool = True) -> None:
-        self.bus.open()
+    def start(
+        self,
+        *,
+        start_worker: bool = True,
+        allow_disconnected: bool = False,
+    ) -> None:
         try:
+            self.bus.open()
             for profile in self.profiles:
                 for motor in profile.config.motors:
                     self.bus.require_motor(motor)
             with self.lock:
                 self._disarm_all_locked(raise_errors=True)
+                self.fault = None
                 self.last_event = "All 12 motors online and disarmed"
-        except Exception:
+        except Exception as exc:
             with self.lock:
+                self._forget_motion_state_locked()
                 self._disarm_all_locked(raise_errors=False)
+                self.fault = (
+                    "Servo bus unavailable; automatic reconnect failed: "
+                    f"{exc}"
+                )
+                self.last_event = (
+                    "Startup fault; waiting for servo bus reconnect"
+                )
             self.bus.close()
-            raise
+            if not allow_disconnected:
+                raise
         if start_worker:
             self.worker = threading.Thread(
                 target=self._worker_loop,
@@ -1843,7 +1858,7 @@ def main(argv: list[str] | None = None) -> int:
     url = f"http://{display_host}:{server.server_port}/"
     mode = "demo" if args.demo else f"hardware on {args.port}"
     try:
-        session.start()
+        session.start(allow_disconnected=not args.demo)
         print(f"Drobot four-leg control ({mode}): {url}")
         scope = "Trusted LAN enabled" if args.allow_remote else "Local machine only"
         print(f"{scope}. Ctrl+C disarms all motors and closes the bus.")
