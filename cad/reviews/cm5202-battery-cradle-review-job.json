@@ -1,0 +1,29 @@
+{
+  "input": "drobot_cad/parts/cm5202_battery_cradle.step.py",
+  "mode": "view",
+  "outputs": [
+    {
+      "path": "C:/Users/roman/Documents/dev/drobot2/cad/reviews/cm5202-battery-cradle/iso.png",
+      "camera": "iso"
+    },
+    {
+      "path": "C:/Users/roman/Documents/dev/drobot2/cad/reviews/cm5202-battery-cradle/iso-opposite.png",
+      "camera": {
+        "direction": [-1, 1, -0.8]
+      }
+    },
+    {
+      "path": "C:/Users/roman/Documents/dev/drobot2/cad/reviews/cm5202-battery-cradle/top.png",
+      "camera": "top"
+    },
+    {
+      "path": "C:/Users/roman/Documents/dev/drobot2/cad/reviews/cm5202-battery-cradle/front.png",
+      "camera": "front"
+    }
+  ],
+  "render": {
+    "viewLabels": true,
+    "padding": 0.12,
+    "sizeProfile": "diagnostic"
+  }
+}

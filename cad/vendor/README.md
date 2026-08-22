@@ -12,6 +12,7 @@ in place; apply placement transforms only in Python assembly code.
 | `references/lekiwi/lekiwi_12v_5ah_battery_reference.stl` | SIGRobotics-UIUC LeKiwi | 12 V battery, 5 Ah BOM / 5.2 Ah URDF reference | [LeKiwi source](https://github.com/SIGRobotics-UIUC/LeKiwi/blob/main/URDF/meshes/Battery---Battery-5.2-Ah-DC5521-Plug-v2.stl) | 2026-07-26 | `f0cd9200f80ff3a75c8b0447eb2e80cd649a6ac86271ff5003571a9f5d94d42c` |
 | `electronics/waveshare_bus_servo_adapter_a.step` | Waveshare | Bus Servo Adapter (A), SKU 25514 | [Official Waveshare STEP](https://files.waveshare.com/wiki/Bus-Servo-Adapter-%28A%29/Bus%20Servo%20Adapter%20%28A%29_3D.zip) | 2026-07-26 | `5b04c6802fe661c3f3f2ed02c4decdb2f557bc0d8a85376b6ad6c38db2bb667f` |
 | `sensors/adafruit_bno085_stemma_qt.step` | Adafruit Industries | Product 4754 BNO085 STEMMA QT breakout | [Official Adafruit CAD](https://github.com/adafruit/Adafruit_CAD_Parts/tree/main/4754%20BNO085%20STEMMA%20QT) | 2026-07-26 | `115ae06a3215c4eb6bb0eb5f4aeeaa39f13fe0a76d8be2ef1416dc8a85b804d1` |
+| `electronics/raspberry_pi_5.step` | Raspberry Pi | Raspberry Pi 5 | [step.parts catalog](https://www.step.parts/parts/raspberry_pi_5) | 2026-08-21 | `c6347ecec58e77adaf8c1f1cbaa5bb7d02884a108b466a48449bfbbe80bb01cb` |
 
 The ST3215 catalog file is the exact geometry used to derive the keyed cavity.
 step.parts searches for `STS3212`, `ST3212`, and `Feetech STS3212` returned no
