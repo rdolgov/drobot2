@@ -81,14 +81,19 @@ def test_manifest_loads_verified_ids_and_directions() -> None:
         "rear_right",
     ]
     assert dashboard.server.ramp_rate_deg_s == 270.0
-    assert dashboard.server.heartbeat_timeout_s == 1.5
+    assert dashboard.server.heartbeat_timeout_s == 20.0
     assert dashboard.monitoring.voltage_warning_low_v == pytest.approx(11.0)
     assert dashboard.monitoring.voltage_spread_warning_v == pytest.approx(0.3)
+    assert dashboard.monitoring.voltage_sag_warning_v == pytest.approx(0.6)
     assert dashboard.monitoring.temperature_warning_c == 55
     assert dashboard.monitoring.leg_current_warning_ma == pytest.approx(2500.0)
+    assert dashboard.monitoring.motor_stall_current_warning_ma == pytest.approx(
+        1200.0
+    )
+    assert dashboard.monitoring.stall_tracking_error_deg == pytest.approx(8.0)
+    assert dashboard.monitoring.stall_speed_raw_max == 20
+    assert dashboard.monitoring.battery_series_cells == 3
     assert dashboard.crawl.period_s == pytest.approx(4.0)
-    assert dashboard.crawl.cycles == 2
-    assert dashboard.crawl.run_until_stopped is True
     assert dashboard.crawl.stride_m == pytest.approx(0.096)
     assert dashboard.crawl.lift_m == pytest.approx(0.035)
     assert dashboard.crawl.support_extension_m == pytest.approx(0.0)
@@ -571,17 +576,10 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
         session.close()
 
 
-def test_crawl_preflight_rejects_off_center_pose_but_allows_telemetry_warning() -> None:
+def test_crawl_accepts_off_center_pose_and_allows_telemetry_warning() -> None:
     session, bus, _clock = _session()
     try:
         bus.positions[1] += 500
-        with pytest.raises(RuntimeError, match="Center the robot"):
-            session.start_crawl_forward(
-                safety_ack=True,
-                confirmation="TEST DISTRIBUTED CRAWL",
-            )
-
-        bus.positions[1] -= 500
         bus.voltage_v[12] = 10.4
         session.start_crawl_forward(
             safety_ack=True,
@@ -710,17 +708,39 @@ def test_capture_zero_all_requires_disarm_and_saves_backups(tmp_path: Path) -> N
         session.close()
 
 
-def test_lost_browser_heartbeat_disarms_all_twelve() -> None:
+def test_lost_browser_heartbeat_is_warning_only_and_gait_continues() -> None:
     session, bus, clock = _session()
     try:
-        session.arm_leg(4, safety_ack=True)
-        clock.advance(4.0)
+        session.start_crawl_forward(
+            safety_ack=True,
+            confirmation="TEST DISTRIBUTED CRAWL",
+        )
+        clock.advance(19.9)
+        session.advance_once()
+        assert session.snapshot()["crawl"]["active"] is True
+
+        clock.advance(0.2)
         session.advance_once()
         state = session.snapshot()
 
-        assert state["any_armed"] is False
-        assert bus.torque == set()
-        assert "heartbeat lost" in state["last_event"].lower()
+        assert state["any_armed"] is True
+        assert state["crawl"]["active"] is True
+        assert state["summary"]["armed_count"] == 12
+        assert bus.torque == set(range(1, 13))
+        assert state["browser_heartbeat"]["recent"] is False
+        assert state["browser_heartbeat"]["warning_only"] is True
+        assert state["browser_heartbeat"]["controls_motion"] is False
+        assert any(
+            "warning only" in warning.lower()
+            for warning in state["summary"]["warnings"]
+        )
+
+        session.heartbeat("test-browser")
+        state = session.snapshot()
+        assert state["browser_heartbeat"]["recent"] is True
+        assert state["browser_heartbeat"]["source"] == "test-browser"
+        assert state["browser_heartbeat"]["received_count"] == 2
+        assert state["crawl"]["active"] is True
     finally:
         session.close()
 
@@ -754,5 +774,43 @@ def test_live_telemetry_warning_does_not_interrupt_armed_motors() -> None:
         assert bus.torque == {4, 5, 6}
         assert state["summary"]["health"] == "warning"
         assert state["fault"] is None
+    finally:
+        session.close()
+
+
+def test_power_analytics_detect_sag_and_possible_stall() -> None:
+    session, bus, clock = _session()
+    try:
+        idle = session.snapshot()
+        assert idle["power"]["idle_reference_voltage_v"] == pytest.approx(12.2)
+        assert idle["power"]["battery_charge"]["status"] == "good"
+        assert idle["power"]["battery_charge"][
+            "average_cell_voltage_v"
+        ] == pytest.approx(12.2 / 3.0)
+
+        session.arm(1, 1, safety_ack=True)
+        stalled_position = bus.positions[1]
+        session.set_target(1, 1, 15.0)
+        session.advance_once()
+        bus.positions[1] = stalled_position
+        bus.voltage_v[1] = 11.5
+        bus.current_ma[1] = 1300.0
+        clock.advance(1.0)
+        state = session.snapshot()
+
+        assert state["power"]["instantaneous_w"] == pytest.approx(14.95)
+        assert state["power"]["voltage_sag_v"] == pytest.approx(0.7)
+        assert state["power"]["possible_stall_ids"] == [1]
+        assert state["legs"][0]["power_w"] == pytest.approx(14.95)
+        assert state["legs"][0]["motors"][0]["possible_stall"] is True
+        assert state["power"]["energy_wh"] > 0.0
+        assert any(
+            "voltage sag" in item.lower()
+            for item in state["summary"]["warnings"]
+        )
+        assert any("stall" in item.lower() for item in state["summary"]["warnings"])
+
+        with pytest.raises(RuntimeError, match="Disarm all motors"):
+            session.reset_power_analytics()
     finally:
         session.close()

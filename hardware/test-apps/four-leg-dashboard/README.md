@@ -30,13 +30,16 @@ The local dashboard provides:
   **SETTINGS**;
 - voltage, temperature, diagnostic current, raw encoder, speed, torque state,
   model, and per-leg current summaries;
-- a 1.5-second browser-heartbeat auto-disarm;
-- best-effort disarm on page close, telemetry read/motion fault, `Ctrl+C`, or normal
-  server exit; and
+- a browser heartbeat sent every 0.7 seconds on an independent request path,
+  with a visible warning after 20 seconds but no effect on gait or torque;
+- best-effort disarm on telemetry read/motion fault, `Ctrl+C`, or normal server
+  exit; and
 - a complete simulated mode that never opens a serial port.
 
-The server binds only to `127.0.0.1`. It is not a LAN or internet remote-control
-service.
+The desktop launcher binds only to `127.0.0.1`. The Raspberry Pi launcher under
+`onboard/scripts/run-manual-web.sh` deliberately enables trusted-LAN access so
+the same page can be used from a phone or computer. Never expose this motor
+control page to the public internet.
 
 ## Source of truth
 
@@ -184,18 +187,63 @@ and older documents remain historical evidence.
 
 Before either whole-robot command is accepted, the server requires all 12 IDs
 online and every computed target inside the configured joint limits. The
-command arms any currently disarmed motors at their measured positions before
-ramping. Browser-heartbeat loss, a telemetry read or motion exception, any
-disarm request, page close, or **STOP + DISARM** cancels motion and attempts to
-remove torque from all twelve motors. Display-only voltage, temperature,
-voltage-spread, and diagnostic-current warnings remain visible but do not stop
-the command.
+command accepts a minor off-stance measured pose, arms all motors at their
+current measured positions, and ramps toward the computed gait-start stance.
+It no longer rejects walking solely because a measured joint is outside a
+zero-centred start-tolerance window. This does not bypass the calibrated hard
+joint-limit validation applied to every computed stance and gait target.
+Browser-heartbeat loss or page close is warning-only. It does not cancel the
+gait, change targets, or remove torque. Heartbeats continue independently when
+a telemetry refresh fails and do not take the servo-bus session lock. A
+telemetry read or motion exception, an explicit disarm request, **STOP +
+DISARM**, `Ctrl+C`, or normal server shutdown still attempts to remove torque
+from all twelve motors. Display-only voltage, temperature, voltage-spread, and
+diagnostic-current warnings remain visible but do not stop the command.
 
 The tracked defaults live in `[crawl]` in `../../robot-runtime/four-leg.toml`.
-The parser permits a 5-120 mm stride, 5-80 mm lift, 4-60 second period, and one
-to four finite-fallback cycles. `run_until_stopped = true` makes both dashboard
-walking buttons loop continuously; the retained `cycles = 2` value is used only
-if that setting is deliberately disabled.
+The parser permits a 5-120 mm stride, 5-80 mm lift, and 4-60 second period.
+Both dashboard walking buttons loop continuously until **STOP + DISARM**,
+a bus/motion fault, or process shutdown. Closing or backgrounding a mobile
+browser does not stop walking or send a disarm request.
+
+### Power and battery analytics
+
+The dashboard estimates electrical power from each servo's diagnostic voltage
+and current registers. It shows instantaneous and 60-second average/peak watts,
+peak summed current, the lowest recent bus voltage, per-leg and per-motor power,
+and sampled watt-hours. The chart is populated by the browser's telemetry poll,
+so the energy figure covers observed dashboard time and is not a battery fuel
+gauge. It also excludes Raspberry Pi and converter losses.
+
+Use **RESET AT IDLE** after connecting each power source while all motors are
+disarmed. Leave the robot idle for several telemetry samples, then run the same
+supported gait with the bench supply and battery:
+
+1. A large sag from the idle reference, especially together with a current
+   spike and a stall warning, points toward battery internal resistance, BMS or
+   connector limits, wiring loss, or inadequate peak-current delivery.
+2. A high-current, low-speed motor with at least 8 degrees of tracking error is
+   marked as a possible stall. Repeated IDs or one high-power leg suggest joint
+   friction, mechanical interference, excess load, or a weak servo branch.
+3. If the robot falls without meaningful voltage sag or stall signatures, move
+   the same battery mass around while supported and inspect center of mass,
+   lateral balance, shoe contact, and traction. Electrical telemetry cannot
+   distinguish those mechanical causes by itself.
+
+The tracked warning defaults are 0.6 V sag, 1200 mA per motor, 8 degrees of
+tracking error, and raw speed at or below 20. These are diagnostic heuristics,
+not certified protection thresholds. Hard joint limits, onboard fault handling,
+explicit disarm controls, and the physical cutoff remain the actual safety
+layers.
+
+For the tracked 3S LiPo, the same idle reference drives a deliberately coarse
+charge indicator: **FULL** at 4.10 V/cell or above, **GOOD** from 3.90 V/cell,
+**LOW** from 3.70 V/cell, and **RECHARGE** below 3.70 V/cell. The displayed cell
+value is only pack voltage divided by three; it cannot detect an imbalanced or
+failing individual cell. Confirm a low/recharge result with a balance-plug cell
+checker and follow the battery manufacturer's limits.
+The value beside the status is the live measured pack voltage; the smaller line
+retains the disarmed idle reference used to classify the charge state.
 
 ### Separate diagonal-pair mode
 
@@ -388,12 +436,12 @@ The dashboard uses attention thresholds from `../../robot-runtime/four-leg.toml`
 These are display-only software thresholds, not firmware protection settings.
 Temperature, voltage, voltage-spread, and diagnostic-current warnings remain
 visible but do not block a command or automatically disarm motors. Actual
-telemetry read exceptions, motion exceptions, the browser heartbeat watchdog,
-and explicit stop/disarm commands still disarm. Servo voltage does not show
-individual LiPo cell balance. Servo current feedback is diagnostic and is not
-a calibrated battery, branch, force, or joint-torque measurement. Use an inline
-watt meter or clamp meter and per-cell checker for electrical validation. The
-dashboard never declares the entire power system certified.
+telemetry read exceptions, motion exceptions, and explicit stop/disarm commands
+still disarm. Browser-heartbeat age is diagnostic only. Servo voltage does not
+show individual LiPo cell balance. Servo current feedback is diagnostic and is
+not a calibrated battery, branch, force, or joint-torque measurement. Use an
+inline watt meter or clamp meter and per-cell checker for electrical validation.
+The dashboard never declares the entire power system certified.
 
 ## Motion behavior
 

@@ -32,6 +32,14 @@ assemblies.
 | `exports/step/quadruped_body_base.step` | `drobot_cad/parts/quadruped_body.py` | One-piece X2D-safe body tub with hip reinforcement, protected battery rail, four-wall M3 grid, full floor grid, and paired wire ports |
 | `exports/step/quadruped_body_lid.step` | `drobot_cad/parts/quadruped_body_lid.py` | Removable ventilated body lid with a 10 mm-pitch universal M3 grid and direct LeKiwi camera pattern |
 | `exports/step/quadruped_electronics_tray.step` | `drobot_cad/parts/quadruped_electronics_tray.py` | Optional electronics tray with four floor-grid-aligned M3 mounting locations |
+| `exports/step/cm5202_battery_box.step` | `drobot_cad/parts/cm5202_battery_box.step.py` | Main CM5202 LiPo box with four floor-grid M3 mounts, lid-screw towers, and one upper-left wire port |
+| `exports/step/cm5202_battery_box_lid.step` | `drobot_cad/parts/cm5202_battery_box_lid.step.py` | Solid screw-on CM5202 box lid with matching wire relief |
+| `exports/step/cm5202_battery_box_fit_preview.step` | `drobot_cad/assembly/cm5202_battery_box_fit_preview.step.py` | Exploded box, measured battery envelope, and lid review assembly |
+| `exports/step/cm5202_battery_cradle.step` | `drobot_cad/parts/cm5202_battery_cradle.step.py` | Open CM5202 strap cradle with four floor-grid M3 mounts and wire-side clearance |
+| `exports/step/raspberry_pi_5_enclosure_base.step` | `drobot_cad/parts/raspberry_pi_5_enclosure_base.step.py` | Printable Pi 5 box with exact board standoffs and four body-floor grid mounts |
+| `exports/step/raspberry_pi_5_enclosure_lid.step` | `drobot_cad/parts/raspberry_pi_5_enclosure_lid.step.py` | Screw-on ventilated lid with exact BNO085 mounting pattern |
+| `exports/step/raspberry_pi_5_imu_cover.step` | `drobot_cad/parts/raspberry_pi_5_imu_cover.step.py` | Open-sided removable BNO085 protection roof |
+| `exports/step/raspberry_pi_5_enclosure_fit_preview.step` | `drobot_cad/assembly/raspberry_pi_5_enclosure_fit_preview.step.py` | Enclosure, exact Pi 5, lid, exact BNO085, and protection roof review assembly |
 | `exports/step/lekiwi_12v_battery_reference.step` | `drobot_cad/parts/lekiwi_12v_battery_reference.py` | Measured 70 x 66 x 40 mm LeKiwi 12 V pack fit proxy |
 | `exports/step/waveshare_bus_servo_adapter_a.step` | `drobot_cad/parts/waveshare_bus_servo_adapter_a.py` | Exact Waveshare USB/UART serial-bus controller reference |
 | `exports/step/adafruit_bno085_stemma_qt.step` | `drobot_cad/parts/adafruit_bno085.py` | Exact Adafruit BNO085 reference centred on its sensing package |

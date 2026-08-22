@@ -8,6 +8,7 @@ __pycache__/
 build/
 dist/
 .cad-viewer/
+**/__cadgen__/
 !tools/cad-viewer-markup/runtime/dist/
 !tools/cad-viewer-markup/runtime/dist/**
 **/.*.step.glb

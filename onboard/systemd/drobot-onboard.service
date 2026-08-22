@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=__DROBOT_USER__
 WorkingDirectory=__DROBOT_REPO_ROOT__
-Environment=ROS_DISTRO=jazzy
+Environment=ROS_DISTRO=lyrical
 Environment=DROBOT_SERIAL_PORT=auto
 Environment=DROBOT_HTTP_BIND=0.0.0.0
 Environment=DROBOT_HTTP_PORT=8080

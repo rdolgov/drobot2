@@ -505,6 +505,130 @@ main {
   color: var(--amber);
 }
 
+.power-panel {
+  margin: 0 0 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(12, 22, 24, 0.98);
+}
+
+.power-header,
+.power-chart-labels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.power-header h2 {
+  margin: 0;
+}
+
+.power-reset-button {
+  padding: 9px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface-control);
+  color: var(--cyan);
+  font-size: 0.67rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.power-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin: 15px 0;
+}
+
+.power-grid > div {
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid rgba(59, 81, 87, 0.6);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.13);
+}
+
+.power-grid span,
+.power-grid small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.power-grid strong {
+  display: block;
+  margin: 4px 0;
+  color: var(--cyan);
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.battery-charge[data-level="full"],
+.battery-charge[data-level="good"] {
+  color: var(--lime);
+}
+
+.battery-charge[data-level="low"] {
+  color: var(--amber);
+}
+
+.battery-charge[data-level="recharge"] {
+  color: var(--red);
+}
+
+.battery-live-voltage {
+  color: var(--text);
+}
+
+.power-chart-wrap {
+  padding: 8px 10px 5px;
+  border: 1px solid rgba(59, 81, 87, 0.6);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.power-chart {
+  width: 100%;
+  height: 110px;
+  overflow: visible;
+}
+
+.power-chart line {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.power-chart polyline {
+  fill: none;
+  stroke: var(--lime);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.power-chart-labels {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.power-chart-labels b {
+  color: var(--text);
+}
+
+.power-assessment {
+  margin: 12px 0 0;
+  color: var(--amber);
+  font-size: 0.78rem;
+}
+
+.possible-stall {
+  border-color: var(--red);
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
 .settings-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(110px, 0.45fr)) minmax(280px, 2fr);
@@ -1072,6 +1196,10 @@ footer {
     grid-template-columns: repeat(3, 1fr);
   }
 
+  .power-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
   .settings-strip {
     grid-template-columns: repeat(4, 1fr);
   }
@@ -1165,6 +1293,10 @@ footer {
     grid-template-columns: repeat(2, 1fr);
   }
 
+  .power-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .armed-metric {
     grid-column: 1 / -1;
   }
@@ -1216,7 +1348,8 @@ footer {
 
 @media (max-width: 430px) {
   .metrics,
-  .settings-strip {
+  .settings-strip,
+  .power-grid {
     grid-template-columns: 1fr;
   }
 

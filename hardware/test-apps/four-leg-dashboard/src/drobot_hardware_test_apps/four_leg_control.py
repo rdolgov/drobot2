@@ -1,10 +1,11 @@
-"""Localhost-only control dashboard for all four Drobot legs."""
+"""Control dashboard for all four Drobot legs."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import math
+import os
 import secrets
 import shutil
 import socket
@@ -12,6 +13,7 @@ import threading
 import time
 import tomllib
 import webbrowser
+from collections import deque
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from http import HTTPStatus
@@ -46,6 +48,7 @@ APP_ROOT = Path(__file__).resolve().parents[2]
 HARDWARE_ROOT = APP_ROOT.parents[1]
 DEFAULT_MANIFEST = HARDWARE_ROOT / "robot-runtime" / "four-leg.toml"
 STATIC_DIR = Path(__file__).with_name("four_leg_static")
+LAN_CLIENT_VERSION = "2"
 
 
 @dataclass(frozen=True)
@@ -53,8 +56,13 @@ class MonitoringConfig:
     voltage_warning_low_v: float
     voltage_warning_high_v: float
     voltage_spread_warning_v: float
+    voltage_sag_warning_v: float
     temperature_warning_c: int
     leg_current_warning_ma: float
+    motor_stall_current_warning_ma: float
+    stall_tracking_error_deg: float
+    stall_speed_raw_max: int
+    battery_series_cells: int
 
 
 @dataclass(frozen=True)
@@ -67,8 +75,6 @@ class ServerConfig:
 @dataclass(frozen=True)
 class CrawlConfig:
     period_s: float
-    cycles: int
-    run_until_stopped: bool
     stance_settle_s: float
     stride_m: float
     lift_m: float
@@ -78,7 +84,6 @@ class CrawlConfig:
     stance_down_m: float
     stance_fore_aft_m: float
     abduction_deg: float
-    start_tolerance_deg: float
 
 
 @dataclass(frozen=True)
@@ -126,9 +131,6 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("Manifest requires a [monitoring] table")
     if not isinstance(crawl_data, dict):
         raise ValueError("Manifest requires a [crawl] table")
-    run_until_stopped = crawl_data.get("run_until_stopped", True)
-    if not isinstance(run_until_stopped, bool):
-        raise ValueError("crawl.run_until_stopped must be true or false")
     if not isinstance(leg_data, list) or len(leg_data) != 4:
         raise ValueError("Manifest requires exactly four [[legs]] tables")
 
@@ -147,8 +149,8 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("server.http_port must be in [1, 65535]")
     if not 1.0 <= server.ramp_rate_deg_s <= 270.0:
         raise ValueError("server.ramp_rate_deg_s must be in [1, 270]")
-    if not 1.0 <= server.heartbeat_timeout_s <= 10.0:
-        raise ValueError("server.heartbeat_timeout_s must be in [1, 10]")
+    if not 1.0 <= server.heartbeat_timeout_s <= 120.0:
+        raise ValueError("server.heartbeat_timeout_s must be in [1, 120]")
 
     monitoring = MonitoringConfig(
         voltage_warning_low_v=_finite_float(
@@ -163,11 +165,25 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             monitoring_data.get("voltage_spread_warning_v", 0.5),
             "monitoring.voltage_spread_warning_v",
         ),
+        voltage_sag_warning_v=_finite_float(
+            monitoring_data.get("voltage_sag_warning_v", 0.6),
+            "monitoring.voltage_sag_warning_v",
+        ),
         temperature_warning_c=int(monitoring_data.get("temperature_warning_c", 60)),
         leg_current_warning_ma=_finite_float(
             monitoring_data.get("leg_current_warning_ma", 3000.0),
             "monitoring.leg_current_warning_ma",
         ),
+        motor_stall_current_warning_ma=_finite_float(
+            monitoring_data.get("motor_stall_current_warning_ma", 1200.0),
+            "monitoring.motor_stall_current_warning_ma",
+        ),
+        stall_tracking_error_deg=_finite_float(
+            monitoring_data.get("stall_tracking_error_deg", 8.0),
+            "monitoring.stall_tracking_error_deg",
+        ),
+        stall_speed_raw_max=int(monitoring_data.get("stall_speed_raw_max", 20)),
+        battery_series_cells=int(monitoring_data.get("battery_series_cells", 3)),
     )
     if not 0 < monitoring.voltage_warning_low_v:
         raise ValueError("Low-voltage warning must be positive")
@@ -177,18 +193,26 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("Voltage warning range is invalid")
     if not 0 < monitoring.voltage_spread_warning_v <= 3.0:
         raise ValueError("Voltage-spread warning must be in (0, 3]")
+    if not 0.1 <= monitoring.voltage_sag_warning_v <= 3.0:
+        raise ValueError("Voltage-sag warning must be in [0.1, 3]")
     if not 30 <= monitoring.temperature_warning_c <= 90:
         raise ValueError("Temperature warning must be in [30, 90] C")
     if not 100 <= monitoring.leg_current_warning_ma <= 10_000:
         raise ValueError("Leg-current warning must be in [100, 10000] mA")
+    if not 100 <= monitoring.motor_stall_current_warning_ma <= 5_000:
+        raise ValueError("Motor-stall current warning must be in [100, 5000] mA")
+    if not 1.0 <= monitoring.stall_tracking_error_deg <= 45.0:
+        raise ValueError("Stall tracking-error threshold must be in [1, 45] deg")
+    if not 0 <= monitoring.stall_speed_raw_max <= 500:
+        raise ValueError("Stall raw-speed threshold must be in [0, 500]")
+    if not 2 <= monitoring.battery_series_cells <= 6:
+        raise ValueError("Battery series-cell count must be in [2, 6]")
 
     crawl = CrawlConfig(
         period_s=_finite_float(
             crawl_data.get("period_s", 4.0),
             "crawl.period_s",
         ),
-        cycles=int(crawl_data.get("cycles", 2)),
-        run_until_stopped=run_until_stopped,
         stance_settle_s=_finite_float(
             crawl_data.get("stance_settle_s", 1.5),
             "crawl.stance_settle_s",
@@ -219,15 +243,9 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             crawl_data.get("abduction_deg", 0.0),
             "crawl.abduction_deg",
         ),
-        start_tolerance_deg=_finite_float(
-            crawl_data.get("start_tolerance_deg", 35.0),
-            "crawl.start_tolerance_deg",
-        ),
     )
     if not 4.0 <= crawl.period_s <= 60.0:
         raise ValueError("crawl.period_s must be in [4, 60]")
-    if not 1 <= crawl.cycles <= 4:
-        raise ValueError("crawl.cycles must be in [1, 4]")
     if not 0.5 <= crawl.stance_settle_s <= 5.0:
         raise ValueError("crawl.stance_settle_s must be in [0.5, 5]")
     if not 0.005 <= crawl.stride_m <= 0.120:
@@ -248,8 +266,6 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("crawl.stance_fore_aft_m must be in [0, 0.120]")
     if not 0.0 <= crawl.abduction_deg <= 20.0:
         raise ValueError("crawl.abduction_deg must be in [0, 20]")
-    if not 10.0 <= crawl.start_tolerance_deg <= 45.0:
-        raise ValueError("crawl.start_tolerance_deg must be in [10, 45]")
 
     profiles: list[LegProfile] = []
     for index, entry in enumerate(leg_data, start=1):
@@ -387,8 +403,8 @@ class FourLegSession:
         )
         if not 1.0 <= self.ramp_rate_deg_s <= 270.0:
             raise ValueError("ramp rate must be in [1, 270] deg/s")
-        if not 1.0 <= self.heartbeat_timeout_s <= 10.0:
-            raise ValueError("heartbeat timeout must be in [1, 10] seconds")
+        if not 1.0 <= self.heartbeat_timeout_s <= 120.0:
+            raise ValueError("heartbeat timeout must be in [1, 120] seconds")
         self.tick_interval_s = tick_interval_s
         self.clock = clock
         self.persist_calibration = persist_calibration
@@ -401,7 +417,10 @@ class FourLegSession:
             for profile in dashboard.legs
         }
         self.desired_deg: dict[tuple[int, str], float] = {}
+        self.heartbeat_lock = threading.Lock()
         self.last_heartbeat = clock()
+        self.heartbeat_count = 0
+        self.last_heartbeat_source: str | None = None
         self.last_event = "Starting"
         self.fault: str | None = None
         self.crawl_mode = "distributed"
@@ -413,6 +432,11 @@ class FourLegSession:
         self.crawl_started_at: float | None = None
         self.crawl_target_reached_at: float | None = None
         self.crawl_progress = 0.0
+        self.power_samples: deque[tuple[float, float, float, float]] = deque()
+        self.idle_voltage_samples: deque[float] = deque(maxlen=30)
+        self.power_energy_wh = 0.0
+        self.power_last_sample_at: float | None = None
+        self.power_last_w = 0.0
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.worker: threading.Thread | None = None
@@ -481,13 +505,6 @@ class FourLegSession:
 
     def advance_once(self) -> None:
         with self.lock:
-            if self._armed_count_locked():
-                elapsed = self.clock() - self.last_heartbeat
-                if elapsed > self.heartbeat_timeout_s:
-                    self._disarm_all_locked(raise_errors=False)
-                    self.last_event = "Browser heartbeat lost; all motors disarmed"
-                    return
-
             self._advance_crawl_locked()
 
             step_limit = min(
@@ -516,7 +533,6 @@ class FourLegSession:
             "preparing",
             "preloading",
             "walking",
-            "finishing",
         }
 
     def _crawl_pose_locked(
@@ -647,33 +663,13 @@ class FourLegSession:
             )
             return
 
-        duration_s = config.period_s * config.cycles
         if self.crawl_stage == "walking":
             if self.crawl_started_at is None:
                 raise RuntimeError("Crawl clock was not initialized")
             elapsed = max(0.0, now - self.crawl_started_at)
-            if config.run_until_stopped:
-                self.crawl_progress = (elapsed % config.period_s) / config.period_s
-                self._set_crawl_pose_locked(elapsed)
-                return
-            self.crawl_progress = min(elapsed / duration_s, 1.0)
-            if elapsed < duration_s:
-                self._set_crawl_pose_locked(elapsed)
-                return
-            self.crawl_stage = "finishing"
-            self._set_crawl_stance_locked("returning_to_gait_start_stance")
+            self.crawl_progress = (elapsed % config.period_s) / config.period_s
+            self._set_crawl_pose_locked(elapsed)
             return
-
-        self._set_crawl_stance_locked("holding_gait_start_stance")
-        if self._crawl_targets_reached_locked():
-            self.crawl_stage = "complete"
-            self.crawl_phase = "holding_gait_start_stance"
-            self.crawl_progress = 1.0
-            self.last_event = (
-                "Diagonal-pair gait complete; all motors holding stance"
-                if self.crawl_mode == "diagonal_pair"
-                else "Distributed push crawl complete; all motors holding stance"
-            )
 
     def _cancel_crawl_locked(self) -> None:
         self.crawl_stage = "idle"
@@ -731,23 +727,6 @@ class FourLegSession:
             if self.fault:
                 raise RuntimeError("Clear the reported fault before starting a crawl")
 
-            preflight = self._snapshot_locked()
-            out_of_start_range: list[str] = []
-            for leg in preflight["legs"]:
-                for motor in leg["motors"]:
-                    if (
-                        abs(float(motor["measured_deg"]))
-                        > self.dashboard.crawl.start_tolerance_deg
-                    ):
-                        out_of_start_range.append(
-                            f"ID {motor['id']} ({motor['measured_deg']:+.1f} deg)"
-                        )
-            if out_of_start_range:
-                raise RuntimeError(
-                    "Center the robot before walking; outside start tolerance: "
-                    + ", ".join(out_of_start_range)
-                )
-
             previous_mode = self.crawl_mode
             newly_armed: list[tuple[LegProfile, MotorConfig]] = []
             try:
@@ -783,7 +762,7 @@ class FourLegSession:
                 self.crawl_mode = previous_mode
                 raise
 
-            self.last_heartbeat = self.clock()
+            self.heartbeat("control-command")
             self.fault = None
             self.last_event = (
                 "All 12 motors moving to the diagonal-pair start stance"
@@ -796,9 +775,26 @@ class FourLegSession:
             self._disarm_all_locked(raise_errors=True)
             self.last_event = "Crawl stopped; all 12 motors disarmed"
 
-    def heartbeat(self) -> None:
-        with self.lock:
+    def heartbeat(self, source: str | None = None) -> None:
+        with self.heartbeat_lock:
             self.last_heartbeat = self.clock()
+            self.heartbeat_count += 1
+            self.last_heartbeat_source = source
+
+    def _browser_heartbeat_snapshot(self) -> dict[str, Any]:
+        with self.heartbeat_lock:
+            age_s = max(0.0, self.clock() - self.last_heartbeat)
+            count = self.heartbeat_count
+            source = self.last_heartbeat_source
+        return {
+            "age_s": age_s,
+            "recent": age_s <= self.heartbeat_timeout_s,
+            "attention_after_s": self.heartbeat_timeout_s,
+            "received_count": count,
+            "source": source,
+            "warning_only": True,
+            "controls_motion": False,
+        }
 
     def arm(
         self,
@@ -814,7 +810,7 @@ class FourLegSession:
             self._require_manual_control_locked()
             state = controller.arm(motor)
             self.desired_deg[(profile.number, motor.name)] = state.degrees
-            self.last_heartbeat = self.clock()
+            self.heartbeat("control-command")
             self.fault = None
             self.last_event = (
                 f"{profile.label} / {motor.name.replace('_', ' ')} armed "
@@ -844,7 +840,7 @@ class FourLegSession:
                         pass
                     self.desired_deg.pop((profile.number, motor.name), None)
                 raise
-            self.last_heartbeat = self.clock()
+            self.heartbeat("control-command")
             self.fault = None
             self.last_event = f"{profile.label} armed at measured positions"
 
@@ -867,7 +863,7 @@ class FourLegSession:
                 profile.calibration.motor(motor),
             )
             self.desired_deg[(profile.number, motor.name)] = degrees
-            self.last_heartbeat = self.clock()
+            self.heartbeat("control-command")
             self.last_event = (
                 f"{profile.label} / {motor.name.replace('_', ' ')} "
                 f"destination {degrees:+.2f} deg"
@@ -887,7 +883,7 @@ class FourLegSession:
                 armed += 1
             if not armed:
                 raise RuntimeError(f"{profile.label} has no armed motors")
-            self.last_heartbeat = self.clock()
+            self.heartbeat("control-command")
             self.last_event = f"{profile.label} armed motors returning to zero"
 
     def zero_all_armed(self) -> None:
@@ -904,7 +900,7 @@ class FourLegSession:
                     armed += 1
             if not armed:
                 raise RuntimeError("No motors are armed")
-            self.last_heartbeat = self.clock()
+            self.heartbeat("control-command")
             self.last_event = "All armed motors returning to zero"
 
     def center_all(
@@ -942,7 +938,7 @@ class FourLegSession:
                 self.last_event = "Center-all failed; all motors disarmed"
                 raise
 
-            self.last_heartbeat = self.clock()
+            self.heartbeat("control-command")
             self.fault = None
             self.last_event = "All 12 motors returning to calibrated zero"
 
@@ -976,7 +972,7 @@ class FourLegSession:
                 self.last_event = "Walk-stance command failed; all motors disarmed"
                 raise
 
-            self.last_heartbeat = self.clock()
+            self.heartbeat("control-command")
             self.fault = None
             self.last_event = (
                 "All 12 motors moving to wide walk stance; encoder seams use "
@@ -1127,16 +1123,34 @@ class FourLegSession:
             len(controller.armed_ids) for controller in self.controllers.values()
         )
 
+    def reset_power_analytics(self) -> None:
+        with self.lock:
+            if self._armed_count_locked():
+                raise RuntimeError(
+                    "Disarm all motors before resetting power analytics"
+                )
+            self.power_samples.clear()
+            self.idle_voltage_samples.clear()
+            self.power_energy_wh = 0.0
+            self.power_last_sample_at = None
+            self.power_last_w = 0.0
+            self.last_event = "Power analytics reset; collect an idle reference"
+
     def _snapshot_locked(self) -> dict[str, Any]:
+        browser_heartbeat = self._browser_heartbeat_snapshot()
         leg_payloads: list[dict[str, Any]] = []
         all_statuses: list[MotorStatus] = []
         unexpected_torque: list[int] = []
         current_by_leg: dict[int, float] = {}
+        power_by_leg: dict[int, float] = {}
+        possible_stall_ids: list[int] = []
+        monitoring = self.dashboard.monitoring
 
         for profile in self.profiles:
             controller = self.controllers[profile.number]
             motors: list[dict[str, Any]] = []
             leg_current = 0.0
+            leg_power = 0.0
             for motor in profile.config.motors:
                 status = self.bus.status(motor)
                 all_statuses.append(status)
@@ -1151,6 +1165,25 @@ class FourLegSession:
                 if status.torque_enabled and not armed:
                     unexpected_torque.append(motor.servo_id)
                 leg_current += status.current_ma
+                motor_power_w = (
+                    status.voltage_v * max(0.0, status.current_ma) / 1000.0
+                )
+                leg_power += motor_power_w
+                tracking_reference = commanded if commanded is not None else desired
+                tracking_error_deg = (
+                    abs(float(tracking_reference) - measured)
+                    if tracking_reference is not None
+                    else 0.0
+                )
+                possible_stall = bool(
+                    armed
+                    and tracking_error_deg >= monitoring.stall_tracking_error_deg
+                    and status.current_ma
+                    >= monitoring.motor_stall_current_warning_ma
+                    and abs(status.raw_speed) <= monitoring.stall_speed_raw_max
+                )
+                if possible_stall:
+                    possible_stall_ids.append(motor.servo_id)
                 motors.append(
                     {
                         "number": motor.number,
@@ -1171,24 +1204,31 @@ class FourLegSession:
                         "voltage_v": status.voltage_v,
                         "temperature_c": status.temperature_c,
                         "current_ma": status.current_ma,
+                        "power_w": motor_power_w,
+                        "tracking_error_deg": tracking_error_deg,
+                        "possible_stall": possible_stall,
                         "torque_enabled": status.torque_enabled,
                         "armed": armed,
                         "model": status.model_number,
                     }
                 )
             current_by_leg[profile.number] = leg_current
+            power_by_leg[profile.number] = leg_power
             leg_payloads.append(
                 {
                     "number": profile.number,
                     "label": profile.label,
                     "corner": profile.corner,
                     "current_ma": leg_current,
+                    "power_w": leg_power,
+                    "possible_stall_ids": [
+                        motor["id"] for motor in motors if motor["possible_stall"]
+                    ],
                     "armed_count": sum(motor["armed"] for motor in motors),
                     "motors": motors,
                 }
             )
 
-        monitoring = self.dashboard.monitoring
         voltages = [status.voltage_v for status in all_statuses]
         temperatures = [status.temperature_c for status in all_statuses]
         voltage_min = min(voltages)
@@ -1196,6 +1236,61 @@ class FourLegSession:
         voltage_spread = voltage_max - voltage_min
         maximum_temperature = max(temperatures)
         total_current = sum(status.current_ma for status in all_statuses)
+        total_power_w = sum(power_by_leg.values())
+        bus_voltage_v = sum(voltages) / len(voltages)
+        armed_count = self._armed_count_locked()
+        if armed_count == 0 and not unexpected_torque and total_current <= 250.0:
+            self.idle_voltage_samples.append(voltage_min)
+        idle_reference_voltage_v = (
+            sum(self.idle_voltage_samples) / len(self.idle_voltage_samples)
+            if self.idle_voltage_samples
+            else None
+        )
+        voltage_sag_v = (
+            max(0.0, idle_reference_voltage_v - voltage_min)
+            if idle_reference_voltage_v is not None
+            else None
+        )
+        battery_per_cell_v = (
+            idle_reference_voltage_v / monitoring.battery_series_cells
+            if idle_reference_voltage_v is not None
+            else None
+        )
+        if battery_per_cell_v is None:
+            battery_charge_status = "unknown"
+        elif battery_per_cell_v >= 4.10:
+            battery_charge_status = "full"
+        elif battery_per_cell_v >= 3.90:
+            battery_charge_status = "good"
+        elif battery_per_cell_v >= 3.70:
+            battery_charge_status = "low"
+        else:
+            battery_charge_status = "recharge"
+
+        sample_at = self.clock()
+        if self.power_last_sample_at is not None:
+            elapsed_s = sample_at - self.power_last_sample_at
+            if 0.0 < elapsed_s <= 5.0:
+                average_interval_power_w = (self.power_last_w + total_power_w) / 2.0
+                self.power_energy_wh += average_interval_power_w * elapsed_s / 3600.0
+        self.power_last_sample_at = sample_at
+        self.power_last_w = total_power_w
+        self.power_samples.append(
+            (sample_at, total_power_w, total_current, voltage_min)
+        )
+        power_window_s = 60.0
+        while (
+            self.power_samples
+            and sample_at - self.power_samples[0][0] > power_window_s
+        ):
+            self.power_samples.popleft()
+        average_power_w = sum(sample[1] for sample in self.power_samples) / len(
+            self.power_samples
+        )
+        peak_power_w = max(sample[1] for sample in self.power_samples)
+        peak_current_ma = max(sample[2] for sample in self.power_samples)
+        minimum_voltage_v = min(sample[3] for sample in self.power_samples)
+
         warnings: list[str] = []
         if voltage_min < monitoring.voltage_warning_low_v:
             warnings.append(
@@ -1210,6 +1305,13 @@ class FourLegSession:
         if voltage_spread > monitoring.voltage_spread_warning_v:
             warnings.append(
                 f"Servo voltage spread is {voltage_spread:.1f} V; inspect wiring"
+            )
+        if (
+            voltage_sag_v is not None
+            and voltage_sag_v >= monitoring.voltage_sag_warning_v
+        ):
+            warnings.append(
+                f"Bus voltage sag is {voltage_sag_v:.1f} V from the idle reference"
             )
         if maximum_temperature >= monitoring.temperature_warning_c:
             warnings.append(
@@ -1226,6 +1328,41 @@ class FourLegSession:
                 "Unexpected torque-enable state on ID(s) "
                 + ", ".join(str(value) for value in unexpected_torque)
             )
+        if possible_stall_ids:
+            warnings.append(
+                "Possible servo stall on ID(s) "
+                + ", ".join(str(value) for value in possible_stall_ids)
+            )
+        if battery_charge_status == "recharge":
+            warnings.append(
+                f"{monitoring.battery_series_cells}S idle-voltage estimate says "
+                "RECHARGE; verify every cell at the balance connector"
+            )
+        if armed_count and not browser_heartbeat["recent"]:
+            warnings.append(
+                "Browser heartbeat is stale at "
+                f"{browser_heartbeat['age_s']:.1f} s; warning only, onboard "
+                "motion continues"
+            )
+
+        sag_warning = bool(
+            voltage_sag_v is not None
+            and voltage_sag_v >= monitoring.voltage_sag_warning_v
+        )
+        if possible_stall_ids and sag_warning:
+            power_assessment = "Voltage sag and servo-stall signature detected"
+        elif possible_stall_ids:
+            power_assessment = "Possible mechanical load or servo stall detected"
+        elif sag_warning:
+            power_assessment = "Battery or wiring voltage sag detected"
+        elif idle_reference_voltage_v is None:
+            power_assessment = "Idle reference missing; disarm and reset analytics"
+        elif self.crawl_active:
+            power_assessment = (
+                "No electrical stall signature; compare battery mass and balance"
+            )
+        else:
+            power_assessment = "Start from idle, then observe during walking"
 
         crawl_elapsed_s = (
             max(0.0, self.clock() - self.crawl_started_at)
@@ -1242,6 +1379,7 @@ class FourLegSession:
                 "voltage_max_v": voltage_max,
                 "voltage_spread_v": voltage_spread,
                 "total_current_ma": total_current,
+                "total_power_w": total_power_w,
                 "max_temperature_c": maximum_temperature,
                 "health": "warning" if warnings else "nominal",
                 "warnings": warnings,
@@ -1256,8 +1394,47 @@ class FourLegSession:
                 "heartbeat_timeout_s": self.heartbeat_timeout_s,
                 "voltage_warning_low_v": monitoring.voltage_warning_low_v,
                 "voltage_warning_high_v": monitoring.voltage_warning_high_v,
+                "voltage_sag_warning_v": monitoring.voltage_sag_warning_v,
                 "temperature_warning_c": monitoring.temperature_warning_c,
                 "leg_current_warning_ma": monitoring.leg_current_warning_ma,
+                "motor_stall_current_warning_ma": (
+                    monitoring.motor_stall_current_warning_ma
+                ),
+                "stall_tracking_error_deg": monitoring.stall_tracking_error_deg,
+                "stall_speed_raw_max": monitoring.stall_speed_raw_max,
+                "battery_series_cells": monitoring.battery_series_cells,
+            },
+            "power": {
+                "instantaneous_w": total_power_w,
+                "average_w_60s": average_power_w,
+                "peak_w_60s": peak_power_w,
+                "peak_current_a_60s": peak_current_ma / 1000.0,
+                "bus_voltage_v": bus_voltage_v,
+                "idle_reference_voltage_v": idle_reference_voltage_v,
+                "voltage_sag_v": voltage_sag_v,
+                "minimum_voltage_v_60s": minimum_voltage_v,
+                "energy_wh": self.power_energy_wh,
+                "possible_stall_ids": possible_stall_ids,
+                "assessment": power_assessment,
+                "window_s": power_window_s,
+                "history": [
+                    {
+                        "age_s": max(0.0, sample_at - timestamp),
+                        "power_w": power_w,
+                        "current_a": current_ma / 1000.0,
+                        "voltage_v": sample_voltage_v,
+                    }
+                    for timestamp, power_w, current_ma, sample_voltage_v in (
+                        self.power_samples
+                    )
+                ],
+                "battery_charge": {
+                    "status": battery_charge_status,
+                    "series_cells": monitoring.battery_series_cells,
+                    "idle_pack_voltage_v": idle_reference_voltage_v,
+                    "average_cell_voltage_v": battery_per_cell_v,
+                    "voltage_only_estimate": True,
+                },
             },
             "runtime": {
                 "mode": (
@@ -1291,17 +1468,12 @@ class FourLegSession:
                 ),
                 "progress": self.crawl_progress,
                 "period_s": self.dashboard.crawl.period_s,
-                "cycles": self.dashboard.crawl.cycles,
-                "run_until_stopped": self.dashboard.crawl.run_until_stopped,
+                "run_until_stopped": True,
                 "elapsed_s": crawl_elapsed_s,
                 "completed_cycles": int(
                     crawl_elapsed_s / self.dashboard.crawl.period_s
                 ),
-                "duration_s": (
-                    None
-                    if self.dashboard.crawl.run_until_stopped
-                    else self.dashboard.crawl.period_s * self.dashboard.crawl.cycles
-                ),
+                "duration_s": None,
                 "stride_mm": self.dashboard.crawl.stride_m * 1000.0,
                 "lift_mm": self.dashboard.crawl.lift_m * 1000.0,
                 "support_extension_mm": (
@@ -1321,6 +1493,7 @@ class FourLegSession:
                 },
             },
             "any_armed": bool(self._armed_count_locked()),
+            "browser_heartbeat": browser_heartbeat,
             "last_event": self.last_event,
             "fault": self.fault,
         }
@@ -1338,7 +1511,7 @@ class FourLegSession:
 
 class FourLegHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
-    allow_reuse_address = False
+    allow_reuse_address = os.name != "nt"
     allow_reuse_port = False
 
     def server_bind(self) -> None:
@@ -1359,10 +1532,13 @@ class FourLegHTTPServer(ThreadingHTTPServer):
         server_address: tuple[str, int],
         session: FourLegSession,
         token: str,
+        *,
+        allow_remote: bool = False,
     ):
         super().__init__(server_address, FourLegRequestHandler)
         self.session = session
         self.token = token
+        self.allow_remote = allow_remote
 
 
 class FourLegRequestHandler(BaseHTTPRequestHandler):
@@ -1373,13 +1549,24 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
             super().log_message(format, *args)
 
     def _local_host(self) -> bool:
+        if self.server.allow_remote:
+            return True
         host = self.headers.get("Host", "").split(":", 1)[0].lower()
         return host in {"127.0.0.1", "localhost"}
 
     def _authorized(self) -> bool:
+        if getattr(self.server, "allow_remote", False):
+            return True
         return secrets.compare_digest(
             self.headers.get("X-Control-Token", ""),
             self.server.token,
+        )
+
+    def _compatible_lan_client(self) -> bool:
+        return (
+            not getattr(self.server, "allow_remote", False)
+            or self.headers.get("X-Drobot-Client-Version", "")
+            == LAN_CLIENT_VERSION
         )
 
     def _security_headers(self, content_type: str) -> None:
@@ -1446,6 +1633,19 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
             if not self._authorized():
                 self._error(HTTPStatus.FORBIDDEN, "Invalid control token")
                 return
+            if (
+                getattr(self.server, "allow_remote", False)
+                and self.headers.get("X-Control-Token", "")
+                and not self._compatible_lan_client()
+            ):
+                # Pre-v2 browser pages send the embedded token and already
+                # reload themselves after a 403. Headerless LAN scripts can
+                # continue to read state without a token.
+                self._error(
+                    HTTPStatus.FORBIDDEN,
+                    "Dashboard page is out of date; reloading",
+                )
+                return
             try:
                 self._send_json(self.server.session.snapshot())
             except Exception as exc:
@@ -1457,6 +1657,12 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
         if not self._local_host() or not self._authorized():
             self._error(HTTPStatus.FORBIDDEN, "Local control authorization failed")
             return
+        if self.path != "/api/heartbeat" and not self._compatible_lan_client():
+            self._error(
+                HTTPStatus.CONFLICT,
+                "Dashboard page is out of date; reload before sending controls",
+            )
+            return
         try:
             size = int(self.headers.get("Content-Length", "0"))
             if size > 4096:
@@ -1465,7 +1671,7 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError("Request body must be a JSON object")
             if self.path == "/api/heartbeat":
-                self.server.session.heartbeat()
+                self.server.session.heartbeat(self.client_address[0])
             elif self.path == "/api/arm":
                 self.server.session.arm(
                     payload["leg"],
@@ -1489,6 +1695,8 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
                 )
             elif self.path == "/api/crawl-stop":
                 self.server.session.stop_crawl()
+            elif self.path == "/api/power-reset":
+                self.server.session.reset_power_analytics()
             elif self.path == "/api/target":
                 self.server.session.set_target(
                     payload["leg"],
@@ -1532,11 +1740,17 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run the localhost-only Drobot four-leg dashboard.",
+        description="Run the Drobot four-leg dashboard.",
     )
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--port", default="auto", help="Servo serial port")
+    parser.add_argument("--http-bind", default=LOCAL_HOST)
     parser.add_argument("--http-port", type=int)
+    parser.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="Allow LAN clients; use only on a trusted local network",
+    )
     parser.add_argument("--ramp-rate", type=float)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument(
@@ -1548,7 +1762,13 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args = parser.parse_args(argv)
+    if (
+        args.http_bind not in {"127.0.0.1", "localhost", "::1"}
+        and not args.allow_remote
+    ):
+        parser.error("a non-loopback --http-bind requires --allow-remote")
     dashboard = load_dashboard_config(args.manifest)
     bus: Any
     if args.demo:
@@ -1564,18 +1784,25 @@ def main(argv: list[str] | None = None) -> int:
     token = secrets.token_urlsafe(24)
     http_port = dashboard.server.http_port if args.http_port is None else args.http_port
     try:
-        server = FourLegHTTPServer((LOCAL_HOST, http_port), session, token)
+        server = FourLegHTTPServer(
+            (args.http_bind, http_port),
+            session,
+            token,
+            allow_remote=args.allow_remote,
+        )
     except OSError as exc:
         raise SystemExit(
             f"Dashboard port {http_port} is already in use. Stop the existing "
             "demo or hardware dashboard before starting another one."
         ) from exc
-    url = f"http://{LOCAL_HOST}:{server.server_port}/"
+    display_host = f"{socket.gethostname()}.local" if args.allow_remote else LOCAL_HOST
+    url = f"http://{display_host}:{server.server_port}/"
     mode = "demo" if args.demo else f"hardware on {args.port}"
     try:
         session.start()
         print(f"Drobot four-leg control ({mode}): {url}")
-        print("Local machine only. Ctrl+C disarms all motors and closes the bus.")
+        scope = "Trusted LAN enabled" if args.allow_remote else "Local machine only"
+        print(f"{scope}. Ctrl+C disarms all motors and closes the bus.")
         if not args.no_browser:
             threading.Timer(0.4, webbrowser.open, args=(url,)).start()
         server.serve_forever(poll_interval=0.2)

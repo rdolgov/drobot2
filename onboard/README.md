@@ -1,5 +1,17 @@
 # Raspberry Pi ROS 2 onboard controller
 
+The selected learned walking policy also has a standalone, print-only runtime
+under [`policy-runtime/`](policy-runtime/README.md). Use it to read the BNO085
+and print 12 bounded motor targets before connecting policy output to the servo
+bus. Its core interfaces are designed to be reused by this ROS 2 package.
+The policy dashboard uses port 8090; the existing manual motor/crawl dashboard
+uses port 8080, so both can run on the same Pi without sharing ownership of the
+servo bus.
+
+See [`docs/pi5-dog-bringup.md`](docs/pi5-dog-bringup.md) for the checked Pi
+state, exact setup commands, power notes, and the staged safety plan for moving
+from printed targets to real motor control.
+
 This area packages the existing Drobot motor session and browser dashboard as
 a ROS 2 node for an onboard Raspberry Pi. The Pi owns the USB servo bus, serves
 the control page to computers on the same network, publishes telemetry, and
@@ -14,27 +26,87 @@ The package does not copy calibration or gait equations. It imports:
 - `hardware/robot-runtime/four-leg.toml` plus its four tracked servo profiles
   and calibration JSON files as the physical robot source of truth.
 
+## Standalone manual/IK dashboard
+
+The previous inverse-kinematics and manual-walk page can run on the Pi before
+ROS 2 is installed. Install it once:
+
+```bash
+bash onboard/scripts/install-manual-runtime.sh
+bash onboard/scripts/install-manual-web-service.sh --start
+```
+
+Open `http://pi5-dog.local:8080/` from a phone or computer on the same trusted
+network. The tracked service starts in **DEMO / NO MOTOR OUTPUT** mode. It uses
+the real robot profiles, inverse kinematics, crawl logic, and UI with twelve
+simulated motors, but it does not open a USB serial device.
+
+After the Feetech USB adapter is connected to the Pi, the power warning is
+resolved, and the complete robot is safely supported, edit
+`/etc/default/drobot-manual-web`:
+
+```text
+DROBOT_MANUAL_DEMO=false
+DROBOT_MANUAL_SERIAL_PORT=/dev/ttyUSB0
+```
+
+Then restart it with `sudo systemctl restart drobot-manual-web`. Hardware mode
+opens the bus, requires all 12 configured IDs, and disarms them before serving
+the page. Never run this standalone service and the future ROS motor-owner node
+at the same time.
+
+`DROBOT_MANUAL_FALLBACK_DEMO=true` keeps port 8080 available in demo mode if
+the configured USB adapter is unplugged. After reconnecting the adapter,
+restart the service to retry hardware mode. The page's mode badge always shows
+whether output is simulated or connected to hardware.
+
+### Update an existing Pi dashboard
+
+From the existing clone on the Pi, update the checked-out branch and refresh
+the editable runtime installation:
+
+```bash
+cd ~/drobot2
+git pull --ff-only
+bash onboard/scripts/install-manual-runtime.sh
+sudo systemctl restart drobot-manual-web
+sudo systemctl status drobot-manual-web --no-pager
+```
+
+Reload port 8080 after the restart. Confirm the mode badge, `12 / 12` online,
+`0 / 12` armed, plausible voltage and temperature, and no fault before using a
+whole-robot control. **TEST DISTRIBUTED CRAWL** and **TEST DIAGONAL PAIRS** then
+continue until **STOP + DISARM**. A minor off-stance start is accepted and
+ramped into the computed gait stance; it is not permission to start from a
+folded, collided, unsupported, or visibly damaged pose.
+
+The power panel also shows a basic 3S charge indicator from the last disarmed
+idle-voltage reference. It is a pack-level estimate, not a substitute for
+checking all three cells through the balance connector.
+
 ## Supported Pi baseline
 
-Use a Raspberry Pi 4 or 5 with **Ubuntu Server 24.04 64-bit (arm64)** and **ROS
-2 Jazzy**. ROS publishes Jazzy packages for Ubuntu 24.04 arm64, and that image's
-Python version satisfies the repository's Python 3.11-or-newer requirement.
+The current `pi5-dog` baseline is a Raspberry Pi 5 with **Ubuntu Server 26.04
+64-bit (arm64)** and **ROS 2 Lyrical**. Lyrical supports Ubuntu 26.04 on arm64,
+and the image's Python version satisfies the repository's Python
+3.11-or-newer requirement.
 
 Official references:
 
-- [ROS 2 Jazzy Ubuntu installation](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
-- [ROS 2 Jazzy Ubuntu arm64 support](https://docs.ros.org/en/jazzy/Installation/Alternatives/Ubuntu-Install-Binary.html)
+- [ROS 2 Lyrical installation](https://docs.ros.org/en/lyrical/Installation.html)
+- [ROS 2 Lyrical Ubuntu arm64 binary support](https://docs.ros.org/en/lyrical/Installation/Alternatives/Ubuntu-Install-Binary.html)
 - [Ubuntu Server setup on Raspberry Pi](https://ubuntu.com/tutorials/how-to-install-ubuntu-on-your-raspberry-pi)
 
-Raspberry Pi OS is not the tracked installation target because ROS 2 Jazzy's
-official binary platform is Ubuntu 24.04. A source-built or containerized ROS
-installation can be added later without changing the package interfaces.
+Raspberry Pi OS is not the tracked installation target. A source-built or
+containerized ROS installation can be added later without changing the package
+interfaces.
 
 ## Layout
 
 ```text
 onboard/
 |-- ros2_ws/src/drobot_onboard/   ROS 2 ament_python package
+|-- scripts/run-manual-web.sh     standalone manual/IK dashboard
 |-- scripts/install-pi.sh         dependency install and colcon build
 |-- scripts/start-onboard.sh      foreground launcher
 `-- systemd/                      optional boot-service template
@@ -42,9 +114,9 @@ onboard/
 
 ## 1. Prepare the Raspberry Pi
 
-Install ROS 2 Jazzy using the official instructions, including
-`ros-jazzy-ros-base`. Then install the local build and serial-account
-prerequisites:
+Install ROS 2 Lyrical using the official instructions, including the ROS base
+binary archive or equivalent package set. Then install the local build and
+serial-account prerequisites:
 
 ```bash
 sudo apt update
@@ -125,9 +197,17 @@ The browser exposes the same controls as the desktop dashboard, including:
 - continuous diagonal-pair gait; and
 - **STOP + DISARM**.
 
-Walking continues until stopped. Browser-started motion also stops on browser
-heartbeat loss. ROS-started motion is kept alive by the onboard node until a
-ROS stop/disarm request, process shutdown, bus fault, or telemetry/motion fault.
+Walking continues until stopped. The browser sends a heartbeat every 0.7
+seconds on a request path independent of telemetry. After 20 seconds without
+one, the dashboard shows a warning, but the Pi does not stop the gait, change
+targets, or remove torque. Page close does not stop or disarm the robot.
+ROS-started motion is kept alive by the onboard node until a ROS
+stop/disarm request, process shutdown, bus fault, or telemetry/motion fault.
+The gait start accepts a minor off-stance measured pose: all motors are armed at
+their current positions and ramped toward the computed gait stance. Only the
+old zero-centred start-tolerance rejection was removed; all 12 IDs must still
+be online, and every computed target must remain inside its calibrated joint
+limits.
 
 ## HTTP web-service API
 
@@ -140,33 +220,29 @@ routes are:
 | `POST /api/crawl-forward` | Start continuous distributed crawl |
 | `POST /api/diagonal-pair-forward` | Start continuous diagonal-pair gait |
 | `POST /api/crawl-stop` | Stop and disarm all motors |
+| `POST /api/power-reset` | Reset rolling power/energy data and capture a fresh idle reference |
 | `POST /api/crawl-stance` | Move to the distributed gait stance |
 | `POST /api/center-all` | Move all twelve joints to calibrated zero |
 | `POST /api/disarm-all` | Disarm all motors |
 
-Every API request except the initial page/assets requires the
-`X-Control-Token` header. The browser receives a random per-process token
-automatically. For external scripts, set a stable token of at least 16
-characters before starting:
-
-```bash
-export DROBOT_CONTROL_TOKEN='replace-with-a-long-random-value'
-bash onboard/scripts/start-onboard.sh
-```
+The standalone Pi service on the trusted LAN does not require a control token.
+It requires the non-secret `X-Drobot-Client-Version: 2` compatibility header on
+motion-changing POST requests so stale pre-fix pages cannot issue commands.
+The current browser supplies it automatically. The future ROS service can still
+use its optional configured `DROBOT_CONTROL_TOKEN`.
 
 Example script calls:
 
 ```bash
-curl -H "X-Control-Token: $DROBOT_CONTROL_TOKEN" \
-  http://drobot.local:8080/api/state
+curl http://drobot.local:8080/api/state
 
 curl -X POST -H "Content-Type: application/json" \
-  -H "X-Control-Token: $DROBOT_CONTROL_TOKEN" \
+  -H "X-Drobot-Client-Version: 2" \
   -d '{"safety_ack":true,"confirmation":"TEST DISTRIBUTED CRAWL"}' \
   http://drobot.local:8080/api/crawl-forward
 
 curl -X POST -H "Content-Type: application/json" \
-  -H "X-Control-Token: $DROBOT_CONTROL_TOKEN" -d '{}' \
+  -H "X-Drobot-Client-Version: 2" -d '{}' \
   http://drobot.local:8080/api/crawl-stop
 ```
 
@@ -190,7 +266,7 @@ Open a second Pi shell and source the environments:
 
 ```bash
 cd ~/drobot2
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/lyrical/setup.bash
 source onboard/.venv/bin/activate
 source onboard/ros2_ws/install/setup.bash
 ```

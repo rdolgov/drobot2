@@ -136,6 +136,34 @@
           </article>
         </section>
 
+        <section class="power-panel" aria-labelledby="powerTitle">
+          <div class="power-header">
+            <div>
+              <p class="eyebrow">BATTERY AND SERVO LOAD</p>
+              <h2 id="powerTitle">Power analytics</h2>
+            </div>
+            <button class="power-reset-button" id="resetPower" type="button">
+              RESET AT IDLE
+            </button>
+          </div>
+          <div class="power-grid">
+            <div><span>Power now</span><strong id="powerNow">--</strong><small id="powerAverage">60 s average --</small></div>
+            <div><span>Rolling peak</span><strong id="powerPeak">--</strong><small id="currentPeak">Current peak --</small></div>
+            <div><span>Voltage sag</span><strong id="voltageSag">--</strong><small id="idleVoltage">Collecting idle reference</small></div>
+            <div><span>3S charge</span><strong class="battery-charge" id="batteryCharge" data-level="unknown"><span id="batteryChargeStatus">UNKNOWN</span><span class="battery-live-voltage" id="batteryLiveVoltage"> · -- V</span></strong><small id="batteryVoltage">Idle-voltage estimate</small></div>
+            <div><span>Observed energy</span><strong id="energyUsed">--</strong><small>Sampled while dashboard is open</small></div>
+            <div><span>Stall watch</span><strong id="stallWatch">NONE</strong><small>Current + error + low-speed heuristic</small></div>
+          </div>
+          <div class="power-chart-wrap">
+            <svg class="power-chart" viewBox="0 0 600 110" role="img" aria-label="Power use over the last 60 seconds">
+              <line x1="0" y1="104" x2="600" y2="104"></line>
+              <polyline id="powerLine" points=""></polyline>
+            </svg>
+            <div class="power-chart-labels"><span>60 seconds ago</span><b id="powerScale">Waiting for samples</b><span>now</span></div>
+          </div>
+          <p class="power-assessment" id="powerAssessment">Start from idle, then observe during walking.</p>
+        </section>
+
         <section class="settings-strip" aria-label="Active safety settings">
           <div><span>Torque cap</span><strong id="torqueLimit">—</strong></div>
           <div><span>Servo speed</span><strong id="servoSpeed">—</strong></div>

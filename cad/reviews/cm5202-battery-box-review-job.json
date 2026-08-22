@@ -1,0 +1,73 @@
+{
+  "jobs": [
+    {
+      "input": "drobot_cad/parts/cm5202_battery_box.step.py",
+      "mode": "view",
+      "outputs": [
+        {
+          "path": "C:/Users/roman/Documents/dev/drobot2/cad/reviews/cm5202-battery-box/base-iso.png",
+          "camera": "iso"
+        },
+        {
+          "path": "C:/Users/roman/Documents/dev/drobot2/cad/reviews/cm5202-battery-box/base-iso-opposite.png",
+          "camera": { "direction": [-1, 1, -0.8] }
+        },
+        {
+          "path": "C:/Users/roman/Documents/dev/drobot2/cad/reviews/cm5202-battery-box/base-top.png",
+          "camera": "top"
+        }
+      ],
+      "render": {
+        "viewLabels": true,
+        "padding": 0.12,
+        "sizeProfile": "diagnostic"
+      }
+    },
+    {
+      "input": "drobot_cad/parts/cm5202_battery_box_lid.step.py",
+      "mode": "view",
+      "outputs": [
+        {
+          "path": "C:/Users/roman/Documents/dev/drobot2/cad/reviews/cm5202-battery-box/lid-iso.png",
+          "camera": "iso"
+        },
+        {
+          "path": "C:/Users/roman/Documents/dev/drobot2/cad/reviews/cm5202-battery-box/lid-top.png",
+          "camera": "top"
+        }
+      ],
+      "render": {
+        "viewLabels": true,
+        "padding": 0.12,
+        "sizeProfile": "diagnostic"
+      }
+    },
+    {
+      "input": "drobot_cad/assembly/cm5202_battery_box_fit_preview.step.py",
+      "mode": "view",
+      "outputs": [
+        {
+          "path": "C:/Users/roman/Documents/dev/drobot2/cad/reviews/cm5202-battery-box/preview-iso.png",
+          "camera": "iso"
+        },
+        {
+          "path": "C:/Users/roman/Documents/dev/drobot2/cad/reviews/cm5202-battery-box/preview-iso-opposite.png",
+          "camera": { "direction": [-1, 1, -0.8] }
+        },
+        {
+          "path": "C:/Users/roman/Documents/dev/drobot2/cad/reviews/cm5202-battery-box/preview-top.png",
+          "camera": "top"
+        },
+        {
+          "path": "C:/Users/roman/Documents/dev/drobot2/cad/reviews/cm5202-battery-box/preview-front.png",
+          "camera": "front"
+        }
+      ],
+      "render": {
+        "viewLabels": true,
+        "padding": 0.12,
+        "sizeProfile": "assembly"
+      }
+    }
+  ]
+}

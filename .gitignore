@@ -1,6 +1,8 @@
 # Local environments and caches
 .venv/
 **/.venv/
+**/.policy-venv/
+**/.manual-venv/
 __pycache__/
 **/__pycache__/
 *.py[cod]
