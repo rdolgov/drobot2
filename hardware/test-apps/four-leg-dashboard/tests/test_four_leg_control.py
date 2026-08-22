@@ -708,7 +708,7 @@ def test_capture_zero_all_requires_disarm_and_saves_backups(tmp_path: Path) -> N
         session.close()
 
 
-def test_lost_browser_heartbeat_stops_gait_in_torque_enabled_stance() -> None:
+def test_lost_browser_heartbeat_is_warning_only_and_gait_continues() -> None:
     session, bus, clock = _session()
     try:
         session.start_crawl_forward(
@@ -724,19 +724,23 @@ def test_lost_browser_heartbeat_stops_gait_in_torque_enabled_stance() -> None:
         state = session.snapshot()
 
         assert state["any_armed"] is True
-        assert state["heartbeat_hold_active"] is True
-        assert state["crawl"]["active"] is False
-        assert state["crawl"]["phase"] == "browser_heartbeat_safe_hold"
-        assert state["crawl"]["airborne_leg_count"] == 0
-        assert state["crawl"]["planted_support_leg_count"] == 4
+        assert state["crawl"]["active"] is True
         assert state["summary"]["armed_count"] == 12
         assert bus.torque == set(range(1, 13))
-        assert "heartbeat lost" in state["last_event"].lower()
-        assert "torque held" in state["last_event"].lower()
+        assert state["browser_heartbeat"]["recent"] is False
+        assert state["browser_heartbeat"]["warning_only"] is True
+        assert state["browser_heartbeat"]["controls_motion"] is False
+        assert any(
+            "warning only" in warning.lower()
+            for warning in state["summary"]["warnings"]
+        )
 
-        session.heartbeat()
-        assert session.snapshot()["heartbeat_hold_active"] is True
-        assert session.snapshot()["crawl"]["active"] is False
+        session.heartbeat("test-browser")
+        state = session.snapshot()
+        assert state["browser_heartbeat"]["recent"] is True
+        assert state["browser_heartbeat"]["source"] == "test-browser"
+        assert state["browser_heartbeat"]["received_count"] == 2
+        assert state["crawl"]["active"] is True
     finally:
         session.close()
 

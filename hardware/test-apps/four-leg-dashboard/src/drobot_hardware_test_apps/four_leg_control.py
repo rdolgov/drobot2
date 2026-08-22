@@ -48,6 +48,7 @@ APP_ROOT = Path(__file__).resolve().parents[2]
 HARDWARE_ROOT = APP_ROOT.parents[1]
 DEFAULT_MANIFEST = HARDWARE_ROOT / "robot-runtime" / "four-leg.toml"
 STATIC_DIR = Path(__file__).with_name("four_leg_static")
+LAN_CLIENT_VERSION = "2"
 
 
 @dataclass(frozen=True)
@@ -416,8 +417,10 @@ class FourLegSession:
             for profile in dashboard.legs
         }
         self.desired_deg: dict[tuple[int, str], float] = {}
+        self.heartbeat_lock = threading.Lock()
         self.last_heartbeat = clock()
-        self.heartbeat_hold_active = False
+        self.heartbeat_count = 0
+        self.last_heartbeat_source: str | None = None
         self.last_event = "Starting"
         self.fault: str | None = None
         self.crawl_mode = "distributed"
@@ -502,11 +505,6 @@ class FourLegSession:
 
     def advance_once(self) -> None:
         with self.lock:
-            if self._armed_count_locked() and not self.heartbeat_hold_active:
-                elapsed = self.clock() - self.last_heartbeat
-                if elapsed > self.heartbeat_timeout_s:
-                    self._enter_browser_hold_locked()
-
             self._advance_crawl_locked()
 
             step_limit = min(
@@ -683,30 +681,6 @@ class FourLegSession:
         self.crawl_target_reached_at = None
         self.crawl_progress = 0.0
 
-    def _enter_browser_hold_locked(self) -> None:
-        if self.crawl_active:
-            self.desired_deg.update(self._crawl_stance_targets_locked())
-            self._cancel_crawl_locked()
-            self.crawl_phase = "browser_heartbeat_safe_hold"
-            self.last_event = (
-                "Browser heartbeat lost; gait stopped in four-foot stance "
-                "with motor torque held"
-            )
-        else:
-            for profile in self.profiles:
-                controller = self.controllers[profile.number]
-                for motor in profile.config.motors:
-                    if motor.servo_id not in controller.armed_ids:
-                        continue
-                    commanded = controller.targets_deg.get(motor.name)
-                    if commanded is not None:
-                        self.desired_deg[(profile.number, motor.name)] = commanded
-            self.last_event = (
-                "Browser heartbeat lost; armed motors holding their last "
-                "commanded positions"
-            )
-        self.heartbeat_hold_active = True
-
     def _require_manual_control_locked(self) -> None:
         if self.crawl_active:
             raise RuntimeError("Stop the active crawl before manual motion")
@@ -788,8 +762,7 @@ class FourLegSession:
                 self.crawl_mode = previous_mode
                 raise
 
-            self.last_heartbeat = self.clock()
-            self.heartbeat_hold_active = False
+            self.heartbeat("control-command")
             self.fault = None
             self.last_event = (
                 "All 12 motors moving to the diagonal-pair start stance"
@@ -802,9 +775,26 @@ class FourLegSession:
             self._disarm_all_locked(raise_errors=True)
             self.last_event = "Crawl stopped; all 12 motors disarmed"
 
-    def heartbeat(self) -> None:
-        with self.lock:
+    def heartbeat(self, source: str | None = None) -> None:
+        with self.heartbeat_lock:
             self.last_heartbeat = self.clock()
+            self.heartbeat_count += 1
+            self.last_heartbeat_source = source
+
+    def _browser_heartbeat_snapshot(self) -> dict[str, Any]:
+        with self.heartbeat_lock:
+            age_s = max(0.0, self.clock() - self.last_heartbeat)
+            count = self.heartbeat_count
+            source = self.last_heartbeat_source
+        return {
+            "age_s": age_s,
+            "recent": age_s <= self.heartbeat_timeout_s,
+            "attention_after_s": self.heartbeat_timeout_s,
+            "received_count": count,
+            "source": source,
+            "warning_only": True,
+            "controls_motion": False,
+        }
 
     def arm(
         self,
@@ -820,8 +810,7 @@ class FourLegSession:
             self._require_manual_control_locked()
             state = controller.arm(motor)
             self.desired_deg[(profile.number, motor.name)] = state.degrees
-            self.last_heartbeat = self.clock()
-            self.heartbeat_hold_active = False
+            self.heartbeat("control-command")
             self.fault = None
             self.last_event = (
                 f"{profile.label} / {motor.name.replace('_', ' ')} armed "
@@ -851,8 +840,7 @@ class FourLegSession:
                         pass
                     self.desired_deg.pop((profile.number, motor.name), None)
                 raise
-            self.last_heartbeat = self.clock()
-            self.heartbeat_hold_active = False
+            self.heartbeat("control-command")
             self.fault = None
             self.last_event = f"{profile.label} armed at measured positions"
 
@@ -875,8 +863,7 @@ class FourLegSession:
                 profile.calibration.motor(motor),
             )
             self.desired_deg[(profile.number, motor.name)] = degrees
-            self.last_heartbeat = self.clock()
-            self.heartbeat_hold_active = False
+            self.heartbeat("control-command")
             self.last_event = (
                 f"{profile.label} / {motor.name.replace('_', ' ')} "
                 f"destination {degrees:+.2f} deg"
@@ -896,8 +883,7 @@ class FourLegSession:
                 armed += 1
             if not armed:
                 raise RuntimeError(f"{profile.label} has no armed motors")
-            self.last_heartbeat = self.clock()
-            self.heartbeat_hold_active = False
+            self.heartbeat("control-command")
             self.last_event = f"{profile.label} armed motors returning to zero"
 
     def zero_all_armed(self) -> None:
@@ -914,8 +900,7 @@ class FourLegSession:
                     armed += 1
             if not armed:
                 raise RuntimeError("No motors are armed")
-            self.last_heartbeat = self.clock()
-            self.heartbeat_hold_active = False
+            self.heartbeat("control-command")
             self.last_event = "All armed motors returning to zero"
 
     def center_all(
@@ -953,8 +938,7 @@ class FourLegSession:
                 self.last_event = "Center-all failed; all motors disarmed"
                 raise
 
-            self.last_heartbeat = self.clock()
-            self.heartbeat_hold_active = False
+            self.heartbeat("control-command")
             self.fault = None
             self.last_event = "All 12 motors returning to calibrated zero"
 
@@ -988,8 +972,7 @@ class FourLegSession:
                 self.last_event = "Walk-stance command failed; all motors disarmed"
                 raise
 
-            self.last_heartbeat = self.clock()
-            self.heartbeat_hold_active = False
+            self.heartbeat("control-command")
             self.fault = None
             self.last_event = (
                 "All 12 motors moving to wide walk stance; encoder seams use "
@@ -1118,7 +1101,6 @@ class FourLegSession:
 
     def _disarm_all_locked(self, *, raise_errors: bool) -> None:
         self._cancel_crawl_locked()
-        self.heartbeat_hold_active = False
         errors: list[Exception] = []
         for profile in self.profiles:
             controller = self.controllers[profile.number]
@@ -1155,6 +1137,7 @@ class FourLegSession:
             self.last_event = "Power analytics reset; collect an idle reference"
 
     def _snapshot_locked(self) -> dict[str, Any]:
+        browser_heartbeat = self._browser_heartbeat_snapshot()
         leg_payloads: list[dict[str, Any]] = []
         all_statuses: list[MotorStatus] = []
         unexpected_torque: list[int] = []
@@ -1355,6 +1338,12 @@ class FourLegSession:
                 f"{monitoring.battery_series_cells}S idle-voltage estimate says "
                 "RECHARGE; verify every cell at the balance connector"
             )
+        if armed_count and not browser_heartbeat["recent"]:
+            warnings.append(
+                "Browser heartbeat is stale at "
+                f"{browser_heartbeat['age_s']:.1f} s; warning only, onboard "
+                "motion continues"
+            )
 
         sag_warning = bool(
             voltage_sag_v is not None
@@ -1472,14 +1461,10 @@ class FourLegSession:
                 ),
                 "push_partner": self.crawl_push_partner,
                 "airborne_leg_count": (
-                    0
-                    if self.crawl_phase == "browser_heartbeat_safe_hold"
-                    else 2 if self.crawl_mode == "diagonal_pair" else 1
+                    2 if self.crawl_mode == "diagonal_pair" else 1
                 ),
                 "planted_support_leg_count": (
-                    4
-                    if self.crawl_phase == "browser_heartbeat_safe_hold"
-                    else 2 if self.crawl_mode == "diagonal_pair" else 3
+                    2 if self.crawl_mode == "diagonal_pair" else 3
                 ),
                 "progress": self.crawl_progress,
                 "period_s": self.dashboard.crawl.period_s,
@@ -1508,7 +1493,7 @@ class FourLegSession:
                 },
             },
             "any_armed": bool(self._armed_count_locked()),
-            "heartbeat_hold_active": self.heartbeat_hold_active,
+            "browser_heartbeat": browser_heartbeat,
             "last_event": self.last_event,
             "fault": self.fault,
         }
@@ -1570,9 +1555,18 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
         return host in {"127.0.0.1", "localhost"}
 
     def _authorized(self) -> bool:
+        if getattr(self.server, "allow_remote", False):
+            return True
         return secrets.compare_digest(
             self.headers.get("X-Control-Token", ""),
             self.server.token,
+        )
+
+    def _compatible_lan_client(self) -> bool:
+        return (
+            not getattr(self.server, "allow_remote", False)
+            or self.headers.get("X-Drobot-Client-Version", "")
+            == LAN_CLIENT_VERSION
         )
 
     def _security_headers(self, content_type: str) -> None:
@@ -1639,6 +1633,19 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
             if not self._authorized():
                 self._error(HTTPStatus.FORBIDDEN, "Invalid control token")
                 return
+            if (
+                getattr(self.server, "allow_remote", False)
+                and self.headers.get("X-Control-Token", "")
+                and not self._compatible_lan_client()
+            ):
+                # Pre-v2 browser pages send the embedded token and already
+                # reload themselves after a 403. Headerless LAN scripts can
+                # continue to read state without a token.
+                self._error(
+                    HTTPStatus.FORBIDDEN,
+                    "Dashboard page is out of date; reloading",
+                )
+                return
             try:
                 self._send_json(self.server.session.snapshot())
             except Exception as exc:
@@ -1650,6 +1657,12 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
         if not self._local_host() or not self._authorized():
             self._error(HTTPStatus.FORBIDDEN, "Local control authorization failed")
             return
+        if self.path != "/api/heartbeat" and not self._compatible_lan_client():
+            self._error(
+                HTTPStatus.CONFLICT,
+                "Dashboard page is out of date; reload before sending controls",
+            )
+            return
         try:
             size = int(self.headers.get("Content-Length", "0"))
             if size > 4096:
@@ -1658,7 +1671,7 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError("Request body must be a JSON object")
             if self.path == "/api/heartbeat":
-                self.server.session.heartbeat()
+                self.server.session.heartbeat(self.client_address[0])
             elif self.path == "/api/arm":
                 self.server.session.arm(
                     payload["leg"],

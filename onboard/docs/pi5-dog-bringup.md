@@ -130,21 +130,21 @@ service will continue serving the UI in clearly labeled demo mode instead of
 crash-restarting. Reconnect the adapter and restart the service to retry real
 hardware. Linux address reuse is enabled for this service so an active browser
 connection does not prevent port 8080 from reopening during a clean restart;
-Windows retains exclusive port ownership for the desktop dashboard. Open pages
-automatically reload if a service restart replaces the embedded browser-session
-token.
+Windows retains exclusive port ownership for the desktop dashboard. Trusted-LAN
+Pi pages do not require a control token. Motion POSTs carry a non-secret client
+version so stale pages are told to reload rather than controlling the robot.
 
-The page sends its heartbeat every 0.7 seconds. A missing heartbeat or closed
-page no longer removes support torque immediately. After 20 seconds the Pi
-stops the gait, commands the computed four-foot stance through the normal ramp
-limit, and keeps the motors armed. Reconnection does not restart the gait. Use
-**STOP + DISARM** or the physical cutoff when torque must be removed.
+The page sends its heartbeat every 0.7 seconds on an independent request path.
+A missing heartbeat or closed page becomes a visible warning after 20 seconds,
+but it does not stop the gait, alter targets, or remove torque. The onboard gait
+continues until **STOP + DISARM**, an actual controller/bus fault, process
+shutdown, or the physical cutoff.
 
 Both walking buttons run continuously until **STOP + DISARM**. Starting a gait
 from a minor off-stance pose no longer fails the old zero-centred tolerance
 check: the controller holds each measured position first and ramps to the gait
 stance. This relaxation does not remove startup ID checks, computed joint-limit
-checks, browser heartbeat safe hold, telemetry/motion fault handling, or the
+checks, browser-heartbeat diagnostics, telemetry/motion fault handling, or the
 physical-cutoff requirement.
 
 For battery comparisons, disarm all motors, connect the selected source, press

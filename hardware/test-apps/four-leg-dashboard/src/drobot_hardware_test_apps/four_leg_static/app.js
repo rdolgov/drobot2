@@ -35,20 +35,29 @@ const sliderTimers = new Map();
 let latestState = null;
 let connected = false;
 let refreshing = false;
+let heartbeatInFlight = false;
 let reloadingAfterServerRestart = false;
 const errorStorageKey = "drobot-four-leg-permanent-errors-v1";
 let permanentErrors = loadPermanentErrors();
 
-async function api(path, method = "GET", body = undefined, keepalive = false) {
+async function api(
+  path,
+  method = "GET",
+  body = undefined,
+  keepalive = false,
+  signal = undefined,
+) {
   const response = await fetch(path, {
     method,
     headers: {
       "X-Control-Token": token,
+      "X-Drobot-Client-Version": "2",
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
     keepalive,
+    signal,
   });
   const payload = await response.json();
   if (response.status === 403 && !reloadingAfterServerRestart) {
@@ -415,10 +424,11 @@ function updateSummary(state) {
   document.querySelector("#temperatureLimit").textContent =
     `Warning at ${settings.temperature_warning_c} °C`;
   document.querySelector("#armedCount").textContent = `${summary.armed_count} / 12`;
+  const browserHeartbeat = state.browser_heartbeat;
   document.querySelector("#watchdog").textContent =
-    state.heartbeat_hold_active
-      ? "SAFE HOLD — torque remains on"
-      : `${settings.heartbeat_timeout_s.toFixed(1)} s safe hold`;
+    browserHeartbeat.recent
+      ? `Browser ${browserHeartbeat.age_s.toFixed(1)} s ago · warning only`
+      : `STALE ${browserHeartbeat.age_s.toFixed(1)} s · motion continues`;
   document.querySelector("#torqueLimit").textContent =
     `${(settings.torque_limit / 10).toFixed(0)}%`;
   document.querySelector("#servoSpeed").textContent = settings.speed;
@@ -646,13 +656,25 @@ resetPower.addEventListener("click", () => {
   );
 });
 
-setInterval(() => {
-  if (connected && latestState?.any_armed) {
-    api("/api/heartbeat", "POST", {}).catch(() => {});
+async function sendHeartbeat() {
+  if (heartbeatInFlight) return;
+  heartbeatInFlight = true;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 500);
+  try {
+    await api("/api/heartbeat", "POST", {}, false, controller.signal);
+  } catch (_error) {
+    // Heartbeat diagnostics are warning-only and independent of telemetry.
+  } finally {
+    clearTimeout(timeout);
+    heartbeatInFlight = false;
   }
-}, 700);
+}
+
+setInterval(sendHeartbeat, 700);
 
 setInterval(refresh, 900);
 
 renderPermanentErrors();
+sendHeartbeat();
 refresh();

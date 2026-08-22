@@ -198,10 +198,10 @@ The browser exposes the same controls as the desktop dashboard, including:
 - **STOP + DISARM**.
 
 Walking continues until stopped. The browser sends a heartbeat every 0.7
-seconds. After 20 seconds without one, browser-started motion stops locally,
-ramps into the four-foot gait stance, and holds motor torque; reconnecting does
-not automatically resume walking. Page close does not immediately disarm the
-robot. ROS-started motion is kept alive by the onboard node until a ROS
+seconds on a request path independent of telemetry. After 20 seconds without
+one, the dashboard shows a warning, but the Pi does not stop the gait, change
+targets, or remove torque. Page close does not stop or disarm the robot.
+ROS-started motion is kept alive by the onboard node until a ROS
 stop/disarm request, process shutdown, bus fault, or telemetry/motion fault.
 The gait start accepts a minor off-stance measured pose: all motors are armed at
 their current positions and ramped toward the computed gait stance. Only the
@@ -225,29 +225,24 @@ routes are:
 | `POST /api/center-all` | Move all twelve joints to calibrated zero |
 | `POST /api/disarm-all` | Disarm all motors |
 
-Every API request except the initial page/assets requires the
-`X-Control-Token` header. The browser receives a random per-process token
-automatically. For external scripts, set a stable token of at least 16
-characters before starting:
-
-```bash
-export DROBOT_CONTROL_TOKEN='replace-with-a-long-random-value'
-bash onboard/scripts/start-onboard.sh
-```
+The standalone Pi service on the trusted LAN does not require a control token.
+It requires the non-secret `X-Drobot-Client-Version: 2` compatibility header on
+motion-changing POST requests so stale pre-fix pages cannot issue commands.
+The current browser supplies it automatically. The future ROS service can still
+use its optional configured `DROBOT_CONTROL_TOKEN`.
 
 Example script calls:
 
 ```bash
-curl -H "X-Control-Token: $DROBOT_CONTROL_TOKEN" \
-  http://drobot.local:8080/api/state
+curl http://drobot.local:8080/api/state
 
 curl -X POST -H "Content-Type: application/json" \
-  -H "X-Control-Token: $DROBOT_CONTROL_TOKEN" \
+  -H "X-Drobot-Client-Version: 2" \
   -d '{"safety_ack":true,"confirmation":"TEST DISTRIBUTED CRAWL"}' \
   http://drobot.local:8080/api/crawl-forward
 
 curl -X POST -H "Content-Type: application/json" \
-  -H "X-Control-Token: $DROBOT_CONTROL_TOKEN" -d '{}' \
+  -H "X-Drobot-Client-Version: 2" -d '{}' \
   http://drobot.local:8080/api/crawl-stop
 ```
 
