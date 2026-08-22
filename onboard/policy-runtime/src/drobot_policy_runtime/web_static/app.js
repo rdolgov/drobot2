@@ -26,15 +26,12 @@ function showError(message = "") {
 }
 
 async function api(path, method = "GET", body = null) {
-  if (!token) {
-    showAuth("Enter the dashboard token to connect.");
-    const error = new Error("Dashboard token required");
-    error.authRequired = true;
-    throw error;
-  }
   const response = await fetch(path, {
     method,
-    headers: {"X-Drobot-Token": token, "Content-Type": "application/json"},
+    headers: {
+      ...(token ? {"X-Drobot-Token": token} : {}),
+      "Content-Type": "application/json",
+    },
     body: body ? JSON.stringify(body) : null,
   });
   const value = await response.json();
@@ -106,7 +103,8 @@ byId("forgetToken").addEventListener("click", () => {
   token = "";
   sessionStorage.removeItem("drobotToken");
   tokenInput.value = "";
-  showAuth("Saved token removed. Enter the current token from the Pi.");
+  authBox.hidden = true;
+  refresh();
 });
 
 speed.addEventListener("input", () => speedValue.textContent = `${Number(speed.value).toFixed(2)} m/s`);
