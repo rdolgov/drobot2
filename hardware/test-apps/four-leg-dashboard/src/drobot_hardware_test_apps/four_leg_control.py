@@ -34,7 +34,6 @@ from drobot_leg_testbed.model import (
     raw_to_degrees,
     save_calibration,
 )
-from drobot_leg_testbed.ports import resolve_port
 from drobot_leg_testbed.transport import MotorStatus, STSBus
 
 from drobot_hardware_test_apps.crawl_gait import (
@@ -338,6 +337,10 @@ class FourLegDemoBus:
     def close(self) -> None:
         return
 
+    def reopen(self) -> None:
+        self.close()
+        self.open()
+
     def require_motor(self, motor: MotorConfig) -> int:
         if motor.servo_id not in self.positions:
             raise RuntimeError(f"Demo motor ID {motor.servo_id} is missing")
@@ -501,7 +504,15 @@ class FourLegSession:
                 with self.lock:
                     self.fault = str(exc)
                     self.last_event = "Motion fault; all motors disarmed"
-                    self._disarm_all_locked(raise_errors=False)
+                    try:
+                        self._recover_bus_locked()
+                    except Exception as recovery_exc:
+                        self.fault = (
+                            f"{exc}; automatic reconnect failed: {recovery_exc}"
+                        )
+                        self.last_event = (
+                            "Motion fault; waiting for servo bus reconnect"
+                        )
 
     def advance_once(self) -> None:
         with self.lock:
@@ -1118,6 +1129,27 @@ class FourLegSession:
                 + "; ".join(str(error) for error in errors)
             )
 
+    def _forget_motion_state_locked(self) -> None:
+        """Clear commands when the physical bus state can no longer be trusted."""
+
+        self._cancel_crawl_locked()
+        for controller in self.controllers.values():
+            controller.armed_ids.clear()
+            controller.targets_deg.clear()
+        self.desired_deg.clear()
+
+    def _recover_bus_locked(self) -> None:
+        """Reopen a re-enumerated adapter and return to a disarmed state."""
+
+        self._forget_motion_state_locked()
+        self.bus.reopen()
+        for profile in self.profiles:
+            for motor in profile.config.motors:
+                self.bus.require_motor(motor)
+        self._disarm_all_locked(raise_errors=True)
+        self.fault = None
+        self.last_event = "Servo bus reconnected; all 12 motors online and disarmed"
+
     def _armed_count_locked(self) -> int:
         return sum(
             len(controller.armed_ids) for controller in self.controllers.values()
@@ -1505,8 +1537,17 @@ class FourLegSession:
             except Exception as exc:
                 self.fault = str(exc)
                 self.last_event = "Telemetry fault; all motors disarmed"
-                self._disarm_all_locked(raise_errors=False)
-                raise
+                try:
+                    self._recover_bus_locked()
+                except Exception as recovery_exc:
+                    self.fault = (
+                        f"{exc}; automatic reconnect failed: {recovery_exc}"
+                    )
+                    self.last_event = (
+                        "Telemetry fault; waiting for servo bus reconnect"
+                    )
+                    raise RuntimeError(self.fault) from recovery_exc
+                return self._snapshot_locked()
 
 
 class FourLegHTTPServer(ThreadingHTTPServer):
@@ -1774,7 +1815,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.demo:
         bus = FourLegDemoBus(dashboard)
     else:
-        bus = STSBus(resolve_port(args.port), dashboard.bus.baudrate)
+        bus = STSBus(args.port, dashboard.bus.baudrate)
     session = FourLegSession(
         dashboard,
         bus,

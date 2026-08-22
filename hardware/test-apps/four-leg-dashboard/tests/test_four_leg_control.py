@@ -381,6 +381,47 @@ def test_start_requires_all_motors_and_disarms_every_id() -> None:
         session.close()
 
 
+def test_telemetry_fault_reopens_adapter_and_returns_disarmed() -> None:
+    session, bus, _clock = _session()
+    try:
+        session.arm(1, 1, safety_ack=True)
+        assert bus.torque == {1}
+
+        original_status = bus.status
+        failed = False
+        reopen_count = 0
+        bus.port_name = "/dev/ttyACM0"
+
+        def fail_once(motor):
+            nonlocal failed
+            if not failed:
+                failed = True
+                raise RuntimeError("USB adapter disconnected")
+            return original_status(motor)
+
+        def reopen() -> None:
+            nonlocal reopen_count
+            reopen_count += 1
+            bus.port_name = "/dev/ttyACM1"
+
+        bus.status = fail_once
+        bus.reopen = reopen
+
+        state = session.snapshot()
+
+        assert reopen_count == 1
+        assert state["summary"]["online_count"] == 12
+        assert state["summary"]["armed_count"] == 0
+        assert state["runtime"]["port"] == "/dev/ttyACM1"
+        assert state["fault"] is None
+        assert state["last_event"] == (
+            "Servo bus reconnected; all 12 motors online and disarmed"
+        )
+        assert bus.torque == set()
+    finally:
+        session.close()
+
+
 def test_dashboard_port_is_exclusive() -> None:
     first = FourLegHTTPServer(("127.0.0.1", 0), None, "first")
     try:

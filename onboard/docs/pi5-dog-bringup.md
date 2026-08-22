@@ -147,6 +147,12 @@ stance. This relaxation does not remove startup ID checks, computed joint-limit
 checks, browser-heartbeat diagnostics, telemetry/motion fault handling, or the
 physical-cutoff requirement.
 
+Keep `DROBOT_MANUAL_SERIAL_PORT=auto` for replaceable compatible adapters. If
+USB reconnect changes the Linux node from `ttyACM0` to `ttyACM1` (or similarly
+for `ttyUSB`), the running dashboard closes the dead handle, resolves the new
+device, verifies IDs 1-12, and disarms all motors before serving telemetry
+again. It refuses partial-bus recovery.
+
 For battery comparisons, disarm all motors, connect the selected source, press
 **RESET AT IDLE**, and allow several telemetry samples before walking. Compare
 the 60-second power chart, idle-to-load voltage sag, peak current, and possible

@@ -22,7 +22,6 @@ from drobot_hardware_test_apps.four_leg_control import (
     FourLegSession,
     load_dashboard_config,
 )
-from drobot_leg_testbed.ports import resolve_port
 from drobot_leg_testbed.transport import STSBus
 
 
@@ -97,9 +96,8 @@ class DrobotOnboardNode(Node):
             bus: Any = FourLegDemoBus(dashboard)
             bus_description = "demo motors"
         else:
-            resolved_port = resolve_port(serial_port)
-            bus = STSBus(resolved_port, dashboard.bus.baudrate)
-            bus_description = resolved_port
+            bus = STSBus(serial_port, dashboard.bus.baudrate)
+            bus_description = serial_port
 
         self.session = FourLegSession(
             dashboard,
