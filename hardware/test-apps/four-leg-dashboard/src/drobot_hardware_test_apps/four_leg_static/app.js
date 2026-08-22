@@ -71,12 +71,35 @@ async function api(
   return payload;
 }
 
+function normalizeErrorMessage(message) {
+  const original = String(message || "Unknown dashboard error").trim();
+  const transportFault =
+    original.includes("Serial bus is not open") ||
+    original.includes("No likely USB serial adapter found") ||
+    original.includes("Servo bus unavailable") ||
+    original.includes("automatic reconnect failed");
+  return transportFault
+    ? "Servo USB adapter disconnected; waiting for automatic recovery. " +
+      "Controls remain unavailable until all 12 motors reconnect."
+    : original;
+}
+
 function loadPermanentErrors() {
   try {
     const stored = JSON.parse(localStorage.getItem(errorStorageKey) || "[]");
-    return Array.isArray(stored)
-      ? stored.filter((entry) => entry && typeof entry.message === "string")
-      : [];
+    if (!Array.isArray(stored)) return [];
+    const messages = new Set();
+    return stored
+      .filter((entry) => entry && typeof entry.message === "string")
+      .map((entry) => ({
+        ...entry,
+        message: normalizeErrorMessage(entry.message),
+      }))
+      .filter((entry) => {
+        if (messages.has(entry.message)) return false;
+        messages.add(entry.message);
+        return true;
+      });
   } catch (_error) {
     return [];
   }
@@ -106,7 +129,7 @@ function renderPermanentErrors() {
 }
 
 function addPermanentError(message) {
-  const text = String(message || "Unknown dashboard error").trim();
+  const text = normalizeErrorMessage(message);
   if (permanentErrors.some((entry) => entry.message === text)) return;
   permanentErrors.push({ message: text, createdAt: new Date().toISOString() });
   storePermanentErrors();
@@ -561,6 +584,24 @@ async function refresh() {
     connected = false;
     connection.className = "connection offline";
     connectionText.textContent = "CONNECTION LOST";
+    [
+      disarmAll,
+      zeroAll,
+      centerAll,
+      captureZeroAll,
+      setCrawlStance,
+      walkForward,
+      walkDiagonalPair,
+      stopWalk,
+      resetPower,
+    ].forEach((control) => {
+      control.disabled = true;
+    });
+    motorNodes.forEach((row) => {
+      row.querySelectorAll("button, input").forEach((control) => {
+        control.disabled = true;
+      });
+    });
     showNotice(error.message, true);
   } finally {
     refreshing = false;
