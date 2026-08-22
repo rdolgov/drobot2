@@ -579,6 +579,10 @@ main {
   color: var(--red);
 }
 
+.battery-live-voltage {
+  color: var(--text);
+}
+
 .power-chart-wrap {
   padding: 8px 10px 5px;
   border: 1px solid rgba(59, 81, 87, 0.6);

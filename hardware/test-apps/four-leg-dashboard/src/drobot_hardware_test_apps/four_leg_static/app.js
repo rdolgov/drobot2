@@ -440,7 +440,12 @@ function updateSummary(state) {
         `60 s low ${power.minimum_voltage_v_60s.toFixed(2)} V`;
   const batteryCharge = power.battery_charge;
   const batteryChargeNode = document.querySelector("#batteryCharge");
-  batteryChargeNode.textContent = batteryCharge.status.toUpperCase();
+  document.querySelector("#batteryChargeStatus").textContent =
+    batteryCharge.status.toUpperCase();
+  document.querySelector("#batteryLiveVoltage").textContent =
+    power.bus_voltage_v == null
+      ? " · -- V"
+      : ` · ${power.bus_voltage_v.toFixed(2)} V`;
   batteryChargeNode.dataset.level = batteryCharge.status;
   document.querySelector("#batteryVoltage").textContent =
     batteryCharge.average_cell_voltage_v == null

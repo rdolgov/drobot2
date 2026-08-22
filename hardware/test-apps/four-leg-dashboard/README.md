@@ -237,6 +237,8 @@ charge indicator: **FULL** at 4.10 V/cell or above, **GOOD** from 3.90 V/cell,
 value is only pack voltage divided by three; it cannot detect an imbalanced or
 failing individual cell. Confirm a low/recharge result with a balance-plug cell
 checker and follow the battery manufacturer's limits.
+The value beside the status is the live measured pack voltage; the smaller line
+retains the disarmed idle reference used to classify the charge state.
 
 ### Separate diagonal-pair mode
 
