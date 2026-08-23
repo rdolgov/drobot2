@@ -188,11 +188,11 @@ keeping the manual dashboard as the only servo-bus owner. The standalone port
 2. **Live joint feedback:** all 12 calibrated positions and encoder-derived
    velocities feed the observation; stale, missing, or out-of-range feedback
    stops and disarms the test.
-3. **Bounded actuation:** the UI permits only a supported five-second test at
-   `0.00-0.10 m/s`, initializes targets from the measured pose, and enforces
-   joint, rate, tilt, and telemetry guards. Normal five-second completion
-   returns all 12 joints to calibrated center and keeps torque holding; an
-   explicit stop or policy/hardware fault still disarms.
+3. **Bounded actuation:** the UI permits a supported `1-60 s` test at a custom
+   `0.000-0.100 m/s`, initializes targets from the measured pose, and enforces
+   joint, rate, tilt, and telemetry guards. Normal timed completion returns all
+   12 joints to calibrated center and keeps torque holding; an explicit stop or
+   policy/hardware fault still disarms.
 4. **Floor rollout:** remains future work. Review recorded timing, tracking,
    current, voltage sag, body motion, and support behavior before removing the
    fixture or raising the speed/duration limits.

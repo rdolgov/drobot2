@@ -382,7 +382,7 @@ def test_start_requires_all_motors_and_disarms_every_id() -> None:
         session.close()
 
 
-def test_rl_ui_exposes_only_a_bounded_supported_trial() -> None:
+def test_rl_ui_exposes_bounded_custom_speed_and_duration() -> None:
     static_dir = (
         Path(__file__).resolve().parents[1]
         / "src"
@@ -392,12 +392,34 @@ def test_rl_ui_exposes_only_a_bounded_supported_trial() -> None:
     html = (static_dir / "index.html").read_text(encoding="utf-8")
     script = (static_dir / "app.js").read_text(encoding="utf-8")
 
-    assert 'max="0.10"' in html
-    assert "START 5-SECOND RL TEST" in html
+    assert 'id="rlSpeed" type="number"' in html
+    assert 'max="0.10" step="0.001"' in html
+    assert 'id="rlDuration" type="number"' in html
+    assert 'min="1" max="60"' in html
+    assert "START RL WALK" in html
     assert "physical cutoff is ready" in html
     assert '"/api/rl-start"' in script
+    assert "duration_s: duration" in script
     assert 'confirmation: "START SUPPORTED RL TEST"' in script
     assert '"/api/rl-stop"' in script
+
+
+def test_rl_request_bounds_allow_slow_custom_speed_and_timed_walk() -> None:
+    session, _bus, _clock = _session()
+    try:
+        assert session.rl_controller is not None
+        assert session.rl_controller.validate_request(0.005, 12.0) == (0.005, 12.0)
+
+        with pytest.raises(ValueError, match="forward speed"):
+            session.rl_controller.validate_request(-0.001, 5.0)
+        with pytest.raises(ValueError, match="forward speed"):
+            session.rl_controller.validate_request(0.101, 5.0)
+        with pytest.raises(ValueError, match="duration"):
+            session.rl_controller.validate_request(0.05, 0.5)
+        with pytest.raises(ValueError, match="duration"):
+            session.rl_controller.validate_request(0.05, 61.0)
+    finally:
+        session.close()
 
 
 def test_hardware_ui_can_start_disconnected_with_motion_disabled() -> None:

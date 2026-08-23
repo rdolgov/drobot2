@@ -492,29 +492,52 @@ main {
   background: rgba(4, 11, 13, 0.46);
 }
 
-.rl-controls > label:first-child {
+.rl-parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.rl-parameter-grid > label {
+  display: grid;
+  gap: 6px;
   color: #dce8e5;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 800;
 }
 
-.rl-speed-row {
+.rl-number-input {
   display: grid;
-  grid-template-columns: 1fr 74px;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  margin: 9px 0 12px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
 }
 
-.rl-speed-row input {
-  width: 100%;
-}
-
-.rl-speed-row output {
+.rl-number-input input {
+  min-width: 0;
+  padding: 10px;
+  border: 0;
+  outline: 0;
+  background: transparent;
   color: var(--cyan);
-  font-size: 0.76rem;
+  font: inherit;
+  font-size: 0.82rem;
   font-weight: 850;
-  text-align: right;
+}
+
+.rl-number-input:focus-within {
+  border-color: var(--cyan);
+}
+
+.rl-number-input small {
+  padding-right: 9px;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 700;
 }
 
 .rl-ack {
@@ -1500,6 +1523,10 @@ footer {
   .metrics,
   .settings-strip,
   .power-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rl-parameter-grid {
     grid-template-columns: 1fr;
   }
 

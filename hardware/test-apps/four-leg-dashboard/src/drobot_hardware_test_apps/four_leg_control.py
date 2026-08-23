@@ -773,6 +773,7 @@ class FourLegSession:
         self,
         *,
         forward_m_s: float,
+        duration_s: float,
         safety_ack: bool,
         confirmation: str,
     ) -> None:
@@ -785,6 +786,10 @@ class FourLegSession:
         if confirmation != "START SUPPORTED RL TEST":
             raise ValueError("START SUPPORTED RL TEST confirmation is required")
 
+        speed, duration = self.rl_controller.validate_request(
+            forward_m_s,
+            duration_s,
+        )
         self.rl_controller.prepare()
         with self.lock:
             if self.crawl_active or self.rl_controller.active:
@@ -818,7 +823,11 @@ class FourLegSession:
                 self.rl_feedback_time_s = self.clock()
                 self.rl_diagnostic_index = 0
                 self.rl_diagnostic_time_s = None
-                self.rl_controller.start(float(forward_m_s), initial)
+                self.rl_controller.start(
+                    speed,
+                    duration,
+                    initial,
+                )
             except Exception:
                 self._disarm_all_locked(raise_errors=False)
                 raise
@@ -826,8 +835,9 @@ class FourLegSession:
             self.heartbeat("rl-policy-local")
             self.fault = None
             self.last_event = (
-                "Supported 5-second RL walking test started; normal completion "
-                "will return to calibrated center"
+                f"Supported {duration:g}-second RL walking test started "
+                f"at {speed:.3f} m/s; normal completion will return "
+                "to calibrated center"
             )
 
     def stop_rl_policy(self) -> None:
@@ -1534,7 +1544,7 @@ class FourLegSession:
         payload["summary"]["telemetry_live"] = False
         payload["power"]["live"] = False
         payload["power"]["assessment"] = (
-            "Electrical diagnostics are staggered onboard during the 5-second RL test"
+            "Electrical diagnostics are staggered onboard during the RL walk"
         )
         payload["runtime"]["telemetry_mode"] = "cached_during_rl"
         payload["rl_policy"] = self._rl_snapshot_locked()
@@ -2127,6 +2137,7 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
             elif self.path == "/api/rl-start":
                 self.server.session.start_rl_policy(
                     forward_m_s=float(payload.get("forward_m_s", 0.03)),
+                    duration_s=float(payload.get("duration_s", 5.0)),
                     safety_ack=payload.get("safety_ack") is True,
                     confirmation=str(payload.get("confirmation", "")),
                 )
