@@ -53,6 +53,13 @@ combined base COM becomes `(-32.417, 0, 52.120) mm`. Combined mass remains
 randomized by 0.965--1.040, approximately covering a 450--600 g assembly, with
 combined-COM jitter of `(+/-4.5, +/-2.0, +/-3.0) mm`.
 
+After V20 training, the fully assembled physical robot was measured at 7 lb,
+or approximately **3.18 kg**, including the installed rear battery and its
+enclosure. This whole-robot measurement is the preferred mass reference for
+the next simulation calibration. It does not retroactively describe the exact
+mass distribution used during V20 training; individual link inertias and the
+installed center of mass still need measurement or reconciliation.
+
 ## Objective and conservative continuation
 
 V20 inherits V19's low-speed 0.04--0.10 m/s commands, 0.8-second diagonal gait
