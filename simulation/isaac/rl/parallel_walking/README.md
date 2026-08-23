@@ -18,6 +18,24 @@ The actor is a two-layer 256x256 MLP using deployable IMU and joint state. Durin
 only, the critic also sees simulator base velocity, base height, and foot contacts. Those
 privileged values are never required by the deployed actor.
 
+## V20 external rear-payload walking
+
+V20 corrects the battery installation used by V19. The 144 x 68 mm holder
+face is centered on the outside of the 170 x 100 mm rear plate, while its
+43 mm depth projects behind the chassis. The nominal 523.18 g payload center
+is `(-131.5, 0, 50) mm` in the base-link frame. This moves the combined base
+COM to approximately `(-32.42, 0, 52.12) mm` and exposes the rear box as a
+visible collision proxy in Isaac Sim.
+
+The selected `model_900.pt` uses a conservative one-iteration continuation
+from V19 at a 5e-5 PPO learning rate. At a 0.05 m/s command it completed three
+30-second trials with zero falls and stalls, all four legs active, 0.0358 m/s
+actual speed, 0.132 m mean lateral drift, and 14.388 rad/s2 joint RMS
+acceleration. Longer continuations were rejected because they gained speed at
+the expense of drift and jerk. See
+`simulation/docs/rl-external-rear-payload-walking-v20.md` for the complete
+placement, rejected-run, evaluation, artifact, and reproduction record.
+
 ## V19 smooth rear-payload walking
 
 V19 continues V18 with the measured 416 g rear battery plus a 107.18 g

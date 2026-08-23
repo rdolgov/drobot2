@@ -73,3 +73,21 @@ class DrobotCommandedWalkingSmoothPayloadPPORunnerCfg(
     max_iterations = 600
     save_interval = 25
     experiment_name = "drobot_commanded_walk_v19_smooth_rear_payload"
+
+
+@configclass
+class DrobotCommandedWalkingExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedWalkingSmoothPayloadPPORunnerCfg
+):
+    """V20 continuation for the externally mounted rear battery assembly."""
+
+    max_iterations = 300
+    experiment_name = "drobot_commanded_walk_v20_external_rear_payload_straight"
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # A conservative continuation protects the already-smooth V19 gait
+        # while the critic and actor adapt to the rearward inertia shift.
+        self.algorithm.learning_rate = 5.0e-5
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.desired_kl = 0.005

@@ -1,6 +1,6 @@
 # `pi5-dog` bring-up record
 
-Last checked: 2026-08-22
+Last checked: 2026-08-23
 
 This records the current Raspberry Pi state and the safe rollout path from
 print-only policy inference to closed-loop walking. Do not place login
@@ -14,8 +14,8 @@ passwords, dashboard tokens, or Wi-Fi credentials in this repository.
 | Board / OS | Raspberry Pi 5, Ubuntu 26.04 LTS arm64 |
 | Python | 3.14.4 |
 | IMU | BNO085 detected on I2C bus 1 at `0x4A` |
-| Policy model | `parallel-walking-v19-smooth-rear-payload/model_899.onnx` |
-| Model SHA-256 | `5a9452becdb082a023f999d2a7590c4c1dc7eedeedb601b98f00b989356796ad` |
+| Policy model | `parallel-walking-v20-external-rear-payload/model_900.onnx` |
+| Model SHA-256 | `f787669d33115f117ac691c1ba7bb145fa6a726c6a5d22aec7aecc9e284d6529` |
 | Policy runtime | ONNX Runtime 1.29.0, 60 Hz, deterministic Beta mean |
 | Motor output | Disabled; policy targets are displayed/printed only |
 | Manual/IK dashboard | Boot service on port 8080; hardware preference with safe demo fallback |

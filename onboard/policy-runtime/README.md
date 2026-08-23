@@ -1,6 +1,6 @@
 # Raspberry Pi walking-policy runtime
 
-This package runs the selected V19 rear-payload, rectangular-shoe policy on a 64-bit
+This package runs the selected V20 external-rear-payload, rectangular-shoe policy on a 64-bit
 Raspberry Pi with ONNX Runtime. Its standalone CLI and port 8090 UI are
 intentionally print-only: they read the
 BNO085, assembles the exact 50-value observation, runs deterministic inference
@@ -29,8 +29,8 @@ format and the planned ROS 2/rosbag2 replacement boundary.
 ## Model
 
 The deployable model is
-`onboard/models/parallel-walking-v19-smooth-rear-payload/model_899.onnx`. It is exported from
-`simulation/isaac/models/parallel-walking-v19-smooth-rear-payload/model_899.pt` with
+`onboard/models/parallel-walking-v20-external-rear-payload/model_900.onnx`. It is exported from
+`simulation/isaac/models/parallel-walking-v20-external-rear-payload/model_900.pt` with
 `simulation/isaac/rl/parallel_walking/export_policy_onnx.py`.
 
 The accompanying JSON file records hashes and the full observation/action

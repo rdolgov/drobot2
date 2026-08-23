@@ -8,6 +8,7 @@ hardware.
 | --- | --- |
 | Isaac import, sensors, standing, gait, and runtime checks | [`../isaac/README.md`](../isaac/README.md) |
 | Flat-ground reinforcement-learning task | [`rl-training.md`](rl-training.md) |
+| External rear-battery smooth walking (V20) | [`rl-external-rear-payload-walking-v20.md`](rl-external-rear-payload-walking-v20.md) |
 | Original stair task | [`rl-stairs/README.md`](rl-stairs/README.md) |
 | Corrected close-start stair task | [`rl-stairs-v2/README.md`](rl-stairs-v2/README.md) |
 | Hardware-informed stair task | [`rl-stairs-v3/README.md`](rl-stairs-v3/README.md) |

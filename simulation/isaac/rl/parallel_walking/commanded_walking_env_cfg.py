@@ -47,10 +47,10 @@ RECTANGULAR_SHOE_TREAD_WIDTH_M = 0.054
 RECTANGULAR_SHOE_MASS_KG = 0.070237
 
 # The base-link inertia currently includes a provisional 450 g pack centered
-# low in the chassis. V19 replaces that assumption with the measured CM5202
-# pack plus the CAD-derived box/lid mass at the rear-most compatible floor-grid
-# position. The enclosure transform remains an estimate until its installed
-# body-frame position is measured on the robot.
+# low in the chassis. V19 replaced that assumption with the measured CM5202
+# pack plus CAD-derived box/lid mass on the body floor. V20 rotates and moves
+# that same assembly outside the rear wall to match the physical installation.
+# The exact bracket offsets remain estimates until measured on the robot.
 ORIGINAL_BASE_MASS_KG = 2.049119
 ORIGINAL_BASE_COM_M = (0.0, 0.0, 0.046485537)
 ORIGINAL_BASE_INERTIA_KG_M2 = (
@@ -354,6 +354,35 @@ class DrobotCommandedWalkingSmoothPayloadEnvCfg(
     penalty_support_foot_slip = 0.45
     smoothness_curriculum_steps = 19_200
     smoothness_initial_scale = 0.25
+
+
+@configclass
+class DrobotCommandedWalkingExternalRearPayloadEnvCfg(
+    DrobotCommandedWalkingSmoothPayloadEnvCfg
+):
+    """Smooth walking with the battery box mounted outside the rear plate."""
+
+    # The 144 x 68 mm box face is centered on the 170 x 100 mm rear plate.
+    # Its 43 mm box-and-lid depth projects behind the body whose rear face is
+    # X=-110 mm. This rotates the holder's CAD axes so its long axis spans Y,
+    # its tab width spans Z, and its lid/depth spans X.
+    rear_payload_center_m = (-0.1315, 0.0, 0.0500)
+    rear_payload_size_m = (0.043, 0.144, 0.068)
+    # Keep the measured 523.18 g nominal assembly and 450--600 g mass range,
+    # but allow extra fore/aft and vertical placement uncertainty because the
+    # physical adapter between the box and rear-wall grid is not yet measured.
+    rear_payload_combined_com_jitter_m = (0.0045, 0.0020, 0.0030)
+
+    # The first external-payload continuation recovered commanded speed but
+    # learned a persistent lateral arc. Preserve V19's smooth gait and make
+    # straight, low-acceleration progress the dominant adaptation target.
+    penalty_lateral_velocity = 10.00
+    penalty_lateral_displacement = 20.00
+    penalty_yaw_rate = 8.00
+    penalty_action_acceleration = 0.75
+    penalty_joint_acceleration = 0.25
+    penalty_body_linear_acceleration = 0.40
+    penalty_body_angular_acceleration = 0.30
 
 
 @configclass

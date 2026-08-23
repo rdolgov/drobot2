@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 function Get-WalkingContext {
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("forward", "directional", "smooth-payload")]
+        [ValidateSet("forward", "directional", "smooth-payload", "external-rear-payload")]
         [string]$CommandSet
     )
 
@@ -20,9 +20,13 @@ function Get-WalkingContext {
         $task = "Drobot-Commanded-Walk-Directional-Direct"
         $experimentName = "drobot_commanded_walk_directional_v18_coordinated_trot_selected"
     }
-    else {
+    elseif ($CommandSet -eq "smooth-payload") {
         $task = "Drobot-Commanded-Walk-Smooth-Payload-Direct"
         $experimentName = "drobot_commanded_walk_v19_smooth_rear_payload"
+    }
+    else {
+        $task = "Drobot-Commanded-Walk-External-Rear-Payload-Direct"
+        $experimentName = "drobot_commanded_walk_v20_external_rear_payload_straight"
     }
     return [PSCustomObject]@{
         RepoRoot = $repoRoot
@@ -30,7 +34,10 @@ function Get-WalkingContext {
         Task = $task
         ExperimentName = $experimentName
         ExperimentRoot = Join-Path $repoRoot "logs\rsl_rl\$experimentName"
-        BundledCheckpoint = if ($CommandSet -in @("forward", "smooth-payload")) {
+        BundledCheckpoint = if ($CommandSet -eq "external-rear-payload") {
+            Join-Path $repoRoot "simulation\isaac\models\parallel-walking-v19-smooth-rear-payload\model_899.pt"
+        }
+        elseif ($CommandSet -in @("forward", "smooth-payload")) {
             Join-Path $repoRoot "simulation\isaac\models\parallel-walking-v18-coordinated\model_299.pt"
         }
         else {

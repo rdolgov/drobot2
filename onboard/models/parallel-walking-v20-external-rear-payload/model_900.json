@@ -1,0 +1,40 @@
+{
+  "format": "drobot-walking-policy-v1",
+  "source_checkpoint": "model_900.pt",
+  "source_checkpoint_sha256": "ad71f219357cd024751b9a15c3e2fed95f98f091033eb7f3fc09daa711e7e8cc",
+  "source_iteration": 900,
+  "onnx_sha256": "f787669d33115f117ac691c1ba7bb145fa6a726c6a5d22aec7aecc9e284d6529",
+  "control_hz": 60,
+  "gait_period_s": 0.8,
+  "observation_count": 50,
+  "action_count": 12,
+  "observation_order": [
+    "command_forward_m_s[1]",
+    "command_lateral_m_s[1]",
+    "command_yaw_rad_s[1]",
+    "gait_clock_sin[1]",
+    "gait_clock_cos[1]",
+    "imu_angular_velocity_body_rad_s[3]",
+    "projected_gravity_body[3]",
+    "imu_linear_acceleration_body_over_9_81[3]",
+    "joint_position_error_rad[12]",
+    "joint_velocity_over_4_5836625[12]",
+    "previous_normalized_action[12]"
+  ],
+  "action_order": [
+    "front_left_hip_abduction",
+    "rear_left_hip_abduction",
+    "front_right_hip_abduction",
+    "rear_right_hip_abduction",
+    "front_left_hip_flexion",
+    "rear_left_hip_flexion",
+    "front_right_hip_flexion",
+    "rear_right_hip_flexion",
+    "front_left_knee",
+    "rear_left_knee",
+    "front_right_knee",
+    "rear_right_knee"
+  ],
+  "training_task": "Drobot-Commanded-Walk-External-Rear-Payload-Direct",
+  "training_profile": "v20-external-rear-box-523g-straight-smooth-low-rate"
+}

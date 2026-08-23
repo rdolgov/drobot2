@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("forward", "directional", "smooth-payload")]
+    [ValidateSet("forward", "directional", "smooth-payload", "external-rear-payload")]
     [string]$CommandSet = "forward",
     [ValidateRange(1, 100000)]
     [int]$Iterations = 20,

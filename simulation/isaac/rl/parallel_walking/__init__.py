@@ -32,3 +32,8 @@ _register(
     "DrobotCommandedWalkingSmoothPayloadEnvCfg",
     "DrobotCommandedWalkingSmoothPayloadPPORunnerCfg",
 )
+_register(
+    "Drobot-Commanded-Walk-External-Rear-Payload-Direct",
+    "DrobotCommandedWalkingExternalRearPayloadEnvCfg",
+    "DrobotCommandedWalkingExternalRearPayloadPPORunnerCfg",
+)
