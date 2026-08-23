@@ -15,6 +15,14 @@ if [[ ! -d "${VENV_DIR}" ]]; then
 fi
 source "${VENV_DIR}/bin/activate"
 python -m pip install --upgrade pip setuptools wheel
+
+PYTHON_TAG="$(python -c 'import sys; print(f"cp{sys.version_info.major}{sys.version_info.minor}")')"
+MACHINE="$(uname -m)"
+if [[ "${PYTHON_TAG}" == "cp314" && "${MACHINE}" == "aarch64" ]]; then
+  python -m pip install \
+    "https://github.com/adafruit/lgpio-python-wheels/raw/main/wheels/lgpio-0.2.2.0-cp314-cp314-linux_aarch64.whl"
+fi
+
 python -m pip install --editable "${REPO_ROOT}/hardware/test-apps/one-leg-testbed"
 python -m pip install --editable "${REPO_ROOT}/onboard/policy-runtime[bno085]"
 python -m pip install --editable "${REPO_ROOT}/hardware/test-apps/four-leg-dashboard"
