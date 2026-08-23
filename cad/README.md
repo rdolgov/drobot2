@@ -30,6 +30,8 @@ assemblies.
 | `exports/step/rectangular_fork_shoe.step` | `drobot_cad/parts/rectangular_fork_shoe.step.py` | 100 x 60 mm flat PLA shoe with a raised fork attachment for increased stability and clearance |
 | `exports/step/rectangular_fork_shoe_fit_preview.step` | `drobot_cad/assembly/rectangular_fork_shoe_fit_preview.step.py` | Generated lower-leg preview with four M3 rods and bilateral driver-access envelopes |
 | `exports/step/quadruped_body_base.step` | `drobot_cad/parts/quadruped_body.py` | One-piece X2D-safe body tub with hip reinforcement, protected battery rail, four-wall M3 grid, full floor grid, and paired wire ports |
+| `exports/step/quadruped_carry_training_handle.step` | `drobot_cad/parts/quadruped_carry_training_handle.step.py` | One-piece side-grid carry handle with two resistance-band attachment slots |
+| `exports/step/quadruped_carry_training_handle_fit_preview.step` | `drobot_cad/assembly/quadruped_carry_training_handle_fit_preview.step.py` | Installed body and handle review assembly |
 | `exports/step/quadruped_body_lid.step` | `drobot_cad/parts/quadruped_body_lid.py` | Removable ventilated body lid with a 10 mm-pitch universal M3 grid and direct LeKiwi camera pattern |
 | `exports/step/quadruped_electronics_tray.step` | `drobot_cad/parts/quadruped_electronics_tray.py` | Optional electronics tray with four floor-grid-aligned M3 mounting locations |
 | `exports/step/cm5202_battery_box.step` | `drobot_cad/parts/cm5202_battery_box.step.py` | Main CM5202 LiPo box with four floor-grid M3 mounts, lid-screw towers, and one upper-left wire port |
@@ -42,6 +44,9 @@ assemblies.
 | `exports/step/raspberry_pi_5_enclosure_fit_preview.step` | `drobot_cad/assembly/raspberry_pi_5_enclosure_fit_preview.step.py` | Enclosure, exact Pi 5, lid, exact BNO085, and protection roof review assembly |
 | `exports/step/lekiwi_12v_battery_reference.step` | `drobot_cad/parts/lekiwi_12v_battery_reference.py` | Measured 70 x 66 x 40 mm LeKiwi 12 V pack fit proxy |
 | `exports/step/waveshare_bus_servo_adapter_a.step` | `drobot_cad/parts/waveshare_bus_servo_adapter_a.py` | Exact Waveshare USB/UART serial-bus controller reference |
+| `exports/step/waveshare_bus_servo_adapter_enclosure_base.step` | `drobot_cad/parts/waveshare_bus_servo_adapter_enclosure_base.step.py` | Protective adapter box with body-grid mounts and connector openings |
+| `exports/step/waveshare_bus_servo_adapter_enclosure_lid.step` | `drobot_cad/parts/waveshare_bus_servo_adapter_enclosure_lid.step.py` | Screw-on ventilated lid with power-terminal screwdriver access |
+| `exports/step/waveshare_bus_servo_adapter_enclosure_fit_preview.step` | `drobot_cad/assembly/waveshare_bus_servo_adapter_enclosure_fit_preview.step.py` | Exploded enclosure preview with exact official Waveshare board geometry |
 | `exports/step/adafruit_bno085_stemma_qt.step` | `drobot_cad/parts/adafruit_bno085.py` | Exact Adafruit BNO085 reference centred on its sensing package |
 | `exports/step/quadruped_imu_cover.step` | `drobot_cad/parts/quadruped_imu_cover.py` | Printable open-sided BNO085 roof with four aligned M2 nylon through-bolt sleeves |
 | `exports/step/quadruped_imu_tray_fit_preview.step` | `drobot_cad/assembly/quadruped_imu_tray_fit_preview.py` | Installed tray, BNO085, and removable protection-cover fit preview |

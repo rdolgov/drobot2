@@ -13,6 +13,8 @@ their corresponding top-level areas.
 | CM5202 screw-lid battery box | [`cm5202-battery-box.md`](cm5202-battery-box.md) |
 | CM5202 open strap cradle | [`cm5202-battery-cradle.md`](cm5202-battery-cradle.md) |
 | Raspberry Pi 5 enclosure and IMU roof | [`raspberry-pi-5-enclosure.md`](raspberry-pi-5-enclosure.md) |
+| Waveshare Bus Servo Adapter enclosure | [`waveshare-bus-servo-adapter-enclosure.md`](waveshare-bus-servo-adapter-enclosure.md) |
+| Carry and resistance-band training handle | [`quadruped-carry-training-handle.md`](quadruped-carry-training-handle.md) |
 | Rectangular PLA distal-fork shoe | [`rectangular-fork-shoe.md`](rectangular-fork-shoe.md) |
 | Rigid low-profile distal-fork shoe | [`rigid-fork-shoe.md`](rigid-fork-shoe.md) |
 | Superseded TPU distal-fork shoe | [`tpu-fork-shoe.md`](tpu-fork-shoe.md) |
