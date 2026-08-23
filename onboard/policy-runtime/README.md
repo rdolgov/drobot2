@@ -59,7 +59,9 @@ git sparse-checkout add onboard
 
 The installer creates `onboard/.policy-venv` and installs ONNX Runtime plus the
 BNO085 dependencies. Current ONNX Runtime releases provide CPython 3.14 ARM64
-wheels; the installer also handles the documented CPython 3.14 `lgpio` wheel.
+wheels. The BNO085 extra explicitly includes Adafruit's `adafruit-lgpio` backend
+on 64-bit Linux with Python 3.13 or newer, including the Pi 5 manual-controller
+environment.
 
 First verify inference without touching I2C:
 
