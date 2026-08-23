@@ -593,6 +593,40 @@ def test_center_all_requires_confirmation_and_targets_calibrated_zero() -> None:
         session.close()
 
 
+def test_rl_completion_centers_and_holds_while_stop_and_fault_disarm() -> None:
+    session, bus, _clock = _session()
+    try:
+        session.center_all(safety_ack=True, confirmation="CENTER ALL 12")
+        for joint in session.desired_deg:
+            session.desired_deg[joint] = 10.0
+
+        assert session._finish_rl_policy(None, False) is None
+        state = session.snapshot()
+
+        assert state["summary"]["armed_count"] == 12
+        assert bus.torque == set(range(1, 13))
+        assert all(
+            motor["desired_deg"] == 0.0
+            for leg in state["legs"]
+            for motor in leg["motors"]
+        )
+        assert "calibrated center" in state["last_event"].lower()
+        assert "torque holding" in state["last_event"].lower()
+
+        assert session._finish_rl_policy(None, True) is None
+        assert bus.torque == set()
+        assert "stopped" in session.last_event.lower()
+        assert "disarmed" in session.last_event.lower()
+
+        session.center_all(safety_ack=True, confirmation="CENTER ALL 12")
+        assert session._finish_rl_policy("IMU fault", False) == "IMU fault"
+        assert bus.torque == set()
+        assert "fault" in session.last_event.lower()
+        assert "disarmed" in session.last_event.lower()
+    finally:
+        session.close()
+
+
 def test_walk_stance_arms_missing_motors_and_targets_mirrored_angles() -> None:
     session, bus, _clock = _session()
     try:

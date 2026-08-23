@@ -26,7 +26,7 @@ from drobot_policy_runtime.sources import (
 
 JointReader = Callable[[], JointStateSample]
 TargetWriter = Callable[[np.ndarray, np.ndarray, float], None]
-Finalizer = Callable[[str | None], None]
+Finalizer = Callable[[str | None, bool], str | None]
 
 
 class _GuardedImuSource(ImuSource):
@@ -240,7 +240,9 @@ class RlPolicyController:
                 error = str(exc)
         finally:
             stopped = self._stop_event.is_set()
-            self._finalizer(error)
+            finalizer_error = self._finalizer(error, stopped)
+            if error is None and finalizer_error:
+                error = finalizer_error
             with self._lock:
                 self._state.update(
                     active=False,

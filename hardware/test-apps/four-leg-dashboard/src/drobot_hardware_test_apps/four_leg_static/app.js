@@ -598,9 +598,9 @@ function updateSummary(state) {
     : rl.active
       ? `${Number(rl.elapsed_s || 0).toFixed(1)} / ` +
         `${Number(rl.duration_s || 5).toFixed(1)} s / ` +
-        `${Number(rl.forward_m_s || 0).toFixed(2)} m/s / automatic disarm`
+        `${Number(rl.forward_m_s || 0).toFixed(2)} m/s / then center + hold`
       : `${Number(rl.control_hz || 60).toFixed(0)} Hz policy / ` +
-        `0.10 m/s maximum / automatic disarm`;
+        `0.10 m/s maximum / normal completion centers + holds`;
   startRl.disabled =
     !rl.available ||
     rl.active ||

@@ -826,7 +826,8 @@ class FourLegSession:
             self.heartbeat("rl-policy-local")
             self.fault = None
             self.last_event = (
-                "Supported 5-second RL walking test started; automatic disarm enabled"
+                "Supported 5-second RL walking test started; normal completion "
+                "will return to calibrated center"
             )
 
     def stop_rl_policy(self) -> None:
@@ -961,16 +962,34 @@ class FourLegSession:
                 updates[(profile.number, motor.name)] = degrees
             self.desired_deg.update(updates)
 
-    def _finish_rl_policy(self, error: str | None) -> None:
+    def _finish_rl_policy(self, error: str | None, stopped: bool) -> str | None:
         with self.lock:
-            self._disarm_all_locked(raise_errors=False)
+            result = error
             if error:
+                self._disarm_all_locked(raise_errors=False)
                 self.last_event = f"RL policy fault; all motors disarmed: {error}"
+            elif stopped:
+                self._disarm_all_locked(raise_errors=False)
+                self.last_event = "RL walking test stopped; all 12 motors disarmed"
             else:
-                self.last_event = "RL policy test complete; all 12 motors disarmed"
+                try:
+                    self._set_center_all_targets_locked(arm_missing=False)
+                except Exception as exc:
+                    self._disarm_all_locked(raise_errors=False)
+                    center_error = f"RL completion center-all failed: {exc}"
+                    self.last_event = f"{center_error}; all motors disarmed"
+                    result = center_error
+                else:
+                    self.heartbeat("rl-complete-center")
+                    self.fault = None
+                    self.last_event = (
+                        "RL policy test complete; all 12 motors returning to "
+                        "calibrated center with torque holding"
+                    )
             self.rl_feedback_position_rad = None
             self.rl_feedback_velocity_rad_s = None
             self.rl_feedback_time_s = None
+            return result
 
     def start_crawl_forward(
         self,
@@ -1195,6 +1214,26 @@ class FourLegSession:
             self.heartbeat("control-command")
             self.last_event = "All armed motors returning to zero"
 
+    def _set_center_all_targets_locked(self, *, arm_missing: bool) -> None:
+        for profile in self.profiles:
+            controller = self.controllers[profile.number]
+            for motor in profile.config.motors:
+                degrees_to_raw(
+                    0.0,
+                    motor,
+                    profile.calibration.motor(motor),
+                )
+                if motor.servo_id not in controller.armed_ids:
+                    if not arm_missing:
+                        raise RuntimeError(
+                            f"motor ID {motor.servo_id} is not armed for center hold"
+                        )
+                    state = controller.arm(motor)
+                    self.desired_deg[(profile.number, motor.name)] = state.degrees
+        for profile in self.profiles:
+            for motor in profile.config.motors:
+                self.desired_deg[(profile.number, motor.name)] = 0.0
+
     def center_all(
         self,
         *,
@@ -1209,22 +1248,7 @@ class FourLegSession:
         with self.lock:
             self._require_manual_control_locked()
             try:
-                for profile in self.profiles:
-                    controller = self.controllers[profile.number]
-                    for motor in profile.config.motors:
-                        degrees_to_raw(
-                            0.0,
-                            motor,
-                            profile.calibration.motor(motor),
-                        )
-                        if motor.servo_id not in controller.armed_ids:
-                            state = controller.arm(motor)
-                            self.desired_deg[(profile.number, motor.name)] = (
-                                state.degrees
-                            )
-                for profile in self.profiles:
-                    for motor in profile.config.motors:
-                        self.desired_deg[(profile.number, motor.name)] = 0.0
+                self._set_center_all_targets_locked(arm_missing=True)
             except Exception:
                 self._disarm_all_locked(raise_errors=False)
                 self.last_event = "Center-all failed; all motors disarmed"
