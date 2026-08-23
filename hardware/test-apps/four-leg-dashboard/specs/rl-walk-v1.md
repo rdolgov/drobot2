@@ -29,7 +29,7 @@ maps those actions to physical servo IDs 1-12 and converts them to bounded
 semantic joint angles. Policy targets are limited to a five-degree change per
 inference update before the existing servo-session ramp is applied.
 
-While the five-second policy is active, encoder position/speed uses the servo's
+While the policy is active, encoder position/speed uses the servo's
 single-transaction feedback command. Torque, voltage, temperature, current, and
 stall diagnostics are staggered across the 12 motors instead of reading every
 register for every motor in one policy update. Each motor remains covered by
@@ -59,10 +59,12 @@ preventing a jump from an assumed neutral pose.
 
 ## Completion and runtime stops
 
-Normal five-second completion stops policy output, keeps all 12 motors armed,
-and sets every desired semantic joint angle to calibrated zero. The existing
-bounded motion worker ramps into the same pose as **CENTER ALL 12**, then holds
-torque so the robot does not collapse when the trial timer ends.
+The operator selects a forward command from `0.000` through `0.100 m/s` and a
+duration from `1` through `60 seconds`. Normal timed completion stops policy
+output, keeps all 12 motors armed, and sets every desired semantic joint angle
+to calibrated zero. The existing bounded motion worker ramps into the same pose
+as **CENTER ALL 12**, then holds torque so the robot does not collapse when the
+trial timer ends.
 
 Every path below requests policy stop and disarms all 12 motors:
 

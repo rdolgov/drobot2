@@ -29,7 +29,7 @@ const gaitProgress = document.querySelector("#gaitProgress");
 const gaitDetail = document.querySelector("#gaitDetail");
 const rlPanel = document.querySelector("#rlPanel");
 const rlSpeed = document.querySelector("#rlSpeed");
-const rlSpeedValue = document.querySelector("#rlSpeedValue");
+const rlDuration = document.querySelector("#rlDuration");
 const rlSafetyAck = document.querySelector("#rlSafetyAck");
 const startRl = document.querySelector("#startRl");
 const stopRl = document.querySelector("#stopRl");
@@ -598,9 +598,9 @@ function updateSummary(state) {
     : rl.active
       ? `${Number(rl.elapsed_s || 0).toFixed(1)} / ` +
         `${Number(rl.duration_s || 5).toFixed(1)} s / ` +
-        `${Number(rl.forward_m_s || 0).toFixed(2)} m/s / then center + hold`
+        `${Number(rl.forward_m_s || 0).toFixed(3)} m/s / then center + hold`
       : `${Number(rl.control_hz || 60).toFixed(0)} Hz policy / ` +
-        `0.10 m/s maximum / normal completion centers + holds`;
+        `0-0.100 m/s / 1-60 s / completion centers + holds`;
   startRl.disabled =
     !rl.available ||
     rl.active ||
@@ -609,6 +609,7 @@ function updateSummary(state) {
     !rlSafetyAck.checked;
   stopRl.disabled = !rl.active;
   rlSpeed.disabled = rl.active;
+  rlDuration.disabled = rl.active;
   rlSafetyAck.disabled =
     !rl.available || rl.active || crawl.active || state.any_armed;
 
@@ -803,15 +804,21 @@ stopWalk.addEventListener("click", () => {
   postAction("/api/crawl-stop", {}, "Gait sequence stopped; all 12 motors disarmed");
 });
 
-rlSpeed.addEventListener("input", () => {
-  rlSpeedValue.textContent = `${Number(rlSpeed.value).toFixed(2)} m/s`;
-});
-
 rlSafetyAck.addEventListener("change", () => {
   if (latestState) updateSummary(latestState);
 });
 
 startRl.addEventListener("click", async () => {
+  const forwardSpeed = Number(rlSpeed.value);
+  const duration = Number(rlDuration.value);
+  if (!Number.isFinite(forwardSpeed) || forwardSpeed < 0 || forwardSpeed > 0.1) {
+    showNotice("RL speed must be between 0 and 0.100 m/s", true);
+    return;
+  }
+  if (!Number.isFinite(duration) || duration < 1 || duration > 60) {
+    showNotice("RL walk time must be between 1 and 60 seconds", true);
+    return;
+  }
   if (!rlSafetyAck.checked) {
     showNotice("Confirm support, foot clearance, and the physical cutoff", true);
     return;
@@ -823,11 +830,12 @@ startRl.addEventListener("click", async () => {
   await postAction(
     "/api/rl-start",
     {
-      forward_m_s: Number(rlSpeed.value),
+      forward_m_s: forwardSpeed,
+      duration_s: duration,
       safety_ack: true,
       confirmation: "START SUPPORTED RL TEST",
     },
-    "Five-second supported RL walking test started",
+    `${duration}-second supported RL walk started at ${forwardSpeed.toFixed(3)} m/s`,
   );
   rlSafetyAck.checked = false;
   if (latestState) updateSummary(latestState);

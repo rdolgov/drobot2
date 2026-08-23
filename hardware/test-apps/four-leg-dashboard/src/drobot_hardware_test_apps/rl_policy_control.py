@@ -98,7 +98,9 @@ class RlPolicyController:
     """Own policy/IMU state while the parent session remains motor-bus owner."""
 
     CONTROL_HZ = 60.0
-    MAX_DURATION_S = 5.0
+    DEFAULT_DURATION_S = 5.0
+    MIN_DURATION_S = 1.0
+    MAX_DURATION_S = 60.0
     MAX_FORWARD_M_S = 0.10
 
     def __init__(
@@ -127,8 +129,11 @@ class RlPolicyController:
             "error": None,
             "model": self.model_path.name,
             "control_hz": self.CONTROL_HZ,
-            "duration_s": self.MAX_DURATION_S,
+            "duration_s": self.DEFAULT_DURATION_S,
             "forward_m_s": 0.03,
+            "min_duration_s": self.MIN_DURATION_S,
+            "max_duration_s": self.MAX_DURATION_S,
+            "max_forward_m_s": self.MAX_FORWARD_M_S,
             "elapsed_s": 0.0,
             "imu": None,
             "targets": [],
@@ -145,7 +150,7 @@ class RlPolicyController:
             state = dict(self._state)
             if state["active"] and self._started_at is not None:
                 state["elapsed_s"] = min(
-                    self.MAX_DURATION_S,
+                    float(state["duration_s"]),
                     max(0.0, time.monotonic() - self._started_at),
                 )
             state["imu"] = None if state["imu"] is None else dict(state["imu"])
@@ -173,12 +178,32 @@ class RlPolicyController:
             self._state.update(status="ready", error=None)
         return sample
 
-    def start(self, forward_m_s: float, initial_target_rad: np.ndarray) -> None:
+    @classmethod
+    def validate_request(
+        cls,
+        forward_m_s: float,
+        duration_s: float,
+    ) -> tuple[float, float]:
         speed = float(forward_m_s)
-        if not 0.0 <= speed <= self.MAX_FORWARD_M_S:
+        if not 0.0 <= speed <= cls.MAX_FORWARD_M_S:
             raise ValueError(
-                f"RL forward speed must be in [0, {self.MAX_FORWARD_M_S:.2f}] m/s"
+                f"RL forward speed must be in [0, {cls.MAX_FORWARD_M_S:.2f}] m/s"
             )
+        duration = float(duration_s)
+        if not cls.MIN_DURATION_S <= duration <= cls.MAX_DURATION_S:
+            raise ValueError(
+                "RL walk duration must be in "
+                f"[{cls.MIN_DURATION_S:.0f}, {cls.MAX_DURATION_S:.0f}] seconds"
+            )
+        return speed, duration
+
+    def start(
+        self,
+        forward_m_s: float,
+        duration_s: float,
+        initial_target_rad: np.ndarray,
+    ) -> None:
+        speed, duration = self.validate_request(forward_m_s, duration_s)
         initial = np.asarray(initial_target_rad, dtype=np.float32)
         if initial.shape != (12,) or not np.all(np.isfinite(initial)):
             raise ValueError("RL start requires 12 finite measured joint positions")
@@ -199,13 +224,14 @@ class RlPolicyController:
                 status="running",
                 error=None,
                 forward_m_s=speed,
+                duration_s=duration,
                 elapsed_s=0.0,
                 targets=[],
                 motor_output_enabled=True,
             )
             self._thread = threading.Thread(
                 target=self._run,
-                args=(speed, initial.copy()),
+                args=(speed, duration, initial.copy()),
                 name="drobot-rl-policy",
                 daemon=True,
             )
@@ -220,7 +246,12 @@ class RlPolicyController:
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=timeout_s)
 
-    def _run(self, speed: float, initial_target_rad: np.ndarray) -> None:
+    def _run(
+        self,
+        speed: float,
+        duration_s: float,
+        initial_target_rad: np.ndarray,
+    ) -> None:
         error: str | None = None
         try:
             assert self._policy is not None
@@ -234,7 +265,7 @@ class RlPolicyController:
                 control_hz=self.CONTROL_HZ,
                 initial_target_rad=initial_target_rad,
             )
-            loop.run(duration_s=self.MAX_DURATION_S, stop_event=self._stop_event)
+            loop.run(duration_s=duration_s, stop_event=self._stop_event)
         except Exception as exc:
             if not self._stop_event.is_set():
                 error = str(exc)
@@ -250,7 +281,7 @@ class RlPolicyController:
                     error=error,
                     motor_output_enabled=False,
                     elapsed_s=min(
-                        self.MAX_DURATION_S,
+                        duration_s,
                         max(
                             0.0,
                             time.monotonic() - (self._started_at or time.monotonic()),

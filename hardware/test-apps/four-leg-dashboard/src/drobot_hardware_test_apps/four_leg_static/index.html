@@ -108,11 +108,12 @@
             <p class="eyebrow">REAL IMU + LIVE JOINT FEEDBACK</p>
             <h2 id="rlTitle">RL walking policy</h2>
             <p>
-              Runs the selected V18 ONNX policy for five seconds, then
-              returns all 12 joints to calibrated center and holds torque for a
-              stable stance. Faults and the explicit stop button still disarm.
-              The 8080 process remains the only servo-bus owner and applies
-              position, rate, tilt, telemetry, and model-output guards.
+              Runs the selected V18 ONNX policy at the requested speed and
+              duration, then returns all 12 joints to calibrated center and
+              holds torque for a stable stance. Faults and the explicit stop
+              button still disarm. The 8080 process remains the only servo-bus
+              owner and applies position, rate, tilt, telemetry, and
+              model-output guards.
             </p>
             <div class="rl-metrics">
               <span>Status <b id="rlStatus">CHECKING</b></span>
@@ -122,10 +123,21 @@
             </div>
           </div>
           <div class="rl-controls">
-            <label for="rlSpeed">Requested forward speed</label>
-            <div class="rl-speed-row">
-              <input id="rlSpeed" type="range" min="0" max="0.10" step="0.01" value="0.03">
-              <output id="rlSpeedValue">0.03 m/s</output>
+            <div class="rl-parameter-grid">
+              <label for="rlSpeed">
+                <span>Forward speed</span>
+                <span class="rl-number-input">
+                  <input id="rlSpeed" type="number" inputmode="decimal" min="0" max="0.10" step="0.001" value="0.030">
+                  <small>m/s</small>
+                </span>
+              </label>
+              <label for="rlDuration">
+                <span>Walk time</span>
+                <span class="rl-number-input">
+                  <input id="rlDuration" type="number" inputmode="decimal" min="1" max="60" step="1" value="5">
+                  <small>seconds</small>
+                </span>
+              </label>
             </div>
             <label class="rl-ack">
               <input id="rlSafetyAck" type="checkbox">
@@ -133,7 +145,7 @@
             </label>
             <div class="rl-buttons">
               <button class="rl-start-button" id="startRl" type="button">
-                START 5-SECOND RL TEST
+                START RL WALK
               </button>
               <button class="gait-stop-button" id="stopRl" type="button">
                 STOP RL + DISARM
