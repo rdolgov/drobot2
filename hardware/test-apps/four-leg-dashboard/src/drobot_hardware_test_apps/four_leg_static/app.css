@@ -202,6 +202,7 @@ h1 {
 .clear-errors-button,
 .walk-button,
 .gait-stop-button,
+.rl-start-button,
 .leg-actions button,
 .arm-button,
 .set-button,
@@ -423,6 +424,143 @@ main {
 
 .gait-panel.active .gait-state span {
   color: var(--amber);
+}
+
+.rl-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(370px, 0.8fr);
+  gap: 26px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 21px;
+  border: 1px solid rgba(95, 211, 226, 0.45);
+  border-radius: 14px;
+  background:
+    linear-gradient(110deg, rgba(95, 211, 226, 0.09), transparent 48%),
+    #101d20;
+  box-shadow: var(--shadow);
+}
+
+.rl-panel.active {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 1px rgba(255, 196, 92, 0.18), var(--shadow);
+}
+
+.rl-copy h2 {
+  margin-bottom: 5px;
+  font-size: 1.25rem;
+}
+
+.rl-copy > p:last-of-type {
+  max-width: 760px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.rl-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 13px;
+}
+
+.rl-metrics span {
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.rl-metrics b {
+  display: block;
+  overflow: hidden;
+  margin-top: 3px;
+  color: #dce8e5;
+  font-size: 0.69rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rl-controls {
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  background: rgba(4, 11, 13, 0.46);
+}
+
+.rl-controls > label:first-child {
+  color: #dce8e5;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.rl-speed-row {
+  display: grid;
+  grid-template-columns: 1fr 74px;
+  gap: 10px;
+  align-items: center;
+  margin: 9px 0 12px;
+}
+
+.rl-speed-row input {
+  width: 100%;
+}
+
+.rl-speed-row output {
+  color: var(--cyan);
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-align: right;
+}
+
+.rl-ack {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 8px;
+  align-items: start;
+  color: #c8d5d2;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.rl-ack input {
+  width: 17px;
+  height: 17px;
+  margin: 1px 0 0;
+}
+
+.rl-buttons {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rl-start-button,
+.rl-buttons .gait-stop-button {
+  min-height: 49px;
+  padding: 0 15px;
+  font-size: 0.7rem;
+  font-weight: 950;
+  letter-spacing: 0.055em;
+}
+
+.rl-start-button {
+  border-color: var(--cyan);
+  background: var(--cyan);
+  color: #06191c;
+}
+
+.rl-controls > small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.64rem;
+  text-align: center;
 }
 
 .alert-panel {
@@ -1212,6 +1350,10 @@ footer {
     grid-template-columns: 1fr;
   }
 
+  .rl-panel {
+    grid-template-columns: 1fr;
+  }
+
   .motor-row {
     grid-template-columns: minmax(145px, 1fr) 130px minmax(250px, 1.6fr);
   }
@@ -1289,6 +1431,14 @@ footer {
     grid-template-columns: 1fr;
   }
 
+  .rl-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .rl-buttons {
+    grid-template-columns: 1fr;
+  }
+
   .metrics {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1363,6 +1513,10 @@ footer {
   }
 
   .corner-map {
+    grid-template-columns: 1fr;
+  }
+
+  .rl-metrics {
     grid-template-columns: 1fr;
   }
 

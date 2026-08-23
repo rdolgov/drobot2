@@ -5,6 +5,8 @@ $ErrorActionPreference = "Stop"
 $testAppsRoot = $PSScriptRoot
 $oneLegRoot = Join-Path $testAppsRoot "one-leg-testbed"
 $dashboardRoot = Join-Path $testAppsRoot "four-leg-dashboard"
+$repoRoot = Split-Path -Parent (Split-Path -Parent $testAppsRoot)
+$policyRoot = Join-Path $repoRoot "onboard\policy-runtime"
 $venvRoot = Join-Path $oneLegRoot ".venv"
 $python = Join-Path $venvRoot "Scripts\python.exe"
 
@@ -23,6 +25,10 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Installing the Drobot hardware test applications."
+& $python -m pip install -e $policyRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "Walking-policy runtime installation failed."
+}
 & $python -m pip install -e "${dashboardRoot}[dev]"
 if ($LASTEXITCODE -ne 0) {
     throw "Hardware test-app installation failed."

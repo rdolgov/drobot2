@@ -16,6 +16,7 @@ fi
 source "${VENV_DIR}/bin/activate"
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install --editable "${REPO_ROOT}/hardware/test-apps/one-leg-testbed"
+python -m pip install --editable "${REPO_ROOT}/onboard/policy-runtime[bno085]"
 python -m pip install --editable "${REPO_ROOT}/hardware/test-apps/four-leg-dashboard"
 
 echo

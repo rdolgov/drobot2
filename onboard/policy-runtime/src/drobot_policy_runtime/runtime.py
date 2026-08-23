@@ -88,6 +88,7 @@ class WalkingPolicyLoop:
         *,
         command: PolicyCommand = PolicyCommand(),
         control_hz: float = 60.0,
+        initial_target_rad: np.ndarray | None = None,
     ) -> None:
         if not 10.0 <= control_hz <= 200.0:
             raise ValueError("control_hz must be in [10, 200]")
@@ -98,7 +99,14 @@ class WalkingPolicyLoop:
         self.command = command
         self.control_hz = control_hz
         self.previous_action = np.zeros(12, dtype=np.float32)
-        self.previous_target_rad = DEFAULT_JOINT_POSITION_RAD.copy()
+        initial_target = (
+            DEFAULT_JOINT_POSITION_RAD
+            if initial_target_rad is None
+            else np.asarray(initial_target_rad, dtype=np.float32)
+        )
+        if initial_target.shape != (12,) or not np.all(np.isfinite(initial_target)):
+            raise ValueError("initial_target_rad must contain 12 finite values")
+        self.previous_target_rad = initial_target.copy()
 
     def _observation(self, elapsed_s: float) -> np.ndarray:
         imu = self.imu_source.read()

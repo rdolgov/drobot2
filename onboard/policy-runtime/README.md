@@ -1,7 +1,8 @@
 # Raspberry Pi walking-policy runtime
 
 This package runs the selected V18 rectangular-shoe policy on a 64-bit
-Raspberry Pi with ONNX Runtime. It is intentionally print-only: it reads the
+Raspberry Pi with ONNX Runtime. Its standalone CLI and port 8090 UI are
+intentionally print-only: they read the
 BNO085, assembles the exact 50-value observation, runs deterministic inference
 at 60 Hz, converts the 12 normalized actions into bounded/rate-limited joint
 targets, and prints the targets with physical servo IDs. It never opens the
@@ -16,8 +17,8 @@ The shared code is split into replaceable interfaces:
 - `JointStateSource`: neutral placeholder now, servo telemetry or ROS
   `sensor_msgs/JointState` later;
 - `OnnxWalkingPolicy`: portable deterministic policy inference;
-- `MotorSink`: JSON printing now, a separately guarded motor-command publisher
-  later.
+- `MotorSink`: JSON printing in the standalone tools, or the guarded callback
+  used by the single motor-owning port 8080 dashboard.
 
 ## Model
 
@@ -35,9 +36,10 @@ ordering. The policy consumes:
 4. joint position error, joint velocity, and previous action (36).
 
 IMU data alone is not sufficient for safe closed-loop motor control. The
-current script supplies the trained neutral joint pose and zero joint velocity
-only to exercise the sensor-to-policy-to-print pipeline. Real motor actuation
-must first replace `NeutralJointStateSource` with fresh 12-joint feedback.
+standalone tools supply the trained neutral joint pose and zero joint velocity
+only to exercise the sensor-to-policy-to-print pipeline. The guarded port 8080
+rollout instead provides fresh calibrated 12-joint position/velocity feedback;
+see the four-leg dashboard's `specs/rl-walk-v1.md`.
 
 ## Install on `pi5-dog`
 

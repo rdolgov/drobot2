@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "drobot-one-leg-testbed==0.1.0",
+  "drobot-policy-runtime==0.1.0",
 ]
 
 [project.optional-dependencies]
