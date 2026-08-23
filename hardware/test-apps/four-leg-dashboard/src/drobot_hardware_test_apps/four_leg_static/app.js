@@ -37,7 +37,10 @@ const rlStatus = document.querySelector("#rlStatus");
 const rlModel = document.querySelector("#rlModel");
 const rlGravity = document.querySelector("#rlGravity");
 const rlTargets = document.querySelector("#rlTargets");
+const rlRecording = document.querySelector("#rlRecording");
 const rlDetail = document.querySelector("#rlDetail");
+const refreshRecordings = document.querySelector("#refreshRecordings");
+const recordingsList = document.querySelector("#recordingsList");
 const resetPower = document.querySelector("#resetPower");
 const powerLine = document.querySelector("#powerLine");
 const legNodes = new Map();
@@ -118,6 +121,7 @@ function isStateBackedError(message) {
     text.includes("enable feature") ||
     text.includes("rl control") ||
     text.includes("rl policy") ||
+    text.includes("recording") ||
     text.includes("joint feedback")
   );
 }
@@ -181,7 +185,11 @@ function addRecentError(message, createdAt = new Date().toISOString()) {
 
 function refreshRecentErrors(state) {
   const previous = JSON.stringify(recentErrors);
-  const activeMessages = [state?.fault, state?.rl_policy?.error]
+  const activeMessages = [
+    state?.fault,
+    state?.rl_policy?.error,
+    state?.rl_policy?.recording?.error,
+  ]
     .filter((message) => typeof message === "string" && message.trim())
     .map(normalizeErrorMessage);
   const activeSet = new Set(activeMessages);
@@ -268,6 +276,131 @@ async function postAction(path, body, successMessage) {
       showNotice(error.message, true);
     }
   }
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes) || 0;
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderRecordings(recordings) {
+  recordingsList.innerHTML = "";
+  if (!recordings.length) {
+    const empty = document.createElement("small");
+    empty.textContent = "No RL trials recorded yet.";
+    recordingsList.appendChild(empty);
+    return;
+  }
+  recordings.forEach((recording) => {
+    const row = document.createElement("article");
+    row.className = "recording-row";
+    const title = document.createElement("div");
+    title.className = "recording-copy";
+    const name = document.createElement("strong");
+    name.textContent = recording.label || recording.recording_id;
+    const details = document.createElement("small");
+    const created = recording.created_at
+      ? new Date(recording.created_at).toLocaleString()
+      : "Unknown time";
+    details.textContent =
+      `${created} · ${String(recording.status).toUpperCase()} · ` +
+      `${Number(recording.sample_count).toLocaleString()} samples · ` +
+      `${Number(recording.forward_m_s || 0).toFixed(3)} m/s · ` +
+      `${formatBytes(recording.archive_bytes)}`;
+    title.append(name, details);
+
+    const actions = document.createElement("div");
+    actions.className = "recording-actions";
+    const download = document.createElement("button");
+    download.type = "button";
+    download.textContent = recording.archive_ready ? "DOWNLOAD" : "FINALIZING";
+    download.disabled = !recording.archive_ready;
+    download.addEventListener("click", () => downloadRecording(recording));
+    const rename = document.createElement("button");
+    rename.type = "button";
+    rename.textContent = "NAME";
+    rename.addEventListener("click", () => renameRecording(recording));
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "recording-delete";
+    remove.textContent = "DELETE";
+    remove.addEventListener("click", () => deleteRecording(recording));
+    actions.append(download, rename, remove);
+    row.append(title, actions);
+    recordingsList.appendChild(row);
+  });
+}
+
+async function loadRecordings() {
+  refreshRecordings.disabled = true;
+  try {
+    const payload = await api("/api/recordings");
+    renderRecordings(Array.isArray(payload.recordings) ? payload.recordings : []);
+  } catch (error) {
+    recordingsList.innerHTML = "";
+    const message = document.createElement("small");
+    message.textContent = `Could not load recordings: ${error.message}`;
+    recordingsList.appendChild(message);
+  } finally {
+    refreshRecordings.disabled = false;
+  }
+}
+
+async function downloadRecording(recording) {
+  try {
+    const response = await fetch(
+      `/api/recordings/download?id=${encodeURIComponent(recording.recording_id)}`,
+      {
+        headers: {
+          "X-Control-Token": token,
+          "X-Drobot-Client-Version": "2",
+        },
+        cache: "no-store",
+      },
+    );
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(payload.error || `Download failed (${response.status})`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${recording.recording_id}.zip`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    showNotice(error.message, true);
+  }
+}
+
+async function renameRecording(recording) {
+  const label = window.prompt(
+    "Recording name (leave blank to use its ID):",
+    recording.label || "",
+  );
+  if (label === null) return;
+  await postAction(
+    "/api/recordings/rename",
+    { recording_id: recording.recording_id, label },
+    "Recording name saved",
+  );
+  await loadRecordings();
+}
+
+async function deleteRecording(recording) {
+  const name = recording.label || recording.recording_id;
+  if (!window.confirm(`Permanently delete recording “${name}”?`)) return;
+  await postAction(
+    "/api/recordings/delete",
+    { recording_id: recording.recording_id },
+    "Recording deleted",
+  );
+  await loadRecordings();
 }
 
 function createMotorRow(leg, motor) {
@@ -593,23 +726,31 @@ function updateSummary(state) {
     ? gravity.map((value) => Number(value).toFixed(2)).join(" / ")
     : "Waiting";
   rlTargets.textContent = `${Array.isArray(rl.targets) ? rl.targets.length : 0} / 12`;
+  const recorder = rl.recording || {};
+  rlRecording.textContent = recorder.active
+    ? `REC ${String(recorder.recording_id || "").slice(-8)}`
+    : recorder.error
+      ? "ERROR"
+      : "AUTO / READY";
   const temperatureVerification = Array.isArray(rl.temperature_verification)
     ? rl.temperature_verification[0]
     : null;
   rlDetail.textContent = rl.error
     ? `FAULT: ${rl.error}`
-    : temperatureVerification
-      ? `VERIFYING TEMP ID ${temperatureVerification.motor_id}: ` +
-        `${temperatureVerification.temperature_c} C / ` +
-        `${Number(temperatureVerification.elapsed_s).toFixed(1)} / ` +
-        `${Number(temperatureVerification.required_s).toFixed(1)} s / ` +
-        `${temperatureVerification.high_sample_count} readings`
-      : rl.active
-        ? `${Number(rl.elapsed_s || 0).toFixed(1)} / ` +
-          `${Number(rl.duration_s || 5).toFixed(1)} s / ` +
-          `${Number(rl.forward_m_s || 0).toFixed(3)} m/s / then center + hold`
-        : `${Number(rl.control_hz || 60).toFixed(0)} Hz policy / ` +
-          `0-0.100 m/s / 1-60 s / completion centers + holds`;
+    : recorder.error
+      ? `RECORDING ERROR (walking control unchanged): ${recorder.error}`
+      : temperatureVerification
+        ? `VERIFYING TEMP ID ${temperatureVerification.motor_id}: ` +
+          `${temperatureVerification.temperature_c} C / ` +
+          `${Number(temperatureVerification.elapsed_s).toFixed(1)} / ` +
+          `${Number(temperatureVerification.required_s).toFixed(1)} s / ` +
+          `${temperatureVerification.high_sample_count} readings`
+        : rl.active
+          ? `${Number(rl.elapsed_s || 0).toFixed(1)} / ` +
+            `${Number(rl.duration_s || 5).toFixed(1)} s / ` +
+            `${Number(rl.forward_m_s || 0).toFixed(3)} m/s / then center + hold`
+          : `${Number(rl.control_hz || 60).toFixed(0)} Hz policy / ` +
+            `0-0.100 m/s / 1-60 s / completion centers + holds`;
   startRl.disabled =
     !rl.available ||
     rl.active ||
@@ -738,11 +879,14 @@ disarmAll.addEventListener("click", () => {
 
 settingsButton.addEventListener("click", () => {
   settingsDialog.showModal();
+  loadRecordings();
 });
 
 settingsClose.addEventListener("click", () => {
   settingsDialog.close();
 });
+
+refreshRecordings.addEventListener("click", loadRecordings);
 
 clearErrorLog.addEventListener("click", () => {
   recentErrors = [];

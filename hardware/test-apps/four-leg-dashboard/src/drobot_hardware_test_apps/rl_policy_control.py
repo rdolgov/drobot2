@@ -6,7 +6,7 @@ import math
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 import numpy as np
 from drobot_policy_runtime.contract import (
@@ -15,7 +15,13 @@ from drobot_policy_runtime.contract import (
     JOINT_UPPER_RAD,
 )
 from drobot_policy_runtime.policy import OnnxWalkingPolicy
-from drobot_policy_runtime.runtime import MotorSink, PolicyCommand, WalkingPolicyLoop
+from drobot_policy_runtime.recording import TrialRecorder, sha256_file
+from drobot_policy_runtime.runtime import (
+    MotorSink,
+    PolicyCommand,
+    PolicyStepSample,
+    WalkingPolicyLoop,
+)
 from drobot_policy_runtime.sources import (
     Bno085ImuSource,
     ImuSample,
@@ -110,12 +116,20 @@ class RlPolicyController:
         joint_reader: JointReader,
         target_writer: TargetWriter,
         finalizer: Finalizer,
+        recorder: TrialRecorder | None = None,
+        recording_metadata: Mapping[str, Any] | None = None,
     ) -> None:
         self.model_path = model_path.resolve()
+        self.model_sha256 = sha256_file(self.model_path)
+        self.model_contract_path = self.model_path.with_suffix(".json")
+        self.model_contract_sha256 = sha256_file(self.model_contract_path)
         self.imu_axis_map = imu_axis_map
         self._joint_reader = joint_reader
         self._target_writer = target_writer
         self._finalizer = finalizer
+        self._recorder = recorder
+        self._recording_metadata = dict(recording_metadata or {})
+        self._recording_start_error: str | None = None
         self._policy: OnnxWalkingPolicy | None = None
         self._imu: Bno085ImuSource | None = None
         self._lock = threading.RLock()
@@ -138,6 +152,11 @@ class RlPolicyController:
             "imu": None,
             "targets": [],
             "motor_output_enabled": False,
+            "recording": (
+                recorder.status()
+                if recorder is not None
+                else {"active": False, "available": False}
+            ),
         }
 
     @property
@@ -155,6 +174,11 @@ class RlPolicyController:
                 )
             state["imu"] = None if state["imu"] is None else dict(state["imu"])
             state["targets"] = [dict(target) for target in state["targets"]]
+            if self._recorder is not None:
+                recording = self._recorder.status()
+                if recording.get("error") is None and self._recording_start_error:
+                    recording["error"] = self._recording_start_error
+                state["recording"] = recording
             return state
 
     def prepare(self) -> ImuSample:
@@ -229,6 +253,44 @@ class RlPolicyController:
                 targets=[],
                 motor_output_enabled=True,
             )
+            if self._recorder is not None:
+                try:
+                    recording_id = self._recorder.start_trial(
+                        {
+                            **self._recording_metadata,
+                            "trial": {
+                                "forward_m_s": speed,
+                                "lateral_m_s": 0.0,
+                                "yaw_rad_s": 0.0,
+                                "duration_s": duration,
+                                "control_hz": self.CONTROL_HZ,
+                                "start_monotonic_s": self._started_at,
+                                "initial_joint_position_rad": initial.tolist(),
+                            },
+                            "policy": {
+                                "model_file": self.model_path.name,
+                                "model_path": str(self.model_path),
+                                "model_sha256": self.model_sha256,
+                                "contract_file": (
+                                    self.model_contract_path.name
+                                    if self.model_contract_path.is_file()
+                                    else None
+                                ),
+                                "contract_sha256": self.model_contract_sha256,
+                            },
+                        }
+                    )
+                    self._state["recording"] = {
+                        **self._recorder.status(),
+                        "recording_id": recording_id,
+                    }
+                    self._recording_start_error = None
+                except Exception as exc:
+                    self._recording_start_error = str(exc)
+                    self._state["recording"] = {
+                        "active": False,
+                        "error": self._recording_start_error,
+                    }
             self._thread = threading.Thread(
                 target=self._run,
                 args=(speed, duration, initial.copy()),
@@ -264,6 +326,7 @@ class RlPolicyController:
                 command=PolicyCommand(forward_m_s=speed),
                 control_hz=self.CONTROL_HZ,
                 initial_target_rad=initial_target_rad,
+                step_observer=self._record_step,
             )
             loop.run(duration_s=duration_s, stop_event=self._stop_event)
         except Exception as exc:
@@ -274,6 +337,23 @@ class RlPolicyController:
             finalizer_error = self._finalizer(error, stopped)
             if error is None and finalizer_error:
                 error = finalizer_error
+            status = "fault" if error else "stopped" if stopped else "complete"
+            if self._recorder is not None:
+                self._recorder.finish_trial(
+                    status=status,
+                    error=error,
+                    details={
+                        "stopped_by_operator": stopped,
+                        "elapsed_s": min(
+                            duration_s,
+                            max(
+                                0.0,
+                                time.monotonic()
+                                - (self._started_at or time.monotonic()),
+                            ),
+                        ),
+                    },
+                )
             with self._lock:
                 self._state.update(
                     active=False,
@@ -288,6 +368,68 @@ class RlPolicyController:
                         ),
                     ),
                 )
+
+    def _record_step(self, sample: PolicyStepSample) -> None:
+        if self._recorder is None:
+            return
+        imu = sample.imu
+        joints = sample.joints
+        self._recorder.record_sample(
+            {
+                "sequence": sample.sequence,
+                "elapsed_s": sample.elapsed_s,
+                "monotonic_time_s": sample.monotonic_time_s,
+                "sensor_time_s": {
+                    "imu": imu.monotonic_time_s,
+                    "joints": joints.monotonic_time_s,
+                },
+                "command": {
+                    "forward_m_s": sample.command.forward_m_s,
+                    "lateral_m_s": sample.command.lateral_m_s,
+                    "yaw_rad_s": sample.command.yaw_rad_s,
+                },
+                "gait_clock": {
+                    "sin": sample.phase_sin,
+                    "cos": sample.phase_cos,
+                },
+                "imu": {
+                    "angular_velocity_body_rad_s": (
+                        imu.angular_velocity_body_rad_s.tolist()
+                    ),
+                    "projected_gravity_body": imu.projected_gravity_body.tolist(),
+                    "linear_acceleration_body_m_s2": (
+                        imu.linear_acceleration_body_m_s2.tolist()
+                    ),
+                },
+                "joints": {
+                    "position_rad": joints.position_rad.tolist(),
+                    "velocity_rad_s": joints.velocity_rad_s.tolist(),
+                },
+                "observation": sample.observation.tolist(),
+                "action": sample.action.tolist(),
+                "requested_target_rad": sample.requested_target_rad.tolist(),
+                "rate_limited_target_rad": (
+                    sample.rate_limited_target_rad.tolist()
+                ),
+            }
+        )
+
+    def record_diagnostic(self, payload: Mapping[str, Any]) -> None:
+        self.record_event("motor_diagnostic", payload)
+
+    def record_event(
+        self,
+        event_type: str,
+        payload: Mapping[str, Any] | None = None,
+    ) -> None:
+        if self._recorder is not None:
+            self._recorder.record_event(
+                {
+                    "type": event_type,
+                    "monotonic_time_s": time.monotonic(),
+                    **dict(payload or {}),
+                }
+            )
 
     def _update_imu(self, sample: ImuSample) -> None:
         with self._lock:

@@ -20,6 +20,12 @@ The shared code is split into replaceable interfaces:
 - `MotorSink`: JSON printing in the standalone tools, or the guarded callback
   used by the single motor-owning port 8080 dashboard.
 
+`WalkingPolicyLoop` also accepts a passive policy-step observer. The port 8080
+dashboard uses it to queue complete real-walk samples for a background JSONL
+writer; filesystem work never runs in the policy thread. See
+`hardware/test-apps/four-leg-dashboard/docs/rl-recordings.md` for the trial
+format and the planned ROS 2/rosbag2 replacement boundary.
+
 ## Model
 
 The deployable model is

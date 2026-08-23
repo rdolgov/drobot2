@@ -121,6 +121,7 @@
               <span>Model <b id="rlModel">model_299.onnx</b></span>
               <span>IMU gravity <b id="rlGravity">Waiting</b></span>
               <span>Targets <b id="rlTargets">0 / 12</b></span>
+              <span>Recorder <b id="rlRecording">AUTO / READY</b></span>
             </div>
           </div>
           <div class="rl-controls">
@@ -256,6 +257,25 @@
             <small>Errors clear automatically; remove them immediately if needed.</small>
           </div>
         </div>
+        <section class="recordings-panel" aria-labelledby="recordingsTitle">
+          <div class="recordings-header">
+            <div>
+              <p class="eyebrow">AUTOMATIC RL DATA CAPTURE</p>
+              <h3 id="recordingsTitle">Trial recordings</h3>
+            </div>
+            <button class="secondary-button" id="refreshRecordings" type="button">
+              REFRESH
+            </button>
+          </div>
+          <p>
+            Every RL walk records synchronized IMU, joint feedback, policy
+            observations/actions, motor targets, and diagnostics. Download a
+            ZIP for analysis or future simulation fitting.
+          </p>
+          <div class="recordings-list" id="recordingsList">
+            <small>Open Settings to load recordings.</small>
+          </div>
+        </section>
       </dialog>
 
       <footer>

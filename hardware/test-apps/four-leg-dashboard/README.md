@@ -441,6 +441,17 @@ replace them, and the browser retains the list across page refreshes. Open
 resolved. Repeated identical messages are stored once so a disconnected server
 does not flood the panel.
 
+## Automatic RL trial recordings
+
+Every port-8080 RL walk now records the exact policy inputs and outputs plus
+lower-rate motor diagnostics without adding disk access to the 60 Hz control
+thread. Open **Settings → Trial recordings** to name, download, or delete a
+finalized trial. Data is stored under
+`~/.local/share/drobot2/rl-recordings` by default; pass `--recordings-dir` to
+change it. The format, field meanings, dropped-sample behavior, analysis uses,
+and future ROS 2/rosbag2 boundary are documented in
+[`docs/rl-recordings.md`](docs/rl-recordings.md).
+
 ## Understanding “power OK”
 
 The dashboard uses attention thresholds from `../../robot-runtime/four-leg.toml`:

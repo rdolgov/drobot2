@@ -21,6 +21,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 from drobot_leg_testbed.controller import LegController
 from drobot_leg_testbed.model import (
@@ -50,6 +51,9 @@ REPO_ROOT = HARDWARE_ROOT.parent
 DEFAULT_MANIFEST = HARDWARE_ROOT / "robot-runtime" / "four-leg.toml"
 DEFAULT_RL_MODEL = (
     REPO_ROOT / "onboard" / "models" / "parallel-walking-v18" / "model_299.onnx"
+)
+DEFAULT_RECORDINGS_DIR = (
+    Path.home() / ".local" / "share" / "drobot2" / "rl-recordings"
 )
 STATIC_DIR = Path(__file__).with_name("four_leg_static")
 LAN_CLIENT_VERSION = "2"
@@ -417,6 +421,7 @@ class FourLegSession:
         persist_calibration: bool = True,
         rl_model_path: Path | None = None,
         rl_imu_axis_map: str = "+x,+y,+z",
+        recordings_dir: Path = DEFAULT_RECORDINGS_DIR,
     ):
         self.dashboard = dashboard
         self.bus = bus
@@ -470,6 +475,7 @@ class FourLegSession:
         self.stop_event = threading.Event()
         self.worker: threading.Thread | None = None
         self.rl_controller: Any | None = None
+        self.rl_recorder: Any | None = None
         self.rl_motor_order: tuple[
             tuple[LegProfile, MotorConfig, LegController], ...
         ] = ()
@@ -485,6 +491,10 @@ class FourLegSession:
                 ACTION_NAMES,
                 SERVO_ID_BY_ACTION_NAME,
             )
+            from drobot_policy_runtime.recording import (
+                JsonlTrialRecorder,
+                sha256_file,
+            )
 
             from drobot_hardware_test_apps.rl_policy_control import RlPolicyController
 
@@ -496,12 +506,68 @@ class FourLegSession:
             self.rl_motor_order = tuple(
                 motor_by_id[SERVO_ID_BY_ACTION_NAME[name]] for name in ACTION_NAMES
             )
+            self.rl_recorder = JsonlTrialRecorder(recordings_dir)
+            recording_metadata = {
+                "robot": {
+                    "name": "drobot2",
+                    "joint_order": list(ACTION_NAMES),
+                    "servo_ids": [
+                        SERVO_ID_BY_ACTION_NAME[name] for name in ACTION_NAMES
+                    ],
+                    "legs": [
+                        {
+                            "number": profile.number,
+                            "label": profile.label,
+                            "corner": profile.corner,
+                            "profile_path": str(profile.config_path),
+                            "profile_sha256": sha256_file(profile.config_path),
+                            "calibration_path": str(profile.calibration_path),
+                            "calibration_sha256": sha256_file(
+                                profile.calibration_path
+                            ),
+                        }
+                        for profile in self.profiles
+                    ],
+                },
+                "sensors": {
+                    "imu": "BNO085",
+                    "imu_axis_map": rl_imu_axis_map,
+                    "joint_feedback": "ST3215 encoder telemetry",
+                },
+                "data_contract": {
+                    "observation_size": 50,
+                    "action_size": 12,
+                    "observation_order": [
+                        "command_forward_m_s",
+                        "command_lateral_m_s",
+                        "command_yaw_rad_s",
+                        "gait_phase_sin",
+                        "gait_phase_cos",
+                        "imu_angular_velocity_body_rad_s[3]",
+                        "imu_projected_gravity_body[3]",
+                        "imu_linear_acceleration_body_g[3]",
+                        "joint_position_error_rad[12]",
+                        "joint_velocity_normalized[12]",
+                        "previous_action[12]",
+                    ],
+                },
+                "payload": {
+                    "mass_kg": None,
+                    "position_body_m": None,
+                    "note": (
+                        "Set measured battery/enclosure mass and body-frame "
+                        "position before using this trial for dynamics fitting"
+                    ),
+                },
+            }
             self.rl_controller = RlPolicyController(
                 rl_model_path,
                 rl_imu_axis_map,
                 self._read_rl_joint_state,
                 self._apply_rl_targets,
                 self._finish_rl_policy,
+                recorder=self.rl_recorder,
+                recording_metadata=recording_metadata,
             )
 
     @property
@@ -567,6 +633,8 @@ class FourLegSession:
             self.worker.join(timeout=2.0)
         if self.rl_controller is not None:
             self.rl_controller.stop()
+        if self.rl_recorder is not None:
+            self.rl_recorder.close()
         try:
             with self.lock:
                 self._disarm_all_locked(raise_errors=False)
@@ -913,6 +981,13 @@ class FourLegSession:
                     duration,
                     initial,
                 )
+                self.rl_controller.record_event(
+                    "rl_started",
+                    {
+                        "forward_m_s": speed,
+                        "duration_s": duration,
+                    },
+                )
             except Exception:
                 self._disarm_all_locked(raise_errors=False)
                 raise
@@ -1020,6 +1095,23 @@ class FourLegSession:
                         raise RuntimeError(
                             f"RL possible-stall stop on motor ID {motor.servo_id}"
                         )
+                    if self.rl_controller is not None:
+                        self.rl_controller.record_diagnostic(
+                            {
+                                "servo_id": motor.servo_id,
+                                "leg_number": profile.number,
+                                "joint": motor.name,
+                                "position_deg": degrees,
+                                "target_deg": target,
+                                "tracking_error_deg": tracking_error,
+                                "raw_position": status.raw_position,
+                                "raw_speed": status.raw_speed,
+                                "voltage_v": status.voltage_v,
+                                "temperature_c": status.temperature_c,
+                                "current_ma": status.current_ma,
+                                "torque_enabled": status.torque_enabled,
+                            }
+                        )
                 measured_rad.append(math.radians(degrees))
             positions = np.asarray(measured_rad, dtype=np.float32)
             now = self.clock()
@@ -1071,6 +1163,11 @@ class FourLegSession:
 
     def _finish_rl_policy(self, error: str | None, stopped: bool) -> str | None:
         with self.lock:
+            if self.rl_controller is not None:
+                self.rl_controller.record_event(
+                    "rl_finalizing",
+                    {"error": error, "stopped_by_operator": stopped},
+                )
             result = error
             self.rl_temperature_candidates.clear()
             if error:
@@ -1098,6 +1195,26 @@ class FourLegSession:
             self.rl_feedback_velocity_rad_s = None
             self.rl_feedback_time_s = None
             return result
+
+    def list_recordings(self) -> list[dict[str, Any]]:
+        if self.rl_recorder is None:
+            return []
+        return self.rl_recorder.list_recordings()
+
+    def rename_recording(self, recording_id: str, label: str) -> None:
+        if self.rl_recorder is None:
+            raise RuntimeError("RL recording is not configured")
+        self.rl_recorder.rename(recording_id, label)
+
+    def delete_recording(self, recording_id: str) -> None:
+        if self.rl_recorder is None:
+            raise RuntimeError("RL recording is not configured")
+        self.rl_recorder.delete(recording_id)
+
+    def recording_archive(self, recording_id: str) -> Path:
+        if self.rl_recorder is None:
+            raise RuntimeError("RL recording is not configured")
+        return self.rl_recorder.archive_path(recording_id)
 
     def start_crawl_forward(
         self,
@@ -2143,6 +2260,18 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
         data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         self._send_bytes(data, status=status, content_type="application/json")
 
+    def _send_download(self, path: Path) -> None:
+        self.send_response(HTTPStatus.OK)
+        self._security_headers("application/zip")
+        self.send_header("Content-Length", str(path.stat().st_size))
+        self.send_header(
+            "Content-Disposition",
+            f'attachment; filename="{path.name}"',
+        )
+        self.end_headers()
+        with path.open("rb") as stream:
+            shutil.copyfileobj(stream, self.wfile, length=1024 * 1024)
+
     def _error(self, status: HTTPStatus, message: str) -> None:
         self._send_json({"error": message}, status=status)
 
@@ -2150,7 +2279,9 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
         if not self._local_host():
             self._error(HTTPStatus.FORBIDDEN, "Localhost access only")
             return
-        if self.path == "/":
+        request = urlsplit(self.path)
+        path = request.path
+        if path == "/":
             html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
             html = html.replace("__CONTROL_TOKEN__", self.server.token)
             self._send_bytes(
@@ -2158,22 +2289,43 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
                 content_type="text/html; charset=utf-8",
             )
             return
-        if self.path == "/app.css":
+        if path == "/app.css":
             self._send_bytes(
                 (STATIC_DIR / "app.css").read_bytes(),
                 content_type="text/css; charset=utf-8",
             )
             return
-        if self.path == "/app.js":
+        if path == "/app.js":
             self._send_bytes(
                 (STATIC_DIR / "app.js").read_bytes(),
                 content_type="text/javascript; charset=utf-8",
             )
             return
-        if self.path == "/api/state":
+        if path in {
+            "/api/state",
+            "/api/recordings",
+            "/api/recordings/download",
+        }:
             if not self._authorized():
                 self._error(HTTPStatus.FORBIDDEN, "Invalid control token")
                 return
+        if path == "/api/recordings":
+            self._send_json(
+                {"recordings": self.server.session.list_recordings()}
+            )
+            return
+        if path == "/api/recordings/download":
+            recording_id = parse_qs(request.query).get("id", [""])[0]
+            try:
+                self._send_download(
+                    self.server.session.recording_archive(recording_id)
+                )
+            except FileNotFoundError as exc:
+                self._error(HTTPStatus.NOT_FOUND, str(exc))
+            except (ValueError, RuntimeError) as exc:
+                self._error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        if path == "/api/state":
             if (
                 getattr(self.server, "allow_remote", False)
                 and self.headers.get("X-Control-Token", "")
@@ -2245,6 +2397,15 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
                 )
             elif self.path == "/api/rl-stop":
                 self.server.session.stop_rl_policy()
+            elif self.path == "/api/recordings/rename":
+                self.server.session.rename_recording(
+                    str(payload.get("recording_id", "")),
+                    str(payload.get("label", "")),
+                )
+            elif self.path == "/api/recordings/delete":
+                self.server.session.delete_recording(
+                    str(payload.get("recording_id", ""))
+                )
             elif self.path == "/api/power-reset":
                 self.server.session.reset_power_analytics()
             elif self.path == "/api/target":
@@ -2304,6 +2465,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--ramp-rate", type=float)
     parser.add_argument("--rl-model", type=Path, default=DEFAULT_RL_MODEL)
     parser.add_argument("--rl-imu-axis-map", default="+x,+y,+z")
+    parser.add_argument(
+        "--recordings-dir",
+        type=Path,
+        default=DEFAULT_RECORDINGS_DIR,
+        help="Directory for automatic RL trial recordings",
+    )
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument(
         "--demo",
@@ -2334,6 +2501,7 @@ def main(argv: list[str] | None = None) -> int:
         persist_calibration=not args.demo,
         rl_model_path=None if args.demo else args.rl_model,
         rl_imu_axis_map=args.rl_imu_axis_map,
+        recordings_dir=args.recordings_dir,
     )
     token = secrets.token_urlsafe(24)
     http_port = dashboard.server.http_port if args.http_port is None else args.http_port
