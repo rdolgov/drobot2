@@ -246,6 +246,14 @@ class STSBus:
         self._check(f"read position ID {servo_id}", result, error)
         return int(position)
 
+    def read_position_speed(self, servo_id: int) -> tuple[int, int]:
+        """Read the high-rate feedback fields in one servo transaction."""
+
+        packet = self._require_open()
+        position, speed, result, error = packet.ReadPosSpeed(servo_id)
+        self._check(f"read position/speed ID {servo_id}", result, error)
+        return int(position), int(speed)
+
     def write_position(
         self,
         servo_id: int,
@@ -257,6 +265,16 @@ class STSBus:
             REG_TORQUE_LIMIT,
             bus_config.torque_limit,
         )
+        self.write_position_command(servo_id, raw_position, bus_config)
+
+    def write_position_command(
+        self,
+        servo_id: int,
+        raw_position: int,
+        bus_config: BusConfig,
+    ) -> None:
+        """Write a target after arm-time limits have already been configured."""
+
         packet = self._require_open()
         # The Python SDK writes the supplied 16-bit word verbatim. Match
         # Feetech's official C++ WritePosEx implementation by converting a
@@ -271,10 +289,8 @@ class STSBus:
         self._check(f"write position ID {servo_id}", result, error)
 
     def status(self, motor: MotorConfig) -> MotorStatus:
-        packet = self._require_open()
         model = self.require_motor(motor)
-        position, speed, result, error = packet.ReadPosSpeed(motor.servo_id)
-        self._check(f"read position/speed ID {motor.servo_id}", result, error)
+        position, speed = self.read_position_speed(motor.servo_id)
         return MotorStatus(
             servo_id=motor.servo_id,
             model_number=model,

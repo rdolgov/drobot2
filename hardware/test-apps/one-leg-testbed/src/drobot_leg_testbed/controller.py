@@ -90,7 +90,11 @@ class LegController:
             motor,
             self.calibration.motor(motor),
         )
-        self.bus.write_position(motor.servo_id, raw, self.config.bus)
+        fast_write = getattr(self.bus, "write_position_command", None)
+        if fast_write is None:
+            self.bus.write_position(motor.servo_id, raw, self.config.bus)
+        else:
+            fast_write(motor.servo_id, raw, self.config.bus)
         self.targets_deg[motor.name] = degrees
         return TargetState(motor, degrees, raw)
 

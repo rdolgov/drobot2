@@ -81,14 +81,17 @@ class _GuardedMotorSink(MotorSink):
         joint_target_rad: np.ndarray,
         monotonic_time_s: float,
     ) -> None:
-        if (
-            self._last_write_s is not None
-            and monotonic_time_s - self._last_write_s > 0.12
-        ):
-            raise RuntimeError("RL control loop missed its 120 ms deadline")
         self._write(action, joint_target_rad, monotonic_time_s)
-        self._update(action, joint_target_rad, monotonic_time_s)
-        self._last_write_s = monotonic_time_s
+        completed_s = time.monotonic()
+        if self._last_write_s is not None:
+            gap_s = completed_s - self._last_write_s
+            if gap_s > 0.12:
+                raise RuntimeError(
+                    "RL control loop missed its 120 ms deadline "
+                    f"(actual output gap {gap_s * 1000.0:.0f} ms)"
+                )
+        self._update(action, joint_target_rad, completed_s)
+        self._last_write_s = completed_s
 
 
 class RlPolicyController:

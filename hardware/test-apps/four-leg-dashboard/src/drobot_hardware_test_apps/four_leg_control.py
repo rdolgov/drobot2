@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import math
 import os
@@ -456,6 +457,9 @@ class FourLegSession:
         self.rl_feedback_position_rad: Any | None = None
         self.rl_feedback_velocity_rad_s: Any | None = None
         self.rl_feedback_time_s: float | None = None
+        self.rl_diagnostic_index = 0
+        self.rl_diagnostic_time_s: float | None = None
+        self.last_full_snapshot: dict[str, Any] | None = None
         if rl_model_path is not None:
             from drobot_policy_runtime.contract import (
                 ACTION_NAMES,
@@ -789,6 +793,8 @@ class FourLegSession:
                 raise RuntimeError("Disarm all 12 motors before starting an RL test")
             if self.fault:
                 raise RuntimeError("Clear the reported hardware fault before RL start")
+            if self.last_full_snapshot is None:
+                self._snapshot_locked()
 
             measured_by_id: dict[int, float] = {}
             try:
@@ -810,6 +816,8 @@ class FourLegSession:
                 self.rl_feedback_position_rad = initial.copy()
                 self.rl_feedback_velocity_rad_s = np.zeros(12, dtype=np.float32)
                 self.rl_feedback_time_s = self.clock()
+                self.rl_diagnostic_index = 0
+                self.rl_diagnostic_time_s = None
                 self.rl_controller.start(float(forward_m_s), initial)
             except Exception:
                 self._disarm_all_locked(raise_errors=False)
@@ -854,38 +862,56 @@ class FourLegSession:
 
             measured_rad: list[float] = []
             monitoring = self.dashboard.monitoring
-            for profile, motor, _controller in self.rl_motor_order:
-                status = self.bus.status(motor)
+            diagnostic_index: int | None = None
+            if (
+                self.rl_diagnostic_time_s is None
+                or now - self.rl_diagnostic_time_s >= 0.10
+            ):
+                diagnostic_index = self.rl_diagnostic_index
+                self.rl_diagnostic_index = (self.rl_diagnostic_index + 1) % 12
+                self.rl_diagnostic_time_s = now
+
+            fast_reader = getattr(self.bus, "read_position_speed", None)
+            for index, (profile, motor, _controller) in enumerate(
+                self.rl_motor_order
+            ):
+                status = None
+                if diagnostic_index == index or fast_reader is None:
+                    status = self.bus.status(motor)
+                    raw_position = status.raw_position
+                else:
+                    raw_position, _raw_speed = fast_reader(motor.servo_id)
                 degrees = raw_to_degrees(
-                    status.raw_position,
+                    raw_position,
                     motor,
                     profile.calibration.motor(motor),
                 )
-                if not status.torque_enabled:
-                    raise RuntimeError(
-                        f"RL telemetry says motor ID {motor.servo_id} lost torque"
-                    )
-                if status.temperature_c >= monitoring.temperature_warning_c:
-                    raise RuntimeError(
-                        f"RL temperature stop on ID {motor.servo_id}: "
-                        f"{status.temperature_c} C"
-                    )
-                if status.voltage_v < monitoring.voltage_warning_low_v - 0.5:
-                    raise RuntimeError(
-                        f"RL low-voltage stop on ID {motor.servo_id}: "
-                        f"{status.voltage_v:.1f} V"
-                    )
-                target = self.desired_deg[(profile.number, motor.name)]
-                tracking_error = abs(target - degrees)
-                if (
-                    status.current_ma
-                    >= monitoring.motor_stall_current_warning_ma
-                    and abs(status.raw_speed) <= monitoring.stall_speed_raw_max
-                    and tracking_error >= monitoring.stall_tracking_error_deg
-                ):
-                    raise RuntimeError(
-                        f"RL possible-stall stop on motor ID {motor.servo_id}"
-                    )
+                if status is not None:
+                    if not status.torque_enabled:
+                        raise RuntimeError(
+                            f"RL telemetry says motor ID {motor.servo_id} lost torque"
+                        )
+                    if status.temperature_c >= monitoring.temperature_warning_c:
+                        raise RuntimeError(
+                            f"RL temperature stop on ID {motor.servo_id}: "
+                            f"{status.temperature_c} C"
+                        )
+                    if status.voltage_v < monitoring.voltage_warning_low_v - 0.5:
+                        raise RuntimeError(
+                            f"RL low-voltage stop on ID {motor.servo_id}: "
+                            f"{status.voltage_v:.1f} V"
+                        )
+                    target = self.desired_deg[(profile.number, motor.name)]
+                    tracking_error = abs(target - degrees)
+                    if (
+                        status.current_ma
+                        >= monitoring.motor_stall_current_warning_ma
+                        and abs(status.raw_speed) <= monitoring.stall_speed_raw_max
+                        and tracking_error >= monitoring.stall_tracking_error_deg
+                    ):
+                        raise RuntimeError(
+                            f"RL possible-stall stop on motor ID {motor.servo_id}"
+                        )
                 measured_rad.append(math.radians(degrees))
             positions = np.asarray(measured_rad, dtype=np.float32)
             now = self.clock()
@@ -1432,7 +1458,75 @@ class FourLegSession:
             self.power_last_w = 0.0
             self.last_event = "Power analytics reset; collect an idle reference"
 
+    def _cached_rl_snapshot_locked(self) -> dict[str, Any]:
+        """Serve the UI without monopolizing the serial bus during RL control."""
+
+        if self.last_full_snapshot is None:
+            raise RuntimeError("RL telemetry cache was not initialized")
+        payload = copy.deepcopy(self.last_full_snapshot)
+        measured_by_id: dict[int, float] = {}
+        if self.rl_feedback_position_rad is not None:
+            measured_by_id = {
+                motor.servo_id: math.degrees(
+                    float(self.rl_feedback_position_rad[index])
+                )
+                for index, (_profile, motor, _controller) in enumerate(
+                    self.rl_motor_order
+                )
+            }
+
+        profile_by_number = {profile.number: profile for profile in self.profiles}
+        for leg in payload["legs"]:
+            profile = profile_by_number[int(leg["number"])]
+            controller = self.controllers[profile.number]
+            armed_count = 0
+            for motor_payload in leg["motors"]:
+                motor = profile.config.motor(int(motor_payload["number"]))
+                armed = motor.servo_id in controller.armed_ids
+                armed_count += int(armed)
+                commanded = controller.targets_deg.get(motor.name)
+                desired = self.desired_deg.get((profile.number, motor.name))
+                measured = measured_by_id.get(
+                    motor.servo_id,
+                    float(motor_payload["measured_deg"]),
+                )
+                reference = commanded if commanded is not None else desired
+                motor_payload.update(
+                    measured_deg=measured,
+                    commanded_deg=commanded,
+                    desired_deg=desired,
+                    tracking_error_deg=(
+                        abs(float(reference) - measured)
+                        if reference is not None
+                        else 0.0
+                    ),
+                    torque_enabled=armed,
+                    armed=armed,
+                )
+            leg["armed_count"] = armed_count
+
+        armed_count = self._armed_count_locked()
+        payload["summary"]["armed_count"] = armed_count
+        payload["summary"]["telemetry_live"] = False
+        payload["power"]["live"] = False
+        payload["power"]["assessment"] = (
+            "Electrical diagnostics are staggered onboard during the 5-second RL test"
+        )
+        payload["runtime"]["telemetry_mode"] = "cached_during_rl"
+        payload["rl_policy"] = self._rl_snapshot_locked()
+        payload["any_armed"] = bool(armed_count)
+        payload["browser_heartbeat"] = self._browser_heartbeat_snapshot()
+        payload["last_event"] = self.last_event
+        payload["fault"] = self.fault
+        return payload
+
     def _snapshot_locked(self) -> dict[str, Any]:
+        if (
+            self.rl_controller is not None
+            and self.rl_controller.active
+            and self.last_full_snapshot is not None
+        ):
+            return self._cached_rl_snapshot_locked()
         browser_heartbeat = self._browser_heartbeat_snapshot()
         leg_payloads: list[dict[str, Any]] = []
         all_statuses: list[MotorStatus] = []
@@ -1668,7 +1762,7 @@ class FourLegSession:
             else 0.0
         )
 
-        return {
+        payload = {
             "legs": leg_payloads,
             "summary": {
                 "online_count": len(all_statuses),
@@ -1796,6 +1890,8 @@ class FourLegSession:
             "last_event": self.last_event,
             "fault": self.fault,
         }
+        self.last_full_snapshot = copy.deepcopy(payload)
+        return payload
 
     def snapshot(self) -> dict[str, Any]:
         with self.lock:
