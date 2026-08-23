@@ -48,8 +48,10 @@ let connected = false;
 let refreshing = false;
 let heartbeatInFlight = false;
 let reloadingAfterServerRestart = false;
-const errorStorageKey = "drobot-four-leg-permanent-errors-v1";
-let permanentErrors = loadPermanentErrors();
+const legacyErrorStorageKey = "drobot-four-leg-permanent-errors-v1";
+const errorStorageKey = "drobot-four-leg-recent-errors-v2";
+const errorRetentionMs = 10 * 60 * 1000;
+let recentErrors = loadRecentErrors();
 
 async function api(
   path,
@@ -105,14 +107,32 @@ function isTransientNetworkError(message) {
   );
 }
 
-function loadPermanentErrors() {
+function isStateBackedError(message) {
+  const text = normalizeErrorMessage(message).toLowerCase();
+  return (
+    text.includes("servo usb adapter") ||
+    text.includes("serial bus") ||
+    text.includes("reconnect") ||
+    text.includes("bno") ||
+    text.includes("imu") ||
+    text.includes("enable feature") ||
+    text.includes("rl control") ||
+    text.includes("rl policy") ||
+    text.includes("joint feedback")
+  );
+}
+
+function loadRecentErrors() {
   try {
+    localStorage.removeItem(legacyErrorStorageKey);
     const stored = JSON.parse(localStorage.getItem(errorStorageKey) || "[]");
     if (!Array.isArray(stored)) return [];
     const messages = new Set();
+    const oldestAllowed = Date.now() - errorRetentionMs;
     return stored
       .filter((entry) => entry && typeof entry.message === "string")
       .filter((entry) => !isTransientNetworkError(entry.message))
+      .filter((entry) => Date.parse(entry.createdAt) >= oldestAllowed)
       .map((entry) => ({
         ...entry,
         message: normalizeErrorMessage(entry.message),
@@ -127,17 +147,17 @@ function loadPermanentErrors() {
   }
 }
 
-function storePermanentErrors() {
+function storeRecentErrors() {
   try {
-    localStorage.setItem(errorStorageKey, JSON.stringify(permanentErrors));
+    localStorage.setItem(errorStorageKey, JSON.stringify(recentErrors));
   } catch (_error) {
-    // The on-screen log still remains permanent for this page session.
+    // The on-screen recent log still remains available for this page session.
   }
 }
 
-function renderPermanentErrors() {
+function renderRecentErrors() {
   errorList.innerHTML = "";
-  permanentErrors.forEach((entry) => {
+  recentErrors.forEach((entry) => {
     const item = document.createElement("li");
     const time = document.createElement("time");
     time.dateTime = entry.createdAt;
@@ -147,22 +167,47 @@ function renderPermanentErrors() {
     item.append(time, message);
     errorList.append(item);
   });
-  errorLog.hidden = permanentErrors.length === 0;
+  errorLog.hidden = recentErrors.length === 0;
 }
 
-function addPermanentError(message) {
+function addRecentError(message, createdAt = new Date().toISOString()) {
   if (isTransientNetworkError(message)) return;
   const text = normalizeErrorMessage(message);
-  if (permanentErrors.some((entry) => entry.message === text)) return;
-  permanentErrors.push({ message: text, createdAt: new Date().toISOString() });
-  storePermanentErrors();
-  renderPermanentErrors();
+  if (recentErrors.some((entry) => entry.message === text)) return;
+  recentErrors.push({ message: text, createdAt });
+  storeRecentErrors();
+  renderRecentErrors();
+}
+
+function refreshRecentErrors(state) {
+  const previous = JSON.stringify(recentErrors);
+  const activeMessages = [state?.fault, state?.rl_policy?.error]
+    .filter((message) => typeof message === "string" && message.trim())
+    .map(normalizeErrorMessage);
+  const activeSet = new Set(activeMessages);
+  const oldestAllowed = Date.now() - errorRetentionMs;
+  recentErrors = recentErrors.filter((entry) => {
+    const createdAt = Date.parse(entry.createdAt);
+    if (isStateBackedError(entry.message)) {
+      return activeSet.has(normalizeErrorMessage(entry.message));
+    }
+    return Number.isFinite(createdAt) && createdAt >= oldestAllowed;
+  });
+  activeMessages.forEach((message) => {
+    if (!recentErrors.some((entry) => entry.message === message)) {
+      recentErrors.push({ message, createdAt: new Date().toISOString() });
+    }
+  });
+  if (JSON.stringify(recentErrors) !== previous) {
+    storeRecentErrors();
+    renderRecentErrors();
+  }
 }
 
 function showNotice(message, isError = false) {
   if (isError) {
     notice.textContent = "";
-    addPermanentError(message);
+    addRecentError(message);
     return;
   }
   notice.textContent = message;
@@ -537,8 +582,6 @@ function updateSummary(state) {
     item.textContent = warning;
     alertList.appendChild(item);
   });
-  if (state.fault) addPermanentError(state.fault);
-
   document.body.classList.toggle("has-warning", summary.health === "warning");
   document.body.classList.toggle("has-armed", state.any_armed);
 
@@ -630,6 +673,7 @@ async function refresh() {
   refreshing = true;
   try {
     latestState = await api("/api/state");
+    refreshRecentErrors(latestState);
     latestState.legs.forEach(updateLeg);
     updateSummary(latestState);
     connected = true;
@@ -691,9 +735,9 @@ settingsClose.addEventListener("click", () => {
 });
 
 clearErrorLog.addEventListener("click", () => {
-  permanentErrors = [];
-  storePermanentErrors();
-  renderPermanentErrors();
+  recentErrors = [];
+  storeRecentErrors();
+  renderRecentErrors();
 });
 
 zeroAll.addEventListener("click", () => {
@@ -820,6 +864,6 @@ setInterval(sendHeartbeat, 700);
 
 setInterval(refresh, 900);
 
-renderPermanentErrors();
+renderRecentErrors();
 sendHeartbeat();
 refresh();
