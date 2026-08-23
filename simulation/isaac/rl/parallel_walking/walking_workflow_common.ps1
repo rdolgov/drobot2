@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 function Get-WalkingContext {
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("forward", "directional")]
+        [ValidateSet("forward", "directional", "smooth-payload")]
         [string]$CommandSet
     )
 
@@ -12,20 +12,25 @@ function Get-WalkingContext {
     if (-not (Test-Path -LiteralPath $isaacPython -PathType Leaf)) {
         throw "Isaac Sim Python was not found at $isaacPython"
     }
-    $suffix = if ($CommandSet -eq "forward") { "forward" } else { "directional" }
-    $task = if ($CommandSet -eq "forward") {
-        "Drobot-Commanded-Walk-Forward-Direct"
+    if ($CommandSet -eq "forward") {
+        $task = "Drobot-Commanded-Walk-Forward-Direct"
+        $experimentName = "drobot_commanded_walk_forward_v18_coordinated_trot_selected"
+    }
+    elseif ($CommandSet -eq "directional") {
+        $task = "Drobot-Commanded-Walk-Directional-Direct"
+        $experimentName = "drobot_commanded_walk_directional_v18_coordinated_trot_selected"
     }
     else {
-        "Drobot-Commanded-Walk-Directional-Direct"
+        $task = "Drobot-Commanded-Walk-Smooth-Payload-Direct"
+        $experimentName = "drobot_commanded_walk_v19_smooth_rear_payload"
     }
     return [PSCustomObject]@{
         RepoRoot = $repoRoot
         IsaacPython = $isaacPython
         Task = $task
-        ExperimentName = "drobot_commanded_walk_${suffix}_v18_coordinated_trot_selected"
-        ExperimentRoot = Join-Path $repoRoot "logs\rsl_rl\drobot_commanded_walk_${suffix}_v18_coordinated_trot_selected"
-        BundledCheckpoint = if ($CommandSet -eq "forward") {
+        ExperimentName = $experimentName
+        ExperimentRoot = Join-Path $repoRoot "logs\rsl_rl\$experimentName"
+        BundledCheckpoint = if ($CommandSet -in @("forward", "smooth-payload")) {
             Join-Path $repoRoot "simulation\isaac\models\parallel-walking-v18-coordinated\model_299.pt"
         }
         else {

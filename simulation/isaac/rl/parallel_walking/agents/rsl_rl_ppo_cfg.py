@@ -62,3 +62,14 @@ class DrobotCommandedWalkingDirectionalPPORunnerCfg(
     """Same network shape, expanded to forward/backward/turn commands."""
 
     experiment_name = "drobot_commanded_walk_directional_v18_coordinated_trot_selected"
+
+
+@configclass
+class DrobotCommandedWalkingSmoothPayloadPPORunnerCfg(
+    DrobotCommandedWalkingForwardPPORunnerCfg
+):
+    """V19 continuation for the rear battery and low-acceleration gait."""
+
+    max_iterations = 600
+    save_interval = 25
+    experiment_name = "drobot_commanded_walk_v19_smooth_rear_payload"

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from itertools import permutations
 
 import gymnasium as gym
+import numpy as np
 import isaaclab.sim as sim_utils
 import torch
 import warp as wp
@@ -17,6 +19,9 @@ from pxr import Gf, PhysxSchema, UsdGeom, UsdPhysics, UsdShade
 from . import preview_control
 from .commanded_walking_env_cfg import (
     DISTAL_LINK_LENGTH_M,
+    ORIGINAL_BASE_COM_M,
+    ORIGINAL_BASE_INERTIA_KG_M2,
+    ORIGINAL_BASE_MASS_KG,
     RECTANGULAR_SHOE_LENGTH_FORE_AFT_M,
     RECTANGULAR_SHOE_MASS_KG,
     RECTANGULAR_SHOE_SOLE_BACK_FROM_FORK_M,
@@ -25,6 +30,9 @@ from .commanded_walking_env_cfg import (
     RECTANGULAR_SHOE_TREAD_PROJECTION_M,
     RECTANGULAR_SHOE_TREAD_WIDTH_M,
     RECTANGULAR_SHOE_WIDTH_LATERAL_M,
+    REPLACED_BATTERY_CENTER_M,
+    REPLACED_BATTERY_MASS_KG,
+    REPLACED_BATTERY_SIZE_M,
     SERVO_VELOCITY_LIMIT_RAD_S,
     DrobotCommandedWalkingForwardEnvCfg,
 )
@@ -144,6 +152,158 @@ def _author_rectangular_shoes(stage) -> None:
             )
 
 
+def _box_inertia(mass_kg: float, size_m: np.ndarray) -> np.ndarray:
+    x, y, z = size_m
+    return np.diag(
+        (
+            mass_kg * (y * y + z * z) / 12.0,
+            mass_kg * (x * x + z * z) / 12.0,
+            mass_kg * (x * x + y * y) / 12.0,
+        )
+    )
+
+
+def _parallel_axis(offset_m: np.ndarray) -> np.ndarray:
+    return np.eye(3) * np.dot(offset_m, offset_m) - np.outer(
+        offset_m, offset_m
+    )
+
+
+def _matrix_to_quaternion_wxyz(rotation: np.ndarray) -> tuple[float, ...]:
+    trace = float(np.trace(rotation))
+    if trace > 0.0:
+        scale = np.sqrt(trace + 1.0) * 2.0
+        return (
+            0.25 * scale,
+            (rotation[2, 1] - rotation[1, 2]) / scale,
+            (rotation[0, 2] - rotation[2, 0]) / scale,
+            (rotation[1, 0] - rotation[0, 1]) / scale,
+        )
+    index = int(np.argmax(np.diag(rotation)))
+    if index == 0:
+        scale = np.sqrt(
+            1.0 + rotation[0, 0] - rotation[1, 1] - rotation[2, 2]
+        ) * 2.0
+        return (
+            (rotation[2, 1] - rotation[1, 2]) / scale,
+            0.25 * scale,
+            (rotation[0, 1] + rotation[1, 0]) / scale,
+            (rotation[0, 2] + rotation[2, 0]) / scale,
+        )
+    if index == 1:
+        scale = np.sqrt(
+            1.0 + rotation[1, 1] - rotation[0, 0] - rotation[2, 2]
+        ) * 2.0
+        return (
+            (rotation[0, 2] - rotation[2, 0]) / scale,
+            (rotation[0, 1] + rotation[1, 0]) / scale,
+            0.25 * scale,
+            (rotation[1, 2] + rotation[2, 1]) / scale,
+        )
+    scale = np.sqrt(
+        1.0 + rotation[2, 2] - rotation[0, 0] - rotation[1, 1]
+    ) * 2.0
+    return (
+        (rotation[1, 0] - rotation[0, 1]) / scale,
+        (rotation[0, 2] + rotation[2, 0]) / scale,
+        (rotation[1, 2] + rotation[2, 1]) / scale,
+        0.25 * scale,
+    )
+
+
+def _author_rear_battery_payload(stage, cfg) -> None:
+    """Replace the provisional centered battery with the measured rear pack."""
+    if not cfg.rear_payload_enabled:
+        return
+    base_prims = [
+        prim
+        for prim in stage.Traverse()
+        if prim.GetName() == "base_link"
+        and str(prim.GetPath()).startswith("/World/envs/env_0/Robot")
+    ]
+    if len(base_prims) != 1:
+        raise RuntimeError(
+            "Expected one env-0 base_link before authoring the rear payload; "
+            f"found {len(base_prims)}"
+        )
+
+    original_com = np.asarray(ORIGINAL_BASE_COM_M, dtype=np.float64)
+    ixx, ixy, ixz, iyy, iyz, izz = ORIGINAL_BASE_INERTIA_KG_M2
+    original_inertia = np.asarray(
+        ((ixx, ixy, ixz), (ixy, iyy, iyz), (ixz, iyz, izz)),
+        dtype=np.float64,
+    )
+    old_mass = REPLACED_BATTERY_MASS_KG
+    old_center = np.asarray(REPLACED_BATTERY_CENTER_M, dtype=np.float64)
+    old_size = np.asarray(REPLACED_BATTERY_SIZE_M, dtype=np.float64)
+    dry_mass = ORIGINAL_BASE_MASS_KG - old_mass
+    dry_com = (
+        ORIGINAL_BASE_MASS_KG * original_com - old_mass * old_center
+    ) / dry_mass
+    dry_inertia_about_original = original_inertia - (
+        _box_inertia(old_mass, old_size)
+        + old_mass * _parallel_axis(old_center - original_com)
+    )
+    dry_inertia = dry_inertia_about_original - dry_mass * _parallel_axis(
+        dry_com - original_com
+    )
+
+    payload_mass = float(cfg.rear_payload_mass_kg)
+    payload_center = np.asarray(cfg.rear_payload_center_m, dtype=np.float64)
+    payload_size = np.asarray(cfg.rear_payload_size_m, dtype=np.float64)
+    combined_mass = dry_mass + payload_mass
+    combined_com = (
+        dry_mass * dry_com + payload_mass * payload_center
+    ) / combined_mass
+    combined_inertia = (
+        dry_inertia
+        + dry_mass * _parallel_axis(dry_com - combined_com)
+        + _box_inertia(payload_mass, payload_size)
+        + payload_mass * _parallel_axis(payload_center - combined_com)
+    )
+    eigenvalues, eigenvectors = np.linalg.eigh(combined_inertia)
+    axis_order = max(
+        permutations(range(3)),
+        key=lambda order: sum(
+            abs(float(eigenvectors[axis, order[axis]])) for axis in range(3)
+        ),
+    )
+    diagonal_inertia = eigenvalues[list(axis_order)]
+    principal_axes = eigenvectors[:, list(axis_order)]
+    if np.linalg.det(principal_axes) < 0.0:
+        principal_axes[:, 0] *= -1.0
+    quaternion = _matrix_to_quaternion_wxyz(principal_axes)
+
+    base = base_prims[0]
+    mass_api = UsdPhysics.MassAPI.Apply(base)
+    mass_api.CreateMassAttr().Set(float(combined_mass))
+    mass_api.CreateCenterOfMassAttr().Set(
+        Gf.Vec3f(*(float(value) for value in combined_com))
+    )
+    mass_api.CreateDiagonalInertiaAttr().Set(
+        Gf.Vec3f(*(float(value) for value in diagonal_inertia))
+    )
+    mass_api.CreatePrincipalAxesAttr().Set(
+        Gf.Quatf(
+            float(quaternion[0]),
+            Gf.Vec3f(*(float(value) for value in quaternion[1:])),
+        )
+    )
+
+    proxy = UsdGeom.Cube.Define(
+        stage,
+        base.GetPath().AppendChild("simulation_only_rear_battery_enclosure_proxy"),
+    )
+    proxy.CreateSizeAttr().Set(1.0)
+    proxy.CreateDisplayColorAttr().Set([Gf.Vec3f(0.32, 0.10, 0.10)])
+    xform = UsdGeom.Xformable(proxy.GetPrim())
+    xform.AddTranslateOp().Set(
+        Gf.Vec3d(*(float(value) for value in payload_center))
+    )
+    xform.AddScaleOp().Set(Gf.Vec3d(*(float(value) for value in payload_size)))
+    UsdPhysics.CollisionAPI.Apply(proxy.GetPrim())
+
+
 class DrobotCommandedWalkingEnv(DirectRLEnv):
     """Learn smooth command tracking around a coordinated four-leg gait clock."""
 
@@ -161,6 +321,13 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._previous_actions = torch.zeros_like(self._actions)
         self._older_actions = torch.zeros_like(self._actions)
         self._previous_targets = self._robot.data.default_joint_pos.torch.clone()
+        self._previous_joint_velocity = self._robot.data.joint_vel.torch.clone()
+        self._previous_body_linear_velocity = (
+            self._robot.data.root_lin_vel_w.torch.clone()
+        )
+        self._previous_body_angular_velocity = (
+            self._robot.data.root_ang_vel_w.torch.clone()
+        )
         self._commands = torch.zeros((self.num_envs, 3), device=self.device)
         self._joint_scale = torch.tensor(
             [
@@ -224,6 +391,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             raise RuntimeError(
                 f"Expected four distal rigid bodies, got {self._foot_body_names}"
             )
+        self._randomize_rear_payload_estimate()
 
         self._steps_since_reset = torch.zeros(
             self.num_envs, dtype=torch.long, device=self.device
@@ -262,6 +430,15 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             (self.num_envs,), torch.inf, device=self.device
         )
         self._episode_stall_step_sum = torch.zeros(self.num_envs, device=self.device)
+        self._episode_joint_acceleration_squared_sum = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self._episode_body_linear_acceleration_squared_sum = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self._episode_body_angular_acceleration_squared_sum = torch.zeros(
+            self.num_envs, device=self.device
+        )
         reward_term_names = (
             "forward_velocity_tracking",
             "instant_progress",
@@ -285,6 +462,9 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             "diagonal_sync",
             "action_magnitude",
             "joint_velocity",
+            "joint_acceleration",
+            "body_linear_acceleration",
+            "body_angular_acceleration",
             "support_foot_slip",
             "touchdown_impact",
             "qualified_touchdown",
@@ -294,6 +474,43 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             name: torch.zeros(self.num_envs, device=self.device)
             for name in reward_term_names
         }
+
+    def _randomize_rear_payload_estimate(self) -> None:
+        """Spread the measured payload uncertainty across vectorized robots."""
+        if not self.cfg.rear_payload_enabled:
+            return
+        base_ids, base_names = self._robot.find_bodies("base_link")
+        if len(base_ids) != 1:
+            raise RuntimeError(f"Expected one base_link body, got {base_names}")
+        base_ids = torch.as_tensor(base_ids, dtype=torch.int32, device=self.device)
+        env_ids = torch.arange(
+            self.num_envs, dtype=torch.int32, device=self.device
+        )
+        low, high = self.cfg.rear_payload_combined_mass_scale_range
+        mass_scale = low + (high - low) * torch.rand(
+            (self.num_envs, 1), device=self.device
+        )
+        masses = self._robot.data.body_mass.torch[:, base_ids.long()] * mass_scale
+        inertias = (
+            self._robot.data.body_inertia.torch[:, base_ids.long()] * mass_scale.unsqueeze(-1)
+        )
+        self._robot.set_masses_index(
+            masses=masses, body_ids=base_ids, env_ids=env_ids
+        )
+        self._robot.set_inertias_index(
+            inertias=inertias, body_ids=base_ids, env_ids=env_ids
+        )
+
+        jitter_limit = torch.tensor(
+            self.cfg.rear_payload_combined_com_jitter_m,
+            dtype=torch.float32,
+            device=self.device,
+        )
+        coms = self._robot.data.body_com_pose_b.torch[:, base_ids.long()].clone()
+        coms[:, :, :3] += (
+            2.0 * torch.rand((self.num_envs, 1, 3), device=self.device) - 1.0
+        ) * jitter_limit
+        self._robot.set_coms_index(coms=coms, body_ids=base_ids, env_ids=env_ids)
 
     def _current_episode_horizon_steps(self) -> int:
         curriculum_step = (
@@ -313,6 +530,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._robot = Articulation(self.cfg.robot)
         self.scene.articulations["robot"] = self._robot
         _author_rectangular_shoes(self.scene.stage)
+        _author_rear_battery_payload(self.scene.stage, self.cfg)
         self._contact_sensor = ContactSensor(self.cfg.contact_sensor)
         self.scene.sensors["contact_sensor"] = self._contact_sensor
         self._imu_sensor = Imu(self.cfg.imu_sensor)
@@ -567,6 +785,51 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             ),
             dim=1,
         )
+        joint_acceleration = (
+            self._robot.data.joint_vel.torch - self._previous_joint_velocity
+        ) / self.step_dt
+        body_linear_acceleration = (
+            self._robot.data.root_lin_vel_w.torch
+            - self._previous_body_linear_velocity
+        ) / self.step_dt
+        body_angular_acceleration = (
+            self._robot.data.root_ang_vel_w.torch
+            - self._previous_body_angular_velocity
+        ) / self.step_dt
+        joint_acceleration_squared = torch.mean(
+            torch.square(joint_acceleration), dim=1
+        )
+        body_linear_acceleration_squared = torch.mean(
+            torch.square(body_linear_acceleration), dim=1
+        )
+        body_angular_acceleration_squared = torch.mean(
+            torch.square(body_angular_acceleration), dim=1
+        )
+        normalized_joint_acceleration = joint_acceleration_squared / (
+            self.cfg.joint_acceleration_normalizer_rad_s2**2
+        )
+        normalized_body_linear_acceleration = (
+            body_linear_acceleration_squared
+            / self.cfg.body_linear_acceleration_normalizer_m_s2**2
+        )
+        normalized_body_angular_acceleration = (
+            body_angular_acceleration_squared
+            / self.cfg.body_angular_acceleration_normalizer_rad_s2**2
+        )
+        if self.cfg.smoothness_curriculum_steps > 0:
+            smoothness_fraction = min(
+                float(
+                    self.common_step_counter
+                    + self.cfg.command_curriculum_offset_steps
+                )
+                / float(self.cfg.smoothness_curriculum_steps),
+                1.0,
+            )
+            smoothness_scale = self.cfg.smoothness_initial_scale + (
+                1.0 - self.cfg.smoothness_initial_scale
+            ) * smoothness_fraction
+        else:
+            smoothness_scale = 1.0
         action_magnitude = torch.mean(torch.square(self._actions), dim=1)
         action_saturation = torch.mean(
             torch.square(torch.clamp(torch.abs(self._actions) - 0.80, min=0.0)),
@@ -718,9 +981,13 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             ),
             "yaw_rate": -self.cfg.penalty_yaw_rate * torch.square(yaw_error),
             "body_height": -self.cfg.penalty_body_height * torch.square(height_error),
-            "action_rate": -self.cfg.penalty_action_rate * action_rate,
+            "action_rate": (
+                -smoothness_scale * self.cfg.penalty_action_rate * action_rate
+            ),
             "action_acceleration": (
-                -self.cfg.penalty_action_acceleration * action_acceleration
+                -smoothness_scale
+                * self.cfg.penalty_action_acceleration
+                * action_acceleration
             ),
             "action_saturation": (
                 -self.cfg.penalty_action_saturation * action_saturation
@@ -730,6 +997,21 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             ),
             "action_magnitude": -self.cfg.penalty_action_magnitude * action_magnitude,
             "joint_velocity": -self.cfg.penalty_joint_velocity * joint_speed,
+            "joint_acceleration": (
+                -smoothness_scale
+                * self.cfg.penalty_joint_acceleration
+                * normalized_joint_acceleration
+            ),
+            "body_linear_acceleration": (
+                -smoothness_scale
+                * self.cfg.penalty_body_linear_acceleration
+                * normalized_body_linear_acceleration
+            ),
+            "body_angular_acceleration": (
+                -smoothness_scale
+                * self.cfg.penalty_body_angular_acceleration
+                * normalized_body_angular_acceleration
+            ),
             "support_foot_slip": (
                 -self.cfg.penalty_support_foot_slip * support_foot_slip
             ),
@@ -762,6 +1044,13 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_command_speed_sum += command_speed
         self._episode_base_height_sum += base_height
         self._episode_stall_step_sum += sustained_stall.float()
+        self._episode_joint_acceleration_squared_sum += joint_acceleration_squared
+        self._episode_body_linear_acceleration_squared_sum += (
+            body_linear_acceleration_squared
+        )
+        self._episode_body_angular_acceleration_squared_sum += (
+            body_angular_acceleration_squared
+        )
         self._episode_min_rolling_speed = torch.where(
             rolling_window_ready & active_translation,
             torch.minimum(self._episode_min_rolling_speed, rolling_speed),
@@ -769,6 +1058,13 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         )
         for name, term in reward_terms.items():
             self._episode_reward_term_sums[name] += term
+        self._previous_joint_velocity.copy_(self._robot.data.joint_vel.torch)
+        self._previous_body_linear_velocity.copy_(
+            self._robot.data.root_lin_vel_w.torch
+        )
+        self._previous_body_angular_velocity.copy_(
+            self._robot.data.root_ang_vel_w.torch
+        )
         return reward
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -919,6 +1215,33 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             log["Metrics/sustained_stall_rate"] = (
                 self._episode_stall_step_sum[env_ids] / mature_steps
             ).mean().item()
+            log["Metrics/rms_joint_acceleration_rad_s2"] = torch.sqrt(
+                self._episode_joint_acceleration_squared_sum[env_ids]
+                / completed_steps
+            ).mean().item()
+            log["Metrics/rms_body_linear_acceleration_m_s2"] = torch.sqrt(
+                self._episode_body_linear_acceleration_squared_sum[env_ids]
+                / completed_steps
+            ).mean().item()
+            log["Metrics/rms_body_angular_acceleration_rad_s2"] = torch.sqrt(
+                self._episode_body_angular_acceleration_squared_sum[env_ids]
+                / completed_steps
+            ).mean().item()
+            if self.cfg.smoothness_curriculum_steps > 0:
+                fraction = min(
+                    float(
+                        self.common_step_counter
+                        + self.cfg.command_curriculum_offset_steps
+                    )
+                    / float(self.cfg.smoothness_curriculum_steps),
+                    1.0,
+                )
+                log["Metrics/smoothness_penalty_scale"] = (
+                    self.cfg.smoothness_initial_scale
+                    + (1.0 - self.cfg.smoothness_initial_scale) * fraction
+                )
+            else:
+                log["Metrics/smoothness_penalty_scale"] = 1.0
             log["Metrics/current_episode_horizon_s"] = (
                 self._current_episode_horizon_steps() * self.step_dt
             )
@@ -1019,6 +1342,9 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._previous_actions[env_ids] = 0.0
         self._older_actions[env_ids] = 0.0
         self._previous_targets[env_ids] = joint_position
+        self._previous_joint_velocity[env_ids] = 0.0
+        self._previous_body_linear_velocity[env_ids] = 0.0
+        self._previous_body_angular_velocity[env_ids] = 0.0
         self._steps_since_reset[env_ids] = 0
         self._failed[env_ids] = False
         self._failure_nonfinite[env_ids] = False
@@ -1040,5 +1366,8 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._rolling_command_speed[env_ids] = 0.0
         self._episode_min_rolling_speed[env_ids] = torch.inf
         self._episode_stall_step_sum[env_ids] = 0.0
+        self._episode_joint_acceleration_squared_sum[env_ids] = 0.0
+        self._episode_body_linear_acceleration_squared_sum[env_ids] = 0.0
+        self._episode_body_angular_acceleration_squared_sum[env_ids] = 0.0
         for term_sum in self._episode_reward_term_sums.values():
             term_sum[env_ids] = 0.0

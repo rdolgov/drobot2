@@ -43,6 +43,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--training-task", default="")
+    parser.add_argument("--training-profile", default="")
     args = parser.parse_args()
 
     checkpoint_path = args.checkpoint.resolve()
@@ -103,6 +105,10 @@ def main() -> None:
             "rear_right_knee",
         ],
     }
+    if args.training_task:
+        metadata["training_task"] = args.training_task
+    if args.training_profile:
+        metadata["training_profile"] = args.training_profile
     output_path.with_suffix(".json").write_text(
         json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
     )

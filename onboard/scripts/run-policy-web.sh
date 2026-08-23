@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 VENV_DIR="${REPO_ROOT}/onboard/.policy-venv"
-MODEL_PATH="${REPO_ROOT}/onboard/models/parallel-walking-v18/model_299.onnx"
+MODEL_PATH="${REPO_ROOT}/onboard/models/parallel-walking-v19-smooth-rear-payload/model_899.onnx"
 HTTP_BIND="${DROBOT_POLICY_BIND:-0.0.0.0}"
 HTTP_PORT="${DROBOT_POLICY_PORT:-8090}"
 CONTROL_TOKEN="${DROBOT_POLICY_TOKEN:-}"

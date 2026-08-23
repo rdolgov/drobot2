@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -14,6 +15,10 @@ parser.add_argument("--checkpoint", required=True)
 parser.add_argument("--seconds", type=int, default=30)
 parser.add_argument("--episodes", type=int, default=3)
 parser.add_argument("--window-seconds", type=int, default=5)
+parser.add_argument(
+    "--task", default="Drobot-Commanded-Walk-Forward-Direct"
+)
+parser.add_argument("--forward-speed", type=float, default=0.15)
 args = parser.parse_args()
 if args.seconds < 10 or args.episodes < 1:
     parser.error("evaluation needs at least 10 seconds and one episode")
@@ -41,7 +46,7 @@ import parallel_walking  # noqa: E402, F401
 from parallel_walking import preview_control  # noqa: E402
 from parallel_walking.commanded_walking_env import LEG_NAMES  # noqa: E402
 
-task = "Drobot-Commanded-Walk-Forward-Direct"
+task = args.task
 env_cfg = load_cfg_from_registry(task, "env_cfg_entry_point")
 agent_cfg = load_cfg_from_registry(task, "rsl_rl_cfg_entry_point")
 agent_cfg = handle_deprecated_rsl_rl_cfg(agent_cfg, metadata.version("rsl-rl-lib"))
@@ -50,7 +55,7 @@ env_cfg.seed = 4401
 env_cfg.reset_joint_position_noise_rad = 0.0
 env_cfg.reset_xy_jitter_m = 0.0
 env_cfg.disable_time_limit = True
-preview_control.COMMAND_OVERRIDE = (0.15, 0.0, 0.0)
+preview_control.COMMAND_OVERRIDE = (args.forward_speed, 0.0, 0.0)
 
 env = gym.make(task, cfg=env_cfg)
 env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
@@ -71,8 +76,18 @@ for _ in range(args.episodes):
     saturated_action_sum = 0.0
     action_rate_sum = 0.0
     action_acceleration_sum = 0.0
+    joint_acceleration_squared_sum = 0.0
+    body_linear_acceleration_squared_sum = 0.0
+    body_angular_acceleration_squared_sum = 0.0
     previous_action = torch.zeros((12,), device=env.unwrapped.device)
     older_action = torch.zeros((12,), device=env.unwrapped.device)
+    previous_joint_velocity = env.unwrapped._robot.data.joint_vel.torch[0].clone()
+    previous_body_linear_velocity = (
+        env.unwrapped._robot.data.root_lin_vel_w.torch[0].clone()
+    )
+    previous_body_angular_velocity = (
+        env.unwrapped._robot.data.root_ang_vel_w.torch[0].clone()
+    )
     foot_names = [
         next(leg for leg in LEG_NAMES if leg in name)
         for name in env.unwrapped._foot_sensor_names
@@ -98,6 +113,25 @@ for _ in range(args.episodes):
         older_action.copy_(previous_action)
         previous_action.copy_(actions[0])
         obs, _, dones, _ = env.step(actions)
+        joint_velocity = env.unwrapped._robot.data.joint_vel.torch[0]
+        body_linear_velocity = env.unwrapped._robot.data.root_lin_vel_w.torch[0]
+        body_angular_velocity = env.unwrapped._robot.data.root_ang_vel_w.torch[0]
+        joint_acceleration_squared_sum += float(
+            torch.mean(torch.square((joint_velocity - previous_joint_velocity) * 60.0)).item()
+        )
+        body_linear_acceleration_squared_sum += float(
+            torch.mean(
+                torch.square((body_linear_velocity - previous_body_linear_velocity) * 60.0)
+            ).item()
+        )
+        body_angular_acceleration_squared_sum += float(
+            torch.mean(
+                torch.square((body_angular_velocity - previous_body_angular_velocity) * 60.0)
+            ).item()
+        )
+        previous_joint_velocity.copy_(joint_velocity)
+        previous_body_linear_velocity.copy_(body_linear_velocity)
+        previous_body_angular_velocity.copy_(body_angular_velocity)
         foot_contact = env.unwrapped._foot_forces()[0] > 1.0
         touchdown_counts += (foot_contact & ~previous_contact).float()
         previous_contact.copy_(foot_contact)
@@ -141,6 +175,15 @@ for _ in range(args.episodes):
             / max(completed_steps, 1),
             "mean_abs_action_acceleration_per_step2": action_acceleration_sum
             / max(completed_steps, 1),
+            "rms_joint_acceleration_rad_s2": math.sqrt(
+                joint_acceleration_squared_sum / max(completed_steps, 1)
+            ),
+            "rms_body_linear_acceleration_m_s2": math.sqrt(
+                body_linear_acceleration_squared_sum / max(completed_steps, 1)
+            ),
+            "rms_body_angular_acceleration_rad_s2": math.sqrt(
+                body_angular_acceleration_squared_sum / max(completed_steps, 1)
+            ),
             "touchdowns_by_leg": {
                 name: int(touchdown_counts[index].item())
                 for index, name in enumerate(foot_names)
@@ -161,6 +204,8 @@ summary = {
     "seconds": args.seconds,
     "window_seconds": args.window_seconds,
     "episodes": results,
+    "task": task,
+    "forward_speed_m_s": args.forward_speed,
     "mean_distance_m": sum(float(item["distance_m"]) for item in results)
     / len(results),
     "mean_abs_lateral_displacement_m": sum(
@@ -176,6 +221,15 @@ summary = {
     )
     / len(results),
     "fall_rate": sum(bool(item["fell"]) for item in results) / len(results),
+    "mean_rms_joint_acceleration_rad_s2": sum(
+        float(item["rms_joint_acceleration_rad_s2"]) for item in results
+    ) / len(results),
+    "mean_rms_body_linear_acceleration_m_s2": sum(
+        float(item["rms_body_linear_acceleration_m_s2"]) for item in results
+    ) / len(results),
+    "mean_rms_body_angular_acceleration_rad_s2": sum(
+        float(item["rms_body_angular_acceleration_rad_s2"]) for item in results
+    ) / len(results),
 }
 print("SUSTAINED_EVALUATION_JSON=" + json.dumps(summary, sort_keys=True), flush=True)
 env.close()

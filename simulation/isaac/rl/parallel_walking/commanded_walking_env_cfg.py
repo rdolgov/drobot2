@@ -46,6 +46,25 @@ RECTANGULAR_SHOE_TREAD_LENGTH_M = 0.094
 RECTANGULAR_SHOE_TREAD_WIDTH_M = 0.054
 RECTANGULAR_SHOE_MASS_KG = 0.070237
 
+# The base-link inertia currently includes a provisional 450 g pack centered
+# low in the chassis. V19 replaces that assumption with the measured CM5202
+# pack plus the CAD-derived box/lid mass at the rear-most compatible floor-grid
+# position. The enclosure transform remains an estimate until its installed
+# body-frame position is measured on the robot.
+ORIGINAL_BASE_MASS_KG = 2.049119
+ORIGINAL_BASE_COM_M = (0.0, 0.0, 0.046485537)
+ORIGINAL_BASE_INERTIA_KG_M2 = (
+    0.0132456004,
+    0.0000110328,
+    0.0,
+    0.0097442040,
+    0.0,
+    0.0196972212,
+)
+REPLACED_BATTERY_MASS_KG = 0.450
+REPLACED_BATTERY_CENTER_M = (0.0, 0.0, 0.024)
+REPLACED_BATTERY_SIZE_M = (0.070, 0.066, 0.040)
+
 
 @configclass
 class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
@@ -261,6 +280,80 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     # Keep value targets conditioned while preserving all reward ratios.
     reward_scale = 0.10
     qualified_foot_air_time_s = 0.10
+
+    rear_payload_enabled = False
+    rear_payload_mass_kg = 0.0
+    rear_payload_center_m = (0.0, 0.0, 0.0)
+    rear_payload_size_m = (0.0, 0.0, 0.0)
+    rear_payload_combined_mass_scale_range = (1.0, 1.0)
+    rear_payload_combined_com_jitter_m = (0.0, 0.0, 0.0)
+    smoothness_curriculum_steps = 0
+    smoothness_initial_scale = 1.0
+    joint_acceleration_normalizer_rad_s2 = 40.0
+    body_linear_acceleration_normalizer_m_s2 = 5.0
+    body_angular_acceleration_normalizer_rad_s2 = 10.0
+    penalty_joint_acceleration = 0.0
+    penalty_body_linear_acceleration = 0.0
+    penalty_body_angular_acceleration = 0.0
+
+
+@configclass
+class DrobotCommandedWalkingSmoothPayloadEnvCfg(
+    DrobotCommandedWalkingForwardEnvCfg
+):
+    """Rear-battery continuation prioritizing low-acceleration locomotion."""
+
+    rear_payload_enabled = True
+    # 416 g measured battery + 80.196 g box + 26.984 g lid. Fasteners, foam,
+    # and wire bulges remain omitted until they are weighed.
+    rear_payload_mass_kg = 0.523179545
+    rear_payload_center_m = (-0.039104, 0.0, 0.024521)
+    rear_payload_size_m = (0.144, 0.068, 0.043)
+    # Approximate 450-600 g payload uncertainty without changing the policy
+    # inputs. The COM jitter corresponds to roughly +/-12 mm uncertainty in the
+    # payload placement after accounting for the dry chassis mass.
+    rear_payload_combined_mass_scale_range = (0.965, 1.040)
+    rear_payload_combined_com_jitter_m = (0.0030, 0.0020, 0.0020)
+
+    # Train the deployable low-speed range directly. Continuing from V18 and
+    # retaining a hard stall cost prevents smooth standing from becoming the
+    # preferred solution.
+    initial_forward_speed_min_m_s = 0.04
+    initial_forward_speed_max_m_s = 0.10
+    forward_speed_min_m_s = 0.04
+    forward_speed_max_m_s = 0.10
+    command_curriculum_steps = 1
+    minimum_sustained_speed_m_s = 0.025
+    distance_success_fraction = 0.55
+
+    gait_stride_m = 0.055
+    gait_lift_m = 0.018
+    gait_start_ramp_s = 1.20
+
+    # Motion remains required, but speed is deliberately subordinate to smooth
+    # gait tracking, low accelerations, gentle contacts, and stable posture.
+    reward_forward_velocity_tracking = 1.50
+    reward_instant_progress = 2.00
+    reward_sustained_progress = 3.00
+    penalty_sustained_stall = 6.00
+    reward_gait_reference = 3.00
+    reward_scheduled_stance = 0.75
+    reward_scheduled_swing = 1.75
+    reward_upright = 1.50
+    penalty_roll_pitch_rate = 0.30
+    penalty_body_tilt = 2.00
+    penalty_body_height = 3.00
+    penalty_action_rate = 0.12
+    penalty_action_acceleration = 0.65
+    penalty_joint_velocity = 0.030
+    penalty_joint_acceleration = 0.20
+    penalty_body_linear_acceleration = 0.30
+    penalty_body_angular_acceleration = 0.25
+    penalty_touchdown_impact = 0.12
+    touchdown_force_soft_limit_n = 14.0
+    penalty_support_foot_slip = 0.45
+    smoothness_curriculum_steps = 19_200
+    smoothness_initial_scale = 0.25
 
 
 @configclass

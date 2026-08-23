@@ -27,6 +27,11 @@ COMMANDS = {
 COMMAND_NAME = _consume_value("--motion_command", "forward").lower()
 if COMMAND_NAME not in COMMANDS:
     raise ValueError(f"Unknown motion command {COMMAND_NAME!r}; choose {tuple(COMMANDS)}")
+FORWARD_SPEED_TEXT = _consume_value("--forward_speed", "")
+if FORWARD_SPEED_TEXT:
+    forward_speed = float(FORWARD_SPEED_TEXT)
+    _, lateral_speed, yaw_rate = COMMANDS[COMMAND_NAME]
+    COMMANDS[COMMAND_NAME] = (forward_speed, lateral_speed, yaw_rate)
 
 PACKAGE_PARENT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PACKAGE_PARENT))

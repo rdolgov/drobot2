@@ -18,6 +18,24 @@ The actor is a two-layer 256x256 MLP using deployable IMU and joint state. Durin
 only, the critic also sees simulator base velocity, base height, and foot contacts. Those
 privileged values are never required by the deployed actor.
 
+## V19 smooth rear-payload walking
+
+V19 continues V18 with the measured 416 g rear battery plus a 107.18 g
+CAD-volume estimate for its printed box and lid. The task models a nominal
+523.18 g rear assembly and randomizes the uncertain payload over approximately
+450--600 g with small COM offsets. Its reward directly penalizes joint, body
+linear, and body angular acceleration in addition to action differences, foot
+slip, and touchdown impact. Speed commands are deliberately low at
+0.04--0.10 m/s, but sustained progress and four per-leg touchdown metrics keep
+the solution from becoming a stationary bent-knee pose.
+
+The selected `model_899.pt` completed three deterministic 30-second trials at
+a 0.05 m/s command with zero falls, no stalled five-second windows, and all four
+legs active. It averaged 0.0457 m/s, 0.204 m lateral drift, 14.653 rad/s2 joint
+RMS acceleration, and 0.484 m/s2 body linear RMS acceleration. See
+`simulation/docs/rl-smooth-rear-payload-walking-v19.md` for the complete mass,
+reward, training, evaluation, and reproduction record.
+
 ## V18 coordinated walking
 
 V18 fixes the stationary bent-knee behavior seen in the V17 review. Its reward makes

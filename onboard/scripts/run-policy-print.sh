@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 VENV_DIR="${REPO_ROOT}/onboard/.policy-venv"
-MODEL_PATH="${REPO_ROOT}/onboard/models/parallel-walking-v18/model_299.onnx"
+MODEL_PATH="${REPO_ROOT}/onboard/models/parallel-walking-v19-smooth-rear-payload/model_899.onnx"
 
 if [[ ! -x "${VENV_DIR}/bin/drobot-policy-print" ]]; then
   echo "Policy runtime is not installed. Run:" >&2
@@ -17,4 +17,3 @@ if [[ ! -f "${MODEL_PATH}" ]]; then
 fi
 
 exec "${VENV_DIR}/bin/drobot-policy-print" --model "${MODEL_PATH}" "$@"
-
