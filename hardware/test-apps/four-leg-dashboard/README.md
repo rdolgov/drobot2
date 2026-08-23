@@ -28,9 +28,9 @@ The local dashboard provides:
 - a guarded V18 **START 5-SECOND RL TEST** using the real BNO085, live calibrated
   position/velocity feedback for all 12 joints, bounded 60 Hz policy targets,
   automatic completion/fault disarm, and a dedicated **STOP RL + DISARM**;
-- a permanent red error log directly below the toolbar; command, connection,
-  and server faults remain in browser storage until explicitly cleared from
-  **SETTINGS**;
+- a recent red error log directly below the toolbar; active bus and RL faults
+  remain visible, resolved state-backed faults clear on refresh, and other
+  entries expire after ten minutes (with an immediate **SETTINGS** clear);
 - voltage, temperature, diagnostic current, raw encoder, speed, torque state,
   model, and per-leg current summaries;
 - a browser heartbeat sent every 0.7 seconds on an independent request path,

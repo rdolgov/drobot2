@@ -136,8 +136,10 @@ Pi pages do not require a control token. Motion POSTs carry a non-secret client
 version so stale pages are told to reload rather than controlling the robot.
 
 Brief browser or Wi-Fi polling failures are shown as a live connection warning
-and are not stored in the permanent error log. Hardware faults, including a
-missing servo USB adapter, remain stored until cleared from Settings.
+and are not stored in the recent error log. Active hardware and RL faults remain
+visible, then clear automatically after the corresponding server state recovers.
+Other command errors expire after ten minutes; Settings still provides an
+immediate manual clear.
 
 The page sends its heartbeat every 0.7 seconds on an independent request path.
 A missing heartbeat or closed page becomes a visible warning after 20 seconds,
