@@ -10,6 +10,8 @@ HTTP_BIND="${DROBOT_MANUAL_BIND:-0.0.0.0}"
 HTTP_PORT="${DROBOT_MANUAL_PORT:-8080}"
 DEMO_MODE="${DROBOT_MANUAL_DEMO:-true}"
 FALLBACK_DEMO="${DROBOT_MANUAL_FALLBACK_DEMO:-false}"
+RL_MODEL="${DROBOT_RL_MODEL:-${REPO_ROOT}/onboard/models/parallel-walking-v18/model_299.onnx}"
+RL_IMU_AXIS_MAP="${DROBOT_RL_IMU_AXIS_MAP:-+x,+y,+z}"
 
 if [[ ! -x "${VENV_DIR}/bin/drobot-four-leg-web" ]]; then
   echo "Manual dashboard runtime is not installed. Run:" >&2
@@ -23,6 +25,8 @@ ARGS=(
   --http-port "${HTTP_PORT}"
   --allow-remote
   --no-browser
+  --rl-model "${RL_MODEL}"
+  --rl-imu-axis-map "${RL_IMU_AXIS_MAP}"
 )
 case "${DEMO_MODE,,}" in
   true|1|yes) ARGS+=(--demo) ;;

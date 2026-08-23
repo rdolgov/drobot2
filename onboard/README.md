@@ -1,12 +1,11 @@
 # Raspberry Pi ROS 2 onboard controller
 
-The selected learned walking policy also has a standalone, print-only runtime
-under [`policy-runtime/`](policy-runtime/README.md). Use it to read the BNO085
-and print 12 bounded motor targets before connecting policy output to the servo
-bus. Its core interfaces are designed to be reused by this ROS 2 package.
-The policy dashboard uses port 8090; the existing manual motor/crawl dashboard
-uses port 8080, so both can run on the same Pi without sharing ownership of the
-servo bus.
+The selected learned walking policy has a standalone, print-only runtime under
+[`policy-runtime/`](policy-runtime/README.md) and a guarded real-motor rollout
+inside the port 8080 dashboard. The real rollout uses the BNO085 plus live
+12-joint feedback, runs for at most five seconds, and keeps the manual dashboard
+as the only servo-bus owner. Stop the port 8090 print-only service before using
+the real RL control so only one process reads the BNO085.
 
 See [`docs/pi5-dog-bringup.md`](docs/pi5-dog-bringup.md) for the checked Pi
 state, exact setup commands, power notes, and the staged safety plan for moving
@@ -229,6 +228,8 @@ routes are:
 | `POST /api/crawl-forward` | Start continuous distributed crawl |
 | `POST /api/diagonal-pair-forward` | Start continuous diagonal-pair gait |
 | `POST /api/crawl-stop` | Stop and disarm all motors |
+| `POST /api/rl-start` | Start the guarded five-second RL test after support acknowledgement |
+| `POST /api/rl-stop` | Stop RL inference and disarm all motors |
 | `POST /api/power-reset` | Reset rolling power/energy data and capture a fresh idle reference |
 | `POST /api/crawl-stance` | Move to the distributed gait stance |
 | `POST /api/center-all` | Move all twelve joints to calibrated zero |

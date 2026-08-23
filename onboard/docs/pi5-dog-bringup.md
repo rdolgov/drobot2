@@ -176,21 +176,22 @@ sudo systemctl stop drobot-manual-web
 
 ## Controlled rollout to learned motor control
 
-The policy must not be connected directly to the motors yet. Its observation
-expects real joint position and joint velocity, while the current print-only
-runtime deliberately inserts the neutral pose and zero velocity.
+The port 8080 dashboard now includes the first guarded real-motor rollout. It
+uses live calibrated joint position/velocity feedback and the real BNO085 while
+keeping the manual dashboard as the only servo-bus owner. The standalone port
+8090 service remains print-only and should be stopped before an 8080 RL test.
 
 1. **Sensor validation:** confirm the BNO085 mounting transform and signs while
    the robot is supported. Level projected gravity should be near `[0,0,-1]`.
-2. **Read-only joint feedback:** add all 12 servo positions and velocities to
-   the observation without enabling torque. Reject stale, missing, or
-   out-of-range feedback.
-3. **Shadow mode:** compare policy targets with measured positions while the
-   manual controller moves the robot. Log timing, clipping, rate limiting, and
-   disagreement.
-4. **Guarded actuation:** require a physical enable/interlock, heartbeat,
-   posture limits, action-rate limits, current/temperature limits, and an
-   immediate disarm path. Begin supported and at low power.
+2. **Live joint feedback:** all 12 calibrated positions and encoder-derived
+   velocities feed the observation; stale, missing, or out-of-range feedback
+   stops and disarms the test.
+3. **Bounded actuation:** the UI permits only a supported five-second test at
+   `0.00-0.10 m/s`, initializes targets from the measured pose, and enforces
+   joint, rate, tilt, telemetry, and automatic-disarm guards.
+4. **Floor rollout:** remains future work. Review recorded timing, tracking,
+   current, voltage sag, body motion, and support behavior before removing the
+   fixture or raising the speed/duration limits.
 5. **ROS 2 split:** publish BNO085 data as `sensor_msgs/Imu`, servo feedback as
    `sensor_msgs/JointState`, and velocity commands separately. Publish
    timestamped policy targets to the single motor-owner node, which remains
@@ -199,6 +200,9 @@ runtime deliberately inserts the neutral pose and zero velocity.
 This split lets the same policy core run from shell scripts today and behind
 ROS 2 later, while preventing the browser, manual gait, and learned policy from
 fighting over the servo bus.
+
+The exact V1 contract and stop conditions are in
+`hardware/test-apps/four-leg-dashboard/specs/rl-walk-v1.md`.
 
 ## Verification recorded on 2026-08-21
 

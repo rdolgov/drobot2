@@ -45,7 +45,11 @@ from drobot_hardware_test_apps.crawl_gait import (
 LOCAL_HOST = "127.0.0.1"
 APP_ROOT = Path(__file__).resolve().parents[2]
 HARDWARE_ROOT = APP_ROOT.parents[1]
+REPO_ROOT = HARDWARE_ROOT.parent
 DEFAULT_MANIFEST = HARDWARE_ROOT / "robot-runtime" / "four-leg.toml"
+DEFAULT_RL_MODEL = (
+    REPO_ROOT / "onboard" / "models" / "parallel-walking-v18" / "model_299.onnx"
+)
 STATIC_DIR = Path(__file__).with_name("four_leg_static")
 LAN_CLIENT_VERSION = "2"
 
@@ -391,6 +395,8 @@ class FourLegSession:
         heartbeat_timeout_s: float | None = None,
         clock: Any = time.monotonic,
         persist_calibration: bool = True,
+        rl_model_path: Path | None = None,
+        rl_imu_axis_map: str = "+x,+y,+z",
     ):
         self.dashboard = dashboard
         self.bus = bus
@@ -443,6 +449,36 @@ class FourLegSession:
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.worker: threading.Thread | None = None
+        self.rl_controller: Any | None = None
+        self.rl_motor_order: tuple[
+            tuple[LegProfile, MotorConfig, LegController], ...
+        ] = ()
+        self.rl_feedback_position_rad: Any | None = None
+        self.rl_feedback_velocity_rad_s: Any | None = None
+        self.rl_feedback_time_s: float | None = None
+        if rl_model_path is not None:
+            from drobot_policy_runtime.contract import (
+                ACTION_NAMES,
+                SERVO_ID_BY_ACTION_NAME,
+            )
+
+            from drobot_hardware_test_apps.rl_policy_control import RlPolicyController
+
+            motor_by_id = {
+                motor.servo_id: (profile, motor, self.controllers[profile.number])
+                for profile in self.profiles
+                for motor in profile.config.motors
+            }
+            self.rl_motor_order = tuple(
+                motor_by_id[SERVO_ID_BY_ACTION_NAME[name]] for name in ACTION_NAMES
+            )
+            self.rl_controller = RlPolicyController(
+                rl_model_path,
+                rl_imu_axis_map,
+                self._read_rl_joint_state,
+                self._apply_rl_targets,
+                self._finish_rl_policy,
+            )
 
     @property
     def profiles(self) -> tuple[LegProfile, ...]:
@@ -505,6 +541,8 @@ class FourLegSession:
         self.stop_event.set()
         if self.worker is not None:
             self.worker.join(timeout=2.0)
+        if self.rl_controller is not None:
+            self.rl_controller.stop()
         try:
             with self.lock:
                 self._disarm_all_locked(raise_errors=False)
@@ -711,6 +749,202 @@ class FourLegSession:
     def _require_manual_control_locked(self) -> None:
         if self.crawl_active:
             raise RuntimeError("Stop the active crawl before manual motion")
+        if self.rl_controller is not None and self.rl_controller.active:
+            raise RuntimeError("Stop the active RL walking test before manual motion")
+
+    def _rl_snapshot_locked(self) -> dict[str, Any]:
+        if self.rl_controller is None:
+            return {
+                "available": False,
+                "active": False,
+                "status": "unavailable",
+                "error": "RL policy runtime is not configured",
+                "motor_output_enabled": False,
+                "targets": [],
+                "imu": None,
+            }
+        return self.rl_controller.snapshot()
+
+    def start_rl_policy(
+        self,
+        *,
+        forward_m_s: float,
+        safety_ack: bool,
+        confirmation: str,
+    ) -> None:
+        if self.rl_controller is None:
+            raise RuntimeError("RL policy runtime is not configured")
+        if not safety_ack:
+            raise ValueError(
+                "Confirm the robot is supported, feet are clear, and cutoff is ready"
+            )
+        if confirmation != "START SUPPORTED RL TEST":
+            raise ValueError("START SUPPORTED RL TEST confirmation is required")
+
+        self.rl_controller.prepare()
+        with self.lock:
+            if self.crawl_active or self.rl_controller.active:
+                raise RuntimeError("Stop the active gait before starting an RL test")
+            if self._armed_count_locked():
+                raise RuntimeError("Disarm all 12 motors before starting an RL test")
+            if self.fault:
+                raise RuntimeError("Clear the reported hardware fault before RL start")
+
+            measured_by_id: dict[int, float] = {}
+            try:
+                for profile in self.profiles:
+                    controller = self.controllers[profile.number]
+                    for motor in profile.config.motors:
+                        state = controller.arm(motor)
+                        measured_by_id[motor.servo_id] = state.degrees
+                        self.desired_deg[(profile.number, motor.name)] = state.degrees
+                import numpy as np
+
+                initial = np.asarray(
+                    [
+                        math.radians(measured_by_id[motor.servo_id])
+                        for _profile, motor, _controller in self.rl_motor_order
+                    ],
+                    dtype=np.float32,
+                )
+                self.rl_feedback_position_rad = initial.copy()
+                self.rl_feedback_velocity_rad_s = np.zeros(12, dtype=np.float32)
+                self.rl_feedback_time_s = self.clock()
+                self.rl_controller.start(float(forward_m_s), initial)
+            except Exception:
+                self._disarm_all_locked(raise_errors=False)
+                raise
+
+            self.heartbeat("rl-policy-local")
+            self.fault = None
+            self.last_event = (
+                "Supported 5-second RL walking test started; automatic disarm enabled"
+            )
+
+    def stop_rl_policy(self) -> None:
+        if self.rl_controller is None:
+            raise RuntimeError("RL policy runtime is not configured")
+        self.rl_controller.request_stop()
+        with self.lock:
+            self._disarm_all_locked(raise_errors=True)
+            self.last_event = "RL walking test stopped; all 12 motors disarmed"
+        self.rl_controller.stop()
+
+    def _read_rl_joint_state(self) -> Any:
+        import numpy as np
+        from drobot_policy_runtime.sources import JointStateSample
+
+        with self.lock:
+            if self.rl_controller is None or not self.rl_controller.active:
+                raise RuntimeError("RL joint feedback requested while policy is inactive")
+            if self._armed_count_locked() != 12:
+                raise RuntimeError("RL policy requires all 12 motors armed")
+            now = self.clock()
+            if (
+                self.rl_feedback_position_rad is not None
+                and self.rl_feedback_velocity_rad_s is not None
+                and self.rl_feedback_time_s is not None
+                and now - self.rl_feedback_time_s < 0.04
+            ):
+                return JointStateSample(
+                    position_rad=self.rl_feedback_position_rad.copy(),
+                    velocity_rad_s=self.rl_feedback_velocity_rad_s.copy(),
+                    monotonic_time_s=self.rl_feedback_time_s,
+                )
+
+            measured_rad: list[float] = []
+            monitoring = self.dashboard.monitoring
+            for profile, motor, _controller in self.rl_motor_order:
+                status = self.bus.status(motor)
+                degrees = raw_to_degrees(
+                    status.raw_position,
+                    motor,
+                    profile.calibration.motor(motor),
+                )
+                if not status.torque_enabled:
+                    raise RuntimeError(
+                        f"RL telemetry says motor ID {motor.servo_id} lost torque"
+                    )
+                if status.temperature_c >= monitoring.temperature_warning_c:
+                    raise RuntimeError(
+                        f"RL temperature stop on ID {motor.servo_id}: "
+                        f"{status.temperature_c} C"
+                    )
+                if status.voltage_v < monitoring.voltage_warning_low_v - 0.5:
+                    raise RuntimeError(
+                        f"RL low-voltage stop on ID {motor.servo_id}: "
+                        f"{status.voltage_v:.1f} V"
+                    )
+                target = self.desired_deg[(profile.number, motor.name)]
+                tracking_error = abs(target - degrees)
+                if (
+                    status.current_ma
+                    >= monitoring.motor_stall_current_warning_ma
+                    and abs(status.raw_speed) <= monitoring.stall_speed_raw_max
+                    and tracking_error >= monitoring.stall_tracking_error_deg
+                ):
+                    raise RuntimeError(
+                        f"RL possible-stall stop on motor ID {motor.servo_id}"
+                    )
+                measured_rad.append(math.radians(degrees))
+            positions = np.asarray(measured_rad, dtype=np.float32)
+            now = self.clock()
+            previous = self.rl_feedback_position_rad
+            previous_time = self.rl_feedback_time_s
+            if previous is None or previous_time is None or now <= previous_time:
+                velocity = np.zeros(12, dtype=np.float32)
+            else:
+                velocity = np.clip(
+                    (positions - previous) / (now - previous_time),
+                    -4.5836625,
+                    4.5836625,
+                ).astype(np.float32)
+            self.rl_feedback_position_rad = positions
+            self.rl_feedback_velocity_rad_s = velocity
+            self.rl_feedback_time_s = now
+            return JointStateSample(
+                position_rad=positions.copy(),
+                velocity_rad_s=velocity.copy(),
+                monotonic_time_s=now,
+            )
+
+    def _apply_rl_targets(
+        self,
+        action: Any,
+        joint_target_rad: Any,
+        _monotonic_time_s: float,
+    ) -> None:
+        if len(action) != 12 or len(joint_target_rad) != 12:
+            raise RuntimeError("RL policy must produce exactly 12 targets")
+        with self.lock:
+            if self.rl_controller is None or not self.rl_controller.active:
+                raise RuntimeError("RL target received while policy is inactive")
+            if self._armed_count_locked() != 12:
+                raise RuntimeError("RL target rejected because not all motors are armed")
+            updates: dict[tuple[int, str], float] = {}
+            for index, (profile, motor, _controller) in enumerate(self.rl_motor_order):
+                degrees = math.degrees(float(joint_target_rad[index]))
+                if not math.isfinite(degrees):
+                    raise RuntimeError("RL policy produced a non-finite target")
+                degrees_to_raw(degrees, motor, profile.calibration.motor(motor))
+                previous = self.desired_deg[(profile.number, motor.name)]
+                if abs(degrees - previous) > 5.0:
+                    raise RuntimeError(
+                        f"RL target step for ID {motor.servo_id} exceeds 5 degrees"
+                    )
+                updates[(profile.number, motor.name)] = degrees
+            self.desired_deg.update(updates)
+
+    def _finish_rl_policy(self, error: str | None) -> None:
+        with self.lock:
+            self._disarm_all_locked(raise_errors=False)
+            if error:
+                self.last_event = f"RL policy fault; all motors disarmed: {error}"
+            else:
+                self.last_event = "RL policy test complete; all 12 motors disarmed"
+            self.rl_feedback_position_rad = None
+            self.rl_feedback_velocity_rad_s = None
+            self.rl_feedback_time_s = None
 
     def start_crawl_forward(
         self,
@@ -799,8 +1033,13 @@ class FourLegSession:
 
     def stop_crawl(self) -> None:
         with self.lock:
+            rl_active = self.rl_controller is not None and self.rl_controller.active
             self._disarm_all_locked(raise_errors=True)
-            self.last_event = "Crawl stopped; all 12 motors disarmed"
+            self.last_event = (
+                "RL walking stopped; all 12 motors disarmed"
+                if rl_active
+                else "Crawl stopped; all 12 motors disarmed"
+            )
 
     def heartbeat(self, source: str | None = None) -> None:
         with self.heartbeat_lock:
@@ -1084,9 +1323,11 @@ class FourLegSession:
     ) -> None:
         profile, motor, controller = self._selection(leg_number, motor_selector)
         with self.lock:
-            if self.crawl_active:
+            if self.crawl_active or (
+                self.rl_controller is not None and self.rl_controller.active
+            ):
                 self._disarm_all_locked(raise_errors=True)
-                self.last_event = "Crawl stopped; all 12 motors disarmed"
+                self.last_event = "Autonomous motion stopped; all motors disarmed"
                 return
             if motor.servo_id in controller.armed_ids:
                 controller.disarm(motor)
@@ -1101,9 +1342,11 @@ class FourLegSession:
         profile = self._profile(leg_number)
         controller = self.controllers[profile.number]
         with self.lock:
-            if self.crawl_active:
+            if self.crawl_active or (
+                self.rl_controller is not None and self.rl_controller.active
+            ):
                 self._disarm_all_locked(raise_errors=True)
-                self.last_event = "Crawl stopped; all 12 motors disarmed"
+                self.last_event = "Autonomous motion stopped; all motors disarmed"
                 return
             errors: list[Exception] = []
             for motor in profile.config.motors:
@@ -1128,6 +1371,8 @@ class FourLegSession:
 
     def _disarm_all_locked(self, *, raise_errors: bool) -> None:
         self._cancel_crawl_locked()
+        if self.rl_controller is not None:
+            self.rl_controller.request_stop()
         errors: list[Exception] = []
         for profile in self.profiles:
             controller = self.controllers[profile.number]
@@ -1150,6 +1395,8 @@ class FourLegSession:
         """Clear commands when the physical bus state can no longer be trusted."""
 
         self._cancel_crawl_locked()
+        if self.rl_controller is not None:
+            self.rl_controller.request_stop()
         for controller in self.controllers.values():
             controller.armed_ids.clear()
             controller.targets_deg.clear()
@@ -1406,7 +1653,9 @@ class FourLegSession:
             power_assessment = "Battery or wiring voltage sag detected"
         elif idle_reference_voltage_v is None:
             power_assessment = "Idle reference missing; disarm and reset analytics"
-        elif self.crawl_active:
+        elif self.crawl_active or (
+            self.rl_controller is not None and self.rl_controller.active
+        ):
             power_assessment = (
                 "No electrical stall signature; compare battery mass and balance"
             )
@@ -1541,6 +1790,7 @@ class FourLegSession:
                     str(profile.number): profile.corner for profile in self.profiles
                 },
             },
+            "rl_policy": self._rl_snapshot_locked(),
             "any_armed": bool(self._armed_count_locked()),
             "browser_heartbeat": browser_heartbeat,
             "last_event": self.last_event,
@@ -1754,6 +2004,14 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
                 )
             elif self.path == "/api/crawl-stop":
                 self.server.session.stop_crawl()
+            elif self.path == "/api/rl-start":
+                self.server.session.start_rl_policy(
+                    forward_m_s=float(payload.get("forward_m_s", 0.03)),
+                    safety_ack=payload.get("safety_ack") is True,
+                    confirmation=str(payload.get("confirmation", "")),
+                )
+            elif self.path == "/api/rl-stop":
+                self.server.session.stop_rl_policy()
             elif self.path == "/api/power-reset":
                 self.server.session.reset_power_analytics()
             elif self.path == "/api/target":
@@ -1811,6 +2069,8 @@ def _parser() -> argparse.ArgumentParser:
         help="Allow LAN clients; use only on a trusted local network",
     )
     parser.add_argument("--ramp-rate", type=float)
+    parser.add_argument("--rl-model", type=Path, default=DEFAULT_RL_MODEL)
+    parser.add_argument("--rl-imu-axis-map", default="+x,+y,+z")
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument(
         "--demo",
@@ -1839,6 +2099,8 @@ def main(argv: list[str] | None = None) -> int:
         bus,
         ramp_rate_deg_s=args.ramp_rate,
         persist_calibration=not args.demo,
+        rl_model_path=None if args.demo else args.rl_model,
+        rl_imu_axis_map=args.rl_imu_axis_map,
     )
     token = secrets.token_urlsafe(24)
     http_port = dashboard.server.http_port if args.http_port is None else args.http_port

@@ -27,6 +27,17 @@ const gaitStage = document.querySelector("#gaitStage");
 const gaitPhase = document.querySelector("#gaitPhase");
 const gaitProgress = document.querySelector("#gaitProgress");
 const gaitDetail = document.querySelector("#gaitDetail");
+const rlPanel = document.querySelector("#rlPanel");
+const rlSpeed = document.querySelector("#rlSpeed");
+const rlSpeedValue = document.querySelector("#rlSpeedValue");
+const rlSafetyAck = document.querySelector("#rlSafetyAck");
+const startRl = document.querySelector("#startRl");
+const stopRl = document.querySelector("#stopRl");
+const rlStatus = document.querySelector("#rlStatus");
+const rlModel = document.querySelector("#rlModel");
+const rlGravity = document.querySelector("#rlGravity");
+const rlTargets = document.querySelector("#rlTargets");
+const rlDetail = document.querySelector("#rlDetail");
 const resetPower = document.querySelector("#resetPower");
 const powerLine = document.querySelector("#powerLine");
 const legNodes = new Map();
@@ -415,9 +426,13 @@ function updateMotor(leg, motor) {
   row.querySelectorAll(
     ".slider, .angle-input, .set-button, .quick-row button",
   ).forEach((control) => {
-    control.disabled = !motor.armed || latestState?.crawl?.active;
+    control.disabled =
+      !motor.armed ||
+      latestState?.crawl?.active ||
+      latestState?.rl_policy?.active;
   });
-  row.querySelector(".arm-button").disabled = latestState?.crawl?.active;
+  row.querySelector(".arm-button").disabled =
+    latestState?.crawl?.active || latestState?.rl_policy?.active;
 
   const value = motor.desired_deg ?? motor.measured_deg;
   const slider = row.querySelector(".slider");
@@ -436,13 +451,16 @@ function updateLeg(leg) {
   panel.querySelector(".leg-current").textContent =
     `${formatCurrent(leg.current_ma)} / ${formatPower(leg.power_w)}`;
   panel.querySelector(".leg-armed").textContent = leg.armed_count;
-  panel.querySelector(".arm-leg").disabled = latestState?.crawl?.active;
-  panel.querySelector(".zero-leg").disabled = latestState?.crawl?.active;
+  const autonomousMotion =
+    latestState?.crawl?.active || latestState?.rl_policy?.active;
+  panel.querySelector(".arm-leg").disabled = autonomousMotion;
+  panel.querySelector(".zero-leg").disabled = autonomousMotion;
   leg.motors.forEach((motor) => updateMotor(leg, motor));
 }
 
 function updateSummary(state) {
   const { summary, settings, crawl, runtime, power } = state;
+  const rl = state.rl_policy || {};
   const demoMode = runtime?.mode === "demo";
   modeBadge.textContent = demoMode
     ? "DEMO / NO MOTOR OUTPUT"
@@ -524,6 +542,33 @@ function updateSummary(state) {
   document.body.classList.toggle("has-warning", summary.health === "warning");
   document.body.classList.toggle("has-armed", state.any_armed);
 
+  rlPanel.classList.toggle("active", Boolean(rl.active));
+  rlStatus.textContent = String(rl.status || "unavailable").toUpperCase();
+  rlModel.textContent = rl.model || "Not configured";
+  const gravity = rl.imu?.projected_gravity;
+  rlGravity.textContent = Array.isArray(gravity)
+    ? gravity.map((value) => Number(value).toFixed(2)).join(" / ")
+    : "Waiting";
+  rlTargets.textContent = `${Array.isArray(rl.targets) ? rl.targets.length : 0} / 12`;
+  rlDetail.textContent = rl.error
+    ? `FAULT: ${rl.error}`
+    : rl.active
+      ? `${Number(rl.elapsed_s || 0).toFixed(1)} / ` +
+        `${Number(rl.duration_s || 5).toFixed(1)} s / ` +
+        `${Number(rl.forward_m_s || 0).toFixed(2)} m/s / automatic disarm`
+      : `${Number(rl.control_hz || 60).toFixed(0)} Hz policy / ` +
+        `0.10 m/s maximum / automatic disarm`;
+  startRl.disabled =
+    !rl.available ||
+    rl.active ||
+    crawl.active ||
+    state.any_armed ||
+    !rlSafetyAck.checked;
+  stopRl.disabled = !rl.active;
+  rlSpeed.disabled = rl.active;
+  rlSafetyAck.disabled =
+    !rl.available || rl.active || crawl.active || state.any_armed;
+
   const phaseText = crawl.phase.replaceAll("_", " ").toUpperCase();
   const swingText = crawl.swing_corner
     ? ` / ${crawl.swing_corner.replaceAll("_", " ").toUpperCase()}`
@@ -566,16 +611,18 @@ function updateSummary(state) {
 
   walkForward.disabled =
     crawl.active ||
+    rl.active ||
     state.any_armed;
   walkDiagonalPair.disabled =
     crawl.active ||
+    rl.active ||
     state.any_armed;
   setCrawlStance.disabled =
-    crawl.active;
+    crawl.active || rl.active;
   stopWalk.disabled = !state.any_armed;
-  zeroAll.disabled = crawl.active;
-  centerAll.disabled = crawl.active;
-  captureZeroAll.disabled = crawl.active || state.any_armed;
+  zeroAll.disabled = crawl.active || rl.active;
+  centerAll.disabled = crawl.active || rl.active;
+  captureZeroAll.disabled = crawl.active || rl.active || state.any_armed;
 }
 
 async function refresh() {
@@ -586,12 +633,15 @@ async function refresh() {
     latestState.legs.forEach(updateLeg);
     updateSummary(latestState);
     connected = true;
-    connection.className = latestState.crawl.active
+    connection.className =
+      latestState.crawl.active || latestState.rl_policy?.active
       ? "connection armed"
       : latestState.any_armed
       ? "connection armed"
       : "connection online";
-    connectionText.textContent = latestState.crawl.active
+    connectionText.textContent = latestState.rl_policy?.active
+      ? "LIVE / RL POLICY ACTIVE"
+      : latestState.crawl.active
       ? "LIVE / CRAWL ACTIVE"
       : latestState.any_armed
       ? "LIVE · TORQUE ARMED"
@@ -609,6 +659,10 @@ async function refresh() {
       walkForward,
       walkDiagonalPair,
       stopWalk,
+      rlSpeed,
+      rlSafetyAck,
+      startRl,
+      stopRl,
       resetPower,
     ].forEach((control) => {
       control.disabled = true;
@@ -703,6 +757,40 @@ walkDiagonalPair.addEventListener("click", () => {
 
 stopWalk.addEventListener("click", () => {
   postAction("/api/crawl-stop", {}, "Gait sequence stopped; all 12 motors disarmed");
+});
+
+rlSpeed.addEventListener("input", () => {
+  rlSpeedValue.textContent = `${Number(rlSpeed.value).toFixed(2)} m/s`;
+});
+
+rlSafetyAck.addEventListener("change", () => {
+  if (latestState) updateSummary(latestState);
+});
+
+startRl.addEventListener("click", async () => {
+  if (!rlSafetyAck.checked) {
+    showNotice("Confirm support, foot clearance, and the physical cutoff", true);
+    return;
+  }
+  if (latestState?.any_armed) {
+    showNotice("Disarm all 12 motors before starting the RL test", true);
+    return;
+  }
+  await postAction(
+    "/api/rl-start",
+    {
+      forward_m_s: Number(rlSpeed.value),
+      safety_ack: true,
+      confirmation: "START SUPPORTED RL TEST",
+    },
+    "Five-second supported RL walking test started",
+  );
+  rlSafetyAck.checked = false;
+  if (latestState) updateSummary(latestState);
+});
+
+stopRl.addEventListener("click", () => {
+  postAction("/api/rl-stop", {}, "RL walking stopped; all 12 motors disarmed");
 });
 
 resetPower.addEventListener("click", () => {

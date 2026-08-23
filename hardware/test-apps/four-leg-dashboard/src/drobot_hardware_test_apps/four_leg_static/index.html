@@ -103,6 +103,45 @@
           </div>
         </section>
 
+        <section class="rl-panel" id="rlPanel" aria-labelledby="rlTitle">
+          <div class="rl-copy">
+            <p class="eyebrow">REAL IMU + LIVE JOINT FEEDBACK</p>
+            <h2 id="rlTitle">RL walking policy</h2>
+            <p>
+              Runs the selected V18 ONNX policy for five seconds, then
+              automatically disarms all 12 motors. The 8080 process remains the
+              only servo-bus owner and applies position, rate, tilt, telemetry,
+              and model-output guards.
+            </p>
+            <div class="rl-metrics">
+              <span>Status <b id="rlStatus">CHECKING</b></span>
+              <span>Model <b id="rlModel">model_299.onnx</b></span>
+              <span>IMU gravity <b id="rlGravity">Waiting</b></span>
+              <span>Targets <b id="rlTargets">0 / 12</b></span>
+            </div>
+          </div>
+          <div class="rl-controls">
+            <label for="rlSpeed">Requested forward speed</label>
+            <div class="rl-speed-row">
+              <input id="rlSpeed" type="range" min="0" max="0.10" step="0.01" value="0.03">
+              <output id="rlSpeedValue">0.03 m/s</output>
+            </div>
+            <label class="rl-ack">
+              <input id="rlSafetyAck" type="checkbox">
+              <span>Robot is supported, all feet are clear, and the physical cutoff is ready.</span>
+            </label>
+            <div class="rl-buttons">
+              <button class="rl-start-button" id="startRl" type="button">
+                START 5-SECOND RL TEST
+              </button>
+              <button class="gait-stop-button" id="stopRl" type="button">
+                STOP RL + DISARM
+              </button>
+            </div>
+            <small id="rlDetail">60 Hz policy / 0.10 m/s maximum / automatic disarm</small>
+          </div>
+        </section>
+
         <section class="alert-panel" id="alertPanel" aria-live="assertive" hidden>
           <strong>CHECK HARDWARE</strong>
           <ul id="alertList"></ul>

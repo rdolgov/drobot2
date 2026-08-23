@@ -376,9 +376,28 @@ def test_start_requires_all_motors_and_disarms_every_id() -> None:
         assert state["summary"]["armed_count"] == 0
         assert state["summary"]["health"] == "nominal"
         assert state["runtime"] == {"mode": "demo", "port": None}
+        assert state["rl_policy"]["available"] is False
         assert bus.torque == set()
     finally:
         session.close()
+
+
+def test_rl_ui_exposes_only_a_bounded_supported_trial() -> None:
+    static_dir = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "drobot_hardware_test_apps"
+        / "four_leg_static"
+    )
+    html = (static_dir / "index.html").read_text(encoding="utf-8")
+    script = (static_dir / "app.js").read_text(encoding="utf-8")
+
+    assert 'max="0.10"' in html
+    assert "START 5-SECOND RL TEST" in html
+    assert "physical cutoff is ready" in html
+    assert '"/api/rl-start"' in script
+    assert 'confirmation: "START SUPPORTED RL TEST"' in script
+    assert '"/api/rl-stop"' in script
 
 
 def test_hardware_ui_can_start_disconnected_with_motion_disabled() -> None:

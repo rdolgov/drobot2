@@ -25,6 +25,9 @@ The local dashboard provides:
 - direct **SET GAIT START STANCE** and **TEST DISTRIBUTED CRAWL** commands
   with visible phase/progress and a dedicated
   **STOP + DISARM** control;
+- a guarded V18 **START 5-SECOND RL TEST** using the real BNO085, live calibrated
+  position/velocity feedback for all 12 joints, bounded 60 Hz policy targets,
+  automatic completion/fault disarm, and a dedicated **STOP RL + DISARM**;
 - a permanent red error log directly below the toolbar; command, connection,
   and server faults remain in browser storage until explicitly cleared from
   **SETTINGS**;
@@ -54,7 +57,12 @@ control page to the public internet.
   HTTP endpoints, telemetry summaries, and demo behavior.
 - `src/drobot_hardware_test_apps/crawl_gait.py` owns the dependency-free
   foot-space inverse kinematics and deterministic crawl equations.
+- `src/drobot_hardware_test_apps/rl_policy_control.py` adapts the shared ONNX
+  policy runtime to the single motor-owning dashboard session.
 - `src/drobot_hardware_test_apps/four_leg_static/` owns the browser UI.
+
+The real-policy rollout and every enforced guard are documented in
+[`specs/rl-walk-v1.md`](specs/rl-walk-v1.md).
 
 The walking manifest currently maps Leg 1 to front-left, Leg 2 to front-right,
 Leg 3 to rear-left, and Leg 4 to rear-right. This preserves the confirmed
