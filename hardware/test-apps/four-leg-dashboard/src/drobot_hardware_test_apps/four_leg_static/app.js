@@ -593,14 +593,23 @@ function updateSummary(state) {
     ? gravity.map((value) => Number(value).toFixed(2)).join(" / ")
     : "Waiting";
   rlTargets.textContent = `${Array.isArray(rl.targets) ? rl.targets.length : 0} / 12`;
+  const temperatureVerification = Array.isArray(rl.temperature_verification)
+    ? rl.temperature_verification[0]
+    : null;
   rlDetail.textContent = rl.error
     ? `FAULT: ${rl.error}`
-    : rl.active
-      ? `${Number(rl.elapsed_s || 0).toFixed(1)} / ` +
-        `${Number(rl.duration_s || 5).toFixed(1)} s / ` +
-        `${Number(rl.forward_m_s || 0).toFixed(3)} m/s / then center + hold`
-      : `${Number(rl.control_hz || 60).toFixed(0)} Hz policy / ` +
-        `0-0.100 m/s / 1-60 s / completion centers + holds`;
+    : temperatureVerification
+      ? `VERIFYING TEMP ID ${temperatureVerification.motor_id}: ` +
+        `${temperatureVerification.temperature_c} C / ` +
+        `${Number(temperatureVerification.elapsed_s).toFixed(1)} / ` +
+        `${Number(temperatureVerification.required_s).toFixed(1)} s / ` +
+        `${temperatureVerification.high_sample_count} readings`
+      : rl.active
+        ? `${Number(rl.elapsed_s || 0).toFixed(1)} / ` +
+          `${Number(rl.duration_s || 5).toFixed(1)} s / ` +
+          `${Number(rl.forward_m_s || 0).toFixed(3)} m/s / then center + hold`
+        : `${Number(rl.control_hz || 60).toFixed(0)} Hz policy / ` +
+          `0-0.100 m/s / 1-60 s / completion centers + holds`;
   startRl.disabled =
     !rl.available ||
     rl.active ||
