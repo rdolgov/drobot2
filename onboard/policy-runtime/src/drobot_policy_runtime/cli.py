@@ -18,7 +18,7 @@ def _address(text: str) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run the V18 walking policy and print motor targets only."
+        description="Run the configured walking policy and print motor targets only."
     )
     parser.add_argument("--model", required=True)
     parser.add_argument("--imu", choices=("bno085", "level"), default="bno085")

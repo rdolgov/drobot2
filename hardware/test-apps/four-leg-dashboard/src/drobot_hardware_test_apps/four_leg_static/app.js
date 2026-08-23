@@ -720,7 +720,9 @@ function updateSummary(state) {
 
   rlPanel.classList.toggle("active", Boolean(rl.active));
   rlStatus.textContent = String(rl.status || "unavailable").toUpperCase();
-  rlModel.textContent = rl.model || "Not configured";
+  rlModel.textContent = rl.model_variant
+    ? `${rl.model_variant} / ${rl.model || "unknown file"}`
+    : rl.model || "Not configured";
   const gravity = rl.imu?.projected_gravity;
   rlGravity.textContent = Array.isArray(gravity)
     ? gravity.map((value) => Number(value).toFixed(2)).join(" / ")

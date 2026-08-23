@@ -142,6 +142,7 @@ class RlPolicyController:
             "status": "ready" if self.model_path.is_file() else "unavailable",
             "error": None,
             "model": self.model_path.name,
+            "model_variant": self.model_path.parent.name,
             "control_hz": self.CONTROL_HZ,
             "duration_s": self.DEFAULT_DURATION_S,
             "forward_m_s": 0.03,
