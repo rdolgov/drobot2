@@ -29,6 +29,16 @@ maps those actions to physical servo IDs 1-12 and converts them to bounded
 semantic joint angles. Policy targets are limited to a five-degree change per
 inference update before the existing servo-session ramp is applied.
 
+While the five-second policy is active, encoder position/speed uses the servo's
+single-transaction feedback command. Torque, voltage, temperature, current, and
+stall diagnostics are staggered across the 12 motors instead of reading every
+register for every motor in one policy update. Each motor remains covered by
+the onboard diagnostics during the trial. Browser dashboard responses use the
+last full electrical snapshot plus live policy targets and encoder positions;
+normal full telemetry resumes immediately after the policy disarms. This keeps
+browser refreshes from blocking the shared serial bus and tripping the onboard
+120 ms output watchdog.
+
 ## Start interlock
 
 The browser requires the exact `START SUPPORTED RL TEST` confirmation generated
