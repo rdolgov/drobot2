@@ -57,11 +57,15 @@ After these checks, each motor is armed while holding its measured position.
 The measured 12-joint vector becomes the policy's initial rate-limiter target,
 preventing a jump from an assumed neutral pose.
 
-## Runtime stops
+## Completion and runtime stops
+
+Normal five-second completion stops policy output, keeps all 12 motors armed,
+and sets every desired semantic joint angle to calibrated zero. The existing
+bounded motion worker ramps into the same pose as **CENTER ALL 12**, then holds
+torque so the robot does not collapse when the trial timer ends.
 
 Every path below requests policy stop and disarms all 12 motors:
 
-- five-second test completion;
 - **STOP RL + DISARM**, **STOP + DISARM**, or **DISARM ALL 12**;
 - model, IMU, serial, telemetry, or joint-feedback exception;
 - a control-loop output gap longer than 120 ms;

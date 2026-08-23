@@ -109,9 +109,10 @@
             <h2 id="rlTitle">RL walking policy</h2>
             <p>
               Runs the selected V18 ONNX policy for five seconds, then
-              automatically disarms all 12 motors. The 8080 process remains the
-              only servo-bus owner and applies position, rate, tilt, telemetry,
-              and model-output guards.
+              returns all 12 joints to calibrated center and holds torque for a
+              stable stance. Faults and the explicit stop button still disarm.
+              The 8080 process remains the only servo-bus owner and applies
+              position, rate, tilt, telemetry, and model-output guards.
             </p>
             <div class="rl-metrics">
               <span>Status <b id="rlStatus">CHECKING</b></span>
@@ -138,7 +139,7 @@
                 STOP RL + DISARM
               </button>
             </div>
-            <small id="rlDetail">60 Hz policy / 0.10 m/s maximum / automatic disarm</small>
+            <small id="rlDetail">60 Hz policy / normal completion centers and holds</small>
           </div>
         </section>
 

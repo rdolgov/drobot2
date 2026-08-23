@@ -27,7 +27,8 @@ The local dashboard provides:
   **STOP + DISARM** control;
 - a guarded V18 **START 5-SECOND RL TEST** using the real BNO085, live calibrated
   position/velocity feedback for all 12 joints, bounded 60 Hz policy targets,
-  automatic completion/fault disarm, and a dedicated **STOP RL + DISARM**;
+  normal-completion transition to calibrated center with torque holding,
+  fault disarm, and a dedicated **STOP RL + DISARM**;
 - a recent red error log directly below the toolbar; active bus and RL faults
   remain visible, resolved state-backed faults clear on refresh, and other
   entries expire after ten minutes (with an immediate **SETTINGS** clear);
