@@ -74,7 +74,15 @@ Every path below requests policy stop and disarms all 12 motors:
 - missing armed motor or invalid/non-finite target;
 - a target update exceeding five degrees;
 - projected-gravity magnitude outside `[0.8, 1.2]`; or
-- body tilt exceeding 60 degrees while the test is running.
+- body tilt exceeding 60 degrees while the test is running;
+- one verified servo temperature remaining at or above `55 C` for five seconds
+  and at least three readings; or
+- one critical servo-temperature reading at or above `65 C`.
+
+The temperature verifier prioritizes repeated reads of a suspicious motor. Any
+re-read below `55 C` clears the candidate without stopping, preventing one
+corrupted telemetry packet from collapsing the robot. The five-second check is
+non-blocking and does not pause the 60 Hz policy loop.
 
 Browser heartbeat remains diagnostic only. A physical cutoff is still the
 emergency stop because neither Wi-Fi nor software disarm is safety-rated.

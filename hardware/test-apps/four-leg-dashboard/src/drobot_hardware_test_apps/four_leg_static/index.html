@@ -113,7 +113,8 @@
               holds torque for a stable stance. Faults and the explicit stop
               button still disarm. The 8080 process remains the only servo-bus
               owner and applies position, rate, tilt, telemetry, and
-              model-output guards.
+              model-output guards. Temperatures from 55–64 C are rechecked for
+              five seconds before stopping; 65 C or higher stops immediately.
             </p>
             <div class="rl-metrics">
               <span>Status <b id="rlStatus">CHECKING</b></span>

@@ -192,7 +192,9 @@ keeping the manual dashboard as the only servo-bus owner. The standalone port
    `0.000-0.100 m/s`, initializes targets from the measured pose, and enforces
    joint, rate, tilt, and telemetry guards. Normal timed completion returns all
    12 joints to calibrated center and keeps torque holding; an explicit stop or
-   policy/hardware fault still disarms.
+   policy/hardware fault still disarms. An RL temperature sample from `55-64 C`
+   must persist across repeated reads for five seconds before disarm; `65 C` or
+   above remains an immediate critical stop.
 4. **Floor rollout:** remains future work. Review recorded timing, tracking,
    current, voltage sag, body motion, and support behavior before removing the
    fixture or raising the speed/duration limits.

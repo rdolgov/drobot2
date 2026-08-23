@@ -62,6 +62,8 @@ class MonitoringConfig:
     voltage_spread_warning_v: float
     voltage_sag_warning_v: float
     temperature_warning_c: int
+    temperature_stop_confirmation_s: float
+    temperature_critical_c: int
     leg_current_warning_ma: float
     motor_stall_current_warning_ma: float
     stall_tracking_error_deg: float
@@ -174,6 +176,13 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             "monitoring.voltage_sag_warning_v",
         ),
         temperature_warning_c=int(monitoring_data.get("temperature_warning_c", 60)),
+        temperature_stop_confirmation_s=_finite_float(
+            monitoring_data.get("temperature_stop_confirmation_s", 5.0),
+            "monitoring.temperature_stop_confirmation_s",
+        ),
+        temperature_critical_c=int(
+            monitoring_data.get("temperature_critical_c", 65)
+        ),
         leg_current_warning_ma=_finite_float(
             monitoring_data.get("leg_current_warning_ma", 3000.0),
             "monitoring.leg_current_warning_ma",
@@ -201,6 +210,16 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("Voltage-sag warning must be in [0.1, 3]")
     if not 30 <= monitoring.temperature_warning_c <= 90:
         raise ValueError("Temperature warning must be in [30, 90] C")
+    if not 1.0 <= monitoring.temperature_stop_confirmation_s <= 10.0:
+        raise ValueError("Temperature-stop confirmation must be in [1, 10] seconds")
+    if not (
+        monitoring.temperature_warning_c
+        < monitoring.temperature_critical_c
+        <= 90
+    ):
+        raise ValueError(
+            "Critical temperature must be above the warning and at most 90 C"
+        )
     if not 100 <= monitoring.leg_current_warning_ma <= 10_000:
         raise ValueError("Leg-current warning must be in [100, 10000] mA")
     if not 100 <= monitoring.motor_stall_current_warning_ma <= 5_000:
@@ -459,6 +478,7 @@ class FourLegSession:
         self.rl_feedback_time_s: float | None = None
         self.rl_diagnostic_index = 0
         self.rl_diagnostic_time_s: float | None = None
+        self.rl_temperature_candidates: dict[int, tuple[float, int, int]] = {}
         self.last_full_snapshot: dict[str, Any] | None = None
         if rl_model_path is not None:
             from drobot_policy_runtime.contract import (
@@ -766,8 +786,72 @@ class FourLegSession:
                 "motor_output_enabled": False,
                 "targets": [],
                 "imu": None,
+                "temperature_verification": [],
             }
-        return self.rl_controller.snapshot()
+        snapshot = self.rl_controller.snapshot()
+        now = self.clock()
+        confirmation_s = self.dashboard.monitoring.temperature_stop_confirmation_s
+        snapshot["temperature_verification"] = [
+            {
+                "motor_id": servo_id,
+                "temperature_c": temperature_c,
+                "high_sample_count": sample_count,
+                "elapsed_s": min(confirmation_s, max(0.0, now - started_at)),
+                "required_s": confirmation_s,
+            }
+            for servo_id, (started_at, sample_count, temperature_c) in sorted(
+                self.rl_temperature_candidates.items()
+            )
+        ]
+        return snapshot
+
+    def _check_rl_temperature_locked(
+        self,
+        servo_id: int,
+        temperature_c: int,
+        now: float,
+    ) -> None:
+        monitoring = self.dashboard.monitoring
+        if temperature_c < monitoring.temperature_warning_c:
+            cleared = self.rl_temperature_candidates.pop(servo_id, None)
+            if cleared is not None:
+                self.last_event = (
+                    f"RL temperature verification cleared on ID {servo_id}: "
+                    f"{temperature_c} C"
+                )
+            return
+        if temperature_c >= monitoring.temperature_critical_c:
+            self.rl_temperature_candidates.pop(servo_id, None)
+            raise RuntimeError(
+                f"RL critical temperature stop on ID {servo_id}: "
+                f"{temperature_c} C"
+            )
+
+        candidate = self.rl_temperature_candidates.get(servo_id)
+        if candidate is None:
+            started_at = now
+            sample_count = 1
+        else:
+            started_at, sample_count, _previous_temperature_c = candidate
+            sample_count += 1
+        self.rl_temperature_candidates[servo_id] = (
+            started_at,
+            sample_count,
+            temperature_c,
+        )
+        elapsed_s = max(0.0, now - started_at)
+        required_s = monitoring.temperature_stop_confirmation_s
+        if elapsed_s >= required_s and sample_count >= 3:
+            raise RuntimeError(
+                f"RL persistent temperature stop on ID {servo_id}: "
+                f"{temperature_c} C after {elapsed_s:.1f} seconds and "
+                f"{sample_count} high readings"
+            )
+        self.last_event = (
+            f"Verifying RL temperature on ID {servo_id}: {temperature_c} C, "
+            f"{elapsed_s:.1f}/{required_s:.1f} seconds, "
+            f"{sample_count} high reading{'s' if sample_count != 1 else ''}"
+        )
 
     def start_rl_policy(
         self,
@@ -823,6 +907,7 @@ class FourLegSession:
                 self.rl_feedback_time_s = self.clock()
                 self.rl_diagnostic_index = 0
                 self.rl_diagnostic_time_s = None
+                self.rl_temperature_candidates.clear()
                 self.rl_controller.start(
                     speed,
                     duration,
@@ -878,7 +963,19 @@ class FourLegSession:
                 self.rl_diagnostic_time_s is None
                 or now - self.rl_diagnostic_time_s >= 0.10
             ):
-                diagnostic_index = self.rl_diagnostic_index
+                pending_indices = [
+                    index
+                    for index, (_profile, motor, _controller) in enumerate(
+                        self.rl_motor_order
+                    )
+                    if motor.servo_id in self.rl_temperature_candidates
+                ]
+                if pending_indices:
+                    diagnostic_index = pending_indices[
+                        self.rl_diagnostic_index % len(pending_indices)
+                    ]
+                else:
+                    diagnostic_index = self.rl_diagnostic_index % 12
                 self.rl_diagnostic_index = (self.rl_diagnostic_index + 1) % 12
                 self.rl_diagnostic_time_s = now
 
@@ -902,11 +999,11 @@ class FourLegSession:
                         raise RuntimeError(
                             f"RL telemetry says motor ID {motor.servo_id} lost torque"
                         )
-                    if status.temperature_c >= monitoring.temperature_warning_c:
-                        raise RuntimeError(
-                            f"RL temperature stop on ID {motor.servo_id}: "
-                            f"{status.temperature_c} C"
-                        )
+                    self._check_rl_temperature_locked(
+                        motor.servo_id,
+                        status.temperature_c,
+                        now,
+                    )
                     if status.voltage_v < monitoring.voltage_warning_low_v - 0.5:
                         raise RuntimeError(
                             f"RL low-voltage stop on ID {motor.servo_id}: "
@@ -975,6 +1072,7 @@ class FourLegSession:
     def _finish_rl_policy(self, error: str | None, stopped: bool) -> str | None:
         with self.lock:
             result = error
+            self.rl_temperature_candidates.clear()
             if error:
                 self._disarm_all_locked(raise_errors=False)
                 self.last_event = f"RL policy fault; all motors disarmed: {error}"
@@ -1822,6 +1920,10 @@ class FourLegSession:
                 "voltage_warning_high_v": monitoring.voltage_warning_high_v,
                 "voltage_sag_warning_v": monitoring.voltage_sag_warning_v,
                 "temperature_warning_c": monitoring.temperature_warning_c,
+                "temperature_stop_confirmation_s": (
+                    monitoring.temperature_stop_confirmation_s
+                ),
+                "temperature_critical_c": monitoring.temperature_critical_c,
                 "leg_current_warning_ma": monitoring.leg_current_warning_ma,
                 "motor_stall_current_warning_ma": (
                     monitoring.motor_stall_current_warning_ma

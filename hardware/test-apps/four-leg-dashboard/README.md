@@ -450,18 +450,22 @@ The dashboard uses attention thresholds from `../../robot-runtime/four-leg.toml`
 | Servo voltage | below 11.0 V | Earlier warning for supply sag under the higher torque cap |
 | Servo voltage | above 12.6 V | Above the documented 12 V ST3215 supply maximum |
 | Voltage spread | above 0.3 V | Earlier branch-wiring and voltage-drop warning |
-| Servo temperature | 55 C or above | Earlier pause-and-inspect threshold |
+| Servo temperature | 55 C or above | Begin a five-second RL confirmation window; a normal re-read clears it |
+| Servo temperature | 65 C or above | Immediate critical RL stop and disarm |
 | Per-leg diagnostic current | 2500 mA or above | Earlier load and connector warning |
 
-These are display-only software thresholds, not firmware protection settings.
-Temperature, voltage, voltage-spread, and diagnostic-current warnings remain
-visible but do not block a command or automatically disarm motors. Actual
-telemetry read exceptions, motion exceptions, and explicit stop/disarm commands
-still disarm. Browser-heartbeat age is diagnostic only. Servo voltage does not
-show individual LiPo cell balance. Servo current feedback is diagnostic and is
-not a calibrated battery, branch, force, or joint-torque measurement. Use an
-inline watt meter or clamp meter and per-cell checker for electrical validation.
-The dashboard never declares the entire power system certified.
+These are software thresholds, not firmware protection settings. During an RL
+walk, a `55-64 C` sample is prioritized for repeated reads and stops the run
+only after it remains high for five seconds with at least three high samples. A
+normal sample resets the confirmation, while `65 C` or above immediately stops
+and disarms. Voltage, voltage-spread, and diagnostic-current warnings remain
+display-only. Actual telemetry read exceptions, motion exceptions, and explicit
+stop/disarm commands still disarm. Browser-heartbeat age is diagnostic only.
+Servo voltage does not show individual LiPo cell balance. Servo current feedback
+is diagnostic and is not a calibrated battery, branch, force, or joint-torque
+measurement. Use an inline watt meter or clamp meter and per-cell checker for
+electrical validation. The dashboard never declares the entire power system
+certified.
 
 ## Motion behavior
 

@@ -86,6 +86,8 @@ def test_manifest_loads_verified_ids_and_directions() -> None:
     assert dashboard.monitoring.voltage_spread_warning_v == pytest.approx(0.3)
     assert dashboard.monitoring.voltage_sag_warning_v == pytest.approx(0.6)
     assert dashboard.monitoring.temperature_warning_c == 55
+    assert dashboard.monitoring.temperature_stop_confirmation_s == pytest.approx(5.0)
+    assert dashboard.monitoring.temperature_critical_c == 65
     assert dashboard.monitoring.leg_current_warning_ma == pytest.approx(2500.0)
     assert dashboard.monitoring.motor_stall_current_warning_ma == pytest.approx(
         1200.0
@@ -418,6 +420,32 @@ def test_rl_request_bounds_allow_slow_custom_speed_and_timed_walk() -> None:
             session.rl_controller.validate_request(0.05, 0.5)
         with pytest.raises(ValueError, match="duration"):
             session.rl_controller.validate_request(0.05, 61.0)
+    finally:
+        session.close()
+
+
+def test_rl_temperature_stop_requires_persistent_or_critical_reading() -> None:
+    session, _bus, clock = _session()
+    try:
+        session._check_rl_temperature_locked(3, 61, clock())
+        assert session.rl_temperature_candidates[3][1:] == (1, 61)
+
+        clock.advance(0.1)
+        session._check_rl_temperature_locked(3, 37, clock())
+        assert session.rl_temperature_candidates == {}
+        assert "cleared" in session.last_event.lower()
+
+        session._check_rl_temperature_locked(3, 61, clock())
+        for _sample in range(4):
+            clock.advance(1.0)
+            session._check_rl_temperature_locked(3, 61, clock())
+        clock.advance(1.0)
+        with pytest.raises(RuntimeError, match="persistent temperature stop"):
+            session._check_rl_temperature_locked(3, 61, clock())
+
+        session.rl_temperature_candidates.clear()
+        with pytest.raises(RuntimeError, match="critical temperature stop"):
+            session._check_rl_temperature_locked(3, 65, clock())
     finally:
         session.close()
 
