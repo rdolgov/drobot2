@@ -7,21 +7,24 @@ import math
 import threading
 import time
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Callable, Protocol
 
 import numpy as np
 
 from .contract import (
+    ACTION_SCALE_RAD,
     ACTION_NAMES,
     DEFAULT_JOINT_POSITION_RAD,
     GAIT_PERIOD_S,
     GRAVITY_M_S2,
+    JOINT_LOWER_RAD,
+    JOINT_UPPER_RAD,
     SERVO_ID_BY_ACTION_NAME,
     SERVO_VELOCITY_LIMIT_RAD_S,
     normalized_action_to_joint_target,
 )
 from .policy import OnnxWalkingPolicy
-from .sources import ImuSource, JointStateSource
+from .sources import ImuSample, ImuSource, JointStateSample, JointStateSource
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,24 @@ class PolicyCommand:
     forward_m_s: float = 0.15
     lateral_m_s: float = 0.0
     yaw_rad_s: float = 0.0
+
+
+@dataclass(frozen=True)
+class PolicyStepSample:
+    """All synchronized inputs and outputs from one successful policy step."""
+
+    sequence: int
+    elapsed_s: float
+    monotonic_time_s: float
+    command: PolicyCommand
+    phase_sin: float
+    phase_cos: float
+    imu: ImuSample
+    joints: JointStateSample
+    observation: np.ndarray
+    action: np.ndarray
+    requested_target_rad: np.ndarray
+    rate_limited_target_rad: np.ndarray
 
 
 class MotorSink(Protocol):
@@ -89,6 +110,7 @@ class WalkingPolicyLoop:
         command: PolicyCommand = PolicyCommand(),
         control_hz: float = 60.0,
         initial_target_rad: np.ndarray | None = None,
+        step_observer: Callable[[PolicyStepSample], None] | None = None,
     ) -> None:
         if not 10.0 <= control_hz <= 200.0:
             raise ValueError("control_hz must be in [10, 200]")
@@ -98,6 +120,8 @@ class WalkingPolicyLoop:
         self.motor_sink = motor_sink
         self.command = command
         self.control_hz = control_hz
+        self.step_observer = step_observer
+        self.step_count = 0
         self.previous_action = np.zeros(12, dtype=np.float32)
         initial_target = (
             DEFAULT_JOINT_POSITION_RAD
@@ -108,19 +132,23 @@ class WalkingPolicyLoop:
             raise ValueError("initial_target_rad must contain 12 finite values")
         self.previous_target_rad = initial_target.copy()
 
-    def _observation(self, elapsed_s: float) -> np.ndarray:
+    def _observation(
+        self, elapsed_s: float
+    ) -> tuple[np.ndarray, ImuSample, JointStateSample, float, float]:
         imu = self.imu_source.read()
         joints = self.joint_source.read()
         phase_angle = 2.0 * math.pi * ((elapsed_s / GAIT_PERIOD_S) % 1.0)
-        return np.concatenate(
+        phase_sin = math.sin(phase_angle)
+        phase_cos = math.cos(phase_angle)
+        observation = np.concatenate(
             (
                 np.asarray(
                     (
                         self.command.forward_m_s,
                         self.command.lateral_m_s,
                         self.command.yaw_rad_s,
-                        math.sin(phase_angle),
-                        math.cos(phase_angle),
+                        phase_sin,
+                        phase_cos,
                     ),
                     dtype=np.float32,
                 ),
@@ -135,13 +163,46 @@ class WalkingPolicyLoop:
                 self.previous_action,
             )
         ).astype(np.float32)
+        return observation, imu, joints, phase_sin, phase_cos
 
     def step(self, start_s: float, now_s: float) -> None:
-        action = self.policy.infer(self._observation(now_s - start_s))
+        elapsed_s = now_s - start_s
+        observation, imu, joints, phase_sin, phase_cos = self._observation(
+            elapsed_s
+        )
+        action = self.policy.infer(observation)
+        requested_target = np.clip(
+            DEFAULT_JOINT_POSITION_RAD
+            + ACTION_SCALE_RAD * np.clip(action, -1.0, 1.0),
+            JOINT_LOWER_RAD,
+            JOINT_UPPER_RAD,
+        ).astype(np.float32)
         target = normalized_action_to_joint_target(
             action, self.previous_target_rad, self.control_hz
         )
         self.motor_sink.write(action, target, now_s)
+        if self.step_observer is not None:
+            try:
+                self.step_observer(
+                    PolicyStepSample(
+                        sequence=self.step_count,
+                        elapsed_s=elapsed_s,
+                        monotonic_time_s=now_s,
+                        command=self.command,
+                        phase_sin=phase_sin,
+                        phase_cos=phase_cos,
+                        imu=imu,
+                        joints=joints,
+                        observation=observation,
+                        action=action,
+                        requested_target_rad=requested_target,
+                        rate_limited_target_rad=target,
+                    )
+                )
+            except Exception:
+                # Recording/telemetry observers must never disturb motor control.
+                pass
+        self.step_count += 1
         self.previous_action = action
         self.previous_target_rad = target
 
