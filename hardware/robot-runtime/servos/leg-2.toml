@@ -17,7 +17,7 @@ max_deg = 45.0
 number = 2
 name = "hip_flexion"
 id = 5
-direction = 1
+direction = -1
 min_deg = -90.0
 max_deg = 90.0
 
