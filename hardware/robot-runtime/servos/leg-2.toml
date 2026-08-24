@@ -25,6 +25,6 @@ max_deg = 90.0
 number = 3
 name = "knee"
 id = 6
-direction = 1
+direction = -1
 min_deg = -120.0
 max_deg = 120.0
