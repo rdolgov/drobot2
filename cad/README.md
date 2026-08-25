@@ -31,6 +31,7 @@ assemblies.
 | `exports/step/rectangular_fork_shoe_fit_preview.step` | `drobot_cad/assembly/rectangular_fork_shoe_fit_preview.step.py` | Generated lower-leg preview with four M3 rods and bilateral driver-access envelopes |
 | `exports/step/quadruped_body_base.step` | `drobot_cad/parts/quadruped_body.py` | One-piece X2D-safe body tub with hip reinforcement, protected battery rail, four-wall M3 grid, full floor grid, and paired wire ports |
 | `exports/step/quadruped_carry_training_handle.step` | `drobot_cad/parts/quadruped_carry_training_handle.step.py` | One-piece side-grid carry handle with two resistance-band attachment slots |
+| `exports/step/apriltag_body_marker.step` | `drobot_cad/parts/apriltag_body_marker.step.py` | Two-material tag36h11 ID 0 chassis marker for synchronized video pose tracking |
 | `exports/step/quadruped_carry_training_handle_fit_preview.step` | `drobot_cad/assembly/quadruped_carry_training_handle_fit_preview.step.py` | Installed body and handle review assembly |
 | `exports/step/quadruped_body_lid.step` | `drobot_cad/parts/quadruped_body_lid.py` | Removable ventilated body lid with a 10 mm-pitch universal M3 grid and direct LeKiwi camera pattern |
 | `exports/step/quadruped_electronics_tray.step` | `drobot_cad/parts/quadruped_electronics_tray.py` | Optional electronics tray with four floor-grid-aligned M3 mounting locations |
