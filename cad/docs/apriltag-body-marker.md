@@ -32,16 +32,39 @@ relative to the chassis.
 
 Preferred workflow:
 
-1. Import `apriltag_body_marker.3mf` as one object with multiple parts.
-2. Assign matte white filament to `white_plate`.
-3. Assign matte black filament to `black_tag36h11_id_0` and its child regions.
-4. Print the marker face upward at 0.20 or 0.24 mm layer height without support.
-5. Disable automatic scaling and avoid glossy, translucent, silk, or reflective
+1. Open `apriltag_body_marker.3mf` directly in Bambu Studio. It is a complete
+   project containing one object with the aligned `white_plate` and
+   `black_tag36h11_id_0` parts.
+2. If Bambu Studio says the included stock P2S profile differs from the
+   connected printer, select **Switch now** to use the connected printer's
+   profile. This is an expected printer-profile prompt, not a damaged-file
+   warning.
+3. Confirm filament 1 is matte white and filament 2 is matte black. The part
+   assignments are already stored in the project.
+4. Confirm the object remains 104 x 80 x 2.24 mm and centered on the plate.
+5. Print the marker face upward at 0.20 or 0.24 mm layer height without support.
+6. Disable automatic scaling and avoid glossy, translucent, silk, or reflective
    filament.
+
+The packaged project uses only stock Bambu printer, process, and PLA presets;
+it does not contain custom machine G-code. It was verified by opening it in
+Bambu Studio 2.8.2 with two active white/black filaments and both parts in the
+correct shared position.
 
 If the slicer does not preserve 3MF part labels, import the aligned white and
 black STL files together **as parts of one object**. Keep their original
 coordinates and do not auto-arrange them separately.
+
+To regenerate the Bambu-compatible file after changing either aligned STL:
+
+```powershell
+uv run python cad/scripts/generate_apriltag_body_marker_3mf.py
+```
+
+The generator flattens the marker's disconnected black regions into one mesh,
+keeps the white and black meshes as two direct parts of one object, assigns
+them to filament 1 and 2, and packages them using the validated stock project
+template in `cad/templates/apriltag_body_marker_bambu_source.3mf`.
 
 ## Recording setup
 
@@ -57,4 +80,3 @@ coordinates and do not auto-arrange them separately.
 
 AprilTag tracking improves pose and speed measurement but does not replace the
 internal recording or show foot forces directly.
-
