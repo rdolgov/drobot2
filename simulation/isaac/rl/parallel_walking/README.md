@@ -18,6 +18,52 @@ The actor is a two-layer 256x256 MLP using deployable IMU and joint state. Durin
 only, the critic also sees simulator base velocity, base height, and foot contacts. Those
 privileged values are never required by the deployed actor.
 
+## V21 low-speed external rear-payload profile
+
+`low-speed-external-rear-payload` is the retraining profile created from the
+real-walk timing investigation. It continues from selected V20 weights but
+resets its own command curriculum: commands expand from `0.04-0.10 m/s` down
+to `0.005-0.10 m/s` over 38,400 policy steps. Cadence scales from 0.35 to
+1.25 Hz and reference stride from 35% to 100%, so a tiny speed request no
+longer drives the old full-rate shuffle. The sustained-stall threshold also
+scales with command speed, while V20's rear payload, straightness, slip,
+touchdown, joint/body acceleration, and action-acceleration objectives remain.
+
+Start the continuation with:
+
+```powershell
+& .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
+  -CommandSet low-speed-external-rear-payload -Iterations 800 -NumEnvs 128
+```
+
+The clean-checkout fallback is V20 `model_900.pt`. The workflow resets the V21
+curriculum offset even though it bootstraps that checkpoint. Evaluate candidate
+checkpoints independently at `0.005`, `0.01`, `0.02`, `0.04`, and `0.08 m/s`
+before export or hardware deployment. The controller/timing baseline and exact
+acceptance rationale are in
+`debug/walk-trials/20260826T020512958721Z-7a4955cb/ANALYSIS.md`.
+
+Export only a selected V21 checkpoint with its trained cadence contract:
+
+```powershell
+& C:\isaacsim\python.bat `
+  .\simulation\isaac\rl\parallel_walking\export_policy_onnx.py `
+  --checkpoint <selected-model.pt> `
+  --output <selected-model.onnx> `
+  --training-task Drobot-Commanded-Walk-Low-Speed-External-Rear-Payload-Direct `
+  --training-profile low-speed-external-rear-payload `
+  --gait-clock-mode speed_scaled `
+  --gait-standstill-deadband-m-s 0.002 `
+  --gait-speed-min-m-s 0.005 --gait-speed-max-m-s 0.10 `
+  --gait-frequency-min-hz 0.35 --gait-frequency-max-hz 1.25 `
+  --forward-speed-min-m-s 0.005 --forward-speed-max-m-s 0.10 `
+  --recommended-forward-speed-m-s 0.005
+```
+
+The generated JSON sidecar is required at deployment. It prevents the runtime
+from applying speed-scaled cadence to a fixed-clock model or accepting a speed
+outside that model's training range.
+
 ## V20 external rear-payload walking
 
 V20 corrects the battery installation used by V19. The 144 x 68 mm holder

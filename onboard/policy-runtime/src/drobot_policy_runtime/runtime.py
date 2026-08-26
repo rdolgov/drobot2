@@ -15,7 +15,7 @@ from .contract import (
     ACTION_SCALE_RAD,
     ACTION_NAMES,
     DEFAULT_JOINT_POSITION_RAD,
-    GAIT_PERIOD_S,
+    GaitClockConfig,
     GRAVITY_M_S2,
     JOINT_LOWER_RAD,
     JOINT_UPPER_RAD,
@@ -50,6 +50,9 @@ class PolicyStepSample:
     action: np.ndarray
     requested_target_rad: np.ndarray
     rate_limited_target_rad: np.ndarray
+    target_elapsed_s: float
+    gait_frequency_hz: float
+    missed_deadlines_total: int
 
 
 class MotorSink(Protocol):
@@ -110,6 +113,7 @@ class WalkingPolicyLoop:
         command: PolicyCommand = PolicyCommand(),
         control_hz: float = 60.0,
         initial_target_rad: np.ndarray | None = None,
+        gait_clock: GaitClockConfig | None = None,
         step_observer: Callable[[PolicyStepSample], None] | None = None,
     ) -> None:
         if not 10.0 <= control_hz <= 200.0:
@@ -120,8 +124,17 @@ class WalkingPolicyLoop:
         self.motor_sink = motor_sink
         self.command = command
         self.control_hz = control_hz
+        self.gait_clock = gait_clock or getattr(
+            policy,
+            "gait_clock_config",
+            GaitClockConfig(),
+        )
         self.step_observer = step_observer
         self.step_count = 0
+        self.missed_deadlines = 0
+        self._phase_cycles = 0.0
+        self._last_phase_time_s: float | None = None
+        self._last_target_time_s: float | None = None
         self.previous_action = np.zeros(12, dtype=np.float32)
         initial_target = (
             DEFAULT_JOINT_POSITION_RAD
@@ -133,11 +146,22 @@ class WalkingPolicyLoop:
         self.previous_target_rad = initial_target.copy()
 
     def _observation(
-        self, elapsed_s: float
-    ) -> tuple[np.ndarray, ImuSample, JointStateSample, float, float]:
+        self,
+        phase_time_s: float,
+    ) -> tuple[np.ndarray, ImuSample, JointStateSample, float, float, float]:
         imu = self.imu_source.read()
         joints = self.joint_source.read()
-        phase_angle = 2.0 * math.pi * ((elapsed_s / GAIT_PERIOD_S) % 1.0)
+        gait_frequency_hz = self.gait_clock.frequency_hz(
+            self.command.forward_m_s,
+            self.command.lateral_m_s,
+        )
+        if self._last_phase_time_s is not None:
+            phase_elapsed_s = max(0.0, phase_time_s - self._last_phase_time_s)
+            self._phase_cycles = (
+                self._phase_cycles + gait_frequency_hz * phase_elapsed_s
+            ) % 1.0
+        self._last_phase_time_s = phase_time_s
+        phase_angle = 2.0 * math.pi * self._phase_cycles
         phase_sin = math.sin(phase_angle)
         phase_cos = math.cos(phase_angle)
         observation = np.concatenate(
@@ -163,14 +187,34 @@ class WalkingPolicyLoop:
                 self.previous_action,
             )
         ).astype(np.float32)
-        return observation, imu, joints, phase_sin, phase_cos
+        return (
+            observation,
+            imu,
+            joints,
+            phase_sin,
+            phase_cos,
+            gait_frequency_hz,
+        )
 
     def step(self, start_s: float, now_s: float) -> None:
-        elapsed_s = now_s - start_s
-        observation, imu, joints, phase_sin, phase_cos = self._observation(
-            elapsed_s
+        (
+            observation,
+            imu,
+            joints,
+            phase_sin,
+            phase_cos,
+            gait_frequency_hz,
+        ) = self._observation(
+            now_s,
         )
         action = self.policy.infer(observation)
+        output_time_s = time.monotonic()
+        elapsed_s = output_time_s - start_s
+        target_elapsed_s = (
+            1.0 / self.control_hz
+            if self._last_target_time_s is None
+            else max(0.0, output_time_s - self._last_target_time_s)
+        )
         requested_target = np.clip(
             DEFAULT_JOINT_POSITION_RAD
             + ACTION_SCALE_RAD * np.clip(action, -1.0, 1.0),
@@ -178,16 +222,18 @@ class WalkingPolicyLoop:
             JOINT_UPPER_RAD,
         ).astype(np.float32)
         target = normalized_action_to_joint_target(
-            action, self.previous_target_rad, self.control_hz
+            action,
+            self.previous_target_rad,
+            target_elapsed_s,
         )
-        self.motor_sink.write(action, target, now_s)
+        self.motor_sink.write(action, target, output_time_s)
         if self.step_observer is not None:
             try:
                 self.step_observer(
                     PolicyStepSample(
                         sequence=self.step_count,
                         elapsed_s=elapsed_s,
-                        monotonic_time_s=now_s,
+                        monotonic_time_s=output_time_s,
                         command=self.command,
                         phase_sin=phase_sin,
                         phase_cos=phase_cos,
@@ -197,6 +243,9 @@ class WalkingPolicyLoop:
                         action=action,
                         requested_target_rad=requested_target,
                         rate_limited_target_rad=target,
+                        target_elapsed_s=target_elapsed_s,
+                        gait_frequency_hz=gait_frequency_hz,
+                        missed_deadlines_total=self.missed_deadlines,
                     )
                 )
             except Exception:
@@ -205,6 +254,7 @@ class WalkingPolicyLoop:
         self.step_count += 1
         self.previous_action = action
         self.previous_target_rad = target
+        self._last_target_time_s = output_time_s
 
     def run(
         self,
@@ -223,4 +273,13 @@ class WalkingPolicyLoop:
             now_s = time.monotonic()
             self.step(start_s, now_s)
             deadline_s += period_s
-            time.sleep(max(0.0, deadline_s - time.monotonic()))
+            completed_s = time.monotonic()
+            if deadline_s <= completed_s:
+                skipped = math.floor((completed_s - deadline_s) / period_s) + 1
+                self.missed_deadlines += skipped
+                deadline_s += skipped * period_s
+            wait_s = max(0.0, deadline_s - time.monotonic())
+            if stop_event is None:
+                time.sleep(wait_s)
+            elif stop_event.wait(wait_s):
+                break

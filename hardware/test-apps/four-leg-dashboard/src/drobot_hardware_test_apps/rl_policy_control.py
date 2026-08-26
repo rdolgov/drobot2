@@ -11,10 +11,11 @@ from typing import Any, Callable, Mapping
 import numpy as np
 from drobot_policy_runtime.contract import (
     ACTION_NAMES,
+    GaitClockConfig,
     JOINT_LOWER_RAD,
     JOINT_UPPER_RAD,
 )
-from drobot_policy_runtime.policy import OnnxWalkingPolicy
+from drobot_policy_runtime.policy import OnnxWalkingPolicy, load_policy_metadata
 from drobot_policy_runtime.recording import TrialRecorder, sha256_file
 from drobot_policy_runtime.runtime import (
     MotorSink,
@@ -60,15 +61,90 @@ class _GuardedImuSource(ImuSource):
         return sample
 
 
-class _CallbackJointSource(JointStateSource):
-    def __init__(self, read: JointReader) -> None:
+class _BackgroundJointSource(JointStateSource):
+    """Poll the shared servo bus independently and serve cached policy inputs."""
+
+    def __init__(
+        self,
+        read: JointReader,
+        initial: JointStateSample,
+        *,
+        poll_hz: float,
+        stale_after_s: float = 0.12,
+    ) -> None:
         self._read = read
+        self._period_s = 1.0 / poll_hz
+        self._stale_after_s = stale_after_s
+        self._lock = threading.Lock()
+        self._sample = initial
+        self._last_error: str | None = None
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is not None:
+            return
+        self._thread = threading.Thread(
+            target=self._poll,
+            name="drobot-rl-joint-feedback",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def close(self) -> None:
+        self._stop_event.set()
+        if (
+            self._thread is not None
+            and self._thread is not threading.current_thread()
+        ):
+            self._thread.join(timeout=0.5)
+
+    def _poll(self) -> None:
+        deadline_s = time.monotonic()
+        while not self._stop_event.is_set():
+            try:
+                sample = self._read()
+                position = np.asarray(sample.position_rad, dtype=np.float32)
+                velocity = np.asarray(sample.velocity_rad_s, dtype=np.float32)
+                if (
+                    position.shape != (12,)
+                    or velocity.shape != (12,)
+                    or not np.all(np.isfinite(position))
+                    or not np.all(np.isfinite(velocity))
+                ):
+                    raise RuntimeError("Joint feedback contains invalid values")
+            except Exception as exc:
+                with self._lock:
+                    self._last_error = str(exc)
+            else:
+                with self._lock:
+                    self._sample = JointStateSample(
+                        position_rad=position.copy(),
+                        velocity_rad_s=velocity.copy(),
+                        monotonic_time_s=float(sample.monotonic_time_s),
+                    )
+                    self._last_error = None
+            deadline_s += self._period_s
+            completed_s = time.monotonic()
+            if deadline_s <= completed_s:
+                deadline_s = completed_s + self._period_s
+            self._stop_event.wait(max(0.0, deadline_s - time.monotonic()))
 
     def read(self) -> JointStateSample:
-        sample = self._read()
-        if time.monotonic() - sample.monotonic_time_s > 0.12:
-            raise RuntimeError("Joint feedback is stale")
-        return sample
+        with self._lock:
+            sample = self._sample
+            last_error = self._last_error
+        age_s = time.monotonic() - sample.monotonic_time_s
+        if age_s > self._stale_after_s:
+            detail = f"; latest read error: {last_error}" if last_error else ""
+            raise RuntimeError(
+                f"Joint feedback is stale ({age_s * 1000.0:.0f} ms){detail}"
+            )
+        return JointStateSample(
+            position_rad=sample.position_rad.copy(),
+            velocity_rad_s=sample.velocity_rad_s.copy(),
+            monotonic_time_s=sample.monotonic_time_s,
+        )
 
 
 class _GuardedMotorSink(MotorSink):
@@ -104,6 +180,7 @@ class RlPolicyController:
     """Own policy/IMU state while the parent session remains motor-bus owner."""
 
     CONTROL_HZ = 60.0
+    JOINT_FEEDBACK_HZ = 100.0
     DEFAULT_DURATION_S = 5.0
     MIN_DURATION_S = 1.0
     MAX_DURATION_S = 60.0
@@ -123,6 +200,39 @@ class RlPolicyController:
         self.model_sha256 = sha256_file(self.model_path)
         self.model_contract_path = self.model_path.with_suffix(".json")
         self.model_contract_sha256 = sha256_file(self.model_contract_path)
+        self.model_metadata = load_policy_metadata(self.model_path)
+        self.gait_clock_config = GaitClockConfig.from_metadata(self.model_metadata)
+        command_range = self.model_metadata.get("forward_command_range_m_s", {})
+        if not isinstance(command_range, Mapping):
+            command_range = {}
+        self.min_forward_m_s = float(command_range.get("min", 0.0))
+        declared_max_forward_m_s = float(
+            command_range.get("max", self.MAX_FORWARD_M_S)
+        )
+        self.max_forward_m_s = min(
+            self.MAX_FORWARD_M_S,
+            declared_max_forward_m_s,
+        )
+        if not (
+            math.isfinite(self.min_forward_m_s)
+            and math.isfinite(declared_max_forward_m_s)
+            and math.isfinite(self.max_forward_m_s)
+            and 0.0 <= self.min_forward_m_s <= self.max_forward_m_s
+        ):
+            raise ValueError("Policy forward command range is invalid")
+        self.recommended_forward_m_s = float(
+            command_range.get(
+                "recommended",
+                max(self.min_forward_m_s, min(0.03, self.max_forward_m_s)),
+            )
+        )
+        if not (
+            math.isfinite(self.recommended_forward_m_s)
+            and self.min_forward_m_s
+            <= self.recommended_forward_m_s
+            <= self.max_forward_m_s
+        ):
+            raise ValueError("Policy recommended forward command is invalid")
         self.imu_axis_map = imu_axis_map
         self._joint_reader = joint_reader
         self._target_writer = target_writer
@@ -145,10 +255,17 @@ class RlPolicyController:
             "model_variant": self.model_path.parent.name,
             "control_hz": self.CONTROL_HZ,
             "duration_s": self.DEFAULT_DURATION_S,
-            "forward_m_s": 0.03,
+            "forward_m_s": self.recommended_forward_m_s,
             "min_duration_s": self.MIN_DURATION_S,
             "max_duration_s": self.MAX_DURATION_S,
-            "max_forward_m_s": self.MAX_FORWARD_M_S,
+            "min_forward_m_s": self.min_forward_m_s,
+            "max_forward_m_s": self.max_forward_m_s,
+            "recommended_forward_m_s": self.recommended_forward_m_s,
+            "gait_clock_mode": self.gait_clock_config.mode,
+            "gait_frequency_hz": self.gait_clock_config.frequency_hz(
+                self.recommended_forward_m_s
+            ),
+            "joint_feedback_target_hz": self.JOINT_FEEDBACK_HZ,
             "elapsed_s": 0.0,
             "imu": None,
             "targets": [],
@@ -203,22 +320,23 @@ class RlPolicyController:
             self._state.update(status="ready", error=None)
         return sample
 
-    @classmethod
     def validate_request(
-        cls,
+        self,
         forward_m_s: float,
         duration_s: float,
     ) -> tuple[float, float]:
         speed = float(forward_m_s)
-        if not 0.0 <= speed <= cls.MAX_FORWARD_M_S:
+        if not self.min_forward_m_s <= speed <= self.max_forward_m_s:
             raise ValueError(
-                f"RL forward speed must be in [0, {cls.MAX_FORWARD_M_S:.2f}] m/s"
+                "RL forward speed must be in "
+                f"[{self.min_forward_m_s:.3f}, {self.max_forward_m_s:.3f}] m/s "
+                "for the selected policy"
             )
         duration = float(duration_s)
-        if not cls.MIN_DURATION_S <= duration <= cls.MAX_DURATION_S:
+        if not self.MIN_DURATION_S <= duration <= self.MAX_DURATION_S:
             raise ValueError(
                 "RL walk duration must be in "
-                f"[{cls.MIN_DURATION_S:.0f}, {cls.MAX_DURATION_S:.0f}] seconds"
+                f"[{self.MIN_DURATION_S:.0f}, {self.MAX_DURATION_S:.0f}] seconds"
             )
         return speed, duration
 
@@ -253,6 +371,7 @@ class RlPolicyController:
                 elapsed_s=0.0,
                 targets=[],
                 motor_output_enabled=True,
+                gait_frequency_hz=self.gait_clock_config.frequency_hz(speed),
             )
             if self._recorder is not None:
                 try:
@@ -265,6 +384,13 @@ class RlPolicyController:
                                 "yaw_rad_s": 0.0,
                                 "duration_s": duration,
                                 "control_hz": self.CONTROL_HZ,
+                                "joint_feedback_target_hz": self.JOINT_FEEDBACK_HZ,
+                                "gait_clock": {
+                                    "mode": self.gait_clock_config.mode,
+                                    "frequency_hz": (
+                                        self.gait_clock_config.frequency_hz(speed)
+                                    ),
+                                },
                                 "start_monotonic_s": self._started_at,
                                 "initial_joint_position_rad": initial.tolist(),
                             },
@@ -316,13 +442,24 @@ class RlPolicyController:
         initial_target_rad: np.ndarray,
     ) -> None:
         error: str | None = None
+        joint_source: _BackgroundJointSource | None = None
         try:
             assert self._policy is not None
             assert self._imu is not None
+            joint_source = _BackgroundJointSource(
+                self._joint_reader,
+                JointStateSample(
+                    position_rad=initial_target_rad.copy(),
+                    velocity_rad_s=np.zeros(12, dtype=np.float32),
+                    monotonic_time_s=time.monotonic(),
+                ),
+                poll_hz=self.JOINT_FEEDBACK_HZ,
+            )
+            joint_source.start()
             loop = WalkingPolicyLoop(
                 self._policy,
                 _GuardedImuSource(self._imu, self._update_imu),
-                _CallbackJointSource(self._joint_reader),
+                joint_source,
                 _GuardedMotorSink(self._target_writer, self._update_targets),
                 command=PolicyCommand(forward_m_s=speed),
                 control_hz=self.CONTROL_HZ,
@@ -334,6 +471,8 @@ class RlPolicyController:
             if not self._stop_event.is_set():
                 error = str(exc)
         finally:
+            if joint_source is not None:
+                joint_source.close()
             stopped = self._stop_event.is_set()
             finalizer_error = self._finalizer(error, stopped)
             if error is None and finalizer_error:
@@ -392,6 +531,11 @@ class RlPolicyController:
                 "gait_clock": {
                     "sin": sample.phase_sin,
                     "cos": sample.phase_cos,
+                    "frequency_hz": sample.gait_frequency_hz,
+                },
+                "control_timing": {
+                    "target_elapsed_s": sample.target_elapsed_s,
+                    "missed_deadlines_total": sample.missed_deadlines_total,
                 },
                 "imu": {
                     "angular_velocity_body_rad_s": (

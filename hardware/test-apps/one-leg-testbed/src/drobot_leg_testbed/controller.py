@@ -73,6 +73,22 @@ class LegController:
         return TargetState(motor, degrees, raw)
 
     def command(self, motor: MotorConfig, degrees: float) -> TargetState:
+        target = self.plan_command(motor, degrees)
+        fast_write = getattr(self.bus, "write_position_command", None)
+        if fast_write is None:
+            self.bus.write_position(
+                motor.servo_id,
+                target.raw_position,
+                self.config.bus,
+            )
+        else:
+            fast_write(motor.servo_id, target.raw_position, self.config.bus)
+        self.commit_command(target)
+        return target
+
+    def plan_command(self, motor: MotorConfig, degrees: float) -> TargetState:
+        """Validate and encode a target without touching the shared bus."""
+
         if motor.servo_id not in self.armed_ids:
             raise RuntimeError(
                 f"{motor.name} is disarmed. Use `arm` before commanding it."
@@ -90,13 +106,12 @@ class LegController:
             motor,
             self.calibration.motor(motor),
         )
-        fast_write = getattr(self.bus, "write_position_command", None)
-        if fast_write is None:
-            self.bus.write_position(motor.servo_id, raw, self.config.bus)
-        else:
-            fast_write(motor.servo_id, raw, self.config.bus)
-        self.targets_deg[motor.name] = degrees
         return TargetState(motor, degrees, raw)
+
+    def commit_command(self, target: TargetState) -> None:
+        """Publish a previously transmitted target to controller state."""
+
+        self.targets_deg[target.motor.name] = target.degrees
 
     def nudge(self, motor: MotorConfig, delta_deg: float) -> TargetState:
         if motor.name not in self.targets_deg:

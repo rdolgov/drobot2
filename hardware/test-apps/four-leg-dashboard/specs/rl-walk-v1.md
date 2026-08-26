@@ -3,14 +3,15 @@
 ## Scope
 
 The port 8080 hardware dashboard can run the selected
-`parallel-walking-v18/model_299.onnx` policy as a bounded, supported-robot
+`parallel-walking-v20-external-rear-payload/model_900.onnx` policy as a bounded, supported-robot
 commissioning test. The four-leg dashboard remains the only process that opens
 the Feetech serial bus. The policy runner supplies targets to that same session;
 it does not create a second motor owner.
 
-The initial rollout is deliberately limited to five seconds and a requested
-forward speed from `0.00` through `0.10 m/s`. It is not an unattended or
-floor-ready autonomy mode.
+The initial rollout is deliberately limited to five seconds. The selected V20
+model accepts its trained `0.04` through `0.10 m/s` forward range; future model
+sidecars may declare a different range. It is not an unattended or floor-ready
+autonomy mode.
 
 ## Observation and action contract
 
@@ -23,21 +24,30 @@ contains:
 4. 12 joint velocities computed from encoder differences; and
 5. 12 previous normalized policy actions.
 
-Encoder feedback is refreshed at least every 40 ms and rejected after 120 ms.
+An independent background source requests encoder feedback at 100 Hz and the
+policy consumes its latest complete cached sample. Feedback is rejected after
+120 ms. The actual achieved USB/servo rate is measured in recordings rather
+than assumed from the requested polling rate.
 The policy produces 12 normalized actions in Isaac order. The tracked contract
 maps those actions to physical servo IDs 1-12 and converts them to bounded
-semantic joint angles. Policy targets are limited to a five-degree change per
-inference update before the existing servo-session ramp is applied.
+semantic joint angles. Policy targets are limited from actual elapsed monotonic
+time, with a five-degree maximum for any one delayed update, before the
+existing servo-session ramp is applied.
 
-While the policy is active, encoder position/speed uses the servo's
-single-transaction feedback command. Torque, voltage, temperature, current, and
+While the policy is active, encoder position/speed uses the SDK's synchronous
+group read for registers 56–59 across all 12 IDs, with a sequential fallback
+after repeated group-read failures. Torque, voltage, temperature, current, and
 stall diagnostics are staggered across the 12 motors instead of reading every
 register for every motor in one policy update. Each motor remains covered by
 the onboard diagnostics during the trial. Browser dashboard responses use the
 last full electrical snapshot plus live policy targets and encoder positions;
 normal full telemetry resumes immediately after the policy disarms. This keeps
-browser refreshes from blocking the shared serial bus and tripping the onboard
-120 ms output watchdog.
+browser refreshes from blocking inference.
+
+The 60 Hz motor-output worker sends all pending targets with one synchronous
+group write, so the four legs begin each update from the same bus packet. Both
+the inference scheduler and motor scheduler skip missed slots instead of
+replaying compressed catch-up updates.
 
 ## Start interlock
 
@@ -59,7 +69,7 @@ preventing a jump from an assumed neutral pose.
 
 ## Completion and runtime stops
 
-The operator selects a forward command from `0.000` through `0.100 m/s` and a
+The operator selects a forward command inside the model-declared range and a
 duration from `1` through `60 seconds`. Normal timed completion stops policy
 output, keeps all 12 motors armed, and sets every desired semantic joint angle
 to calibrated zero. The existing bounded motion worker ramps into the same pose
@@ -100,7 +110,7 @@ sudo systemctl restart drobot-manual-web.service
 ```
 
 Open `http://pi5-dog.local:8080/`, confirm hardware mode, `12 / 12` online,
-`0 / 12` armed, plausible voltage, and no fault. Begin at `0.03 m/s` while the
+`0 / 12` armed, plausible voltage, and no fault. Begin at `0.04 m/s` while the
 body is supported and the feet cannot contact the bench.
 
 ## ROS 2 migration

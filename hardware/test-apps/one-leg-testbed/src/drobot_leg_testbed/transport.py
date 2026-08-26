@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 from .model import BusConfig, MotorConfig
 
@@ -14,6 +14,8 @@ REG_TORQUE_ENABLE = 40
 REG_ACCELERATION = 41
 REG_TORQUE_LIMIT = 48
 REG_LOCK = 55
+REG_PRESENT_POSITION = 56
+REG_PRESENT_SPEED = 58
 REG_PRESENT_VOLTAGE = 62
 REG_PRESENT_TEMPERATURE = 63
 REG_PRESENT_CURRENT = 69
@@ -49,6 +51,13 @@ class STSBus:
         self.port: Any | None = None
         self.packet: Any | None = None
         self._comm_success: int | None = None
+        self._group_sync_read_type: Any | None = None
+        self._position_speed_group: Any | None = None
+        self._position_speed_group_ids: tuple[int, ...] = ()
+        self._sync_read_failures = 0
+        self._sync_read_disabled = False
+        self.feedback_mode = "uninitialized"
+        self._model_numbers: dict[int, int] = {}
 
     def __enter__(self) -> STSBus:
         self.open()
@@ -61,7 +70,12 @@ class STSBus:
         if self.port is not None:
             return
         try:
-            from scservo_sdk import COMM_SUCCESS, PortHandler, sms_sts
+            from scservo_sdk import (
+                COMM_SUCCESS,
+                GroupSyncRead,
+                PortHandler,
+                sms_sts,
+            )
         except ImportError as exc:
             raise RuntimeError(
                 "Feetech SDK is not installed. Run "
@@ -85,12 +99,20 @@ class STSBus:
         self.port = port
         self.packet = sms_sts(port)
         self._comm_success = COMM_SUCCESS
+        self._group_sync_read_type = GroupSyncRead
+        self.feedback_mode = "group_sync_read"
 
     def close(self) -> None:
         if self.port is not None:
             self.port.closePort()
         self.port = None
         self.packet = None
+        self._position_speed_group = None
+        self._position_speed_group_ids = ()
+        self._sync_read_failures = 0
+        self._sync_read_disabled = False
+        self.feedback_mode = "uninitialized"
+        self._model_numbers.clear()
 
     def reopen(self) -> None:
         """Close the stale handle and resolve/open the requested adapter again."""
@@ -119,13 +141,17 @@ class STSBus:
         return int(model)
 
     def require_motor(self, motor: MotorConfig) -> int:
+        cached = self._model_numbers.get(motor.servo_id)
+        if cached is not None:
+            return cached
         model = self.ping(motor.servo_id)
         if model is None:
             raise CommunicationError(
                 f"No motor answered at ID {motor.servo_id} "
                 f"({motor.name}) on {self.port_name}"
             )
-        return model
+        self._model_numbers[motor.servo_id] = int(model)
+        return int(model)
 
     def _write1(self, servo_id: int, address: int, value: int) -> None:
         packet = self._require_open()
@@ -193,6 +219,8 @@ class STSBus:
         if verified_model is None:
             raise CommunicationError(f"Motor did not answer at its new ID {new_id}")
         self.lock_config(new_id)
+        self._model_numbers.pop(current_id, None)
+        self._model_numbers[new_id] = int(verified_model)
         return int(verified_model)
 
     def configure_motor(
@@ -254,6 +282,95 @@ class STSBus:
         self._check(f"read position/speed ID {servo_id}", result, error)
         return int(position), int(speed)
 
+    def _read_positions_speeds_group(
+        self,
+        servo_ids: tuple[int, ...],
+    ) -> dict[int, tuple[int, int]]:
+        packet = self._require_open()
+        if self._group_sync_read_type is None:
+            raise CommunicationError("Group synchronous read is unavailable")
+        if (
+            self._position_speed_group is None
+            or servo_ids != self._position_speed_group_ids
+        ):
+            group = self._group_sync_read_type(
+                packet,
+                REG_PRESENT_POSITION,
+                4,
+            )
+            for servo_id in servo_ids:
+                if not group.addParam(servo_id):
+                    raise CommunicationError(
+                        f"Could not add motor ID {servo_id} to group feedback read"
+                    )
+            self._position_speed_group = group
+            self._position_speed_group_ids = servo_ids
+        group = self._position_speed_group
+        result = group.txRxPacket()
+        self._check("group read position/speed", result, 0)
+        values: dict[int, tuple[int, int]] = {}
+        for servo_id in servo_ids:
+            position_available, error = group.isAvailable(
+                servo_id,
+                REG_PRESENT_POSITION,
+                2,
+            )
+            speed_available, speed_error = group.isAvailable(
+                servo_id,
+                REG_PRESENT_SPEED,
+                2,
+            )
+            if not position_available or not speed_available:
+                raise CommunicationError(
+                    f"Group feedback did not contain motor ID {servo_id}"
+                )
+            self._check(
+                f"group read position/speed ID {servo_id}",
+                result,
+                error or speed_error,
+            )
+            raw_position = group.getData(
+                servo_id,
+                REG_PRESENT_POSITION,
+                2,
+            )
+            raw_speed = group.getData(
+                servo_id,
+                REG_PRESENT_SPEED,
+                2,
+            )
+            values[servo_id] = (
+                int(packet.scs_tohost(raw_position, 15)),
+                int(packet.scs_tohost(raw_speed, 15)),
+            )
+        return values
+
+    def read_positions_speeds(
+        self,
+        servo_ids: list[int] | tuple[int, ...],
+    ) -> dict[int, tuple[int, int]]:
+        """Read all requested encoders in one group transaction when supported."""
+
+        selected = tuple(dict.fromkeys(int(value) for value in servo_ids))
+        if not selected:
+            return {}
+        if not self._sync_read_disabled:
+            try:
+                values = self._read_positions_speeds_group(selected)
+            except CommunicationError:
+                self._sync_read_failures += 1
+                if self._sync_read_failures >= 3:
+                    self._sync_read_disabled = True
+                    self.feedback_mode = "sequential_fallback"
+            else:
+                self._sync_read_failures = 0
+                self.feedback_mode = "group_sync_read"
+                return values
+        return {
+            servo_id: self.read_position_speed(servo_id)
+            for servo_id in selected
+        }
+
     def write_position(
         self,
         servo_id: int,
@@ -287,6 +404,37 @@ class STSBus:
             bus_config.acceleration,
         )
         self._check(f"write position ID {servo_id}", result, error)
+
+    def write_position_commands(
+        self,
+        raw_positions: Mapping[int, int],
+        bus_config: BusConfig,
+    ) -> None:
+        """Send one broadcast packet so all selected targets start together."""
+
+        packet = self._require_open()
+        commands = tuple(
+            (int(key), int(value)) for key, value in raw_positions.items()
+        )
+        if not commands:
+            return
+        group = packet.groupSyncWrite
+        group.clearParam()
+        try:
+            for servo_id, raw_position in commands:
+                if not packet.SyncWritePosEx(
+                    servo_id,
+                    packet.scs_toscs(raw_position, 15),
+                    bus_config.speed,
+                    bus_config.acceleration,
+                ):
+                    raise CommunicationError(
+                        f"Could not add motor ID {servo_id} to group target write"
+                    )
+            result = group.txPacket()
+            self._check("group write positions", result, 0)
+        finally:
+            group.clearParam()
 
     def status(self, motor: MotorConfig) -> MotorStatus:
         model = self.require_motor(motor)

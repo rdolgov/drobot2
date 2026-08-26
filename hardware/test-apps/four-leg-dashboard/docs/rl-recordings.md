@@ -38,11 +38,11 @@ Each trial folder and ZIP contains:
 - `samples.jsonl`: one object for each successfully commanded policy step;
 - `events.jsonl`: start/finalization events and staggered full motor diagnostics.
 
-The recorder deliberately stores the payload mass and body-frame position as
-unknown. Before fitting simulation dynamics, fill those values from an actual
-measurement. The currently discussed 416 g battery is measured, but the box,
-lid, fasteners, wiring, and rear-center-of-mass position are not yet measured,
-so the software does not turn the rough total estimate into a false fact.
+New recordings store the measured 3.175 kg total robot mass plus the V20
+simulation payload estimate: a 523.18 g battery/holder centered at
+`[-0.1315, 0, 0.05] m` in the body frame. The payload number combines the
+measured 416 g battery with CAD-derived box/lid mass; fasteners, foam, and wire
+remain uncertain. Keep that distinction when fitting simulation dynamics.
 
 ## `samples.jsonl`
 
@@ -55,13 +55,18 @@ Every line contains:
 - 12 measured joint positions and derived joint velocities in policy order;
 - the exact 50-value observation passed to ONNX and the 12-value policy action;
 - the action-derived requested target and the velocity-limited target sent to
-  the dashboard motor-target sink.
+  the dashboard motor-target sink;
+- actual elapsed time used by target limiting, cumulative missed deadlines,
+  and the model-declared gait frequency; and
+- feedback transport in diagnostic events (`group_sync_read` or sequential
+  fallback).
 
 The semantic joint and physical servo-ID order is stored in `metadata.json`.
 The target is the control-loop target, not proof that the servo reached it;
-compare it with the subsequent measured joint position. Twelve servo writes
-are not atomic, and only one full motor status is sampled per diagnostic period,
-so `events.jsonl` is intentionally lower rate than `samples.jsonl`.
+compare it with the subsequent measured joint position. New controller builds
+send one synchronous group-write packet for the 12 targets, while only one full
+motor status is sampled per diagnostic period, so `events.jsonl` remains much
+lower rate than `samples.jsonl`.
 
 ## Initial uses
 

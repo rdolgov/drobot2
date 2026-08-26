@@ -91,3 +91,13 @@ class DrobotCommandedWalkingExternalRearPayloadPPORunnerCfg(
         self.algorithm.learning_rate = 5.0e-5
         self.algorithm.entropy_coef = 0.0
         self.algorithm.desired_kl = 0.005
+
+
+@configclass
+class DrobotCommandedWalkingLowSpeedExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedWalkingExternalRearPayloadPPORunnerCfg
+):
+    """V21 continuation for speed-scaled, very-low-speed smooth walking."""
+
+    max_iterations = 800
+    experiment_name = "drobot_commanded_walk_v21_low_speed_external_rear_payload"

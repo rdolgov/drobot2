@@ -6,6 +6,15 @@
   "onnx_sha256": "f787669d33115f117ac691c1ba7bb145fa6a726c6a5d22aec7aecc9e284d6529",
   "control_hz": 60,
   "gait_period_s": 0.8,
+  "gait_clock": {
+    "mode": "fixed",
+    "period_s": 0.8
+  },
+  "forward_command_range_m_s": {
+    "min": 0.04,
+    "max": 0.1,
+    "recommended": 0.04
+  },
   "observation_count": 50,
   "action_count": 12,
   "observation_order": [

@@ -8,6 +8,12 @@ at 60 Hz, converts the 12 normalized actions into bounded/rate-limited joint
 targets, and prints the targets with physical servo IDs. It never opens the
 servo serial port or enables torque.
 
+Rate limiting uses actual elapsed monotonic time, not the number of loop calls,
+and missed deadlines are skipped rather than replayed as catch-up bursts. The
+model JSON sidecar declares the supported command range and gait-clock mode.
+Existing V20 uses its trained fixed 1.25 Hz clock; only a future policy trained
+with speed-scaled cadence may request that deployment mode.
+
 The runtime was exercised on `pi5-dog` with Ubuntu 26.04 ARM64, Python 3.14.4,
 ONNX Runtime 1.29.0, and the BNO085 detected at I2C address `0x4A`.
 

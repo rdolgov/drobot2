@@ -30,6 +30,21 @@ def generated_hip():
     return st3215_hip.gen_step()
 
 
+@lru_cache(maxsize=1)
+def side_reinforcement_webs():
+    return st3215_hip.make_side_reinforcement_webs()
+
+
+def intersection_volume(first, second) -> float:
+    volume = 0.0
+    for first_solid in first.solids():
+        for second_solid in second.solids():
+            overlap = first_solid & second_solid
+            if overlap is not None:
+                volume += sum(float(solid.volume) for solid in overlap.solids())
+    return volume
+
+
 def test_requested_three_stage_motor_bay_rotation_is_applied() -> None:
     fork_direction = mapped_direction(
         st3215_hip.fork_face_down_location(),
@@ -92,8 +107,33 @@ def test_printable_hip_is_one_valid_solid() -> None:
     assert hip.is_valid
     assert len(hip.solids()) == 1
     assert bounds.size.X == pytest.approx(67.3, abs=0.05)
-    assert bounds.size.Y == pytest.approx(44.05, abs=0.05)
+    assert bounds.size.Y == pytest.approx(45.05, abs=0.05)
     assert bounds.size.Z == pytest.approx(123.3084, abs=0.05)
+
+
+def test_side_webs_strengthen_join_without_blocking_motor_entry() -> None:
+    fork, bay = positioned_components()
+    webs = side_reinforcement_webs()
+
+    assert intersection_volume(webs, fork) > 350.0
+    assert intersection_volume(webs, bay) > 1200.0
+    assert intersection_volume(webs, positioned_servo()) == pytest.approx(
+        0.0,
+        abs=1.0e-6,
+    )
+    assert intersection_volume(
+        webs,
+        st3215_hip.motor_insertion_keep_clear(),
+    ) == pytest.approx(0.0, abs=1.0e-6)
+
+
+def test_solid_lower_motor_bay_wall_stays_outside_servo_cavity() -> None:
+    lower_wall_fill = st3215_hip.make_solid_lower_motor_bay_wall()
+
+    assert intersection_volume(
+        lower_wall_fill,
+        positioned_servo(),
+    ) == pytest.approx(0.0, abs=1.0e-6)
 
 
 def test_installed_st3215_still_clears_the_fork() -> None:

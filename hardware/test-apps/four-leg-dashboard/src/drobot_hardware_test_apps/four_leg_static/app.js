@@ -729,6 +729,23 @@ function updateSummary(state) {
     : "Waiting";
   rlTargets.textContent = `${Array.isArray(rl.targets) ? rl.targets.length : 0} / 12`;
   const recorder = rl.recording || {};
+  const minimumRlSpeed = Number(rl.min_forward_m_s ?? 0);
+  const maximumRlSpeed = Number(rl.max_forward_m_s ?? 0.1);
+  const recommendedRlSpeed = Number(
+    rl.recommended_forward_m_s ?? minimumRlSpeed,
+  );
+  rlSpeed.min = minimumRlSpeed.toFixed(3);
+  rlSpeed.max = maximumRlSpeed.toFixed(3);
+  const selectedRlSpeed = Number(rlSpeed.value);
+  if (
+    !rl.active &&
+    document.activeElement !== rlSpeed &&
+    (!Number.isFinite(selectedRlSpeed) ||
+      selectedRlSpeed < minimumRlSpeed ||
+      selectedRlSpeed > maximumRlSpeed)
+  ) {
+    rlSpeed.value = recommendedRlSpeed.toFixed(3);
+  }
   rlRecording.textContent = recorder.active
     ? `REC ${String(recorder.recording_id || "").slice(-8)}`
     : recorder.error
@@ -752,7 +769,10 @@ function updateSummary(state) {
             `${Number(rl.duration_s || 5).toFixed(1)} s / ` +
             `${Number(rl.forward_m_s || 0).toFixed(3)} m/s / then center + hold`
           : `${Number(rl.control_hz || 60).toFixed(0)} Hz policy / ` +
-            `0-0.100 m/s / 1-60 s / completion centers + holds`;
+            `${minimumRlSpeed.toFixed(3)}-${maximumRlSpeed.toFixed(3)} m/s / ` +
+            `${String(rl.gait_clock_mode || "fixed").replaceAll("_", " ")} cadence ` +
+            `(${Number(rl.gait_frequency_hz || 0).toFixed(2)} Hz) / ` +
+            `1-60 s / completion centers + holds`;
   startRl.disabled =
     !rl.available ||
     rl.active ||
@@ -966,8 +986,18 @@ rlSafetyAck.addEventListener("change", () => {
 startRl.addEventListener("click", async () => {
   const forwardSpeed = Number(rlSpeed.value);
   const duration = Number(rlDuration.value);
-  if (!Number.isFinite(forwardSpeed) || forwardSpeed < 0 || forwardSpeed > 0.1) {
-    showNotice("RL speed must be between 0 and 0.100 m/s", true);
+  const minimumRlSpeed = Number(latestState?.rl_policy?.min_forward_m_s ?? 0);
+  const maximumRlSpeed = Number(latestState?.rl_policy?.max_forward_m_s ?? 0.1);
+  if (
+    !Number.isFinite(forwardSpeed) ||
+    forwardSpeed < minimumRlSpeed ||
+    forwardSpeed > maximumRlSpeed
+  ) {
+    showNotice(
+      `RL speed must be between ${minimumRlSpeed.toFixed(3)} and ` +
+        `${maximumRlSpeed.toFixed(3)} m/s for this model`,
+      true,
+    );
     return;
   }
   if (!Number.isFinite(duration) || duration < 1 || duration > 60) {

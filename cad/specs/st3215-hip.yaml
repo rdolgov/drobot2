@@ -53,6 +53,22 @@ join:
   oval_tip_tangent_z_mm: 30.0
   motor_bay_center_x_mm: 0.0
   shared_centerline_y_mm: 0.0
+  reinforcement:
+    type: paired_external_tapered_side_webs
+    opening_setback_mm: 3.5
+    fork_shoulder_overlap_y_mm: 1.5
+    motor_bay_side_wall_overlap_y_mm: 2.5
+    web_x_span_mm: 13.5
+    fork_engagement_z_mm: [18.0, 27.0]
+    motor_bay_engagement_z_mm: [28.0, 44.6117]
+    lower_screw_access_clearance_diameter_mm: 5.0
+    intent: spread bending load into both fork shoulders while keeping the motor insertion path open
+  lower_motor_bay_wall:
+    construction: solid_3_mm_wall
+    lower_diamond_vents: filled
+    upper_diamond_vents: retained
+    fill_margin_around_diamond_field_mm: 0.5
+    intent: remove openings from the load-bearing floor without entering the servo cavity
 
 output:
   source: drobot_cad/parts/st3215_hip.py
@@ -67,4 +83,9 @@ acceptance_tests:
   - fork and bay longitudinal directions are perpendicular
   - bay is centered at global X=0 over the oval tip
   - source parts overlap through the 3 mm lower bay wall
+  - paired side webs fuse into both fork shoulders and motor-bay side walls
+  - motor insertion keep-clear envelope does not intersect the side webs
+  - side webs retain clearance around the existing lower screw-access holes
+  - lower motor-bay wall is solid across the complete diamond-vent field
+  - upper motor-bay diamond vents remain open
   - exact installed ST3215 does not collide with the fork

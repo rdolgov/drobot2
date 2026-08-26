@@ -50,7 +50,11 @@ HARDWARE_ROOT = APP_ROOT.parents[1]
 REPO_ROOT = HARDWARE_ROOT.parent
 DEFAULT_MANIFEST = HARDWARE_ROOT / "robot-runtime" / "four-leg.toml"
 DEFAULT_RL_MODEL = (
-    REPO_ROOT / "onboard" / "models" / "parallel-walking-v18" / "model_299.onnx"
+    REPO_ROOT
+    / "onboard"
+    / "models"
+    / "parallel-walking-v20-external-rear-payload"
+    / "model_900.onnx"
 )
 DEFAULT_RECORDINGS_DIR = (
     Path.home() / ".local" / "share" / "drobot2" / "rl-recordings"
@@ -342,6 +346,7 @@ class FourLegDemoBus:
     """In-memory twelve-motor bus for UI and safety testing."""
 
     def __init__(self, dashboard: DashboardConfig):
+        self.feedback_mode = "in_memory_group"
         self.positions: dict[int, int] = {}
         for profile in dashboard.legs:
             for motor in profile.config.motors:
@@ -377,6 +382,15 @@ class FourLegDemoBus:
     def read_position(self, servo_id: int) -> int:
         return self.positions[servo_id]
 
+    def read_position_speed(self, servo_id: int) -> tuple[int, int]:
+        return self.positions[servo_id], 0
+
+    def read_positions_speeds(
+        self,
+        servo_ids: list[int] | tuple[int, ...],
+    ) -> dict[int, tuple[int, int]]:
+        return {servo_id: (self.positions[servo_id], 0) for servo_id in servo_ids}
+
     def write_position(
         self,
         servo_id: int,
@@ -384,6 +398,22 @@ class FourLegDemoBus:
         _bus_config: BusConfig,
     ) -> None:
         self.positions[servo_id] = raw_position
+
+    def write_position_command(
+        self,
+        servo_id: int,
+        raw_position: int,
+        bus_config: BusConfig,
+    ) -> None:
+        self.write_position(servo_id, raw_position, bus_config)
+
+    def write_position_commands(
+        self,
+        raw_positions: dict[int, int],
+        bus_config: BusConfig,
+    ) -> None:
+        for servo_id, raw_position in raw_positions.items():
+            self.write_position(servo_id, raw_position, bus_config)
 
     def enable_torque(self, servo_id: int) -> None:
         self.torque.add(servo_id)
@@ -408,6 +438,8 @@ class FourLegDemoBus:
 
 class FourLegSession:
     """Serialize twelve-motor access and enforce bounded, explicit motion."""
+
+    RL_MOTOR_OUTPUT_HZ = 60.0
 
     def __init__(
         self,
@@ -510,6 +542,7 @@ class FourLegSession:
             recording_metadata = {
                 "robot": {
                     "name": "drobot2",
+                    "measured_total_mass_kg": 3.175,
                     "joint_order": list(ACTION_NAMES),
                     "servo_ids": [
                         SERVO_ID_BY_ACTION_NAME[name] for name in ACTION_NAMES
@@ -532,7 +565,12 @@ class FourLegSession:
                 "sensors": {
                     "imu": "BNO085",
                     "imu_axis_map": rl_imu_axis_map,
-                    "joint_feedback": "ST3215 encoder telemetry",
+                    "joint_feedback": "STS3215 encoder telemetry",
+                    "servo_baudrate": self.dashboard.bus.baudrate,
+                    "feedback_transport": (
+                        "group synchronous position/speed read with "
+                        "sequential fallback"
+                    ),
                 },
                 "data_contract": {
                     "observation_size": 50,
@@ -550,13 +588,16 @@ class FourLegSession:
                         "joint_velocity_normalized[12]",
                         "previous_action[12]",
                     ],
+                    "target_rate_limit": "actual elapsed monotonic time",
+                    "missed_deadline_policy": "skip; never replay catch-up bursts",
                 },
                 "payload": {
-                    "mass_kg": None,
-                    "position_body_m": None,
+                    "mass_kg": 0.523179545,
+                    "position_body_m": [-0.1315, 0.0, 0.05],
                     "note": (
-                        "Set measured battery/enclosure mass and body-frame "
-                        "position before using this trial for dynamics fitting"
+                        "416 g measured battery plus CAD-derived printed box "
+                        "and lid; body-frame position matches the V20 external "
+                        "rear payload model"
                     ),
                 },
             }
@@ -642,9 +683,15 @@ class FourLegSession:
             self.bus.close()
 
     def _worker_loop(self) -> None:
-        while not self.stop_event.wait(self.tick_interval_s):
+        previous_started_s = time.monotonic()
+        next_deadline_s = previous_started_s + self.tick_interval_s
+        while True:
+            wait_s = max(0.0, next_deadline_s - time.monotonic())
+            if self.stop_event.wait(wait_s):
+                break
+            started_s = time.monotonic()
             try:
-                self.advance_once()
+                self.advance_once(elapsed_s=started_s - previous_started_s)
             except Exception as exc:
                 with self.lock:
                     self.fault = str(exc)
@@ -659,15 +706,40 @@ class FourLegSession:
                         self.last_event = (
                             "Motion fault; waiting for servo bus reconnect"
                         )
+            previous_started_s = started_s
+            period_s = (
+                1.0 / self.RL_MOTOR_OUTPUT_HZ
+                if self.rl_controller is not None and self.rl_controller.active
+                else self.tick_interval_s
+            )
+            next_deadline_s += period_s
+            completed_s = time.monotonic()
+            if next_deadline_s <= completed_s:
+                # Skip missed output slots instead of replaying a burst of stale
+                # targets after a slow USB or diagnostic transaction.
+                next_deadline_s = completed_s + period_s
 
-    def advance_once(self) -> None:
+    def advance_once(self, *, elapsed_s: float | None = None) -> None:
         with self.lock:
             self._advance_crawl_locked()
 
+            nominal_period_s = (
+                1.0 / self.RL_MOTOR_OUTPUT_HZ
+                if self.rl_controller is not None and self.rl_controller.active
+                else self.tick_interval_s
+            )
+            motion_elapsed_s = (
+                nominal_period_s
+                if elapsed_s is None
+                else max(0.0, min(float(elapsed_s), 0.10))
+            )
             step_limit = min(
                 self.dashboard.bus.max_command_step_deg,
-                self.ramp_rate_deg_s * self.tick_interval_s,
+                self.ramp_rate_deg_s * motion_elapsed_s,
             )
+            if self.rl_controller is not None and self.rl_controller.active:
+                step_limit = min(step_limit, 5.0)
+            planned: list[tuple[LegController, Any]] = []
             for profile in self.profiles:
                 controller = self.controllers[profile.number]
                 for motor in profile.config.motors:
@@ -682,7 +754,25 @@ class FourLegSession:
                     if abs(delta) < 0.01:
                         continue
                     step = max(-step_limit, min(step_limit, delta))
-                    controller.command(motor, current + step)
+                    planned.append(
+                        (controller, controller.plan_command(motor, current + step))
+                    )
+            if not planned:
+                return
+            batch_writer = getattr(self.bus, "write_position_commands", None)
+            if batch_writer is None:
+                for controller, target in planned:
+                    controller.command(target.motor, target.degrees)
+                return
+            batch_writer(
+                {
+                    target.motor.servo_id: target.raw_position
+                    for _controller, target in planned
+                },
+                self.dashboard.bus,
+            )
+            for controller, target in planned:
+                controller.commit_command(target)
 
     @property
     def crawl_active(self) -> bool:
@@ -1019,19 +1109,6 @@ class FourLegSession:
             if self._armed_count_locked() != 12:
                 raise RuntimeError("RL policy requires all 12 motors armed")
             now = self.clock()
-            if (
-                self.rl_feedback_position_rad is not None
-                and self.rl_feedback_velocity_rad_s is not None
-                and self.rl_feedback_time_s is not None
-                and now - self.rl_feedback_time_s < 0.04
-            ):
-                return JointStateSample(
-                    position_rad=self.rl_feedback_position_rad.copy(),
-                    velocity_rad_s=self.rl_feedback_velocity_rad_s.copy(),
-                    monotonic_time_s=self.rl_feedback_time_s,
-                )
-
-            measured_rad: list[float] = []
             monitoring = self.dashboard.monitoring
             diagnostic_index: int | None = None
             if (
@@ -1054,16 +1131,33 @@ class FourLegSession:
                 self.rl_diagnostic_index = (self.rl_diagnostic_index + 1) % 12
                 self.rl_diagnostic_time_s = now
 
-            fast_reader = getattr(self.bus, "read_position_speed", None)
+            servo_ids = [
+                motor.servo_id for _profile, motor, _controller in self.rl_motor_order
+            ]
+            group_reader = getattr(self.bus, "read_positions_speeds", None)
+            if group_reader is None:
+                raw_by_id = {
+                    servo_id: self.bus.read_position_speed(servo_id)
+                    for servo_id in servo_ids
+                }
+            else:
+                raw_by_id = group_reader(servo_ids)
+
+            diagnostic_status = None
+            if diagnostic_index is not None:
+                diagnostic_status = self.bus.status(
+                    self.rl_motor_order[diagnostic_index][1]
+                )
+
+            measured_rad: list[float] = []
             for index, (profile, motor, _controller) in enumerate(
                 self.rl_motor_order
             ):
-                status = None
-                if diagnostic_index == index or fast_reader is None:
-                    status = self.bus.status(motor)
+                raw_position, raw_speed = raw_by_id[motor.servo_id]
+                status = diagnostic_status if diagnostic_index == index else None
+                if status is not None:
                     raw_position = status.raw_position
-                else:
-                    raw_position, _raw_speed = fast_reader(motor.servo_id)
+                    raw_speed = status.raw_speed
                 degrees = raw_to_degrees(
                     raw_position,
                     motor,
@@ -1110,28 +1204,37 @@ class FourLegSession:
                                 "temperature_c": status.temperature_c,
                                 "current_ma": status.current_ma,
                                 "torque_enabled": status.torque_enabled,
+                                "feedback_transport": getattr(
+                                    self.bus,
+                                    "feedback_mode",
+                                    "sequential",
+                                ),
                             }
                         )
                 measured_rad.append(math.radians(degrees))
             positions = np.asarray(measured_rad, dtype=np.float32)
-            now = self.clock()
+            sampled_s = self.clock()
             previous = self.rl_feedback_position_rad
             previous_time = self.rl_feedback_time_s
-            if previous is None or previous_time is None or now <= previous_time:
+            if (
+                previous is None
+                or previous_time is None
+                or sampled_s <= previous_time
+            ):
                 velocity = np.zeros(12, dtype=np.float32)
             else:
                 velocity = np.clip(
-                    (positions - previous) / (now - previous_time),
+                    (positions - previous) / (sampled_s - previous_time),
                     -4.5836625,
                     4.5836625,
                 ).astype(np.float32)
             self.rl_feedback_position_rad = positions
             self.rl_feedback_velocity_rad_s = velocity
-            self.rl_feedback_time_s = now
+            self.rl_feedback_time_s = sampled_s
             return JointStateSample(
                 position_rad=positions.copy(),
                 velocity_rad_s=velocity.copy(),
-                monotonic_time_s=now,
+                monotonic_time_s=sampled_s,
             )
 
     def _apply_rl_targets(
@@ -2390,7 +2493,7 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
                 self.server.session.stop_crawl()
             elif self.path == "/api/rl-start":
                 self.server.session.start_rl_policy(
-                    forward_m_s=float(payload.get("forward_m_s", 0.03)),
+                    forward_m_s=float(payload.get("forward_m_s", 0.04)),
                     duration_s=float(payload.get("duration_s", 5.0)),
                     safety_ack=payload.get("safety_ack") is True,
                     confirmation=str(payload.get("confirmation", "")),

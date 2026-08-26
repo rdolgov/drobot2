@@ -225,6 +225,16 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     # opposite diagonal pair is half a cycle away.  A 65% duty factor includes
     # short four-foot support intervals around pair transitions.
     gait_period_s = 0.80
+    # Existing checkpoints use a fixed 1.25 Hz clock. A future policy must opt
+    # into command-scaled cadence so deployment cannot change the meaning of a
+    # trained observation silently.
+    gait_clock_mode = "fixed"
+    gait_standstill_deadband_m_s = 0.0
+    gait_speed_min_m_s = 0.04
+    gait_speed_max_m_s = 0.10
+    gait_frequency_min_hz = 1.25
+    gait_frequency_max_hz = 1.25
+    gait_stride_scale_min = 1.0
     gait_duty_factor = 0.65
     gait_stride_m = 0.080
     gait_lift_m = 0.025
@@ -239,6 +249,9 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     # being mistaken for sustained walking.
     sustained_speed_window_s = 2.0
     minimum_sustained_speed_m_s = 0.08
+    active_translation_threshold_m_s = 0.03
+    scale_sustained_speed_with_command = False
+    minimum_sustained_speed_fraction = 0.50
     # The prior policy remained smooth and stable but plateaued near 0.02 m/s.
     # Give PPO a non-vanishing linear gradient away from standing, then keep
     # the two-second term as the stronger sustained-motion signal.
@@ -383,6 +396,41 @@ class DrobotCommandedWalkingExternalRearPayloadEnvCfg(
     penalty_joint_acceleration = 0.25
     penalty_body_linear_acceleration = 0.40
     penalty_body_angular_acceleration = 0.30
+
+
+@configclass
+class DrobotCommandedWalkingLowSpeedExternalRearPayloadEnvCfg(
+    DrobotCommandedWalkingExternalRearPayloadEnvCfg
+):
+    """V21 continuation with a deployable clock for very slow smooth walking."""
+
+    # Begin inside V20's learned range, then introduce slower commands over 600
+    # 64-step PPO rollouts. The workflow intentionally resets this new
+    # curriculum even when bootstrapping the network weights from model_900.pt.
+    initial_forward_speed_min_m_s = 0.04
+    initial_forward_speed_max_m_s = 0.10
+    forward_speed_min_m_s = 0.005
+    forward_speed_max_m_s = 0.10
+    command_curriculum_steps = 38_400
+    episode_horizon_curriculum_steps = 38_400
+
+    # A slower command produces both a slower clock and a shorter step. The
+    # lowest mapping is about one 19 mm stride every 2.86 seconds, rather than
+    # asking the old 1.25 Hz gait to shuffle at a tiny velocity command.
+    gait_clock_mode = "speed_scaled"
+    gait_standstill_deadband_m_s = 0.002
+    gait_speed_min_m_s = 0.005
+    gait_speed_max_m_s = 0.10
+    gait_frequency_min_hz = 0.35
+    gait_frequency_max_hz = 1.25
+    gait_stride_scale_min = 0.35
+
+    # A fixed 0.025 m/s stall threshold would label every correct 0.005 m/s
+    # rollout as a failure. Preserve the strong anti-freeze reward while making
+    # its threshold proportional to the command at low speed.
+    active_translation_threshold_m_s = 0.002
+    scale_sustained_speed_with_command = True
+    minimum_sustained_speed_fraction = 0.50
 
 
 @configclass

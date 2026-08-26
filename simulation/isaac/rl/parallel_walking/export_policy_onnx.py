@@ -45,7 +45,52 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--training-task", default="")
     parser.add_argument("--training-profile", default="")
+    parser.add_argument(
+        "--gait-clock-mode",
+        choices=("fixed", "speed_scaled"),
+        default="fixed",
+    )
+    parser.add_argument("--gait-period-s", type=float, default=0.8)
+    parser.add_argument("--gait-standstill-deadband-m-s", type=float, default=0.0)
+    parser.add_argument("--gait-speed-min-m-s", type=float, default=0.04)
+    parser.add_argument("--gait-speed-max-m-s", type=float, default=0.10)
+    parser.add_argument("--gait-frequency-min-hz", type=float, default=1.25)
+    parser.add_argument("--gait-frequency-max-hz", type=float, default=1.25)
+    parser.add_argument("--forward-speed-min-m-s", type=float, default=0.04)
+    parser.add_argument("--forward-speed-max-m-s", type=float, default=0.10)
+    parser.add_argument("--recommended-forward-speed-m-s", type=float, default=0.04)
     args = parser.parse_args()
+
+    if args.gait_period_s <= 0.0:
+        parser.error("--gait-period-s must be positive")
+    if not (
+        0.0
+        <= args.forward_speed_min_m_s
+        <= args.recommended_forward_speed_m_s
+        <= args.forward_speed_max_m_s
+    ):
+        parser.error(
+            "forward speed values must satisfy 0 <= min <= recommended <= max"
+        )
+    if args.gait_clock_mode == "speed_scaled":
+        if not (
+            0.0
+            <= args.gait_standstill_deadband_m_s
+            <= args.gait_speed_min_m_s
+            < args.gait_speed_max_m_s
+        ):
+            parser.error(
+                "speed-scaled gait values must satisfy "
+                "0 <= deadband <= speed min < speed max"
+            )
+        if not (
+            0.0
+            < args.gait_frequency_min_hz
+            <= args.gait_frequency_max_hz
+        ):
+            parser.error(
+                "speed-scaled gait frequencies must satisfy 0 < min <= max"
+            )
 
     checkpoint_path = args.checkpoint.resolve()
     output_path = args.output.resolve()
@@ -68,13 +113,27 @@ def main() -> None:
     )
 
     metadata = {
-        "format": "drobot-walking-policy-v1",
+        "format": "drobot-walking-policy-v2",
         "source_checkpoint": checkpoint_path.name,
         "source_checkpoint_sha256": sha256(checkpoint_path),
         "source_iteration": int(checkpoint["iter"]),
         "onnx_sha256": sha256(output_path),
         "control_hz": 60,
-        "gait_period_s": 0.8,
+        "gait_period_s": args.gait_period_s,
+        "gait_clock": {
+            "mode": args.gait_clock_mode,
+            "period_s": args.gait_period_s,
+            "standstill_deadband_m_s": args.gait_standstill_deadband_m_s,
+            "speed_min_m_s": args.gait_speed_min_m_s,
+            "speed_max_m_s": args.gait_speed_max_m_s,
+            "frequency_min_hz": args.gait_frequency_min_hz,
+            "frequency_max_hz": args.gait_frequency_max_hz,
+        },
+        "forward_command_range_m_s": {
+            "min": args.forward_speed_min_m_s,
+            "max": args.forward_speed_max_m_s,
+            "recommended": args.recommended_forward_speed_m_s,
+        },
         "observation_count": 50,
         "action_count": 12,
         "observation_order": [

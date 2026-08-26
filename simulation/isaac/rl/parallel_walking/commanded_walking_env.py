@@ -583,14 +583,55 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         return torch.linalg.norm(force, dim=-1)
 
     def _gait_phase(self) -> torch.Tensor:
+        frequency_hz, _stride_scale = self._gait_schedule()
         return torch.remainder(
-            self._steps_since_reset.float() * self.step_dt / self.cfg.gait_period_s,
+            self._steps_since_reset.float() * self.step_dt * frequency_hz,
             1.0,
         )
+
+    def _gait_schedule(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return per-environment clock frequency and stride scale."""
+
+        command_speed = torch.linalg.norm(self._commands[:, :2], dim=1)
+        if self.cfg.gait_clock_mode == "fixed":
+            frequency_hz = torch.full_like(
+                command_speed,
+                1.0 / self.cfg.gait_period_s,
+            )
+            return frequency_hz, torch.ones_like(command_speed)
+        if self.cfg.gait_clock_mode != "speed_scaled":
+            raise ValueError(
+                f"Unsupported gait clock mode: {self.cfg.gait_clock_mode}"
+            )
+        speed_fraction = torch.clamp(
+            (command_speed - self.cfg.gait_speed_min_m_s)
+            / (self.cfg.gait_speed_max_m_s - self.cfg.gait_speed_min_m_s),
+            min=0.0,
+            max=1.0,
+        )
+        active = command_speed > self.cfg.gait_standstill_deadband_m_s
+        frequency_hz = self.cfg.gait_frequency_min_hz + speed_fraction * (
+            self.cfg.gait_frequency_max_hz - self.cfg.gait_frequency_min_hz
+        )
+        frequency_hz = torch.where(
+            active,
+            frequency_hz,
+            torch.zeros_like(frequency_hz),
+        )
+        stride_scale = self.cfg.gait_stride_scale_min + speed_fraction * (
+            1.0 - self.cfg.gait_stride_scale_min
+        )
+        stride_scale = torch.where(
+            active,
+            stride_scale,
+            torch.zeros_like(stride_scale),
+        )
+        return frequency_hz, stride_scale
 
     def _gait_targets(self) -> tuple[torch.Tensor, torch.Tensor]:
         """Return deployable smooth joint references and scheduled contacts."""
         phase = self._gait_phase()
+        _frequency_hz, stride_scale = self._gait_schedule()
         leg_phase = torch.remainder(
             phase.unsqueeze(1) + self._leg_phase_offsets.unsqueeze(0), 1.0
         )
@@ -599,11 +640,12 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         swing_u = torch.clamp((leg_phase - duty) / (1.0 - duty), 0.0, 1.0)
         stance_curve = stance_u * stance_u * (3.0 - 2.0 * stance_u)
         swing_curve = swing_u * swing_u * (3.0 - 2.0 * swing_u)
-        half_stride = 0.5 * self.cfg.gait_stride_m
+        gait_stride = self.cfg.gait_stride_m * stride_scale.unsqueeze(1)
+        half_stride = 0.5 * gait_stride
         stride_offset = torch.where(
             leg_phase < duty,
-            half_stride - self.cfg.gait_stride_m * stance_curve,
-            -half_stride + self.cfg.gait_stride_m * swing_curve,
+            half_stride - gait_stride * stance_curve,
+            -half_stride + gait_stride * swing_curve,
         )
         lift = torch.where(
             leg_phase < duty,
@@ -742,7 +784,9 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         net_lateral_displacement = torch.sum(
             displacement[:, :2] * lateral_direction, dim=1
         )
-        active_translation = command_speed > 0.03
+        active_translation = (
+            command_speed > self.cfg.active_translation_threshold_m_s
+        )
         sustained_progress = torch.where(
             active_translation,
             torch.clamp(
@@ -752,14 +796,27 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             ),
             torch.zeros_like(rolling_speed),
         )
+        if self.cfg.scale_sustained_speed_with_command:
+            sustained_speed_threshold = torch.minimum(
+                torch.full_like(
+                    command_speed,
+                    self.cfg.minimum_sustained_speed_m_s,
+                ),
+                self.cfg.minimum_sustained_speed_fraction * command_speed,
+            )
+        else:
+            sustained_speed_threshold = torch.full_like(
+                command_speed,
+                self.cfg.minimum_sustained_speed_m_s,
+            )
         normalized_stall_deficit = torch.clamp(
-            (self.cfg.minimum_sustained_speed_m_s - rolling_speed)
-            / self.cfg.minimum_sustained_speed_m_s,
+            (sustained_speed_threshold - rolling_speed)
+            / torch.clamp(sustained_speed_threshold, min=1.0e-4),
             min=0.0,
             max=2.0,
         )
         sustained_stall = rolling_window_ready & active_translation & (
-            rolling_speed < self.cfg.minimum_sustained_speed_m_s
+            rolling_speed < sustained_speed_threshold
         )
         net_commanded_distance = torch.where(
             active_translation,

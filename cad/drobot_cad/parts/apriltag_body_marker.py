@@ -19,7 +19,7 @@ from build123d import (
     BuildSketch,
     Color,
     Compound,
-    Cylinder,
+    Polygon,
     Pos,
     RectangleRounded,
     Shape,
@@ -46,9 +46,12 @@ ZIP_SLOT_WIDTH_MM = 4.0
 ZIP_SLOT_LENGTH_MM = 16.0
 ZIP_SLOT_X_MM = 46.0
 ZIP_SLOT_Y_MM = 20.0
-FRONT_INDEX_HOLE_DIAMETER_MM = 3.4
-FRONT_INDEX_HOLE_X_MM = 46.0
-FRONT_INDEX_HOLE_Y_MM = 34.0
+FRONT_ARROW_CENTER_X_MM = 46.0
+FRONT_ARROW_CENTER_Y_MM = 34.0
+FRONT_ARROW_LENGTH_MM = 8.0
+FRONT_ARROW_HEAD_WIDTH_MM = 7.0
+FRONT_ARROW_HEAD_LENGTH_MM = 3.2
+FRONT_ARROW_SHAFT_WIDTH_MM = 2.4
 
 # Bit coordinates are listed in the exact decode order used by tag36h11.c.
 BIT_COORDINATES = (
@@ -128,14 +131,36 @@ def _slot_cutters() -> list[Shape]:
             )
             cutters.append(Pos(x_mm, y_mm, -1.0) * cutter)
 
-    index_hole = Cylinder(
-        FRONT_INDEX_HOLE_DIAMETER_MM / 2.0,
-        PLATE_THICKNESS_MM + 2.0,
-        align=(Align.CENTER, Align.CENTER, Align.MIN),
+    half_length = FRONT_ARROW_LENGTH_MM / 2.0
+    half_head_width = FRONT_ARROW_HEAD_WIDTH_MM / 2.0
+    half_shaft_width = FRONT_ARROW_SHAFT_WIDTH_MM / 2.0
+    head_base_y = (
+        FRONT_ARROW_CENTER_Y_MM
+        + half_length
+        - FRONT_ARROW_HEAD_LENGTH_MM
     )
-    cutters.append(
-        Pos(FRONT_INDEX_HOLE_X_MM, FRONT_INDEX_HOLE_Y_MM, -1.0) * index_hole
+    arrow_points = (
+        (
+            FRONT_ARROW_CENTER_X_MM - half_shaft_width,
+            FRONT_ARROW_CENTER_Y_MM - half_length,
+        ),
+        (
+            FRONT_ARROW_CENTER_X_MM + half_shaft_width,
+            FRONT_ARROW_CENTER_Y_MM - half_length,
+        ),
+        (FRONT_ARROW_CENTER_X_MM + half_shaft_width, head_base_y),
+        (FRONT_ARROW_CENTER_X_MM + half_head_width, head_base_y),
+        (FRONT_ARROW_CENTER_X_MM, FRONT_ARROW_CENTER_Y_MM + half_length),
+        (FRONT_ARROW_CENTER_X_MM - half_head_width, head_base_y),
+        (FRONT_ARROW_CENTER_X_MM - half_shaft_width, head_base_y),
     )
+    with BuildSketch() as arrow_profile:
+        Polygon(*arrow_points)
+    arrow_cutter = extrude(
+        arrow_profile.sketch,
+        amount=PLATE_THICKNESS_MM + 2.0,
+    )
+    cutters.append(Pos(0.0, 0.0, -1.0) * arrow_cutter)
     return cutters
 
 
@@ -190,4 +215,3 @@ def make_apriltag_body_marker() -> Compound:
     marker = Compound(children=[make_white_plate(), make_black_tag()])
     marker.label = "apriltag_body_marker_tag36h11_id_0"
     return marker
-

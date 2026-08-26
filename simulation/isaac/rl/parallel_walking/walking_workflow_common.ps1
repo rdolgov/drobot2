@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 function Get-WalkingContext {
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("forward", "directional", "smooth-payload", "external-rear-payload")]
+        [ValidateSet("forward", "directional", "smooth-payload", "external-rear-payload", "low-speed-external-rear-payload")]
         [string]$CommandSet
     )
 
@@ -24,9 +24,13 @@ function Get-WalkingContext {
         $task = "Drobot-Commanded-Walk-Smooth-Payload-Direct"
         $experimentName = "drobot_commanded_walk_v19_smooth_rear_payload"
     }
-    else {
+    elseif ($CommandSet -eq "external-rear-payload") {
         $task = "Drobot-Commanded-Walk-External-Rear-Payload-Direct"
         $experimentName = "drobot_commanded_walk_v20_external_rear_payload_straight"
+    }
+    else {
+        $task = "Drobot-Commanded-Walk-Low-Speed-External-Rear-Payload-Direct"
+        $experimentName = "drobot_commanded_walk_v21_low_speed_external_rear_payload"
     }
     return [PSCustomObject]@{
         RepoRoot = $repoRoot
@@ -34,7 +38,10 @@ function Get-WalkingContext {
         Task = $task
         ExperimentName = $experimentName
         ExperimentRoot = Join-Path $repoRoot "logs\rsl_rl\$experimentName"
-        BundledCheckpoint = if ($CommandSet -eq "external-rear-payload") {
+        BundledCheckpoint = if ($CommandSet -eq "low-speed-external-rear-payload") {
+            Join-Path $repoRoot "simulation\isaac\models\parallel-walking-v20-external-rear-payload\model_900.pt"
+        }
+        elseif ($CommandSet -eq "external-rear-payload") {
             Join-Path $repoRoot "simulation\isaac\models\parallel-walking-v19-smooth-rear-payload\model_899.pt"
         }
         elseif ($CommandSet -in @("forward", "smooth-payload")) {
@@ -43,6 +50,7 @@ function Get-WalkingContext {
         else {
             $null
         }
+        ResetCurriculumOffset = ($CommandSet -eq "low-speed-external-rear-payload")
         TrainScript = Join-Path $PSScriptRoot "train_commanded_walking.py"
         PlayScript = Join-Path $PSScriptRoot "play_commanded_walking.py"
     }
@@ -114,7 +122,15 @@ function Invoke-WalkingTraining {
     $curriculumOffsetSteps = 0
     if ($null -ne $source) {
         $checkpointStem = [System.IO.Path]::GetFileNameWithoutExtension($source)
-        if ($checkpointStem -match '^model_(\d+)$') {
+        $experimentPrefix = $Context.ExperimentRoot.TrimEnd('\') + '\'
+        $sourceIsCurrentExperiment = $source.StartsWith(
+            $experimentPrefix,
+            [System.StringComparison]::OrdinalIgnoreCase
+        )
+        $resetTransferredCurriculum = (
+            $Context.ResetCurriculumOffset -and -not $sourceIsCurrentExperiment
+        )
+        if (-not $resetTransferredCurriculum -and $checkpointStem -match '^model_(\d+)$') {
             # Each saved iteration represents one 64-step rollout per environment.
             $curriculumOffsetSteps = ([int64]$Matches[1] + 1) * 64
         }

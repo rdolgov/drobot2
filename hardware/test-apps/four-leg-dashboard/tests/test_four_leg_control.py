@@ -395,6 +395,7 @@ def test_rl_ui_exposes_bounded_custom_speed_and_duration() -> None:
     script = (static_dir / "app.js").read_text(encoding="utf-8")
 
     assert 'id="rlSpeed" type="number"' in html
+    assert 'min="0.04" max="0.10"' in html
     assert 'max="0.10" step="0.001"' in html
     assert 'id="rlDuration" type="number"' in html
     assert 'min="1" max="60"' in html
@@ -406,14 +407,32 @@ def test_rl_ui_exposes_bounded_custom_speed_and_duration() -> None:
     assert '"/api/rl-stop"' in script
 
 
-def test_rl_request_bounds_allow_slow_custom_speed_and_timed_walk() -> None:
-    session, _bus, _clock = _session()
+def test_rl_request_bounds_follow_selected_model_metadata(tmp_path: Path) -> None:
+    dashboard = load_dashboard_config(MANIFEST)
+    bus = FourLegDemoBus(dashboard)
+    clock = FakeClock()
+    model_path = (
+        REPO_ROOT
+        / "onboard"
+        / "models"
+        / "parallel-walking-v20-external-rear-payload"
+        / "model_900.onnx"
+    )
+    session = FourLegSession(
+        dashboard,
+        bus,
+        clock=clock,
+        persist_calibration=False,
+        rl_model_path=model_path,
+        recordings_dir=tmp_path,
+    )
+    session.start(start_worker=False)
     try:
         assert session.rl_controller is not None
-        assert session.rl_controller.validate_request(0.005, 12.0) == (0.005, 12.0)
+        assert session.rl_controller.validate_request(0.04, 12.0) == (0.04, 12.0)
 
         with pytest.raises(ValueError, match="forward speed"):
-            session.rl_controller.validate_request(-0.001, 5.0)
+            session.rl_controller.validate_request(0.005, 5.0)
         with pytest.raises(ValueError, match="forward speed"):
             session.rl_controller.validate_request(0.101, 5.0)
         with pytest.raises(ValueError, match="duration"):
