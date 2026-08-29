@@ -67,7 +67,7 @@ async function api(
     method,
     headers: {
       "X-Control-Token": token,
-      "X-Drobot-Client-Version": "2",
+      "X-Drobot-Client-Version": "3",
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -355,7 +355,7 @@ async function downloadRecording(recording) {
       {
         headers: {
           "X-Control-Token": token,
-          "X-Drobot-Client-Version": "2",
+          "X-Drobot-Client-Version": "3",
         },
         cache: "no-store",
       },
@@ -669,7 +669,8 @@ function updateSummary(state) {
   document.querySelector("#servoSpeed").textContent = settings.speed;
   document.querySelector("#acceleration").textContent = settings.acceleration;
   document.querySelector("#rampRate").textContent =
-    `${settings.ramp_rate_deg_s.toFixed(0)}°/s`;
+    `${settings.crawl_ramp_rate_deg_s.toFixed(0)}°/s crawl · ` +
+    `${settings.ramp_rate_deg_s.toFixed(0)}°/s manual/RL ceiling`;
   document.querySelector("#lastEvent").textContent = state.last_event;
   document.querySelector("#powerNow").textContent = formatPower(power.instantaneous_w);
   document.querySelector("#powerAverage").textContent =
@@ -803,7 +804,7 @@ function updateSummary(state) {
     : "";
   gaitStage.textContent = crawl.active
     ? `${crawl.stage.toUpperCase()}${cycleText} / ${(crawl.progress * 100).toFixed(0)}%`
-    : crawl.stage === "complete"
+    : crawl.stage === "complete" || crawl.stage === "holding"
       ? "COMPLETE / HOLDING"
       : "READY / DISARMED";
   gaitPhase.textContent = `${phaseText}${swingText}${swingPairText}${pushText}`;
@@ -813,12 +814,12 @@ function updateSummary(state) {
       `${crawl.stride_mm.toFixed(0)} mm stride / ` +
       `${crawl.lift_mm.toFixed(0)} mm lift / 2 planted shoes / ` +
       `STOP to end`
-    : crawl.pattern === "rectangular_flat_support_crawl_v8"
+    : crawl.pattern === "rectangular_flat_support_crawl_v9_slow"
       ? `Continuous / ` +
         `${(crawl.stride_mm).toFixed(0)} mm stride / ` +
         `${(crawl.lift_mm).toFixed(0)} mm lift / ` +
-        `3 planted shoes stay flat / ` +
-        `STOP to end`
+        `${Number(crawl.period_s || 0).toFixed(0)} s cycle / ` +
+        `3 planted shoes stay flat / STOP returns to 4-foot hold`
       : `${crawl.stride_mm.toFixed(0)} mm stride / ` +
       `${crawl.lift_mm.toFixed(0)} mm lift / ` +
       `${crawl.stance_fore_aft_mm.toFixed(0)} mm front/rear splay / ` +
@@ -976,7 +977,11 @@ walkDiagonalPair.addEventListener("click", () => {
 });
 
 stopWalk.addEventListener("click", () => {
-  postAction("/api/crawl-stop", {}, "Gait sequence stopped; all 12 motors disarmed");
+  postAction(
+    "/api/crawl-stop",
+    {},
+    "Returning slowly to a stable four-foot stance; torque remains armed",
+  );
 });
 
 rlSafetyAck.addEventListener("change", () => {

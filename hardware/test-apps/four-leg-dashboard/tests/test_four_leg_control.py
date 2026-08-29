@@ -95,9 +95,10 @@ def test_manifest_loads_verified_ids_and_directions() -> None:
     assert dashboard.monitoring.stall_tracking_error_deg == pytest.approx(8.0)
     assert dashboard.monitoring.stall_speed_raw_max == 20
     assert dashboard.monitoring.battery_series_cells == 3
-    assert dashboard.crawl.period_s == pytest.approx(4.0)
-    assert dashboard.crawl.stride_m == pytest.approx(0.096)
-    assert dashboard.crawl.lift_m == pytest.approx(0.035)
+    assert dashboard.crawl.period_s == pytest.approx(12.0)
+    assert dashboard.crawl.ramp_rate_deg_s == pytest.approx(60.0)
+    assert dashboard.crawl.stride_m == pytest.approx(0.060)
+    assert dashboard.crawl.lift_m == pytest.approx(0.025)
     assert dashboard.crawl.support_extension_m == pytest.approx(0.0)
     assert dashboard.crawl.stance_down_m == pytest.approx(0.329341447)
     assert dashboard.crawl.stance_fore_aft_m == pytest.approx(0.080)
@@ -772,10 +773,15 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
         assert state["crawl"]["run_until_stopped"] is True
         assert state["crawl"]["duration_s"] is None
         assert state["crawl"]["completed_cycles"] == 0
-        assert state["crawl"]["pattern"] == "rectangular_flat_support_crawl_v8"
+        assert (
+            state["crawl"]["pattern"]
+            == "rectangular_flat_support_crawl_v9_slow"
+        )
         assert state["crawl"]["supported_test_only"] is True
-        assert state["crawl"]["stride_mm"] == pytest.approx(96.0)
-        assert state["crawl"]["lift_mm"] == pytest.approx(35.0)
+        assert state["crawl"]["period_s"] == pytest.approx(12.0)
+        assert state["crawl"]["ramp_rate_deg_s"] == pytest.approx(60.0)
+        assert state["crawl"]["stride_mm"] == pytest.approx(60.0)
+        assert state["crawl"]["lift_mm"] == pytest.approx(25.0)
         assert state["crawl"]["support_extension_mm"] == pytest.approx(0.0)
         assert state["crawl"]["stance_down_mm"] == pytest.approx(329.341447)
         assert state["crawl"]["stance_fore_aft_mm"] == pytest.approx(80.0)
@@ -789,9 +795,11 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
 
         session.stop_crawl()
         state = session.snapshot()
-        assert state["crawl"]["active"] is False
-        assert state["summary"]["armed_count"] == 0
-        assert bus.torque == set()
+        assert state["crawl"]["active"] is True
+        assert state["crawl"]["stage"] == "stopping"
+        assert state["crawl"]["phase"] == "return_to_stable_stance"
+        assert state["summary"]["armed_count"] == 12
+        assert bus.torque == set(range(1, 13))
     finally:
         session.close()
 
@@ -839,7 +847,10 @@ def test_diagonal_pair_mode_has_separate_start_route_and_state() -> None:
         assert bus.torque == set(range(1, 13))
 
         session.stop_crawl()
-        assert session.snapshot()["summary"]["armed_count"] == 0
+        stopped = session.snapshot()
+        assert stopped["crawl"]["stage"] == "stopping"
+        assert stopped["summary"]["armed_count"] == 12
+        assert bus.torque == set(range(1, 13))
     finally:
         session.close()
 
@@ -870,9 +881,10 @@ def test_crawl_repeats_until_explicit_stop() -> None:
 
         session.stop_crawl()
         state = session.snapshot()
-        assert state["crawl"]["active"] is False
-        assert state["summary"]["armed_count"] == 0
-        assert bus.torque == set()
+        assert state["crawl"]["active"] is True
+        assert state["crawl"]["stage"] == "stopping"
+        assert state["summary"]["armed_count"] == 12
+        assert bus.torque == set(range(1, 13))
     finally:
         session.close()
 

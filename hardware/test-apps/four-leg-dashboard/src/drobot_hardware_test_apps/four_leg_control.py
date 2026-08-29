@@ -60,7 +60,7 @@ DEFAULT_RECORDINGS_DIR = (
     Path.home() / ".local" / "share" / "drobot2" / "rl-recordings"
 )
 STATIC_DIR = Path(__file__).with_name("four_leg_static")
-LAN_CLIENT_VERSION = "2"
+LAN_CLIENT_VERSION = "3"
 
 
 @dataclass(frozen=True)
@@ -90,6 +90,7 @@ class ServerConfig:
 class CrawlConfig:
     period_s: float
     stance_settle_s: float
+    ramp_rate_deg_s: float
     stride_m: float
     lift_m: float
     support_extension_m: float
@@ -248,6 +249,10 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
             crawl_data.get("stance_settle_s", 1.5),
             "crawl.stance_settle_s",
         ),
+        ramp_rate_deg_s=_finite_float(
+            crawl_data.get("ramp_rate_deg_s", 60.0),
+            "crawl.ramp_rate_deg_s",
+        ),
         stride_m=_finite_float(crawl_data.get("stride_m", 0.096), "crawl.stride_m"),
         lift_m=_finite_float(crawl_data.get("lift_m", 0.035), "crawl.lift_m"),
         support_extension_m=_finite_float(
@@ -279,6 +284,8 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
         raise ValueError("crawl.period_s must be in [4, 60]")
     if not 0.5 <= crawl.stance_settle_s <= 5.0:
         raise ValueError("crawl.stance_settle_s must be in [0.5, 5]")
+    if not 5.0 <= crawl.ramp_rate_deg_s <= 180.0:
+        raise ValueError("crawl.ramp_rate_deg_s must be in [5, 180]")
     if not 0.005 <= crawl.stride_m <= 0.120:
         raise ValueError("crawl.stride_m must be in [0.005, 0.120]")
     if not 0.005 <= crawl.lift_m <= 0.080:
@@ -496,6 +503,7 @@ class FourLegSession:
         self.crawl_swing_pair: tuple[str, ...] | None = None
         self.crawl_push_partner: str | None = None
         self.crawl_started_at: float | None = None
+        self.crawl_elapsed_s = 0.0
         self.crawl_target_reached_at: float | None = None
         self.crawl_progress = 0.0
         self.power_samples: deque[tuple[float, float, float, float]] = deque()
@@ -723,19 +731,32 @@ class FourLegSession:
         with self.lock:
             self._advance_crawl_locked()
 
+            hardcoded_crawl_active = self.crawl_active
             nominal_period_s = (
                 1.0 / self.RL_MOTOR_OUTPUT_HZ
                 if self.rl_controller is not None and self.rl_controller.active
                 else self.tick_interval_s
             )
-            motion_elapsed_s = (
-                nominal_period_s
-                if elapsed_s is None
-                else max(0.0, min(float(elapsed_s), 0.10))
-            )
+            if hardcoded_crawl_active:
+                # A telemetry request can hold the shared bus lock long enough
+                # to miss one or more 20 Hz crawl ticks.  Never compensate with
+                # a larger catch-up step: the real robot must remain slower
+                # than the planned one-leg-at-a-time support transition.
+                motion_elapsed_s = self.tick_interval_s
+                motion_rate_deg_s = min(
+                    self.ramp_rate_deg_s,
+                    self.dashboard.crawl.ramp_rate_deg_s,
+                )
+            else:
+                motion_elapsed_s = (
+                    nominal_period_s
+                    if elapsed_s is None
+                    else max(0.0, min(float(elapsed_s), 0.10))
+                )
+                motion_rate_deg_s = self.ramp_rate_deg_s
             step_limit = min(
                 self.dashboard.bus.max_command_step_deg,
-                self.ramp_rate_deg_s * motion_elapsed_s,
+                motion_rate_deg_s * motion_elapsed_s,
             )
             if self.rl_controller is not None and self.rl_controller.active:
                 step_limit = min(step_limit, 5.0)
@@ -780,6 +801,7 @@ class FourLegSession:
             "preparing",
             "preloading",
             "walking",
+            "stopping",
         }
 
     def _crawl_pose_locked(
@@ -866,6 +888,28 @@ class FourLegSession:
             return
         now = self.clock()
         config = self.dashboard.crawl
+        if self.crawl_stage == "stopping":
+            self.crawl_mode = "distributed"
+            self._set_crawl_stance_locked("returning_to_four_foot_stance")
+            if not self._crawl_targets_reached_locked():
+                self.crawl_target_reached_at = None
+                return
+            if self.crawl_target_reached_at is None:
+                self.crawl_target_reached_at = now
+                return
+            if now - self.crawl_target_reached_at < config.stance_settle_s:
+                return
+            self.crawl_stage = "holding"
+            self.crawl_phase = "stable_four_foot_hold"
+            self.crawl_started_at = None
+            self.crawl_elapsed_s = 0.0
+            self.crawl_target_reached_at = None
+            self.crawl_progress = 0.0
+            self.last_event = (
+                "Crawl stopped at stable four-foot stance; torque remains armed"
+            )
+            return
+
         if self.crawl_stage == "preparing":
             self._set_crawl_stance_locked("settling_gait_start_stance")
             if not self._crawl_targets_reached_locked():
@@ -902,6 +946,7 @@ class FourLegSession:
                 return
             self.crawl_stage = "walking"
             self.crawl_started_at = now
+            self.crawl_elapsed_s = 0.0
             self.crawl_target_reached_at = None
             self.last_event = (
                 "Diagonal-pair gait started; front-left and rear-right lift first"
@@ -913,7 +958,12 @@ class FourLegSession:
         if self.crawl_stage == "walking":
             if self.crawl_started_at is None:
                 raise RuntimeError("Crawl clock was not initialized")
-            elapsed = max(0.0, now - self.crawl_started_at)
+            # Advance one trajectory tick per completed controller iteration.
+            # Wall-clock catch-up can otherwise skip contact phases after a
+            # slow USB/telemetry transaction and begin moving the next leg
+            # before the previous one has completed its plant and settle.
+            self.crawl_elapsed_s += self.tick_interval_s
+            elapsed = self.crawl_elapsed_s
             self.crawl_progress = (elapsed % config.period_s) / config.period_s
             self._set_crawl_pose_locked(elapsed)
             return
@@ -925,6 +975,7 @@ class FourLegSession:
         self.crawl_swing_pair = None
         self.crawl_push_partner = None
         self.crawl_started_at = None
+        self.crawl_elapsed_s = 0.0
         self.crawl_target_reached_at = None
         self.crawl_progress = 0.0
 
@@ -1407,11 +1458,23 @@ class FourLegSession:
     def stop_crawl(self) -> None:
         with self.lock:
             rl_active = self.rl_controller is not None and self.rl_controller.active
-            self._disarm_all_locked(raise_errors=True)
+            if rl_active:
+                self._disarm_all_locked(raise_errors=True)
+                self.last_event = "RL walking stopped; all 12 motors disarmed"
+                return
+            if not self._armed_count_locked():
+                self._cancel_crawl_locked()
+                self.last_event = "Crawl stopped; all 12 motors already disarmed"
+                return
+            self.crawl_mode = "distributed"
+            self.crawl_stage = "stopping"
+            self.crawl_started_at = None
+            self.crawl_elapsed_s = 0.0
+            self.crawl_target_reached_at = None
+            self.crawl_progress = 0.0
+            self._set_crawl_stance_locked("returning_to_four_foot_stance")
             self.last_event = (
-                "RL walking stopped; all 12 motors disarmed"
-                if rl_active
-                else "Crawl stopped; all 12 motors disarmed"
+                "Crawl stopping; returning slowly to a stable four-foot stance"
             )
 
     def heartbeat(self, source: str | None = None) -> None:
@@ -2109,9 +2172,7 @@ class FourLegSession:
             power_assessment = "Start from idle, then observe during walking"
 
         crawl_elapsed_s = (
-            max(0.0, self.clock() - self.crawl_started_at)
-            if self.crawl_stage == "walking" and self.crawl_started_at is not None
-            else 0.0
+            self.crawl_elapsed_s if self.crawl_stage == "walking" else 0.0
         )
 
         payload = {
@@ -2135,6 +2196,7 @@ class FourLegSession:
                 "acceleration": self.dashboard.bus.acceleration,
                 "max_command_step_deg": self.dashboard.bus.max_command_step_deg,
                 "ramp_rate_deg_s": self.ramp_rate_deg_s,
+                "crawl_ramp_rate_deg_s": self.dashboard.crawl.ramp_rate_deg_s,
                 "heartbeat_timeout_s": self.heartbeat_timeout_s,
                 "voltage_warning_low_v": monitoring.voltage_warning_low_v,
                 "voltage_warning_high_v": monitoring.voltage_warning_high_v,
@@ -2195,7 +2257,7 @@ class FourLegSession:
                 "pattern": (
                     "diagonal_pair_flat_support_gait_v1"
                     if self.crawl_mode == "diagonal_pair"
-                    else "rectangular_flat_support_crawl_v8"
+                    else "rectangular_flat_support_crawl_v9_slow"
                 ),
                 "supported_test_only": True,
                 "active": self.crawl_active,
@@ -2216,6 +2278,7 @@ class FourLegSession:
                 ),
                 "progress": self.crawl_progress,
                 "period_s": self.dashboard.crawl.period_s,
+                "ramp_rate_deg_s": self.dashboard.crawl.ramp_rate_deg_s,
                 "run_until_stopped": True,
                 "elapsed_s": crawl_elapsed_s,
                 "completed_cycles": int(

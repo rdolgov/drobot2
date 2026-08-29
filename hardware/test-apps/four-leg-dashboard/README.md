@@ -24,7 +24,8 @@ The local dashboard provides:
   twelve motors, with timestamped backups of all four calibration files;
 - direct **SET GAIT START STANCE** and **TEST DISTRIBUTED CRAWL** commands
   with visible phase/progress and a dedicated
-  **STOP + DISARM** control;
+  **STOP + STABLE HOLD** control; **DISARM ALL 12** remains the explicit way
+  to remove torque;
 - a guarded V20 **START RL WALK** using the real BNO085, live calibrated
   position/velocity feedback for all 12 joints, a model-declared forward
   command range (`0.040-0.100 m/s` for V20), a custom `1-60 s` duration,
@@ -146,7 +147,7 @@ port with another dashboard process.
    structure, support, and complete-robot collision behavior have separate
    validation.
 
-## Rectangular flat-support crawl V8
+## Rectangular flat-support crawl V9 slow
 
 The current gait uses foot-space inverse kinematics and repeats this order:
 
@@ -166,7 +167,7 @@ face is `30 mm` beyond the distal fork axis, and its recommended bonded tread
 adds `1 mm`. The gait therefore uses a `159.896689 mm` proximal link and a
 `190.896689 mm` effective knee-to-contact length.
 
-The `100 x 60 mm` sole is flat rather than a rocker. Gait V8 keeps every planted
+The `100 x 60 mm` sole is flat rather than a rocker. Gait V9 keeps every planted
 leg at `hip flexion + knee = 0 degrees`, so the distal link and shoe normal
 point vertically down throughout weight transfer, swing, touchdown, and the
 four-foot push. The previous 3 mm fixed-X support extension was removed because
@@ -174,19 +175,20 @@ it deliberately tipped the three planted soles. The swing leg returns to zero
 sole pitch before the firm-plant phase.
 
 Because the robot has only two pitch joints per leg, it cannot independently
-command swing-foot X, height, and pitch. V8 prioritizes the requested 90-degree
-flatness for every loaded shoe; only the unloaded swing shoe may pitch. Source
-sampling limits that temporary pitch to `17.25 degrees` with the selected lift,
-while the lowest long edge retains at least `20.2 mm` analytic clearance during
-the horizontal swing. Zero hip abduction and zero lateral shift preserve full
-3D flatness for support.
+command swing-foot X, height, and pitch. V9 prioritizes the requested 90-degree
+flatness for every loaded shoe; only the unloaded swing shoe may pitch. The
+smaller 25 mm lift and 60 mm stride reduce swing excursion relative to V8. Zero
+hip abduction and zero lateral shift preserve full 3D flatness for support.
 
 The tracked nominal stance is `329.341 mm` deep with `80 mm` front/rear separation
 from each hip and no extra abduction. **SET GAIT START STANCE** moves to the
 exact phase-zero flat-sole pose without beginning the crawl. **TEST DISTRIBUTED
-CRAWL** repeats its 4-second cycle until **STOP + DISARM** is pressed. It uses a
-`96 mm` stride, `35 mm` contact-centre lift, zero support extension, a `24 mm`
-planted-foot push after each placement, and `6 mm` of fore/aft body transfer.
+CRAWL** repeats its 12-second cycle until **STOP + STABLE HOLD** is pressed. It
+uses a `60 mm` stride, `25 mm` contact-centre lift, zero support extension, a
+`15 mm` planted-foot push after each placement, and `6 mm` of fore/aft body
+transfer. The dedicated crawl ramp is `60 degrees/s`, separate from the
+`270 degrees/s` manual/RL ceiling. Each servo update advances by one fixed
+50 ms control tick, so a slow telemetry read cannot create a catch-up burst.
 Each horizontal swing happens only after the selected rectangular shoe has
 lifted. The controller uses smooth interpolation throughout the phase table.
 
@@ -206,9 +208,11 @@ joint-limit validation applied to every computed stance and gait target.
 Browser-heartbeat loss or page close is warning-only. It does not cancel the
 gait, change targets, or remove torque. Heartbeats continue independently when
 a telemetry refresh fails and do not take the servo-bus session lock. A
-telemetry read or motion exception, an explicit disarm request, **STOP +
-DISARM**, `Ctrl+C`, or normal server shutdown still attempts to remove torque
-from all twelve motors. Display-only voltage, temperature, voltage-spread, and
+telemetry read or motion exception, an explicit disarm request, `Ctrl+C`, or
+normal server shutdown still attempts to remove torque from all twelve motors.
+The normal crawl Stop command instead returns all four feet to the stable gait
+stance and holds torque; use **DISARM ALL 12** when it is safe to remove support.
+Display-only voltage, temperature, voltage-spread, and
 diagnostic-current warnings remain visible but do not stop the command.
 
 When `--port auto` is used, a USB disconnect/reconnect is recovered without a
@@ -223,7 +227,7 @@ press.
 
 The tracked defaults live in `[crawl]` in `../../robot-runtime/four-leg.toml`.
 The parser permits a 5-120 mm stride, 5-80 mm lift, and 4-60 second period.
-Both dashboard walking buttons loop continuously until **STOP + DISARM**,
+Both dashboard walking buttons loop continuously until **STOP + STABLE HOLD**,
 a bus/motion fault, or process shutdown. Closing or backgrounding a mobile
 browser does not stop walking or send a disarm request.
 
@@ -274,8 +278,8 @@ rear-right lift and advance together, followed by front-right and rear-left.
 During each airborne phase the opposite diagonal remains on the exact flat-sole
 branch. After the pair plants, all four targets push rearward by half a stride.
 
-The mode continuously repeats a 4-second cycle with two diagonal placements,
-a 96 mm stride, and 35 mm lift until **STOP + DISARM** is pressed. Offline
+The mode shares the conservative 12-second cycle, 60 mm stride, 25 mm lift,
+and 60 degrees/s crawl ramp until **STOP + STABLE HOLD** is pressed. Offline
 geometry sampling found a periodic path with a `67.25 degree` maximum
 hip-flexion target, `73.11 degree` maximum knee target, `144.1 degrees/s` peak
 requested rate, and at least `19.43 mm` of long-edge clearance during
@@ -291,7 +295,7 @@ Isaac or on hardware. The full sequence and target equations are documented in
 ## Isaac validation status
 
 The retained Isaac result is for the previous `24 mm` V8 stride, not the active
-`96 mm` hardware profile. It used two cycles with rectangular `100 x 60 x 6
+V9 60 mm hardware profile. It used two cycles with rectangular `100 x 60 x 6
 mm` PLA collision boxes and `94 x 54 x 1 mm` tread boxes. The robot remained
 upright and moved forward, but the strict result is **FAIL**:
 peak tracking error was `0.223851 rad` and only the rear-right and rear-left
@@ -389,14 +393,13 @@ Historical flexible-shoe evidence:
 - [`validation/isaac-tpu-flex-crawl-40mm-8s-moderate.json`](validation/isaac-tpu-flex-crawl-40mm-8s-moderate.json)
 - [`validation/isaac-tpu-flex-crawl-40mm-8s-moderate.png`](validation/isaac-tpu-flex-crawl-40mm-8s-moderate.png)
 
-That historical TPU comparison selected a `40 mm` profile. The active
-rectangular flat-support V8 configuration supersedes it with a `96 mm` stride,
-`24 mm` planted-foot pushes, a `35 mm` contact-centre lift, and zero support
-extension. Offline trajectory sampling keeps the largest hip-flexion target at
-`70.65 degrees`, inside the hardware profile's 90-degree limit, and the largest
-knee target at `75.71 degrees`, inside its 120-degree limit. The active 96 mm,
-4-second profile has not been run in Isaac; no result is claimed from the older
-reports.
+That historical TPU comparison selected a `40 mm` profile. The V8 rectangular
+profile that followed used a 96 mm stride and 4-second period, but the hardware
+trial showed 20-39 degree tracking error and unstable motion. The active V9
+profile is deliberately more conservative: 60 mm stride, 25 mm lift, 12-second
+period, longer contact/settle phases, and a 60 degrees/s crawl ramp. It has not
+been run in Isaac or tested on hardware yet; no result is claimed from the
+older reports.
 
 ## Center all twelve joints
 
@@ -483,10 +486,12 @@ certified.
 
 Arming first commands the motor's measured position and only then enables
 torque. Browser destinations are converted with the tracked calibration and
-range checked before acceptance. The background worker can approach them at up
-to the configured 270 degrees per second through command steps no larger than
-15 degrees. Each servo profile uses speed register `3400`, acceleration `254`,
-and the existing 90% torque limit.
+range checked before acceptance. The background worker can approach manual and
+RL destinations at up to the configured 270 degrees per second through command
+steps no larger than 15 degrees. The hardcoded crawl has its own 60 degrees/s
+ceiling and advances from a fixed 50 ms gait tick to avoid catch-up bursts.
+Each servo profile uses speed register `3400`, acceleration `254`, and the
+existing 90% torque limit.
 
 The `ZERO` controls mean calibrated zero, not torque off. Always use the joint,
 leg, or global disarm button when holding torque is no longer required.

@@ -18,10 +18,11 @@ stall_speed_raw_max = 20
 battery_series_cells = 3
 
 [crawl]
-period_s = 4.0
-stance_settle_s = 1.5
-stride_m = 0.096
-lift_m = 0.035
+period_s = 12.0
+stance_settle_s = 2.0
+ramp_rate_deg_s = 60.0
+stride_m = 0.060
+lift_m = 0.025
 support_extension_m = 0.0
 weight_shift_forward_m = 0.006
 weight_shift_lateral_m = 0.0

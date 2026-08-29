@@ -28,9 +28,11 @@ servo, wiring, or linkage changes.
 
 All profiles use 1,000,000 baud, a 90% torque limit, speed register 3400,
 acceleration register 254, and a 15-degree maximum command step. The dashboard
-motion ramp is 270 degrees/s. These are aggressive response settings selected
-for gait recovery; loaded joints may not reach no-load speed, and software
-limits do not replace physical stops or collision checks. See the
+manual/RL motion ceiling is 270 degrees/s. The hardcoded crawl separately uses
+a 60 degrees/s ramp, 12-second cycle, 60 mm stride, and 25 mm lift so only one
+leg advances slowly while three feet remain planted. Loaded joints may not
+reach no-load speed, and software limits do not replace physical stops or
+collision checks. See the
 [Waveshare ST3215 documentation](https://www.waveshare.com/wiki/ST3215_Servo)
 and the
 [ST3215-C047 datasheet](https://files.seeedstudio.com/products/Feetech/108090003_FEETECH_ST-3215-C047-Datasheet.pdf)

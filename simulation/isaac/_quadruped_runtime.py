@@ -49,14 +49,14 @@ CRAWL_PHASE_OFFSETS = {
 }
 
 DISTRIBUTED_PUSH_PHASES = (
-    ("weight_transfer", 0.10),
-    ("lift", 0.23),
-    ("swing", 0.22),
-    ("lower", 0.23),
-    ("firm_plant", 0.06),
-    ("weight_return", 0.06),
-    ("all_feet_push", 0.08),
-    ("step_settle", 0.02),
+    ("weight_transfer", 0.15),
+    ("lift", 0.15),
+    ("swing", 0.20),
+    ("lower", 0.20),
+    ("firm_plant", 0.10),
+    ("weight_return", 0.08),
+    ("all_feet_push", 0.07),
+    ("step_settle", 0.05),
 )
 DISTRIBUTED_PUSH_SWING_ORDER = (
     "rear_right",

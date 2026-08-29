@@ -78,8 +78,10 @@ sudo systemctl status drobot-manual-web --no-pager
 Reload port 8080 after the restart. Confirm the mode badge, `12 / 12` online,
 `0 / 12` armed, plausible voltage and temperature, and no fault before using a
 whole-robot control. **TEST DISTRIBUTED CRAWL** and **TEST DIAGONAL PAIRS** then
-continue until **STOP + DISARM**. A minor off-stance start is accepted and
-ramped into the computed gait stance; it is not permission to start from a
+continue until **STOP + STABLE HOLD**. The stop returns to the four-foot gait
+stance and keeps torque armed; use **DISARM ALL 12** when support can safely be
+removed. A minor off-stance start is accepted and ramped into the computed gait
+stance; it is not permission to start from a
 folded, collided, unsupported, or visibly damaged pose.
 
 The power panel also shows a basic 3S charge indicator from the last disarmed
@@ -197,7 +199,8 @@ The browser exposes the same controls as the desktop dashboard, including:
 - calibrated center and gait-start stance;
 - continuous distributed crawl;
 - continuous diagonal-pair gait; and
-- **STOP + DISARM**.
+- **STOP + STABLE HOLD**, which returns to the four-foot gait stance and keeps
+  torque armed; **DISARM ALL 12** remains available separately.
 
 Walking continues until stopped. The browser sends a heartbeat every 0.7
 seconds on a request path independent of telemetry. After 20 seconds without
@@ -227,7 +230,7 @@ routes are:
 | `GET /api/state` | Read telemetry, motor state, gait phase, warnings, and faults |
 | `POST /api/crawl-forward` | Start continuous distributed crawl |
 | `POST /api/diagonal-pair-forward` | Start continuous diagonal-pair gait |
-| `POST /api/crawl-stop` | Stop and disarm all motors |
+| `POST /api/crawl-stop` | Stop a hardcoded gait, return to the four-foot stance, and hold torque |
 | `POST /api/rl-start` | Start the guarded five-second RL test after support acknowledgement |
 | `POST /api/rl-stop` | Stop RL inference and disarm all motors |
 | `POST /api/power-reset` | Reset rolling power/energy data and capture a fresh idle reference |
@@ -236,7 +239,7 @@ routes are:
 | `POST /api/disarm-all` | Disarm all motors |
 
 The standalone Pi service on the trusted LAN does not require a control token.
-It requires the non-secret `X-Drobot-Client-Version: 2` compatibility header on
+It requires the non-secret `X-Drobot-Client-Version: 3` compatibility header on
 motion-changing POST requests so stale pre-fix pages cannot issue commands.
 The current browser supplies it automatically. The future ROS service can still
 use its optional configured `DROBOT_CONTROL_TOKEN`.
@@ -247,12 +250,12 @@ Example script calls:
 curl http://drobot.local:8080/api/state
 
 curl -X POST -H "Content-Type: application/json" \
-  -H "X-Drobot-Client-Version: 2" \
+  -H "X-Drobot-Client-Version: 3" \
   -d '{"safety_ack":true,"confirmation":"TEST DISTRIBUTED CRAWL"}' \
   http://drobot.local:8080/api/crawl-forward
 
 curl -X POST -H "Content-Type: application/json" \
-  -H "X-Drobot-Client-Version: 2" -d '{}' \
+  -H "X-Drobot-Client-Version: 3" -d '{}' \
   http://drobot.local:8080/api/crawl-stop
 ```
 
@@ -267,7 +270,7 @@ The launch file places the node in the `/drobot` namespace.
 | `/drobot/command` | `std_msgs/msg/String` | Programmatic command input |
 | `/drobot/walk_distributed` | `std_srvs/srv/Trigger` | Start continuous one-leg-at-a-time crawl |
 | `/drobot/walk_diagonal_pair` | `std_srvs/srv/Trigger` | Start continuous diagonal-pair gait |
-| `/drobot/stop` | `std_srvs/srv/Trigger` | Stop gait and disarm all motors |
+| `/drobot/stop` | `std_srvs/srv/Trigger` | Stop gait, return to four-foot stance, and hold torque |
 | `/drobot/disarm_all` | `std_srvs/srv/Trigger` | Disarm all motors |
 | `/drobot/center_all` | `std_srvs/srv/Trigger` | Move all joints to calibrated zero |
 | `/drobot/gait_stance` | `std_srvs/srv/Trigger` | Move to the distributed gait start stance |
