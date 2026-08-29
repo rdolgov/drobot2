@@ -67,7 +67,7 @@ async function api(
     method,
     headers: {
       "X-Control-Token": token,
-      "X-Drobot-Client-Version": "5",
+      "X-Drobot-Client-Version": "6",
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -355,7 +355,7 @@ async function downloadRecording(recording) {
       {
         headers: {
           "X-Control-Token": token,
-          "X-Drobot-Client-Version": "5",
+          "X-Drobot-Client-Version": "6",
         },
         cache: "no-store",
       },
@@ -730,6 +730,8 @@ function updateSummary(state) {
     : "Waiting";
   rlTargets.textContent = `${Array.isArray(rl.targets) ? rl.targets.length : 0} / 12`;
   const recorder = rl.recording || {};
+  const armedCount = Number(summary.armed_count || 0);
+  const rlArmStateValid = armedCount === 0 || armedCount === 12;
   const minimumRlSpeed = Number(rl.min_forward_m_s ?? 0);
   const maximumRlSpeed = Number(rl.max_forward_m_s ?? 0.1);
   const recommendedRlSpeed = Number(
@@ -778,13 +780,17 @@ function updateSummary(state) {
     !rl.available ||
     rl.active ||
     crawl.active ||
-    state.any_armed ||
+    !rlArmStateValid ||
     !rlSafetyAck.checked;
   stopRl.disabled = !rl.active;
   rlSpeed.disabled = rl.active;
   rlDuration.disabled = rl.active;
-  rlSafetyAck.disabled =
-    !rl.available || rl.active || crawl.active || state.any_armed;
+  rlSafetyAck.disabled = rl.active || crawl.active;
+  if (!rl.active && armedCount === 12 && rl.available) {
+    rlDetail.textContent += " / all 12 armed: RL start preserves torque";
+  } else if (!rl.active && armedCount > 0 && armedCount < 12) {
+    rlDetail.textContent += " / partial arming: disarm all 12 before RL";
+  }
 
   const phaseText = crawl.phase.replaceAll("_", " ").toUpperCase();
   const swingText = crawl.swing_corner
@@ -1016,8 +1022,9 @@ startRl.addEventListener("click", async () => {
     showNotice("Confirm support, foot clearance, and the physical cutoff", true);
     return;
   }
-  if (latestState?.any_armed) {
-    showNotice("Disarm all 12 motors before starting the RL test", true);
+  const armedCount = Number(latestState?.summary?.armed_count || 0);
+  if (armedCount > 0 && armedCount < 12) {
+    showNotice("Disarm the partially armed robot before starting RL", true);
     return;
   }
   await postAction(

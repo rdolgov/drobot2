@@ -406,6 +406,8 @@ def test_rl_ui_exposes_bounded_custom_speed_and_duration() -> None:
     assert "duration_s: duration" in script
     assert 'confirmation: "START SUPPORTED RL TEST"' in script
     assert '"/api/rl-stop"' in script
+    assert "armedCount === 0 || armedCount === 12" in script
+    assert "rlSafetyAck.disabled = rl.active || crawl.active" in script
 
 
 def test_rl_request_bounds_follow_selected_model_metadata(tmp_path: Path) -> None:

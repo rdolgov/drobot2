@@ -60,7 +60,7 @@ DEFAULT_RECORDINGS_DIR = (
     Path.home() / ".local" / "share" / "drobot2" / "rl-recordings"
 )
 STATIC_DIR = Path(__file__).with_name("four_leg_static")
-LAN_CLIENT_VERSION = "5"
+LAN_CLIENT_VERSION = "6"
 
 
 @dataclass(frozen=True)
@@ -1114,8 +1114,11 @@ class FourLegSession:
         with self.lock:
             if self.crawl_active or self.rl_controller.active:
                 raise RuntimeError("Stop the active gait before starting an RL test")
-            if self._armed_count_locked():
-                raise RuntimeError("Disarm all 12 motors before starting an RL test")
+            armed_count = self._armed_count_locked()
+            if armed_count not in {0, 12}:
+                raise RuntimeError(
+                    "RL start requires either all 12 motors armed or all 12 disarmed"
+                )
             if self.fault:
                 raise RuntimeError("Clear the reported hardware fault before RL start")
             if self.last_full_snapshot is None:
@@ -1123,6 +1126,7 @@ class FourLegSession:
 
             measured_by_id: dict[int, float] = {}
             try:
+                self._cancel_crawl_locked()
                 for profile in self.profiles:
                     controller = self.controllers[profile.number]
                     for motor in profile.config.motors:
@@ -1165,7 +1169,13 @@ class FourLegSession:
             self.last_event = (
                 f"Supported {duration:g}-second RL walking test started "
                 f"at {speed:.3f} m/s; normal completion will return "
-                "to calibrated center"
+                "to calibrated center; existing full-robot torque was preserved"
+                if armed_count == 12
+                else (
+                    f"Supported {duration:g}-second RL walking test started "
+                    f"at {speed:.3f} m/s; normal completion will return "
+                    "to calibrated center"
+                )
             )
 
     def stop_rl_policy(self) -> None:

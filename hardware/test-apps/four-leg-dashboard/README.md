@@ -30,6 +30,8 @@ The local dashboard provides:
   position/velocity feedback for all 12 joints, a model-declared forward
   command range (`0.040-0.100 m/s` for V20), a custom `1-60 s` duration,
   bounded 60 Hz policy targets and synchronous 12-motor writes,
+  start from either a fully disarmed robot or an existing all-12-motor stable
+  hold without dropping torque (partial arming remains rejected),
   normal-completion transition to calibrated center with torque holding, fault
   disarm, and a dedicated **STOP RL + DISARM**;
 - a recent red error log directly below the toolbar; active bus and RL faults

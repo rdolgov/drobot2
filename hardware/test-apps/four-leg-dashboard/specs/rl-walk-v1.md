@@ -59,11 +59,14 @@ and the physical power cutoff is ready. Start is rejected unless:
 - projected gravity says the body is within 41 degrees of upright;
 - the serial bus has no active fault;
 - no manual, crawl, diagonal-pair, or RL command is active;
-- all motors begin disarmed; and
+- either all 12 motors begin disarmed or all 12 are already armed in a stable
+  hold; partially armed states are rejected; and
 - all 12 measured joints are inside the policy envelope with a five-degree
   commissioning margin.
 
-After these checks, each motor is armed while holding its measured position.
+After these checks, each motor is anchored to its measured position before
+policy output starts. If all 12 were already armed, torque remains enabled
+through the transition; otherwise they are armed at those measured positions.
 The measured 12-joint vector becomes the policy's initial rate-limiter target,
 preventing a jump from an assumed neutral pose.
 
@@ -78,7 +81,7 @@ trial timer ends.
 
 Every path below requests policy stop and disarms all 12 motors:
 
-- **STOP RL + DISARM**, **STOP + DISARM**, or **DISARM ALL 12**;
+- **STOP RL + DISARM** or **DISARM ALL 12**;
 - model, IMU, serial, telemetry, or joint-feedback exception;
 - a control-loop output gap longer than 120 ms;
 - missing armed motor or invalid/non-finite target;
@@ -110,8 +113,9 @@ sudo systemctl restart drobot-manual-web.service
 ```
 
 Open `http://pi5-dog.local:8080/`, confirm hardware mode, `12 / 12` online,
-`0 / 12` armed, plausible voltage, and no fault. Begin at `0.04 m/s` while the
-body is supported and the feet cannot contact the bench.
+either `0 / 12` or `12 / 12` armed, plausible voltage, and no fault. Never
+start from a partially armed robot. Begin at `0.04 m/s` while the body is
+supported and the feet cannot contact the bench.
 
 ## ROS 2 migration
 
