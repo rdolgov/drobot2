@@ -235,7 +235,7 @@ routes are:
 | `POST /api/crawl-forward` | Start continuous distributed crawl |
 | `POST /api/diagonal-pair-forward` | Start continuous diagonal-pair gait |
 | `POST /api/crawl-stop` | Stop a hardcoded gait, return to the four-foot stance, and hold torque |
-| `POST /api/rl-start` | Start the guarded RL test from all-disarmed or an existing all-12-motor hold |
+| `POST /api/rl-start` | Start the guarded RL test from the completed all-12 calibrated-center hold |
 | `POST /api/rl-stop` | Stop RL inference and disarm all motors |
 | `POST /api/power-reset` | Reset rolling power/energy data and capture a fresh idle reference |
 | `POST /api/crawl-stance` | Move to the distributed gait stance |
@@ -243,7 +243,7 @@ routes are:
 | `POST /api/disarm-all` | Disarm all motors |
 
 The standalone Pi service on the trusted LAN does not require a control token.
-It requires the non-secret `X-Drobot-Client-Version: 6` compatibility header on
+It requires the non-secret `X-Drobot-Client-Version: 7` compatibility header on
 motion-changing POST requests so stale pre-fix pages cannot issue commands.
 The current browser supplies it automatically. The future ROS service can still
 use its optional configured `DROBOT_CONTROL_TOKEN`.
@@ -254,12 +254,12 @@ Example script calls:
 curl http://drobot.local:8080/api/state
 
 curl -X POST -H "Content-Type: application/json" \
-  -H "X-Drobot-Client-Version: 6" \
+  -H "X-Drobot-Client-Version: 7" \
   -d '{"safety_ack":true,"confirmation":"TEST DISTRIBUTED CRAWL"}' \
   http://drobot.local:8080/api/crawl-forward
 
 curl -X POST -H "Content-Type: application/json" \
-  -H "X-Drobot-Client-Version: 6" -d '{}' \
+  -H "X-Drobot-Client-Version: 7" -d '{}' \
   http://drobot.local:8080/api/crawl-stop
 ```
 

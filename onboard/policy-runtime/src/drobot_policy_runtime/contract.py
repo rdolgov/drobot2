@@ -14,7 +14,9 @@ ACTION_SIZE = 12
 SERVO_VELOCITY_LIMIT_RAD_S = 4.5836625
 GRAVITY_M_S2 = 9.81
 GAIT_PERIOD_S = 0.8
-MAX_TARGET_STEP_RAD = math.radians(5.0)
+# Match the conservative 120 deg/s crawl ceiling at 60 Hz. The hardware sink
+# independently clamps finite commands to the same bound.
+MAX_TARGET_STEP_RAD = math.radians(2.0)
 
 
 @dataclass(frozen=True)

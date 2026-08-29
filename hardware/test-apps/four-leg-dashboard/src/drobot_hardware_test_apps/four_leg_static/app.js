@@ -67,7 +67,7 @@ async function api(
     method,
     headers: {
       "X-Control-Token": token,
-      "X-Drobot-Client-Version": "6",
+      "X-Drobot-Client-Version": "7",
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -355,7 +355,7 @@ async function downloadRecording(recording) {
       {
         headers: {
           "X-Control-Token": token,
-          "X-Drobot-Client-Version": "6",
+          "X-Drobot-Client-Version": "7",
         },
         cache: "no-store",
       },
@@ -730,8 +730,7 @@ function updateSummary(state) {
     : "Waiting";
   rlTargets.textContent = `${Array.isArray(rl.targets) ? rl.targets.length : 0} / 12`;
   const recorder = rl.recording || {};
-  const armedCount = Number(summary.armed_count || 0);
-  const rlArmStateValid = armedCount === 0 || armedCount === 12;
+  const rlStartReady = Boolean(rl.start_ready);
   const minimumRlSpeed = Number(rl.min_forward_m_s ?? 0);
   const maximumRlSpeed = Number(rl.max_forward_m_s ?? 0.1);
   const recommendedRlSpeed = Number(
@@ -780,16 +779,21 @@ function updateSummary(state) {
     !rl.available ||
     rl.active ||
     crawl.active ||
-    !rlArmStateValid ||
+    !rlStartReady ||
     !rlSafetyAck.checked;
   stopRl.disabled = !rl.active;
   rlSpeed.disabled = rl.active;
   rlDuration.disabled = rl.active;
   rlSafetyAck.disabled = rl.active || crawl.active;
-  if (!rl.active && armedCount === 12 && rl.available) {
-    rlDetail.textContent += " / all 12 armed: RL start preserves torque";
-  } else if (!rl.active && armedCount > 0 && armedCount < 12) {
-    rlDetail.textContent += " / partial arming: disarm all 12 before RL";
+  if (!rl.active && rlStartReady && rl.available) {
+    rlDetail.textContent +=
+      ` / centered hold ready / ${Number(rl.target_step_limit_deg || 2).toFixed(0)}° step cap`;
+  } else if (!rl.active && rl.available) {
+    rlDetail.textContent +=
+      " / press CENTER ALL 12 and wait for the centered hold";
+  }
+  if (Number(rl.target_clamp_count || 0) > 0) {
+    rlDetail.textContent += ` / step clamps ${Number(rl.target_clamp_count)}`;
   }
 
   const phaseText = crawl.phase.replaceAll("_", " ").toUpperCase();
@@ -1022,9 +1026,11 @@ startRl.addEventListener("click", async () => {
     showNotice("Confirm support, foot clearance, and the physical cutoff", true);
     return;
   }
-  const armedCount = Number(latestState?.summary?.armed_count || 0);
-  if (armedCount > 0 && armedCount < 12) {
-    showNotice("Disarm the partially armed robot before starting RL", true);
+  if (!latestState?.rl_policy?.start_ready) {
+    showNotice(
+      "Press CENTER ALL 12 and wait until all joints reach the centered hold",
+      true,
+    );
     return;
   }
   await postAction(

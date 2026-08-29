@@ -109,9 +109,11 @@
             <h2 id="rlTitle">RL walking policy</h2>
             <p>
               Runs the selected ONNX policy at the requested speed and
-              duration, then returns all 12 joints to calibrated center and
-              holds torque for a stable stance. Faults and the explicit stop
-              button still disarm. The 8080 process remains the only servo-bus
+              duration. Press CENTER ALL 12 first and wait for the centered
+              hold; RL preserves torque through startup and returns all 12
+              joints to calibrated center when complete. A target-step clamp or
+              transient deadline miss returns to center and holds; hardware
+              faults and the explicit stop button still disarm. The 8080 process remains the only servo-bus
               owner and applies position, rate, tilt, telemetry, and
               model-output guards. Temperatures from 55–64 C are rechecked for
               five seconds before stopping; 65 C or higher stops immediately.

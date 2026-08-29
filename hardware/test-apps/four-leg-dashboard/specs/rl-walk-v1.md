@@ -59,16 +59,17 @@ and the physical power cutoff is ready. Start is rejected unless:
 - projected gravity says the body is within 41 degrees of upright;
 - the serial bus has no active fault;
 - no manual, crawl, diagonal-pair, or RL command is active;
-- either all 12 motors begin disarmed or all 12 are already armed in a stable
-  hold; partially armed states are rejected; and
+- all 12 motors are armed at the completed **CENTER ALL 12** target, with every
+  measured joint no more than five degrees from calibrated center; and
 - all 12 measured joints are inside the policy envelope with a five-degree
   commissioning margin.
 
-After these checks, each motor is anchored to its measured position before
-policy output starts. If all 12 were already armed, torque remains enabled
-through the transition; otherwise they are armed at those measured positions.
-The measured 12-joint vector becomes the policy's initial rate-limiter target,
-preventing a jump from an assumed neutral pose.
+After these checks, each motor is re-anchored to its measured centered position
+without dropping torque. The measured 12-joint vector becomes the policy's
+initial rate-limiter target, preventing a jump from an assumed neutral pose.
+Finite policy targets are limited to two degrees per 60 Hz update. A larger
+finite request is clamped and recorded rather than treated as a fault or a
+reason to disarm.
 
 ## Completion and runtime stops
 
@@ -85,7 +86,6 @@ Every path below requests policy stop and disarms all 12 motors:
 - model, IMU, serial, telemetry, or joint-feedback exception;
 - a control-loop output gap longer than 120 ms;
 - missing armed motor or invalid/non-finite target;
-- a target update exceeding five degrees;
 - projected-gravity magnitude outside `[0.8, 1.2]`; or
 - body tilt exceeding 60 degrees while the test is running;
 - one verified servo temperature remaining at or above `55 C` for five seconds
@@ -99,6 +99,10 @@ non-blocking and does not pause the 60 Hz policy loop.
 
 Browser heartbeat remains diagnostic only. A physical cutoff is still the
 emergency stop because neither Wi-Fi nor software disarm is safety-rated.
+A legacy target-step error or a transient 120 ms policy-output deadline miss
+stops policy inference and returns to calibrated center with torque holding.
+Bus, motor-torque, low-voltage, stall, severe-tilt, and critical-temperature
+faults retain their hard-stop behavior.
 
 ## Raspberry Pi process ownership
 
@@ -113,9 +117,9 @@ sudo systemctl restart drobot-manual-web.service
 ```
 
 Open `http://pi5-dog.local:8080/`, confirm hardware mode, `12 / 12` online,
-either `0 / 12` or `12 / 12` armed, plausible voltage, and no fault. Never
-start from a partially armed robot. Begin at `0.04 m/s` while the body is
-supported and the feet cannot contact the bench.
+plausible voltage, and no fault. Press **CENTER ALL 12**, wait for the RL panel
+to report that its centered hold is ready, then acknowledge and start. Begin at
+`0.04 m/s` while the body is supported and the feet cannot contact the bench.
 
 ## ROS 2 migration
 
