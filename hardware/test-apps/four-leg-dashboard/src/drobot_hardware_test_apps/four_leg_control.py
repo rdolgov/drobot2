@@ -60,7 +60,7 @@ DEFAULT_RECORDINGS_DIR = (
     Path.home() / ".local" / "share" / "drobot2" / "rl-recordings"
 )
 STATIC_DIR = Path(__file__).with_name("four_leg_static")
-LAN_CLIENT_VERSION = "4"
+LAN_CLIENT_VERSION = "5"
 
 
 @dataclass(frozen=True)
@@ -2312,7 +2312,7 @@ class FourLegSession:
                 "pattern": (
                     "diagonal_pair_flat_support_gait_v1"
                     if self.crawl_mode == "diagonal_pair"
-                    else "rectangular_flat_support_crawl_v9_slow"
+                    else "rectangular_flat_support_crawl_v10_medium"
                 ),
                 "supported_test_only": True,
                 "active": self.crawl_active,

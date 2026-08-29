@@ -1,12 +1,12 @@
-# Rectangular-shoe flat-support crawl V9 slow
+# Rectangular-shoe flat-support crawl V10 medium
 
 The filename is retained as a stable documentation link. Its contents now
-specify the active V9 rectangular-shoe crawl. Earlier V5/V8/TPU results remain historical
+specify the active V10 rectangular-shoe crawl. Earlier V5/V8/V9/TPU results remain historical
 sections in this document.
 
 ## Decision
 
-V9 is a deterministic, open-loop static crawl based on rectangular-shoe
+V10 is a deterministic, open-loop static crawl based on rectangular-shoe
 contact positions rather than isolated joint commands. One foot is lifted at a
 time while the other three remain exact flat-sole support candidates. The
 selected foot advances, rejoins the flat branch before load, and a short
@@ -29,7 +29,7 @@ Sources:
 
 ## Foot order and phase table
 
-One 12-second cycle contains four 3-second steps in this
+One 6-second cycle contains four 1.5-second steps in this
 order:
 
 1. rear right (Leg 4);
@@ -40,16 +40,16 @@ order:
 Each step uses the following normalized phase table. Smoothstep interpolation
 removes velocity discontinuities at the ends of each phase.
 
-| Phase | Step fraction | Time in a 3.00 s step | Purpose |
+| Phase | Step fraction | Time in a 1.50 s step | Purpose |
 | --- | ---: | ---: | --- |
-| Weight transfer | 0.15 | 0.450 s | Move the body target fore/aft away from the foot to lift |
-| Lift | 0.15 | 0.450 s | Raise only the selected foot to full clearance |
-| Swing | 0.20 | 0.600 s | Advance the selected foot while all three supports remain flat |
-| Lower | 0.20 | 0.600 s | Return the selected foot toward the flat branch |
-| Firm plant | 0.10 | 0.300 s | Hold the new flat contact with the other three soles level |
-| Weight return | 0.08 | 0.240 s | Return the open-loop body transfer after contact |
-| All-feet push | 0.07 | 0.210 s | Move all flat planted targets rearward by one quarter stride |
-| Step settle | 0.05 | 0.150 s | Hold the completed step before another leg can lift |
+| Weight transfer | 0.15 | 0.225 s | Move the body target fore/aft away from the foot to lift |
+| Lift | 0.15 | 0.225 s | Raise only the selected foot to full clearance |
+| Swing | 0.20 | 0.300 s | Advance the selected foot while all three supports remain flat |
+| Lower | 0.20 | 0.300 s | Return the selected foot toward the flat branch |
+| Firm plant | 0.10 | 0.150 s | Hold the new flat contact with the other three soles level |
+| Weight return | 0.08 | 0.120 s | Return the open-loop body transfer after contact |
+| All-feet push | 0.07 | 0.105 s | Move all flat planted targets rearward by one quarter stride |
+| Step settle | 0.05 | 0.075 s | Hold the completed step before another leg can lift |
 
 After four steps, each foot has moved forward by one complete stride while it
 was airborne and rearward by four quarter-stride pushes while planted. The
@@ -64,7 +64,7 @@ adds `0.001 m`. The effective knee-to-contact length is therefore `L2 =
 0.159896689 + 0.031 = 0.190896689 m`.
 
 For a planted flat sole, the shoe normal follows the distal-link axis and must
-point down. V9 therefore uses:
+point down. V10 therefore uses:
 
 ```text
 hip   = asin(x / L1)
@@ -94,14 +94,14 @@ final calibrated motor convention is deliberately explicit:
 This fixes the earlier failure where the front and rear legs folded toward one
 another. The gait start is the computed phase-zero pose, not the old hardcoded
 45-degree stance. With only two sagittal pitch joints, foot X, foot Z, and sole
-pitch cannot all be independently selected. V9 reserves exact zero pitch for
+pitch cannot all be independently selected. V10 reserves exact zero pitch for
 every planted shoe and permits only the unloaded swing shoe to deviate. The
 selected 25 mm contact-centre lift and 60 mm stride reduce the unloaded swing
 excursion relative to V8. The three support legs remain on the exact flat-sole
 branch throughout the move.
 
 The V7 fixed-X support extension is removed. It added downward reach but made
-the three loaded soles tip by design. V9 instead recomputes the exact flat
+the three loaded soles tip by design. V10 retains V9's exact flat
 support depth for every current fore/aft target. Zero abduction and zero
 lateral transfer keep the rectangular contact planes level in 3D.
 
@@ -110,7 +110,7 @@ lateral transfer keep the rectangular contact planes level in 3D.
 | Parameter | Tracked value |
 | --- | ---: |
 | Hardware cycle count | Continuous until STOP + STABLE HOLD |
-| Period per cycle | 12.000 s |
+| Period per cycle | 6.000 s |
 | Total command duration | Unbounded until explicitly stopped |
 | Finite fallback cycle count | 2 |
 | Foot stride | 0.060 m |
@@ -124,14 +124,16 @@ lateral transfer keep the rectangular contact planes level in 3D.
 
 The V8 hardware trial used a 96 mm stride and 4-second cycle. Live telemetry
 showed roughly 20-39 degrees of tracking error on moving joints, while voltage,
-current, and temperature did not show a matching electrical fault. V9 therefore
-reduces stride to 60 mm, lift to 25 mm, and the crawl command ramp to 60
-degrees/s. It triples the cycle time, lengthens firm-plant and settle phases,
-and advances its trajectory by one fixed 50 ms tick per controller update so a
-slow telemetry read cannot cause a catch-up burst. Only one leg is selected as
-airborne; the next leg cannot lift until the prior leg completes lowering,
-plant, weight-return, push, and settle. The 80 mm stance offset and exact
-329.341447 mm stance depth remain unchanged.
+current, and temperature did not show a matching electrical fault. V9 reduced
+stride to 60 mm, lift to 25 mm, used a 12-second period and 60 degrees/s crawl
+ramp, and completed its first physical trial stably. V10 keeps the same
+geometry, phase proportions, and one-leg-at-a-time support sequence while
+doubling the period-derived cadence and command ramp to 6 seconds and 120
+degrees/s. The trajectory still advances by one fixed 50 ms tick per controller
+update so a slow telemetry read cannot cause a catch-up burst. The next leg
+cannot lift until the prior leg completes lowering, plant, weight-return, push,
+and settle. The 80 mm stance offset and exact 329.341447 mm stance depth remain
+unchanged.
 
 ## Actuator and controller settings
 
@@ -143,13 +145,13 @@ The four tracked servo profiles now use the same settings:
 | Speed register | 3400 |
 | Acceleration register | 254 |
 | Manual/RL dashboard ramp ceiling | 270 degrees/s |
-| Hardcoded crawl ramp ceiling | 60 degrees/s |
+| Hardcoded crawl ramp ceiling | 120 degrees/s |
 | Maximum command step | 15 degrees |
 
 `3400` is the maximum ST3215 speed setting exposed by the current software and
 `254` is the maximum acceleration byte. The manual/RL ceiling equals the URDF's
 documented no-load joint-speed limit of `4.712389 rad/s` (270 degrees/s), while
-the hardcoded crawl applies its lower 60 degrees/s software ramp. These are
+the hardcoded crawl applies its lower 120 degrees/s software ramp. These are
 response limits, not a promise that a loaded joint will reach no-load speed.
 The tracked torque setting remains the requested 90%; it is not raised to
 continuous stall torque.
@@ -161,8 +163,8 @@ Vendor references:
 
 ## Isaac evidence
 
-The report below is the retained `24 mm` V8 baseline. The active V9 60 mm,
-12-second hardware profile has not been simulated or hardware-tested. The
+The report below is the retained `24 mm` V8 baseline. The active V10 60 mm,
+6-second hardware profile has not been simulated or hardware-tested. The
 baseline ran two 8-second cycles
 with 120 Hz physics, 60 Hz control, and a `2.6477955 Nm` per-joint cap
 representing 90% of the documented stall value. Isaac disabled the legacy
@@ -214,7 +216,7 @@ compliance, two-millimeter corner radii, structural flex, servo backlash, and
 measured tread friction. The older V5/TPU evidence below remains historical.
 
 Two retained V8 tuning comparisons document the older 35 mm lift and 8-second
-period; they are not validation of the active V9 profile:
+period; they are not validation of the active V10 profile:
 
 - [`../validation/isaac-rectangular-flat-crawl-v8-12s.json`](../validation/isaac-rectangular-flat-crawl-v8-12s.json)
   used 48 mm lift and a 12-second period; tracking improved only to `0.236925
@@ -299,8 +301,9 @@ when available.
 Isaac can verify internal target consistency and screen for obvious collapse;
 it does not verify the real foot friction, backlash, supply voltage drop,
 wiring, servo heat, or exact mass distribution. The 24 mm V8 baseline is
-simulated; the active 60 mm, 12-second V9 profile has not been simulated or
-hardware-tested.
+simulated. The 60 mm, 12-second V9 profile completed its first physical trial
+stably. The active V10 profile doubles only cadence and the crawl ramp; it has
+not been simulated or hardware-tested.
 For its first requested trial:
 
 1. Restart the dashboard so it reloads the TOML profiles and Python gait code.

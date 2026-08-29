@@ -67,7 +67,7 @@ async function api(
     method,
     headers: {
       "X-Control-Token": token,
-      "X-Drobot-Client-Version": "4",
+      "X-Drobot-Client-Version": "5",
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -355,7 +355,7 @@ async function downloadRecording(recording) {
       {
         headers: {
           "X-Control-Token": token,
-          "X-Drobot-Client-Version": "4",
+          "X-Drobot-Client-Version": "5",
         },
         cache: "no-store",
       },
@@ -814,7 +814,7 @@ function updateSummary(state) {
       `${crawl.stride_mm.toFixed(0)} mm stride / ` +
       `${crawl.lift_mm.toFixed(0)} mm lift / 2 planted shoes / ` +
       `STOP to end`
-    : crawl.pattern === "rectangular_flat_support_crawl_v9_slow"
+    : crawl.pattern === "rectangular_flat_support_crawl_v10_medium"
       ? `Continuous / ` +
         `${(crawl.stride_mm).toFixed(0)} mm stride / ` +
         `${(crawl.lift_mm).toFixed(0)} mm lift / ` +

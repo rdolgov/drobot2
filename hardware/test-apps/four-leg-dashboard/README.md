@@ -147,7 +147,7 @@ port with another dashboard process.
    structure, support, and complete-robot collision behavior have separate
    validation.
 
-## Rectangular flat-support crawl V9 slow
+## Rectangular flat-support crawl V10 medium
 
 The current gait uses foot-space inverse kinematics and repeats this order:
 
@@ -167,7 +167,7 @@ face is `30 mm` beyond the distal fork axis, and its recommended bonded tread
 adds `1 mm`. The gait therefore uses a `159.896689 mm` proximal link and a
 `190.896689 mm` effective knee-to-contact length.
 
-The `100 x 60 mm` sole is flat rather than a rocker. Gait V9 keeps every planted
+The `100 x 60 mm` sole is flat rather than a rocker. Gait V10 keeps every planted
 leg at `hip flexion + knee = 0 degrees`, so the distal link and shoe normal
 point vertically down throughout weight transfer, swing, touchdown, and the
 four-foot push. The previous 3 mm fixed-X support extension was removed because
@@ -175,7 +175,7 @@ it deliberately tipped the three planted soles. The swing leg returns to zero
 sole pitch before the firm-plant phase.
 
 Because the robot has only two pitch joints per leg, it cannot independently
-command swing-foot X, height, and pitch. V9 prioritizes the requested 90-degree
+command swing-foot X, height, and pitch. V10 prioritizes the requested 90-degree
 flatness for every loaded shoe; only the unloaded swing shoe may pitch. The
 smaller 25 mm lift and 60 mm stride reduce swing excursion relative to V8. Zero
 hip abduction and zero lateral shift preserve full 3D flatness for support.
@@ -183,10 +183,10 @@ hip abduction and zero lateral shift preserve full 3D flatness for support.
 The tracked nominal stance is `329.341 mm` deep with `80 mm` front/rear separation
 from each hip and no extra abduction. **SET GAIT START STANCE** moves to the
 exact phase-zero flat-sole pose without beginning the crawl. **TEST DISTRIBUTED
-CRAWL** repeats its 12-second cycle until **STOP + STABLE HOLD** is pressed. It
+CRAWL** repeats its 6-second cycle until **STOP + STABLE HOLD** is pressed. It
 uses a `60 mm` stride, `25 mm` contact-centre lift, zero support extension, a
 `15 mm` planted-foot push after each placement, and `6 mm` of fore/aft body
-transfer. The dedicated crawl ramp is `60 degrees/s`, separate from the
+transfer. The dedicated crawl ramp is `120 degrees/s`, separate from the
 `270 degrees/s` manual/RL ceiling. Each servo update advances by one fixed
 50 ms control tick, so a slow telemetry read cannot create a catch-up burst.
 Each horizontal swing happens only after the selected rectangular shoe has
@@ -282,8 +282,8 @@ rear-right lift and advance together, followed by front-right and rear-left.
 During each airborne phase the opposite diagonal remains on the exact flat-sole
 branch. After the pair plants, all four targets push rearward by half a stride.
 
-The mode shares the conservative 12-second cycle, 60 mm stride, 25 mm lift,
-and 60 degrees/s crawl ramp until **STOP + STABLE HOLD** is pressed. Offline
+The mode shares the 6-second cycle, 60 mm stride, 25 mm lift, and 120 degrees/s
+crawl ramp until **STOP + STABLE HOLD** is pressed. Offline
 geometry sampling found a periodic path with a `67.25 degree` maximum
 hip-flexion target, `73.11 degree` maximum knee target, `144.1 degrees/s` peak
 requested rate, and at least `19.43 mm` of long-edge clearance during
@@ -399,11 +399,13 @@ Historical flexible-shoe evidence:
 
 That historical TPU comparison selected a `40 mm` profile. The V8 rectangular
 profile that followed used a 96 mm stride and 4-second period, but the hardware
-trial showed 20-39 degree tracking error and unstable motion. The active V9
-profile is deliberately more conservative: 60 mm stride, 25 mm lift, 12-second
-period, longer contact/settle phases, and a 60 degrees/s crawl ramp. It has not
-been run in Isaac or tested on hardware yet; no result is claimed from the
-older reports.
+trial showed 20-39 degree tracking error and unstable motion. The subsequent
+V9 profile was deliberately conservative: 60 mm stride, 25 mm lift, 12-second
+period, longer contact/settle phases, and a 60 degrees/s crawl ramp. Its first
+physical trial walked stably. V10 retains its support geometry and phase
+proportions while doubling cadence and the crawl ramp to 6 seconds and 120
+degrees/s. V10 has not been run in Isaac or tested on hardware yet; no result
+is claimed from the older reports.
 
 ## Center all twelve joints
 
@@ -492,7 +494,7 @@ Arming first commands the motor's measured position and only then enables
 torque. Browser destinations are converted with the tracked calibration and
 range checked before acceptance. The background worker can approach manual and
 RL destinations at up to the configured 270 degrees per second through command
-steps no larger than 15 degrees. The hardcoded crawl has its own 60 degrees/s
+steps no larger than 15 degrees. The hardcoded crawl has its own 120 degrees/s
 ceiling and advances from a fixed 50 ms gait tick to avoid catch-up bursts.
 Each servo profile uses speed register `3400`, acceleration `254`, and the
 existing 90% torque limit.

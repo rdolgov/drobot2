@@ -29,7 +29,7 @@ servo, wiring, or linkage changes.
 All profiles use 1,000,000 baud, a 90% torque limit, speed register 3400,
 acceleration register 254, and a 15-degree maximum command step. The dashboard
 manual/RL motion ceiling is 270 degrees/s. The hardcoded crawl separately uses
-a 60 degrees/s ramp, 12-second cycle, 60 mm stride, and 25 mm lift so only one
+a 120 degrees/s ramp, 6-second cycle, 60 mm stride, and 25 mm lift so only one
 leg advances slowly while three feet remain planted. Loaded joints may not
 reach no-load speed, and software limits do not replace physical stops or
 collision checks. See the

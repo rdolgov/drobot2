@@ -243,7 +243,7 @@ routes are:
 | `POST /api/disarm-all` | Disarm all motors |
 
 The standalone Pi service on the trusted LAN does not require a control token.
-It requires the non-secret `X-Drobot-Client-Version: 4` compatibility header on
+It requires the non-secret `X-Drobot-Client-Version: 5` compatibility header on
 motion-changing POST requests so stale pre-fix pages cannot issue commands.
 The current browser supplies it automatically. The future ROS service can still
 use its optional configured `DROBOT_CONTROL_TOKEN`.
@@ -254,12 +254,12 @@ Example script calls:
 curl http://drobot.local:8080/api/state
 
 curl -X POST -H "Content-Type: application/json" \
-  -H "X-Drobot-Client-Version: 4" \
+  -H "X-Drobot-Client-Version: 5" \
   -d '{"safety_ack":true,"confirmation":"TEST DISTRIBUTED CRAWL"}' \
   http://drobot.local:8080/api/crawl-forward
 
 curl -X POST -H "Content-Type: application/json" \
-  -H "X-Drobot-Client-Version: 4" -d '{}' \
+  -H "X-Drobot-Client-Version: 5" -d '{}' \
   http://drobot.local:8080/api/crawl-stop
 ```
 
