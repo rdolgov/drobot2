@@ -84,6 +84,10 @@ removed. A minor off-stance start is accepted and ramped into the computed gait
 stance; it is not permission to start from a
 folded, collided, unsupported, or visibly damaged pose.
 
+After **SET GAIT START STANCE** reports `COMPLETE / HOLDING`, **TEST DISTRIBUTED
+CRAWL** can start directly while all 12 motors continue holding that verified
+stance. Partial or unrelated armed configurations remain blocked.
+
 The power panel also shows a basic 3S charge indicator from the last disarmed
 idle-voltage reference. It is a pack-level estimate, not a substitute for
 checking all three cells through the balance connector.
@@ -239,7 +243,7 @@ routes are:
 | `POST /api/disarm-all` | Disarm all motors |
 
 The standalone Pi service on the trusted LAN does not require a control token.
-It requires the non-secret `X-Drobot-Client-Version: 3` compatibility header on
+It requires the non-secret `X-Drobot-Client-Version: 4` compatibility header on
 motion-changing POST requests so stale pre-fix pages cannot issue commands.
 The current browser supplies it automatically. The future ROS service can still
 use its optional configured `DROBOT_CONTROL_TOKEN`.
@@ -250,12 +254,12 @@ Example script calls:
 curl http://drobot.local:8080/api/state
 
 curl -X POST -H "Content-Type: application/json" \
-  -H "X-Drobot-Client-Version: 3" \
+  -H "X-Drobot-Client-Version: 4" \
   -d '{"safety_ack":true,"confirmation":"TEST DISTRIBUTED CRAWL"}' \
   http://drobot.local:8080/api/crawl-forward
 
 curl -X POST -H "Content-Type: application/json" \
-  -H "X-Drobot-Client-Version: 3" -d '{}' \
+  -H "X-Drobot-Client-Version: 4" -d '{}' \
   http://drobot.local:8080/api/crawl-stop
 ```
 

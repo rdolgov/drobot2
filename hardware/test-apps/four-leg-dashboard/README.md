@@ -191,6 +191,10 @@ transfer. The dedicated crawl ramp is `60 degrees/s`, separate from the
 50 ms control tick, so a slow telemetry read cannot create a catch-up burst.
 Each horizontal swing happens only after the selected rectangular shoe has
 lifted. The controller uses smooth interpolation throughout the phase table.
+After **SET GAIT START STANCE** reaches `COMPLETE / HOLDING`, the distributed
+crawl button becomes available without disarming. The server accepts this
+transition only when all 12 motors remain armed at the settled gait targets;
+partial or unrelated armed states are still rejected.
 
 The exact equations, phase fractions, sign convention, simulation evidence,
 and physical trial ladder are in

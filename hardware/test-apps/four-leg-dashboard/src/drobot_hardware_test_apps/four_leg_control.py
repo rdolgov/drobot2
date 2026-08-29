@@ -60,7 +60,7 @@ DEFAULT_RECORDINGS_DIR = (
     Path.home() / ".local" / "share" / "drobot2" / "rl-recordings"
 )
 STATIC_DIR = Path(__file__).with_name("four_leg_static")
-LAN_CLIENT_VERSION = "3"
+LAN_CLIENT_VERSION = "4"
 
 
 @dataclass(frozen=True)
@@ -798,6 +798,7 @@ class FourLegSession:
     @property
     def crawl_active(self) -> bool:
         return self.crawl_stage in {
+            "positioning",
             "preparing",
             "preloading",
             "walking",
@@ -883,14 +884,38 @@ class FourLegSession:
                     return False
         return True
 
+    def _crawl_stance_ready_locked(self, tolerance_deg: float = 0.3) -> bool:
+        if self.crawl_stage != "holding" or self._armed_count_locked() != 12:
+            return False
+        stance_targets = self._crawl_stance_targets_locked()
+        for profile in self.profiles:
+            controller = self.controllers[profile.number]
+            for motor in profile.config.motors:
+                key = (profile.number, motor.name)
+                stance = stance_targets[key]
+                desired = self.desired_deg.get(key)
+                commanded = controller.targets_deg.get(motor.name)
+                if desired is None or commanded is None:
+                    return False
+                if abs(desired - stance) > tolerance_deg:
+                    return False
+                if abs(commanded - stance) > tolerance_deg:
+                    return False
+        return True
+
     def _advance_crawl_locked(self) -> None:
         if not self.crawl_active:
             return
         now = self.clock()
         config = self.dashboard.crawl
-        if self.crawl_stage == "stopping":
+        if self.crawl_stage in {"positioning", "stopping"}:
+            positioning_only = self.crawl_stage == "positioning"
             self.crawl_mode = "distributed"
-            self._set_crawl_stance_locked("returning_to_four_foot_stance")
+            self._set_crawl_stance_locked(
+                "positioning_four_foot_stance"
+                if positioning_only
+                else "returning_to_four_foot_stance"
+            )
             if not self._crawl_targets_reached_locked():
                 self.crawl_target_reached_at = None
                 return
@@ -906,7 +931,9 @@ class FourLegSession:
             self.crawl_target_reached_at = None
             self.crawl_progress = 0.0
             self.last_event = (
-                "Crawl stopped at stable four-foot stance; torque remains armed"
+                "Stable four-foot gait stance ready; torque remains armed"
+                if positioning_only
+                else "Crawl stopped at stable four-foot stance; torque remains armed"
             )
             return
 
@@ -1407,8 +1434,15 @@ class FourLegSession:
         with self.lock:
             if self.crawl_active:
                 raise RuntimeError("A crawl is already active")
-            if self._armed_count_locked():
-                raise RuntimeError("Disarm all 12 motors before starting a crawl")
+            armed_count = self._armed_count_locked()
+            start_from_held_stance = (
+                mode == "distributed"
+                and self._crawl_stance_ready_locked()
+            )
+            if armed_count and not start_from_held_stance:
+                raise RuntimeError(
+                    "Start from the settled gait stance or disarm all 12 motors"
+                )
             if self.fault:
                 raise RuntimeError("Clear the reported fault before starting a crawl")
 
@@ -1422,21 +1456,32 @@ class FourLegSession:
                 for sample in range(sample_count + 1):
                     self._crawl_pose_locked(duration_s * sample / sample_count)
 
-                for profile in self.profiles:
-                    controller = self.controllers[profile.number]
-                    for motor in profile.config.motors:
-                        state = controller.arm(motor)
-                        newly_armed.append((profile, motor))
-                        self.desired_deg[(profile.number, motor.name)] = state.degrees
-                self.crawl_stage = "preparing"
-                self.crawl_phase = "moving_to_stance"
+                if not start_from_held_stance:
+                    for profile in self.profiles:
+                        controller = self.controllers[profile.number]
+                        for motor in profile.config.motors:
+                            state = controller.arm(motor)
+                            newly_armed.append((profile, motor))
+                            self.desired_deg[(profile.number, motor.name)] = state.degrees
+                self.crawl_stage = (
+                    "preloading" if start_from_held_stance else "preparing"
+                )
+                self.crawl_phase = (
+                    "four_feet_down_preload"
+                    if start_from_held_stance
+                    else "moving_to_stance"
+                )
                 self.crawl_swing_corner = None
                 self.crawl_swing_pair = None
                 self.crawl_push_partner = None
                 self.crawl_started_at = None
                 self.crawl_target_reached_at = None
                 self.crawl_progress = 0.0
-                self._set_crawl_stance_locked("moving_to_gait_start_stance")
+                self._set_crawl_stance_locked(
+                    "four_feet_down_preload"
+                    if start_from_held_stance
+                    else "moving_to_gait_start_stance"
+                )
             except Exception:
                 for profile, motor in newly_armed:
                     try:
@@ -1452,7 +1497,11 @@ class FourLegSession:
             self.last_event = (
                 "All 12 motors moving to the diagonal-pair start stance"
                 if mode == "diagonal_pair"
-                else "All 12 motors moving to the distributed-push start stance"
+                else (
+                    "Distributed crawl preloading from settled four-foot stance"
+                    if start_from_held_stance
+                    else "All 12 motors moving to the distributed-push start stance"
+                )
             )
 
     def stop_crawl(self) -> None:
@@ -1674,6 +1723,12 @@ class FourLegSession:
                                 state.degrees
                             )
                 self.desired_deg.update(targets)
+                self.crawl_stage = "positioning"
+                self.crawl_phase = "positioning_four_foot_stance"
+                self.crawl_started_at = None
+                self.crawl_elapsed_s = 0.0
+                self.crawl_target_reached_at = None
+                self.crawl_progress = 0.0
             except Exception:
                 self._disarm_all_locked(raise_errors=False)
                 self.last_event = "Walk-stance command failed; all motors disarmed"
@@ -2261,6 +2316,7 @@ class FourLegSession:
                 ),
                 "supported_test_only": True,
                 "active": self.crawl_active,
+                "start_ready": self._crawl_stance_ready_locked(),
                 "stage": self.crawl_stage,
                 "phase": self.crawl_phase,
                 "swing_corner": self.crawl_swing_corner,

@@ -67,7 +67,7 @@ async function api(
     method,
     headers: {
       "X-Control-Token": token,
-      "X-Drobot-Client-Version": "3",
+      "X-Drobot-Client-Version": "4",
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -355,7 +355,7 @@ async function downloadRecording(recording) {
       {
         headers: {
           "X-Control-Token": token,
-          "X-Drobot-Client-Version": "3",
+          "X-Drobot-Client-Version": "4",
         },
         cache: "no-store",
       },
@@ -829,7 +829,7 @@ function updateSummary(state) {
   walkForward.disabled =
     crawl.active ||
     rl.active ||
-    state.any_armed;
+    (state.any_armed && !crawl.start_ready);
   walkDiagonalPair.disabled =
     crawl.active ||
     rl.active ||
@@ -953,8 +953,11 @@ setCrawlStance.addEventListener("click", () => {
 });
 
 walkForward.addEventListener("click", () => {
-  if (latestState?.any_armed) {
-    showNotice("Disarm all 12 motors before starting the gait sequence", true);
+  if (latestState?.any_armed && !latestState?.crawl?.start_ready) {
+    showNotice(
+      "Wait for the gait stance to report COMPLETE / HOLDING, or disarm all 12 motors",
+      true,
+    );
     return;
   }
   postAction(

@@ -749,7 +749,7 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
             session.start_crawl_forward(safety_ack=True, confirmation="")
 
         session.arm(1, 1, safety_ack=True)
-        with pytest.raises(RuntimeError, match="Disarm all 12"):
+        with pytest.raises(RuntimeError, match="settled gait stance"):
             session.start_crawl_forward(
                 safety_ack=True,
                 confirmation="TEST DISTRIBUTED CRAWL",
@@ -799,6 +799,39 @@ def test_crawl_requires_guarded_disarmed_start_and_manual_motion_is_locked() -> 
         assert state["crawl"]["stage"] == "stopping"
         assert state["crawl"]["phase"] == "return_to_stable_stance"
         assert state["summary"]["armed_count"] == 12
+        assert bus.torque == set(range(1, 13))
+    finally:
+        session.close()
+
+
+def test_crawl_can_start_directly_from_settled_armed_gait_stance() -> None:
+    session, bus, clock = _session()
+    try:
+        session.set_crawl_stance(
+            safety_ack=True,
+            confirmation="SET GAIT START STANCE",
+        )
+        assert session.snapshot()["crawl"]["stage"] == "positioning"
+
+        for _tick in range(200):
+            clock.advance(0.05)
+            session.advance_once()
+            if session.snapshot()["crawl"]["stage"] == "holding":
+                break
+
+        settled = session.snapshot()
+        assert settled["crawl"]["stage"] == "holding"
+        assert settled["crawl"]["start_ready"] is True
+        assert settled["summary"]["armed_count"] == 12
+
+        session.start_crawl_forward(
+            safety_ack=True,
+            confirmation="TEST DISTRIBUTED CRAWL",
+        )
+        started = session.snapshot()
+        assert started["crawl"]["stage"] == "preloading"
+        assert started["crawl"]["active"] is True
+        assert started["summary"]["armed_count"] == 12
         assert bus.torque == set(range(1, 13))
     finally:
         session.close()
