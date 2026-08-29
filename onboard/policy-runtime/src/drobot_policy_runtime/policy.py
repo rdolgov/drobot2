@@ -8,7 +8,12 @@ from typing import Any
 
 import numpy as np
 
-from .contract import ACTION_SIZE, OBSERVATION_SIZE, GaitClockConfig
+from .contract import (
+    ACTION_SIZE,
+    OBSERVATION_SIZE,
+    GaitClockConfig,
+    JointTargetConfig,
+)
 
 
 def load_policy_metadata(model_path: str | Path) -> dict[str, Any]:
@@ -35,6 +40,7 @@ class OnnxWalkingPolicy:
             raise FileNotFoundError(f"Walking policy not found: {path}")
         self.metadata = load_policy_metadata(path)
         self.gait_clock_config = GaitClockConfig.from_metadata(self.metadata)
+        self.joint_target_config = JointTargetConfig.from_metadata(self.metadata)
         options = ort.SessionOptions()
         options.intra_op_num_threads = 1
         options.inter_op_num_threads = 1

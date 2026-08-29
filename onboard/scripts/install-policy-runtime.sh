@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 VENV_DIR="${REPO_ROOT}/onboard/.policy-venv"
-MODEL_PATH="${REPO_ROOT}/onboard/models/parallel-walking-v20-external-rear-payload/model_900.onnx"
-MODEL_METADATA="${REPO_ROOT}/onboard/models/parallel-walking-v20-external-rear-payload/model_900.json"
+MODEL_PATH="${REPO_ROOT}/onboard/models/parallel-walking-v22-low-speed-residual-crawl/model_500.onnx"
+MODEL_METADATA="${REPO_ROOT}/onboard/models/parallel-walking-v22-low-speed-residual-crawl/model_500.json"
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "python3 is required." >&2
@@ -25,7 +25,7 @@ if head -n 1 "${MODEL_PATH}" | grep -q '^version https://git-lfs'; then
   fi
   git -C "${REPO_ROOT}" lfs install
   git -C "${REPO_ROOT}" lfs pull \
-    --include="onboard/models/parallel-walking-v20-external-rear-payload/model_900.onnx"
+    --include="onboard/models/parallel-walking-v22-low-speed-residual-crawl/model_500.onnx"
 fi
 python3 - "${MODEL_PATH}" "${MODEL_METADATA}" <<'PY'
 import hashlib

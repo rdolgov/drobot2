@@ -109,9 +109,11 @@
             <h2 id="rlTitle">RL walking policy</h2>
             <p>
               Runs the selected ONNX policy at the requested speed and
-              duration. Press CENTER ALL 12 first and wait for the centered
-              hold; RL preserves torque through startup and returns all 12
-              joints to calibrated center when complete. A target-step clamp or
+              duration. Press PREPARE RL STANCE first; it moves all twelve
+              joints together into the neutral pose used during training and
+              waits for a settled hold before enabling inference. RL preserves
+              torque through startup and returns all 12 joints to calibrated
+              center when complete. A target-step clamp or
               transient deadline miss returns to center and holds; hardware
               faults and the explicit stop button still disarm. The 8080 process remains the only servo-bus
               owner and applies position, rate, tilt, telemetry, and
@@ -148,6 +150,9 @@
               <span>Robot is supported, all feet are clear, and the physical cutoff is ready.</span>
             </label>
             <div class="rl-buttons">
+              <button class="secondary-button" id="prepareRl" type="button">
+                PREPARE RL STANCE
+              </button>
               <button class="rl-start-button" id="startRl" type="button">
                 START RL WALK
               </button>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import isaaclab.sim as sim_utils
@@ -209,6 +210,12 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     action_scale_abduction_rad = 0.12
     action_scale_hip_rad = 0.30
     action_scale_knee_rad = 0.40
+    action_mode = "direct"
+    residual_action_scale = 1.0
+    # The deployable controller may impose a stricter target slew rate than the
+    # actuator itself.  Keeping this configurable lets training reproduce that
+    # packet-level behavior exactly.
+    target_velocity_limit_rad_s = SERVO_VELOCITY_LIMIT_RAD_S
     reset_joint_position_noise_rad = 0.015
     reset_xy_jitter_m = 0.02
     # These are the validated walking termination limits.  V9's 0.28 m height
@@ -236,6 +243,9 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     gait_frequency_max_hz = 1.25
     gait_stride_scale_min = 1.0
     gait_duty_factor = 0.65
+    gait_phase_offsets = (0.0, 0.5, 0.5, 0.0)
+    gait_reference_mode = "continuous"
+    gait_weight_shift_forward_m = 0.0
     gait_stride_m = 0.080
     gait_lift_m = 0.025
     gait_start_ramp_s = 0.60
@@ -278,6 +288,7 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     penalty_action_rate = 0.03
     penalty_action_acceleration = 0.12
     penalty_action_saturation = 0.50
+    penalty_target_limiter_gap = 0.0
     # Contact timing and the analytic gait reference provide the primary
     # diagonal-pair coordination.  This stays deliberately light: forcing the
     # normalized joint actions to match made the learned robot freeze because
@@ -289,6 +300,9 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     penalty_touchdown_impact = 0.05
     touchdown_force_soft_limit_n = 18.0
     reward_qualified_touchdown = 0.025
+    reward_least_active_swing = 0.0
+    reward_three_foot_support = 0.0
+    penalty_excess_airborne_feet = 0.0
     penalty_termination = 350.0
     # Keep value targets conditioned while preserving all reward ratios.
     reward_scale = 0.10
@@ -431,6 +445,79 @@ class DrobotCommandedWalkingLowSpeedExternalRearPayloadEnvCfg(
     active_translation_threshold_m_s = 0.002
     scale_sustained_speed_with_command = True
     minimum_sustained_speed_fraction = 0.50
+
+
+@configclass
+class DrobotCommandedWalkingLowSpeedCrawlExternalRearPayloadEnvCfg(
+    DrobotCommandedWalkingExternalRearPayloadEnvCfg
+):
+    """V22 deployment-matched, slow sequential crawl with three-foot support."""
+
+    # Train around the speeds used by the hardware UI, then gradually expose
+    # very small commands.  Speed is intentionally secondary to stable support
+    # and smooth target motion.
+    initial_forward_speed_min_m_s = 0.008
+    initial_forward_speed_max_m_s = 0.015
+    forward_speed_min_m_s = 0.003
+    forward_speed_max_m_s = 0.015
+    command_curriculum_steps = 51_200
+    episode_horizon_curriculum_steps = 51_200
+
+    gait_clock_mode = "speed_scaled"
+    gait_standstill_deadband_m_s = 0.002
+    gait_speed_min_m_s = 0.003
+    gait_speed_max_m_s = 0.015
+    gait_frequency_min_hz = 0.06
+    gait_frequency_max_hz = 0.30
+    gait_stride_scale_min = 1.0
+    gait_duty_factor = 0.8625
+    # LEG_NAMES is FL, RL, FR, RR.  These offsets schedule the proven hardware
+    # crawl order RR -> FR -> RL -> FL with only one leg in swing at a time.
+    gait_phase_offsets = (0.07, 0.32, 0.57, 0.82)
+    gait_stride_m = 0.050
+    gait_lift_m = 0.016
+    gait_start_ramp_s = 1.50
+    gait_reference_mode = "distributed_push"
+    gait_weight_shift_forward_m = 0.006
+    action_mode = "gait_residual"
+    residual_action_scale = 0.25
+
+    # The Raspberry Pi sends at most 2 degrees per 60 Hz control tick.  At
+    # 120 deg/s this simulator limiter has the identical discrete-time cap.
+    target_velocity_limit_rad_s = math.radians(120.0)
+
+    active_translation_threshold_m_s = 0.002
+    scale_sustained_speed_with_command = True
+    minimum_sustained_speed_fraction = 0.40
+    minimum_sustained_speed_m_s = 0.006
+
+    reward_forward_velocity_tracking = 1.50
+    reward_instant_progress = 2.00
+    reward_sustained_progress = 3.00
+    penalty_sustained_stall = 6.00
+    reward_gait_reference = 12.00
+    reward_scheduled_stance = 1.50
+    reward_scheduled_swing = 4.00
+    reward_qualified_touchdown = 0.10
+    reward_least_active_swing = 4.00
+    reward_three_foot_support = 2.00
+    penalty_excess_airborne_feet = 5.00
+    penalty_diagonal_sync = 0.0
+    penalty_action_rate = 0.18
+    penalty_action_acceleration = 0.90
+    penalty_action_saturation = 0.75
+    penalty_target_limiter_gap = 1.50
+    penalty_joint_velocity = 0.040
+    penalty_joint_acceleration = 0.30
+    penalty_body_linear_acceleration = 0.55
+    penalty_body_angular_acceleration = 0.45
+    penalty_body_tilt = 3.00
+    penalty_roll_pitch_rate = 0.50
+    penalty_lateral_velocity = 12.00
+    penalty_lateral_displacement = 24.00
+    penalty_yaw_rate = 10.00
+    penalty_support_foot_slip = 0.60
+    penalty_touchdown_impact = 0.18
 
 
 @configclass

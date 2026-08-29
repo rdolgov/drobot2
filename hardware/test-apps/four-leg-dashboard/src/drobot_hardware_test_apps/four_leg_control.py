@@ -53,16 +53,15 @@ DEFAULT_RL_MODEL = (
     REPO_ROOT
     / "onboard"
     / "models"
-    / "parallel-walking-v20-external-rear-payload"
-    / "model_900.onnx"
+    / "parallel-walking-v22-low-speed-residual-crawl"
+    / "model_500.onnx"
 )
 DEFAULT_RECORDINGS_DIR = (
     Path.home() / ".local" / "share" / "drobot2" / "rl-recordings"
 )
 STATIC_DIR = Path(__file__).with_name("four_leg_static")
-LAN_CLIENT_VERSION = "7"
+LAN_CLIENT_VERSION = "8"
 RL_TARGET_STEP_LIMIT_DEG = 2.0
-RL_CENTER_MEASURED_TOLERANCE_DEG = 5.0
 
 
 @dataclass(frozen=True)
@@ -528,6 +527,8 @@ class FourLegSession:
         self.rl_diagnostic_time_s: float | None = None
         self.rl_temperature_candidates: dict[int, tuple[float, int, int]] = {}
         self.rl_target_clamp_count = 0
+        self.rl_stance_preparing = False
+        self.rl_stance_target_reached_at: float | None = None
         self.last_full_snapshot: dict[str, Any] | None = None
         if rl_model_path is not None:
             from drobot_policy_runtime.contract import (
@@ -607,7 +608,7 @@ class FourLegSession:
                     "position_body_m": [-0.1315, 0.0, 0.05],
                     "note": (
                         "416 g measured battery plus CAD-derived printed box "
-                        "and lid; body-frame position matches the V20 external "
+                        "and lid; body-frame position matches the external "
                         "rear payload model"
                     ),
                 },
@@ -757,6 +758,11 @@ class FourLegSession:
                     else max(0.0, min(float(elapsed_s), 0.10))
                 )
                 motion_rate_deg_s = self.ramp_rate_deg_s
+                if self.rl_stance_preparing and self.rl_controller is not None:
+                    motion_rate_deg_s = min(
+                        motion_rate_deg_s,
+                        self.rl_controller.joint_target_config.startup_ramp_rate_deg_s,
+                    )
             step_limit = min(
                 self.dashboard.bus.max_command_step_deg,
                 motion_rate_deg_s * motion_elapsed_s,
@@ -782,11 +788,13 @@ class FourLegSession:
                         (controller, controller.plan_command(motor, current + step))
                     )
             if not planned:
+                self._update_rl_stance_progress_locked()
                 return
             batch_writer = getattr(self.bus, "write_position_commands", None)
             if batch_writer is None:
                 for controller, target in planned:
                     controller.command(target.motor, target.degrees)
+                self._update_rl_stance_progress_locked()
                 return
             batch_writer(
                 {
@@ -797,6 +805,7 @@ class FourLegSession:
             )
             for controller, target in planned:
                 controller.commit_command(target)
+            self._update_rl_stance_progress_locked()
 
     @property
     def crawl_active(self) -> bool:
@@ -1015,19 +1024,59 @@ class FourLegSession:
         if self.rl_controller is not None and self.rl_controller.active:
             raise RuntimeError("Stop the active RL walking test before manual motion")
 
-    def _rl_center_ready_locked(self, tolerance_deg: float = 0.3) -> bool:
+    def _rl_stance_targets_locked(self) -> dict[tuple[int, str], float]:
+        if self.rl_controller is None or len(self.rl_motor_order) != 12:
+            raise RuntimeError("RL policy runtime is not configured")
+        targets: dict[tuple[int, str], float] = {}
+        for target_rad, (profile, motor, _controller) in zip(
+            self.rl_controller.joint_target_config.neutral_joint_position_rad,
+            self.rl_motor_order,
+            strict=True,
+        ):
+            target_deg = math.degrees(target_rad)
+            degrees_to_raw(
+                target_deg,
+                motor,
+                profile.calibration.motor(motor),
+            )
+            targets[(profile.number, motor.name)] = target_deg
+        return targets
+
+    def _clear_rl_stance_locked(self) -> None:
+        self.rl_stance_preparing = False
+        self.rl_stance_target_reached_at = None
+
+    def _update_rl_stance_progress_locked(self, tolerance_deg: float = 0.3) -> None:
+        if not self.rl_stance_preparing or self.rl_controller is None:
+            self.rl_stance_target_reached_at = None
+            return
         if self._armed_count_locked() != 12:
+            self.rl_stance_target_reached_at = None
+            return
+        targets = self._rl_stance_targets_locked()
+        for profile, motor, controller in self.rl_motor_order:
+            target = targets[(profile.number, motor.name)]
+            desired = self.desired_deg.get((profile.number, motor.name))
+            commanded = controller.targets_deg.get(motor.name)
+            if (
+                desired is None
+                or commanded is None
+                or abs(desired - target) > tolerance_deg
+                or abs(commanded - target) > tolerance_deg
+            ):
+                self.rl_stance_target_reached_at = None
+                return
+        if self.rl_stance_target_reached_at is None:
+            self.rl_stance_target_reached_at = self.clock()
+
+    def _rl_stance_ready_locked(self) -> bool:
+        self._update_rl_stance_progress_locked()
+        if self.rl_stance_target_reached_at is None or self.rl_controller is None:
             return False
-        for profile in self.profiles:
-            controller = self.controllers[profile.number]
-            for motor in profile.config.motors:
-                desired = self.desired_deg.get((profile.number, motor.name))
-                commanded = controller.targets_deg.get(motor.name)
-                if desired is None or commanded is None:
-                    return False
-                if abs(desired) > tolerance_deg or abs(commanded) > tolerance_deg:
-                    return False
-        return True
+        return (
+            self.clock() - self.rl_stance_target_reached_at
+            >= self.rl_controller.joint_target_config.startup_settle_s
+        )
 
     def _rl_snapshot_locked(self) -> dict[str, Any]:
         if self.rl_controller is None:
@@ -1041,11 +1090,20 @@ class FourLegSession:
                 "imu": None,
                 "temperature_verification": [],
                 "start_ready": False,
+                "startup_status": "unavailable",
                 "target_step_limit_deg": RL_TARGET_STEP_LIMIT_DEG,
                 "target_clamp_count": self.rl_target_clamp_count,
             }
         snapshot = self.rl_controller.snapshot()
-        snapshot["start_ready"] = self._rl_center_ready_locked()
+        snapshot["start_ready"] = self._rl_stance_ready_locked()
+        if snapshot["start_ready"]:
+            snapshot["startup_status"] = "ready"
+        elif self.rl_stance_target_reached_at is not None:
+            snapshot["startup_status"] = "settling"
+        elif self.rl_stance_preparing:
+            snapshot["startup_status"] = "moving"
+        else:
+            snapshot["startup_status"] = "prepare-required"
         snapshot["target_step_limit_deg"] = RL_TARGET_STEP_LIMIT_DEG
         snapshot["target_clamp_count"] = self.rl_target_clamp_count
         now = self.clock()
@@ -1137,9 +1195,10 @@ class FourLegSession:
         with self.lock:
             if self.crawl_active or self.rl_controller.active:
                 raise RuntimeError("Stop the active gait before starting an RL test")
-            if not self._rl_center_ready_locked():
+            if not self._rl_stance_ready_locked():
                 raise RuntimeError(
-                    "Press CENTER ALL 12 and wait for the centered hold before RL start"
+                    "Press PREPARE RL STANCE and wait for the settled policy pose "
+                    "before RL start"
                 )
             if self.fault:
                 raise RuntimeError("Clear the reported hardware fault before RL start")
@@ -1147,16 +1206,42 @@ class FourLegSession:
                 self._snapshot_locked()
 
             measured_by_id: dict[int, float] = {}
-            for profile in self.profiles:
-                controller = self.controllers[profile.number]
-                for motor in profile.config.motors:
-                    measured = controller.measured_degrees(motor)
-                    if abs(measured) > RL_CENTER_MEASURED_TOLERANCE_DEG:
-                        raise RuntimeError(
-                            f"Wait for CENTER ALL 12: motor ID {motor.servo_id} "
-                            f"is still {measured:+.1f} degrees from center"
-                        )
-                    measured_by_id[motor.servo_id] = measured
+            stance_targets = self._rl_stance_targets_locked()
+            tolerance_deg = (
+                self.rl_controller.joint_target_config.startup_position_tolerance_deg
+            )
+            servo_ids = [
+                motor.servo_id
+                for _profile, motor, _controller in self.rl_motor_order
+            ]
+            group_reader = getattr(self.bus, "read_positions_speeds", None)
+            if group_reader is None:
+                raw_by_id = {
+                    servo_id: self.bus.read_position_speed(servo_id)
+                    for servo_id in servo_ids
+                }
+            else:
+                raw_by_id = group_reader(servo_ids)
+            for profile, motor, _controller in self.rl_motor_order:
+                raw_position, raw_speed = raw_by_id[motor.servo_id]
+                measured = raw_to_degrees(
+                    raw_position,
+                    motor,
+                    profile.calibration.motor(motor),
+                )
+                target = stance_targets[(profile.number, motor.name)]
+                if abs(measured - target) > tolerance_deg:
+                    raise RuntimeError(
+                        f"Wait for PREPARE RL STANCE: motor ID {motor.servo_id} "
+                        f"is {measured:+.1f} degrees; expected {target:+.1f} "
+                        f"within {tolerance_deg:.1f} degrees"
+                    )
+                if abs(raw_speed) > self.dashboard.monitoring.stall_speed_raw_max:
+                    raise RuntimeError(
+                        f"Wait for PREPARE RL STANCE: motor ID {motor.servo_id} "
+                        f"is still moving (raw speed {raw_speed})"
+                    )
+                measured_by_id[motor.servo_id] = measured
             try:
                 self._cancel_crawl_locked()
                 self.rl_target_clamp_count = 0
@@ -1181,6 +1266,7 @@ class FourLegSession:
                 self.rl_diagnostic_index = 0
                 self.rl_diagnostic_time_s = None
                 self.rl_temperature_candidates.clear()
+                self._clear_rl_stance_locked()
                 self.rl_controller.start(
                     speed,
                     duration,
@@ -1202,7 +1288,7 @@ class FourLegSession:
             self.last_event = (
                 f"Supported {duration:g}-second RL walking test started "
                 f"at {speed:.3f} m/s; normal completion will return "
-                "to calibrated center; centered full-robot torque was preserved"
+                "to calibrated center; the settled policy stance preserved torque"
             )
 
     def stop_rl_policy(self) -> None:
@@ -1220,7 +1306,9 @@ class FourLegSession:
 
         with self.lock:
             if self.rl_controller is None or not self.rl_controller.active:
-                raise RuntimeError("RL joint feedback requested while policy is inactive")
+                raise RuntimeError(
+                    "RL joint feedback requested while policy is inactive"
+                )
             if self._armed_count_locked() != 12:
                 raise RuntimeError("RL policy requires all 12 motors armed")
             now = self.clock()
@@ -1268,11 +1356,10 @@ class FourLegSession:
             for index, (profile, motor, _controller) in enumerate(
                 self.rl_motor_order
             ):
-                raw_position, raw_speed = raw_by_id[motor.servo_id]
+                raw_position, _raw_speed = raw_by_id[motor.servo_id]
                 status = diagnostic_status if diagnostic_index == index else None
                 if status is not None:
                     raw_position = status.raw_position
-                    raw_speed = status.raw_speed
                 degrees = raw_to_degrees(
                     raw_position,
                     motor,
@@ -1364,7 +1451,9 @@ class FourLegSession:
             if self.rl_controller is None or not self.rl_controller.active:
                 raise RuntimeError("RL target received while policy is inactive")
             if self._armed_count_locked() != 12:
-                raise RuntimeError("RL target rejected because not all motors are armed")
+                raise RuntimeError(
+                    "RL target rejected because not all motors are armed"
+                )
             updates: dict[tuple[int, str], float] = {}
             for index, (profile, motor, _controller) in enumerate(self.rl_motor_order):
                 requested_degrees = math.degrees(float(joint_target_rad[index]))
@@ -1539,7 +1628,9 @@ class FourLegSession:
                         for motor in profile.config.motors:
                             state = controller.arm(motor)
                             newly_armed.append((profile, motor))
-                            self.desired_deg[(profile.number, motor.name)] = state.degrees
+                            self.desired_deg[(profile.number, motor.name)] = (
+                                state.degrees
+                            )
                 self.crawl_stage = (
                     "preloading" if start_from_held_stance else "preparing"
                 )
@@ -1766,6 +1857,7 @@ class FourLegSession:
             self._require_manual_control_locked()
             try:
                 self._cancel_crawl_locked()
+                self._clear_rl_stance_locked()
                 self._set_center_all_targets_locked(arm_missing=True)
             except Exception:
                 self._disarm_all_locked(raise_errors=False)
@@ -1775,6 +1867,51 @@ class FourLegSession:
             self.heartbeat("control-command")
             self.fault = None
             self.last_event = "All 12 motors returning to calibrated zero"
+
+    def prepare_rl_stance(
+        self,
+        *,
+        safety_ack: bool,
+        confirmation: str,
+    ) -> None:
+        if self.rl_controller is None:
+            raise RuntimeError("RL policy runtime is not configured")
+        if not safety_ack:
+            raise ValueError(
+                "Confirm full support, foot clearance, and the physical cutoff"
+            )
+        if confirmation != "PREPARE RL STANCE":
+            raise ValueError("PREPARE RL STANCE confirmation is required")
+
+        with self.lock:
+            self._require_manual_control_locked()
+            targets = self._rl_stance_targets_locked()
+            try:
+                self._cancel_crawl_locked()
+                self._clear_rl_stance_locked()
+                for profile in self.profiles:
+                    controller = self.controllers[profile.number]
+                    for motor in profile.config.motors:
+                        if motor.servo_id not in controller.armed_ids:
+                            state = controller.arm(motor)
+                            self.desired_deg[(profile.number, motor.name)] = (
+                                state.degrees
+                            )
+                self.desired_deg.update(targets)
+                self.rl_stance_preparing = True
+            except Exception:
+                self._disarm_all_locked(raise_errors=False)
+                self.last_event = "RL stance preparation failed; all motors disarmed"
+                raise
+
+            self.heartbeat("rl-stance-prepare")
+            self.fault = None
+            config = self.rl_controller.joint_target_config
+            self.last_event = (
+                "All 12 motors moving to the model-declared RL stance at "
+                f"{config.startup_ramp_rate_deg_s:.0f} deg/s; inference remains "
+                "stopped until the pose settles"
+            )
 
     def set_crawl_stance(
         self,
@@ -1789,6 +1926,7 @@ class FourLegSession:
 
         with self.lock:
             self._require_manual_control_locked()
+            self._clear_rl_stance_locked()
             self.crawl_mode = "distributed"
             targets = self._crawl_stance_targets_locked()
             try:
@@ -1945,6 +2083,7 @@ class FourLegSession:
 
     def _disarm_all_locked(self, *, raise_errors: bool) -> None:
         self._cancel_crawl_locked()
+        self._clear_rl_stance_locked()
         if self.rl_controller is not None:
             self.rl_controller.request_stop()
         errors: list[Exception] = []
@@ -1969,6 +2108,7 @@ class FourLegSession:
         """Clear commands when the physical bus state can no longer be trusted."""
 
         self._cancel_crawl_locked()
+        self._clear_rl_stance_locked()
         if self.rl_controller is not None:
             self.rl_controller.request_stop()
         for controller in self.controllers.values():
@@ -2692,6 +2832,11 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
                 self.server.session.start_rl_policy(
                     forward_m_s=float(payload.get("forward_m_s", 0.04)),
                     duration_s=float(payload.get("duration_s", 5.0)),
+                    safety_ack=payload.get("safety_ack") is True,
+                    confirmation=str(payload.get("confirmation", "")),
+                )
+            elif self.path == "/api/rl-prepare":
+                self.server.session.prepare_rl_stance(
                     safety_ack=payload.get("safety_ack") is True,
                     confirmation=str(payload.get("confirmation", "")),
                 )

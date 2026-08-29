@@ -1,6 +1,6 @@
 # `pi5-dog` bring-up record
 
-Last checked: 2026-08-23
+Last checked: 2026-08-29
 
 This records the current Raspberry Pi state and the safe rollout path from
 print-only policy inference to closed-loop walking. Do not place login
@@ -14,8 +14,8 @@ passwords, dashboard tokens, or Wi-Fi credentials in this repository.
 | Board / OS | Raspberry Pi 5, Ubuntu 26.04 LTS arm64 |
 | Python | 3.14.4 |
 | IMU | BNO085 detected on I2C bus 1 at `0x4A` |
-| Policy model | `parallel-walking-v20-external-rear-payload/model_900.onnx` |
-| Model SHA-256 | `f787669d33115f117ac691c1ba7bb145fa6a726c6a5d22aec7aecc9e284d6529` |
+| Policy model | `parallel-walking-v22-low-speed-residual-crawl/model_500.onnx` |
+| Model SHA-256 | `ddbc2fa70661a5a81342eb76b884888e3da2a1b88c63ef241cd77afbc95ccfe0` |
 | Policy runtime | ONNX Runtime 1.29.0, 60 Hz, deterministic Beta mean |
 | Motor output | Disabled; policy targets are displayed/printed only |
 | Manual/IK dashboard | Boot service on port 8080; hardware preference with safe demo fallback |
@@ -189,7 +189,7 @@ keeping the manual dashboard as the only servo-bus owner. The standalone port
    velocities feed the observation; stale, missing, or out-of-range feedback
    stops and disarms the test.
 3. **Bounded actuation:** the UI permits a supported `1-60 s` test inside the
-   selected model's declared speed range (`0.040-0.100 m/s` for V20),
+   selected model's declared speed range (`0.003-0.015 m/s` for V22),
    initializes targets from the measured pose, and enforces joint, elapsed-time
    rate, tilt, and telemetry guards. Normal timed completion returns all
    12 joints to calibrated center and keeps torque holding; an explicit stop or

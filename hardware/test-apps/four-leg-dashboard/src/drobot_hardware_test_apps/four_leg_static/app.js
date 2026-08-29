@@ -31,6 +31,7 @@ const rlPanel = document.querySelector("#rlPanel");
 const rlSpeed = document.querySelector("#rlSpeed");
 const rlDuration = document.querySelector("#rlDuration");
 const rlSafetyAck = document.querySelector("#rlSafetyAck");
+const prepareRl = document.querySelector("#prepareRl");
 const startRl = document.querySelector("#startRl");
 const stopRl = document.querySelector("#stopRl");
 const rlStatus = document.querySelector("#rlStatus");
@@ -67,7 +68,7 @@ async function api(
     method,
     headers: {
       "X-Control-Token": token,
-      "X-Drobot-Client-Version": "7",
+      "X-Drobot-Client-Version": "8",
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -731,6 +732,7 @@ function updateSummary(state) {
   rlTargets.textContent = `${Array.isArray(rl.targets) ? rl.targets.length : 0} / 12`;
   const recorder = rl.recording || {};
   const rlStartReady = Boolean(rl.start_ready);
+  const rlStartupStatus = String(rl.startup_status || "prepare-required");
   const minimumRlSpeed = Number(rl.min_forward_m_s ?? 0);
   const maximumRlSpeed = Number(rl.max_forward_m_s ?? 0.1);
   const recommendedRlSpeed = Number(
@@ -781,16 +783,21 @@ function updateSummary(state) {
     crawl.active ||
     !rlStartReady ||
     !rlSafetyAck.checked;
+  prepareRl.disabled =
+    !rl.available || rl.active || crawl.active || !rlSafetyAck.checked;
   stopRl.disabled = !rl.active;
   rlSpeed.disabled = rl.active;
   rlDuration.disabled = rl.active;
   rlSafetyAck.disabled = rl.active || crawl.active;
   if (!rl.active && rlStartReady && rl.available) {
     rlDetail.textContent +=
-      ` / centered hold ready / ${Number(rl.target_step_limit_deg || 2).toFixed(0)}° step cap`;
+      ` / policy stance ready / ${Number(rl.target_step_limit_deg || 2).toFixed(0)}° step cap`;
   } else if (!rl.active && rl.available) {
-    rlDetail.textContent +=
-      " / press CENTER ALL 12 and wait for the centered hold";
+    rlDetail.textContent += rlStartupStatus === "moving"
+      ? " / moving slowly to policy stance"
+      : rlStartupStatus === "settling"
+        ? ` / settling for ${Number(rl.startup_settle_s || 0).toFixed(1)} s`
+        : " / press PREPARE RL STANCE";
   }
   if (Number(rl.target_clamp_count || 0) > 0) {
     rlDetail.textContent += ` / step clamps ${Number(rl.target_clamp_count)}`;
@@ -1001,6 +1008,18 @@ rlSafetyAck.addEventListener("change", () => {
   if (latestState) updateSummary(latestState);
 });
 
+prepareRl.addEventListener("click", () => {
+  if (!rlSafetyAck.checked) {
+    showNotice("Confirm support, foot clearance, and the physical cutoff", true);
+    return;
+  }
+  postAction(
+    "/api/rl-prepare",
+    { safety_ack: true, confirmation: "PREPARE RL STANCE" },
+    "All 12 joints moving slowly to the model-declared RL stance",
+  );
+});
+
 startRl.addEventListener("click", async () => {
   const forwardSpeed = Number(rlSpeed.value);
   const duration = Number(rlDuration.value);
@@ -1028,7 +1047,7 @@ startRl.addEventListener("click", async () => {
   }
   if (!latestState?.rl_policy?.start_ready) {
     showNotice(
-      "Press CENTER ALL 12 and wait until all joints reach the centered hold",
+      "Press PREPARE RL STANCE and wait until the model pose settles",
       true,
     );
     return;

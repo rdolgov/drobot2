@@ -402,12 +402,72 @@ def test_rl_ui_exposes_bounded_custom_speed_and_duration() -> None:
     assert 'min="1" max="60"' in html
     assert "START RL WALK" in html
     assert "physical cutoff is ready" in html
+    assert 'id="prepareRl"' in html
+    assert "PREPARE RL STANCE" in html
+    assert '"/api/rl-prepare"' in script
     assert '"/api/rl-start"' in script
     assert "duration_s: duration" in script
     assert 'confirmation: "START SUPPORTED RL TEST"' in script
     assert '"/api/rl-stop"' in script
     assert "Boolean(rl.start_ready)" in script
     assert "rlSafetyAck.disabled = rl.active || crawl.active" in script
+
+
+def test_rl_prepare_moves_to_model_declared_neutral_and_settles(
+    tmp_path: Path,
+) -> None:
+    dashboard = load_dashboard_config(MANIFEST)
+    bus = FourLegDemoBus(dashboard)
+    clock = FakeClock()
+    model_path = (
+        REPO_ROOT
+        / "onboard"
+        / "models"
+        / "parallel-walking-v22-low-speed-residual-crawl"
+        / "model_500.onnx"
+    )
+    session = FourLegSession(
+        dashboard,
+        bus,
+        clock=clock,
+        persist_calibration=False,
+        rl_model_path=model_path,
+        recordings_dir=tmp_path,
+    )
+    session.start(start_worker=False)
+    try:
+        session.prepare_rl_stance(
+            safety_ack=True,
+            confirmation="PREPARE RL STANCE",
+        )
+        assert session.snapshot()["rl_policy"]["startup_status"] == "moving"
+
+        for _step in range(16):
+            clock.advance(0.05)
+            session.advance_once(elapsed_s=0.05)
+
+        settling = session.snapshot()["rl_policy"]
+        assert settling["startup_status"] == "settling"
+        assert settling["start_ready"] is False
+
+        clock.advance(0.51)
+        ready = session.snapshot()["rl_policy"]
+        assert ready["startup_status"] == "ready"
+        assert ready["start_ready"] is True
+
+        expected_deg = tuple(
+            math.degrees(value)
+            for value in (
+                session.rl_controller.joint_target_config.neutral_joint_position_rad
+            )
+        )
+        actual_deg = tuple(
+            controller.measured_degrees(motor)
+            for _profile, motor, controller in session.rl_motor_order
+        )
+        assert actual_deg == pytest.approx(expected_deg, abs=0.2)
+    finally:
+        session.close()
 
 
 def test_rl_request_bounds_follow_selected_model_metadata(tmp_path: Path) -> None:
@@ -418,8 +478,8 @@ def test_rl_request_bounds_follow_selected_model_metadata(tmp_path: Path) -> Non
         REPO_ROOT
         / "onboard"
         / "models"
-        / "parallel-walking-v20-external-rear-payload"
-        / "model_900.onnx"
+        / "parallel-walking-v22-low-speed-residual-crawl"
+        / "model_500.onnx"
     )
     session = FourLegSession(
         dashboard,
@@ -432,16 +492,16 @@ def test_rl_request_bounds_follow_selected_model_metadata(tmp_path: Path) -> Non
     session.start(start_worker=False)
     try:
         assert session.rl_controller is not None
-        assert session.rl_controller.validate_request(0.04, 12.0) == (0.04, 12.0)
+        assert session.rl_controller.validate_request(0.005, 12.0) == (0.005, 12.0)
 
         with pytest.raises(ValueError, match="forward speed"):
-            session.rl_controller.validate_request(0.005, 5.0)
+            session.rl_controller.validate_request(0.002, 5.0)
         with pytest.raises(ValueError, match="forward speed"):
-            session.rl_controller.validate_request(0.101, 5.0)
+            session.rl_controller.validate_request(0.016, 5.0)
         with pytest.raises(ValueError, match="duration"):
-            session.rl_controller.validate_request(0.05, 0.5)
+            session.rl_controller.validate_request(0.005, 0.5)
         with pytest.raises(ValueError, match="duration"):
-            session.rl_controller.validate_request(0.05, 61.0)
+            session.rl_controller.validate_request(0.005, 61.0)
     finally:
         session.close()
 

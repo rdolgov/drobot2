@@ -26,12 +26,13 @@ The local dashboard provides:
   with visible phase/progress and a dedicated
   **STOP + STABLE HOLD** control; **DISARM ALL 12** remains the explicit way
   to remove torque;
-- a guarded V20 **START RL WALK** using the real BNO085, live calibrated
+- a guarded V22 **START RL WALK** using the real BNO085, live calibrated
   position/velocity feedback for all 12 joints, a model-declared forward
-  command range (`0.040-0.100 m/s` for V20), a custom `1-60 s` duration,
+  command range (`0.003-0.015 m/s` for V22), a custom `1-60 s` duration,
   bounded 60 Hz policy targets and synchronous 12-motor writes,
-  a required all-12-motor calibrated-center hold before policy start, preserving
-  torque through the transition, plus a non-fatal 2-degree target-step clamp,
+  a required model-declared RL stance preparation before policy start,
+  preserving torque through the transition, plus a non-fatal 2-degree
+  target-step clamp and a deployment-matched distributed-crawl reference,
   normal-completion transition to calibrated center with torque holding, fault
   disarm, and a dedicated **STOP RL + DISARM**;
 - a recent red error log directly below the toolbar; active bus and RL faults

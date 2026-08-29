@@ -6,21 +6,21 @@ import json
 import math
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Protocol
 
 import numpy as np
 
 from .contract import (
-    ACTION_SCALE_RAD,
     ACTION_NAMES,
-    DEFAULT_JOINT_POSITION_RAD,
-    GaitClockConfig,
     GRAVITY_M_S2,
     JOINT_LOWER_RAD,
     JOINT_UPPER_RAD,
     SERVO_ID_BY_ACTION_NAME,
     SERVO_VELOCITY_LIMIT_RAD_S,
+    GaitClockConfig,
+    JointTargetConfig,
     normalized_action_to_joint_target,
 )
 from .policy import OnnxWalkingPolicy
@@ -114,6 +114,7 @@ class WalkingPolicyLoop:
         control_hz: float = 60.0,
         initial_target_rad: np.ndarray | None = None,
         gait_clock: GaitClockConfig | None = None,
+        joint_target_config: JointTargetConfig | None = None,
         step_observer: Callable[[PolicyStepSample], None] | None = None,
     ) -> None:
         if not 10.0 <= control_hz <= 200.0:
@@ -129,6 +130,11 @@ class WalkingPolicyLoop:
             "gait_clock_config",
             GaitClockConfig(),
         )
+        self.joint_target_config = joint_target_config or getattr(
+            policy,
+            "joint_target_config",
+            JointTargetConfig(),
+        )
         self.step_observer = step_observer
         self.step_count = 0
         self.missed_deadlines = 0
@@ -137,13 +143,33 @@ class WalkingPolicyLoop:
         self._last_target_time_s: float | None = None
         self.previous_action = np.zeros(12, dtype=np.float32)
         initial_target = (
-            DEFAULT_JOINT_POSITION_RAD
+            self.joint_target_config.neutral_array
             if initial_target_rad is None
             else np.asarray(initial_target_rad, dtype=np.float32)
         )
         if initial_target.shape != (12,) or not np.all(np.isfinite(initial_target)):
             raise ValueError("initial_target_rad must contain 12 finite values")
         self.previous_target_rad = initial_target.copy()
+
+    def _reference_target(self, elapsed_s: float) -> np.ndarray | None:
+        table = self.joint_target_config.reference_array
+        if table is None:
+            return None
+        table_index = math.floor(self._phase_cycles * len(table)) % len(table)
+        desired = table[table_index]
+        ramp_duration_s = self.joint_target_config.reference_start_ramp_s
+        ramp = (
+            1.0
+            if ramp_duration_s <= 0.0
+            else float(np.clip(elapsed_s / ramp_duration_s, 0.0, 1.0))
+        )
+        stride_scale = self.gait_clock.stride_scale(
+            self.command.forward_m_s,
+            self.command.lateral_m_s,
+        )
+        motion_scale = ramp * stride_scale
+        neutral = self.joint_target_config.neutral_array
+        return neutral + (desired - neutral) * motion_scale
 
     def _observation(
         self,
@@ -181,7 +207,7 @@ class WalkingPolicyLoop:
                 np.asarray(imu.linear_acceleration_body_m_s2, dtype=np.float32)
                 / GRAVITY_M_S2,
                 np.asarray(joints.position_rad, dtype=np.float32)
-                - DEFAULT_JOINT_POSITION_RAD,
+                - self.joint_target_config.neutral_array,
                 np.asarray(joints.velocity_rad_s, dtype=np.float32)
                 / SERVO_VELOCITY_LIMIT_RAD_S,
                 self.previous_action,
@@ -215,9 +241,22 @@ class WalkingPolicyLoop:
             if self._last_target_time_s is None
             else max(0.0, output_time_s - self._last_target_time_s)
         )
+        reference_target = self._reference_target(max(0.0, now_s - start_s))
+        base_target = (
+            self.joint_target_config.neutral_array
+            if reference_target is None
+            else reference_target
+        )
+        action_scale = (
+            self.joint_target_config.residual_action_scale
+            if self.joint_target_config.action_mode == "gait_residual"
+            else 1.0
+        )
         requested_target = np.clip(
-            DEFAULT_JOINT_POSITION_RAD
-            + ACTION_SCALE_RAD * np.clip(action, -1.0, 1.0),
+            base_target
+            + self.joint_target_config.action_scale_array
+            * action_scale
+            * np.clip(action, -1.0, 1.0),
             JOINT_LOWER_RAD,
             JOINT_UPPER_RAD,
         ).astype(np.float32)
@@ -225,6 +264,8 @@ class WalkingPolicyLoop:
             action,
             self.previous_target_rad,
             target_elapsed_s,
+            self.joint_target_config,
+            reference_target,
         )
         self.motor_sink.write(action, target, output_time_s)
         if self.step_observer is not None:

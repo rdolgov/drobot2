@@ -32,7 +32,7 @@ def test_policy_contract_reserves_three_commands_and_uses_real_imu() -> None:
     cfg = _source("commanded_walking_env_cfg.py")
     env = _source("commanded_walking_env.py")
     play = _source("play_commanded_walking.py")
-    assert "observation_space = 48" in cfg
+    assert "observation_space = 50" in cfg
     assert "self._commands," in env
     assert "self._imu_sensor.data.ang_vel_b.torch" in env
     assert "self._imu_sensor.data.lin_acc_b.torch / 9.81" in env
@@ -45,7 +45,7 @@ def test_policy_contract_reserves_three_commands_and_uses_real_imu() -> None:
 def test_neutral_reset_is_symmetric_and_grounded() -> None:
     cfg = _source("commanded_walking_env_cfg.py")
     assert "decimation = 2" in cfg
-    assert "pos=(0.0, 0.0, 0.3730)" in cfg
+    assert "pos=(0.0, 0.0, 0.3750)" in cfg
     assert '"front_.*_hip_flexion": STABLE_NEUTRAL_FRONT_HIP_RAD' in cfg
     assert '"rear_.*_hip_flexion": STABLE_NEUTRAL_REAR_HIP_RAD' in cfg
     assert '"front_.*_knee": STABLE_NEUTRAL_FRONT_KNEE_RAD' in cfg
@@ -67,7 +67,7 @@ def test_forward_and_directional_tasks_share_policy_shape() -> None:
     assert "hidden_dims=[256, 256]" in agent
 
 
-def test_v16_policy_is_bounded_and_keeps_the_transfer_shape() -> None:
+def test_v18_policy_is_bounded_and_keeps_the_transfer_shape() -> None:
     agent = _source("agents/rsl_rl_ppo_cfg.py")
     common = _source("walking_workflow_common.ps1")
     assert "DrobotBoundedBetaDistributionCfg" in agent
@@ -81,12 +81,12 @@ def test_v16_policy_is_bounded_and_keeps_the_transfer_shape() -> None:
     assert "value_loss_coef=0.5" in agent
     assert "max_grad_norm=0.5" in agent
     assert (
-        'experiment_name = "drobot_commanded_walk_forward_v16_sustained_beta_direct"'
+        'experiment_name = "drobot_commanded_walk_forward_v18_coordinated_trot_selected"'
         in agent
     )
     assert "gamma=0.995" in agent
     assert "obs_normalization=False" in agent
-    assert 'drobot_commanded_walk_${suffix}_v16_sustained_beta_direct' in common
+    assert 'drobot_commanded_walk_forward_v18_coordinated_trot_selected' in common
 
 
 def test_rl_transfer_bootstrap_maps_actor_and_resets_optimizer() -> None:
@@ -102,7 +102,7 @@ def test_rl_transfer_bootstrap_maps_actor_and_resets_optimizer() -> None:
     assert '"--actor-output-scale"' in bootstrap
 
 
-def test_v16_reward_requires_sustained_forward_motion() -> None:
+def test_v18_reward_requires_sustained_forward_motion() -> None:
     cfg = _source("commanded_walking_env_cfg.py")
     env = _source("commanded_walking_env.py")
     assert "initial_forward_speed_min_m_s = 0.15" in cfg
@@ -111,22 +111,22 @@ def test_v16_reward_requires_sustained_forward_motion() -> None:
     assert "command_curriculum_offset_steps = 0" in cfg
     assert "minimum_base_height_m = 0.22" in cfg
     assert "minimum_upright_cosine = 0.78" in cfg
-    assert "velocity_tracking_sigma_m_s = 0.10" in cfg
+    assert "velocity_tracking_sigma_m_s = 0.04" in cfg
     assert "reward_signed_command_progress" not in cfg
-    assert "reward_forward_velocity_tracking = 2.0" in cfg
+    assert "reward_forward_velocity_tracking = 4.0" in cfg
     assert "episode_length_s = 32.0" in cfg
     assert "initial_training_horizon_s = 8.0" in cfg
     assert "final_training_horizon_s = 32.0" in cfg
     assert "episode_horizon_curriculum_steps = 64_000" in cfg
     assert "sustained_speed_window_s = 2.0" in cfg
-    assert "minimum_sustained_speed_m_s = 0.04" in cfg
-    assert "reward_sustained_progress = 0.75" in cfg
-    assert "penalty_sustained_stall = 0.50" in cfg
+    assert "minimum_sustained_speed_m_s = 0.08" in cfg
+    assert "reward_sustained_progress = 4.00" in cfg
+    assert "penalty_sustained_stall = 4.00" in cfg
     assert "penalty_normalized_forward_velocity_error" not in cfg
     assert "reward_body_height_tracking" not in cfg
-    assert "reward_upright = 0.50" in cfg
-    assert "reward_alive = 0.50" in cfg
-    assert "penalty_termination = 100.0" in cfg
+    assert "reward_upright = 1.00" in cfg
+    assert "reward_alive = 0.10" in cfg
+    assert "penalty_termination = 350.0" in cfg
     assert "reward_scale = 0.10" in cfg
     assert "velocity_tracking = torch.exp(" in env
     assert "net_commanded_distance - self._episode_commanded_distance" not in env
@@ -165,7 +165,7 @@ def test_v16_reward_requires_sustained_forward_motion() -> None:
 def test_actor_observation_is_deployable_and_critic_gets_simulation_state() -> None:
     cfg = _source("commanded_walking_env_cfg.py")
     env = _source("commanded_walking_env.py")
-    assert "state_space = 56" in cfg
+    assert "state_space = 58" in cfg
     assert '"policy": torch.clamp(policy_observation' in env
     assert '"critic": torch.clamp(critic_observation' in env
     assert "self._robot.data.root_lin_vel_b.torch" in env
@@ -195,8 +195,35 @@ def test_user_scripts_are_separate_and_resume_by_default() -> None:
     assert '[int]$NumEnvs = 128' in headless
     assert "Find-LatestWalkingCheckpoint" in common
     assert 'Where-Object { $_.Name -notlike "_*" }' in common
-    assert r"models\parallel-walking-v16\model_250.pt" in common
+    assert r"models\parallel-walking-v18-coordinated\model_299.pt" in common
     assert "env.command_curriculum_offset_steps=$curriculumOffsetSteps" in common
     assert "([int64]$Matches[1] + 1) * 64" in common
     assert '"--resume"' in common
     assert '-Visualizer "none"' in headless
+
+
+def test_v22_uses_deployable_distributed_crawl_residual() -> None:
+    registration = _source("__init__.py")
+    cfg = _source("commanded_walking_env_cfg.py")
+    env = _source("commanded_walking_env.py")
+    exporter = _source("export_policy_onnx.py")
+    evaluator = _source("evaluate_sustained_walking.py")
+
+    assert (
+        "Drobot-Commanded-Walk-Low-Speed-Crawl-External-Rear-Payload-Direct"
+        in registration
+    )
+    assert 'action_mode = "gait_residual"' in cfg
+    assert "residual_action_scale = 0.25" in cfg
+    assert 'gait_reference_mode = "distributed_push"' in cfg
+    assert "gait_frequency_min_hz = 0.06" in cfg
+    assert "gait_frequency_max_hz = 0.30" in cfg
+    assert "target_velocity_limit_rad_s = math.radians(120.0)" in cfg
+    assert "distributed_push_crawl_by_name" in env
+    assert (
+        "gait_reference + self.cfg.residual_action_scale * self._actions" in env
+    )
+    assert '"action_contract"' in exporter
+    assert '"joint_position_rad": reference_joint_position_rad' in exporter
+    assert "three_or_four_foot_support_fraction" in evaluator
+    assert "mean_target_limiter_gap_rad" in evaluator

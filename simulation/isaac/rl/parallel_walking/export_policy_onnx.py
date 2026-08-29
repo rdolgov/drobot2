@@ -5,10 +5,32 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 import torch
 from torch import nn
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from simulation.isaac._quadruped_runtime import distributed_push_crawl_by_name
+
+ACTION_ORDER = (
+    "front_left_hip_abduction",
+    "rear_left_hip_abduction",
+    "front_right_hip_abduction",
+    "rear_right_hip_abduction",
+    "front_left_hip_flexion",
+    "rear_left_hip_flexion",
+    "front_right_hip_flexion",
+    "rear_right_hip_flexion",
+    "front_left_knee",
+    "rear_left_knee",
+    "front_right_knee",
+    "rear_right_knee",
+)
 
 
 class DeterministicWalkingActor(nn.Module):
@@ -56,6 +78,34 @@ def main() -> None:
     parser.add_argument("--gait-speed-max-m-s", type=float, default=0.10)
     parser.add_argument("--gait-frequency-min-hz", type=float, default=1.25)
     parser.add_argument("--gait-frequency-max-hz", type=float, default=1.25)
+    parser.add_argument("--gait-stride-scale-min", type=float, default=1.0)
+    parser.add_argument(
+        "--gait-pattern",
+        choices=("diagonal_trot", "sequential_crawl", "distributed_support_crawl"),
+        default="diagonal_trot",
+    )
+    parser.add_argument("--gait-duty-factor", type=float, default=0.65)
+    parser.add_argument(
+        "--action-mode", choices=("direct", "gait_residual"), default="direct"
+    )
+    parser.add_argument("--residual-action-scale", type=float, default=1.0)
+    parser.add_argument("--reference-sample-count", type=int, default=2048)
+    parser.add_argument("--reference-start-ramp-s", type=float, default=0.0)
+    parser.add_argument("--reference-stride-m", type=float, default=0.050)
+    parser.add_argument("--reference-lift-m", type=float, default=0.016)
+    parser.add_argument("--reference-weight-shift-forward-m", type=float, default=0.006)
+    parser.add_argument(
+        "--gait-phase-offsets",
+        type=float,
+        nargs=4,
+        metavar=("FL", "RL", "FR", "RR"),
+        default=(0.0, 0.5, 0.5, 0.0),
+    )
+    parser.add_argument("--target-velocity-limit-rad-s", type=float, default=4.5836625)
+    parser.add_argument("--max-target-step-deg", type=float, default=2.0)
+    parser.add_argument("--startup-ramp-rate-deg-s", type=float, default=45.0)
+    parser.add_argument("--startup-settle-s", type=float, default=0.5)
+    parser.add_argument("--startup-position-tolerance-deg", type=float, default=5.0)
     parser.add_argument("--forward-speed-min-m-s", type=float, default=0.04)
     parser.add_argument("--forward-speed-max-m-s", type=float, default=0.10)
     parser.add_argument("--recommended-forward-speed-m-s", type=float, default=0.04)
@@ -63,6 +113,37 @@ def main() -> None:
 
     if args.gait_period_s <= 0.0:
         parser.error("--gait-period-s must be positive")
+    if not 0.0 < args.gait_duty_factor < 1.0:
+        parser.error("--gait-duty-factor must be between zero and one")
+    if args.target_velocity_limit_rad_s <= 0.0 or args.max_target_step_deg <= 0.0:
+        parser.error("target velocity and step limits must be positive")
+    if not 0.0 <= args.gait_stride_scale_min <= 1.0:
+        parser.error("--gait-stride-scale-min must be in [0, 1]")
+    if not 0.0 < args.residual_action_scale <= 1.0:
+        parser.error("--residual-action-scale must be in (0, 1]")
+    if args.reference_sample_count <= 0:
+        parser.error("--reference-sample-count must be positive")
+    if args.action_mode == "gait_residual" and args.gait_pattern != "distributed_support_crawl":
+        parser.error("gait-residual export requires distributed_support_crawl")
+
+    reference_joint_position_rad: list[list[float]] = []
+    if args.action_mode == "gait_residual":
+        for sample_index in range(args.reference_sample_count):
+            pose, _state = distributed_push_crawl_by_name(
+                sample_index / args.reference_sample_count,
+                period_s=1.0,
+                stride_m=args.reference_stride_m,
+                lift_m=args.reference_lift_m,
+                support_extension_m=0.0,
+                weight_shift_forward_m=args.reference_weight_shift_forward_m,
+                weight_shift_lateral_m=0.0,
+                down_m=0.329341447,
+                fore_aft_m=0.080,
+                abduction_deg=0.0,
+            )
+            reference_joint_position_rad.append(
+                [float(pose[name]) for name in ACTION_ORDER]
+            )
     if not (
         0.0
         <= args.forward_speed_min_m_s
@@ -128,14 +209,62 @@ def main() -> None:
             "speed_max_m_s": args.gait_speed_max_m_s,
             "frequency_min_hz": args.gait_frequency_min_hz,
             "frequency_max_hz": args.gait_frequency_max_hz,
+            "stride_scale_min": args.gait_stride_scale_min,
+        },
+        "gait_contract": {
+            "pattern": args.gait_pattern,
+            "duty_factor": args.gait_duty_factor,
+            "phase_offsets_fl_rl_fr_rr": args.gait_phase_offsets,
         },
         "forward_command_range_m_s": {
             "min": args.forward_speed_min_m_s,
             "max": args.forward_speed_max_m_s,
             "recommended": args.recommended_forward_speed_m_s,
         },
+        "action_contract": {
+            "mode": args.action_mode,
+            "residual_scale": args.residual_action_scale,
+        },
         "observation_count": 50,
         "action_count": 12,
+        "joint_target_contract": {
+            "neutral_joint_position_rad": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.5239596454,
+                -0.5239596454,
+                0.5239596454,
+                -0.5239596454,
+                -0.5239596454,
+                0.5239596454,
+                -0.5239596454,
+                0.5239596454,
+            ],
+            "action_scale_rad": [
+                0.12,
+                0.12,
+                0.12,
+                0.12,
+                0.30,
+                0.30,
+                0.30,
+                0.30,
+                0.40,
+                0.40,
+                0.40,
+                0.40,
+            ],
+            "target_velocity_limit_rad_s": args.target_velocity_limit_rad_s,
+            "max_target_step_rad": args.max_target_step_deg * 3.141592653589793 / 180.0,
+        },
+        "startup": {
+            "mode": "prepared_neutral",
+            "ramp_rate_deg_s": args.startup_ramp_rate_deg_s,
+            "settle_s": args.startup_settle_s,
+            "position_tolerance_deg": args.startup_position_tolerance_deg,
+        },
         "observation_order": [
             "command_forward_m_s[1]",
             "command_lateral_m_s[1]",
@@ -149,21 +278,18 @@ def main() -> None:
             "joint_velocity_over_4_5836625[12]",
             "previous_normalized_action[12]",
         ],
-        "action_order": [
-            "front_left_hip_abduction",
-            "rear_left_hip_abduction",
-            "front_right_hip_abduction",
-            "rear_right_hip_abduction",
-            "front_left_hip_flexion",
-            "rear_left_hip_flexion",
-            "front_right_hip_flexion",
-            "rear_right_hip_flexion",
-            "front_left_knee",
-            "rear_left_knee",
-            "front_right_knee",
-            "rear_right_knee",
-        ],
+        "action_order": list(ACTION_ORDER),
     }
+    if reference_joint_position_rad:
+        metadata["gait_reference"] = {
+            "mode": "distributed_push",
+            "start_ramp_s": args.reference_start_ramp_s,
+            "sample_count": args.reference_sample_count,
+            "stride_m": args.reference_stride_m,
+            "lift_m": args.reference_lift_m,
+            "weight_shift_forward_m": args.reference_weight_shift_forward_m,
+            "joint_position_rad": reference_joint_position_rad,
+        }
     if args.training_task:
         metadata["training_task"] = args.training_task
     if args.training_profile:

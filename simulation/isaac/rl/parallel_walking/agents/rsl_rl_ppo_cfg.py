@@ -101,3 +101,22 @@ class DrobotCommandedWalkingLowSpeedExternalRearPayloadPPORunnerCfg(
 
     max_iterations = 800
     experiment_name = "drobot_commanded_walk_v21_low_speed_external_rear_payload"
+
+
+@configclass
+class DrobotCommandedWalkingLowSpeedCrawlExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedWalkingExternalRearPayloadPPORunnerCfg
+):
+    """V22 continuation for a deployment-matched sequential crawl."""
+
+    max_iterations = 1000
+    experiment_name = "drobot_commanded_walk_v22_low_speed_crawl_external_rear_payload"
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # The crawl changes contact topology completely.  Baseline-sized
+        # updates and extra exploration are required when training it fresh;
+        # deployment gating protects against accepting an unstable checkpoint.
+        self.algorithm.learning_rate = 3.0e-4
+        self.algorithm.entropy_coef = 0.003
+        self.algorithm.desired_kl = 0.015

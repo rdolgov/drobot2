@@ -64,6 +64,59 @@ The generated JSON sidecar is required at deployment. It prevents the runtime
 from applying speed-scaled cadence to a fixed-clock model or accepting a speed
 outside that model's training range.
 
+## V22 deployment-matched residual crawl
+
+`low-speed-crawl-external-rear-payload` is the smoothness-first candidate
+created from the August 29 real V20 trial. Unlike V20/V21's direct-action
+diagonal trot, it starts with the exact known-good distributed-push hardware
+crawl and gives PPO only a 25% residual correction around that reference. The
+base gait schedules one airborne foot at a time in the stable rear-right,
+front-right, rear-left, front-left order. Its 86.25% effective stance duty and
+explicit contact rewards favor at least three planted feet and penalize
+two-or-more airborne feet.
+
+The environment applies the same `2 degrees / 60 Hz` target cap as the Pi
+(`120 deg/s`) and penalizes requested targets that run ahead of that limiter.
+Cadence scales from `0.06` to `0.30 Hz` over `0.003-0.015 m/s`, while the full
+50 mm step length is retained so speed changes by cadence instead of tiny foot
+motions. Action, joint, body acceleration, slip, touchdown, tilt, yaw, and
+lateral motion costs are stronger than V20. Training starts in
+`0.008-0.015 m/s` and expands down to `0.003 m/s` over 51,200 policy steps.
+
+Start a fresh residual-policy run with:
+
+```powershell
+& .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
+  -CommandSet low-speed-crawl-external-rear-payload `
+  -Iterations 1000 -NumEnvs 128 -Fresh
+```
+
+Export only a candidate that passes sustained evaluation at `0.003`, `0.005`,
+`0.01`, and `0.015 m/s`, has three-foot support, low limiter gap, no falls or
+stalls, and visibly smooth motion. The V22 export must include:
+
+```powershell
+--training-task Drobot-Commanded-Walk-Low-Speed-Crawl-External-Rear-Payload-Direct `
+--training-profile low-speed-crawl-external-rear-payload `
+--gait-clock-mode speed_scaled --gait-pattern distributed_support_crawl `
+--gait-duty-factor 0.8625 --gait-phase-offsets 0.07 0.32 0.57 0.82 `
+--gait-standstill-deadband-m-s 0.002 `
+--gait-speed-min-m-s 0.003 --gait-speed-max-m-s 0.015 `
+--gait-frequency-min-hz 0.06 --gait-frequency-max-hz 0.30 `
+--gait-stride-scale-min 1.0 --action-mode gait_residual `
+--residual-action-scale 0.25 --reference-sample-count 2048 `
+--reference-start-ramp-s 1.5 --reference-stride-m 0.050 `
+--reference-lift-m 0.016 --reference-weight-shift-forward-m 0.006 `
+--target-velocity-limit-rad-s 2.0943951024 --max-target-step-deg 2 `
+--forward-speed-min-m-s 0.003 --forward-speed-max-m-s 0.015 `
+--recommended-forward-speed-m-s 0.005
+```
+
+The ONNX sidecar embeds the same 2,048-sample joint reference table used in
+Isaac. Deployment reconstructs `reference + 0.25 * policy residual`, then
+applies the same 120 deg/s target limiter. The sidecar is therefore part of the
+model and must always be copied with the ONNX file.
+
 ## V20 external rear-payload walking
 
 V20 corrects the battery installation used by V19. The 144 x 68 mm holder

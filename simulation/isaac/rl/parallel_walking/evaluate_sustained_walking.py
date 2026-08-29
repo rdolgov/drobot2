@@ -79,6 +79,10 @@ for _ in range(args.episodes):
     joint_acceleration_squared_sum = 0.0
     body_linear_acceleration_squared_sum = 0.0
     body_angular_acceleration_squared_sum = 0.0
+    target_limiter_gap_sum = 0.0
+    three_foot_support_sum = 0.0
+    excess_airborne_sum = 0.0
+    absolute_yaw_travel_rad = 0.0
     previous_action = torch.zeros((12,), device=env.unwrapped.device)
     older_action = torch.zeros((12,), device=env.unwrapped.device)
     previous_joint_velocity = env.unwrapped._robot.data.joint_vel.torch[0].clone()
@@ -116,6 +120,14 @@ for _ in range(args.episodes):
         joint_velocity = env.unwrapped._robot.data.joint_vel.torch[0]
         body_linear_velocity = env.unwrapped._robot.data.root_lin_vel_w.torch[0]
         body_angular_velocity = env.unwrapped._robot.data.root_ang_vel_w.torch[0]
+        target_limiter_gap_sum += float(
+            torch.mean(
+                torch.abs(
+                    env.unwrapped._desired_targets[0]
+                    - env.unwrapped._processed_actions[0]
+                )
+            ).item()
+        )
         joint_acceleration_squared_sum += float(
             torch.mean(torch.square((joint_velocity - previous_joint_velocity) * 60.0)).item()
         )
@@ -133,6 +145,12 @@ for _ in range(args.episodes):
         previous_body_linear_velocity.copy_(body_linear_velocity)
         previous_body_angular_velocity.copy_(body_angular_velocity)
         foot_contact = env.unwrapped._foot_forces()[0] > 1.0
+        support_count = int(torch.count_nonzero(foot_contact).item())
+        three_foot_support_sum += float(support_count >= 3)
+        excess_airborne_sum += float(support_count <= 2)
+        absolute_yaw_travel_rad += (
+            abs(float(body_angular_velocity[2].item())) / 60.0
+        )
         touchdown_counts += (foot_contact & ~previous_contact).float()
         previous_contact.copy_(foot_contact)
         _, scheduled_contact = env.unwrapped._gait_targets()
@@ -157,6 +175,7 @@ for _ in range(args.episodes):
         / args.window_seconds
         for index in range(args.window_seconds, len(positions))
     ]
+    stall_speed_threshold_m_s = max(0.001, 0.4 * args.forward_speed)
     results.append(
         {
             "duration_s": duration_s,
@@ -166,9 +185,10 @@ for _ in range(args.episodes):
             "minimum_window_speed_m_s": min(window_speeds, default=0.0),
             "final_window_speed_m_s": window_speeds[-1] if window_speeds else 0.0,
             "stall_window_fraction": (
-                sum(speed < 0.02 for speed in window_speeds)
+                sum(speed < stall_speed_threshold_m_s for speed in window_speeds)
                 / max(len(window_speeds), 1)
             ),
+            "stall_speed_threshold_m_s": stall_speed_threshold_m_s,
             "action_saturation_fraction": saturated_action_sum
             / max(completed_steps, 1),
             "mean_abs_action_rate_per_step": action_rate_sum
@@ -184,6 +204,13 @@ for _ in range(args.episodes):
             "rms_body_angular_acceleration_rad_s2": math.sqrt(
                 body_angular_acceleration_squared_sum / max(completed_steps, 1)
             ),
+            "mean_target_limiter_gap_rad": target_limiter_gap_sum
+            / max(completed_steps, 1),
+            "three_or_four_foot_support_fraction": three_foot_support_sum
+            / max(completed_steps, 1),
+            "two_or_fewer_foot_support_fraction": excess_airborne_sum
+            / max(completed_steps, 1),
+            "absolute_yaw_travel_rad": absolute_yaw_travel_rad,
             "touchdowns_by_leg": {
                 name: int(touchdown_counts[index].item())
                 for index, name in enumerate(foot_names)
@@ -229,6 +256,18 @@ summary = {
     ) / len(results),
     "mean_rms_body_angular_acceleration_rad_s2": sum(
         float(item["rms_body_angular_acceleration_rad_s2"]) for item in results
+    ) / len(results),
+    "mean_target_limiter_gap_rad": sum(
+        float(item["mean_target_limiter_gap_rad"]) for item in results
+    ) / len(results),
+    "mean_three_or_four_foot_support_fraction": sum(
+        float(item["three_or_four_foot_support_fraction"]) for item in results
+    ) / len(results),
+    "mean_two_or_fewer_foot_support_fraction": sum(
+        float(item["two_or_fewer_foot_support_fraction"]) for item in results
+    ) / len(results),
+    "mean_absolute_yaw_travel_rad": sum(
+        float(item["absolute_yaw_travel_rad"]) for item in results
     ) / len(results),
 }
 print("SUSTAINED_EVALUATION_JSON=" + json.dumps(summary, sort_keys=True), flush=True)

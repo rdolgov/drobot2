@@ -3,15 +3,14 @@
 ## Scope
 
 The port 8080 hardware dashboard can run the selected
-`parallel-walking-v20-external-rear-payload/model_900.onnx` policy as a bounded, supported-robot
+`parallel-walking-v22-low-speed-residual-crawl/model_500.onnx` policy as a bounded, supported-robot
 commissioning test. The four-leg dashboard remains the only process that opens
 the Feetech serial bus. The policy runner supplies targets to that same session;
 it does not create a second motor owner.
 
-The initial rollout is deliberately limited to five seconds. The selected V20
-model accepts its trained `0.04` through `0.10 m/s` forward range; future model
-sidecars may declare a different range. It is not an unattended or floor-ready
-autonomy mode.
+The initial rollout is deliberately short and supported. The selected V22
+model accepts its trained `0.003` through `0.015 m/s` forward range and starts
+at the sidecar-recommended `0.003 m/s`. It is not an unattended autonomy mode.
 
 ## Observation and action contract
 
@@ -28,11 +27,14 @@ An independent background source requests encoder feedback at 100 Hz and the
 policy consumes its latest complete cached sample. Feedback is rejected after
 120 ms. The actual achieved USB/servo rate is measured in recordings rather
 than assumed from the requested polling rate.
-The policy produces 12 normalized actions in Isaac order. The tracked contract
-maps those actions to physical servo IDs 1-12 and converts them to bounded
-semantic joint angles. Policy targets are limited from actual elapsed monotonic
-time, with a five-degree maximum for any one delayed update, before the
-existing servo-session ramp is applied.
+The policy produces 12 normalized residual actions in Isaac order. Its JSON sidecar
+declares the trained neutral pose, per-joint action scales, target velocity,
+maximum packet step, and startup ramp/settle tolerance. The tracked contract
+also embeds the exact 2,048-sample distributed-push crawl reference used in
+training. Runtime targets are `reference + 0.25 * policy residual`, mapped to
+physical servo IDs 1-12 and bounded as semantic joint angles. Policy targets
+are limited from actual elapsed monotonic time and the model-declared packet
+cap before the existing servo-session ramp is applied.
 
 While the policy is active, encoder position/speed uses the SDK's synchronous
 group read for registers 56–59 across all 12 IDs, with a sequential fallback
@@ -59,17 +61,19 @@ and the physical power cutoff is ready. Start is rejected unless:
 - projected gravity says the body is within 41 degrees of upright;
 - the serial bus has no active fault;
 - no manual, crawl, diagonal-pair, or RL command is active;
-- all 12 motors are armed at the completed **CENTER ALL 12** target, with every
-  measured joint no more than five degrees from calibrated center; and
+- **PREPARE RL STANCE** has moved all 12 motors together to the model-declared
+  trained neutral pose and completed its settle interval;
+- every measured joint is within the model-declared pose tolerance and its
+  encoder speed is below the configured stopped threshold; and
 - all 12 measured joints are inside the policy envelope with a five-degree
   commissioning margin.
 
-After these checks, each motor is re-anchored to its measured centered position
-without dropping torque. The measured 12-joint vector becomes the policy's
-initial rate-limiter target, preventing a jump from an assumed neutral pose.
-Finite policy targets are limited to two degrees per 60 Hz update. A larger
-finite request is clamped and recorded rather than treated as a fault or a
-reason to disarm.
+Preparation does not run inference. After these checks, each motor is
+re-anchored to its measured policy-neutral position without dropping torque.
+The measured 12-joint vector becomes the policy's initial rate-limiter target,
+preventing a jump from calibrated zero or an assumed pose. Finite V22 policy
+targets are limited to two degrees per 60 Hz update. A larger finite request is
+clamped and recorded rather than treated as a fault or a reason to disarm.
 
 ## Completion and runtime stops
 
@@ -117,9 +121,11 @@ sudo systemctl restart drobot-manual-web.service
 ```
 
 Open `http://pi5-dog.local:8080/`, confirm hardware mode, `12 / 12` online,
-plausible voltage, and no fault. Press **CENTER ALL 12**, wait for the RL panel
-to report that its centered hold is ready, then acknowledge and start. Begin at
-`0.04 m/s` while the body is supported and the feet cannot contact the bench.
+plausible voltage, and no fault. With the robot supported, acknowledge the RL
+interlock and press **PREPARE RL STANCE**. Wait for the RL panel to report
+`policy stance ready`, then start at `0.003 m/s` while the feet cannot strike the
+bench. **CENTER ALL 12** is a calibrated service pose; it is no longer presented
+as the trained RL start pose.
 
 ## ROS 2 migration
 

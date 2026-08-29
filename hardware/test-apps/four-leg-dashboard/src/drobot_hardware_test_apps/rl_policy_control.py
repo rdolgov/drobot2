@@ -5,15 +5,17 @@ from __future__ import annotations
 import math
 import threading
 import time
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
 import numpy as np
 from drobot_policy_runtime.contract import (
     ACTION_NAMES,
-    GaitClockConfig,
     JOINT_LOWER_RAD,
     JOINT_UPPER_RAD,
+    GaitClockConfig,
+    JointTargetConfig,
 )
 from drobot_policy_runtime.policy import OnnxWalkingPolicy, load_policy_metadata
 from drobot_policy_runtime.recording import TrialRecorder, sha256_file
@@ -202,6 +204,7 @@ class RlPolicyController:
         self.model_contract_sha256 = sha256_file(self.model_contract_path)
         self.model_metadata = load_policy_metadata(self.model_path)
         self.gait_clock_config = GaitClockConfig.from_metadata(self.model_metadata)
+        self.joint_target_config = JointTargetConfig.from_metadata(self.model_metadata)
         command_range = self.model_metadata.get("forward_command_range_m_s", {})
         if not isinstance(command_range, Mapping):
             command_range = {}
@@ -266,6 +269,17 @@ class RlPolicyController:
                 self.recommended_forward_m_s
             ),
             "joint_feedback_target_hz": self.JOINT_FEEDBACK_HZ,
+            "neutral_joint_position_deg": [
+                round(math.degrees(value), 3)
+                for value in self.joint_target_config.neutral_joint_position_rad
+            ],
+            "startup_ramp_rate_deg_s": (
+                self.joint_target_config.startup_ramp_rate_deg_s
+            ),
+            "startup_settle_s": self.joint_target_config.startup_settle_s,
+            "startup_position_tolerance_deg": (
+                self.joint_target_config.startup_position_tolerance_deg
+            ),
             "elapsed_s": 0.0,
             "imu": None,
             "targets": [],
@@ -464,6 +478,7 @@ class RlPolicyController:
                 command=PolicyCommand(forward_m_s=speed),
                 control_hz=self.CONTROL_HZ,
                 initial_target_rad=initial_target_rad,
+                joint_target_config=self.joint_target_config,
                 step_observer=self._record_step,
             )
             loop.run(duration_s=duration_s, stop_event=self._stop_event)
