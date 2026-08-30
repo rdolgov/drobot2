@@ -13,7 +13,7 @@ passwords, dashboard tokens, or Wi-Fi credentials in this repository.
 | Host | `pi5-dog.local` |
 | Board / OS | Raspberry Pi 5, Ubuntu 26.04 LTS arm64 |
 | Python | 3.14.4 |
-| IMU | BNO085 detected on I2C bus 1 at `0x4A` |
+| IMU | BNO085 detected at `0x4A` |
 | IMU bus | Software I2C `/dev/i2c-8` on GPIO 2/3 for BNO085 clock stretching |
 | Policy model | `parallel-walking-v22-low-speed-residual-crawl/model_500.onnx` |
 | Model SHA-256 | `ddbc2fa70661a5a81342eb76b884888e3da2a1b88c63ef241cd77afbc95ccfe0` |
@@ -90,6 +90,16 @@ the three BNO085 reports to activate, but it could not deliver a combined
 accelerometer, gyro, and orientation sample fast enough for control. The
 software controller is used for correct clock stretching, not to sacrifice the
 sensor bandwidth needed by the policy.
+
+Observed recovery on 2026-08-29 required removing power from the BNO085 before
+software bus 8 could enable all three reports. After that hard power-cycle, the
+approximately 100 kHz software bus initialized the IMU in 2.4 seconds and
+returned valid gyro, gravity, and acceleration values. In a 120-sample
+scheduled 60 Hz check, combined reads measured 9.1 ms median, 19.6 ms p95, and
+45.6 ms maximum; 7 reads exceeded one 16.7 ms frame, but none approached the
+controller's 120 ms hard deadline. Treat future report-enable failures as a
+reason to stop, disarm, and hard-power-cycle the sensor rather than repeatedly
+pressing RL Start.
 
 Do not try to solve this error only with repeated RL Start attempts. If it
 continues on software bus 8, power-cycle the IMU/Pi and check the 3.3 V, ground, SDA,
