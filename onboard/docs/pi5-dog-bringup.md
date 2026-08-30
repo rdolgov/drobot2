@@ -67,7 +67,7 @@ about 97.5 kHz even when `i2c_arm_baudrate=10000` was requested. The tracked
 configuration therefore uses Linux's clock-stretching-compatible software I2C
 controller on the same GPIO 2/3 wires. No sensor rewiring is required.
 
-Configure software bus 8 at approximately 10 kHz once, then reboot:
+Configure software bus 8 at approximately 100 kHz once, then reboot:
 
 ```bash
 bash onboard/scripts/configure-bno085-i2c.sh
@@ -84,6 +84,12 @@ servo controller:
 ls -l /dev/i2c-8
 sudo i2cdetect -y 8
 ```
+
+Do not reduce the software bus to 10 kHz for the RL runtime. That rate allowed
+the three BNO085 reports to activate, but it could not deliver a combined
+accelerometer, gyro, and orientation sample fast enough for control. The
+software controller is used for correct clock stretching, not to sacrifice the
+sensor bandwidth needed by the policy.
 
 Do not try to solve this error only with repeated RL Start attempts. If it
 continues on software bus 8, power-cycle the IMU/Pi and check the 3.3 V, ground, SDA,

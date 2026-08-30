@@ -3,7 +3,7 @@ set -euo pipefail
 
 BOOT_CONFIG="${DROBOT_BOOT_CONFIG:-/boot/firmware/config.txt}"
 SOFTWARE_BUS="${DROBOT_BNO085_I2C_BUS:-8}"
-GPIO_DELAY_US="${DROBOT_BNO085_I2C_DELAY_US:-50}"
+GPIO_DELAY_US="${DROBOT_BNO085_I2C_DELAY_US:-2}"
 SERVICE_ENV="${DROBOT_MANUAL_SERVICE_ENV:-/etc/default/drobot-manual-web}"
 
 if [[ ! -f "${BOOT_CONFIG}" ]]; then
