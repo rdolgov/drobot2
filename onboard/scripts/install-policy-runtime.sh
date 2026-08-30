@@ -59,6 +59,14 @@ python -m pip install --editable "${REPO_ROOT}/onboard/policy-runtime[bno085]"
 
 echo
 echo "Drobot print-only policy runtime installed."
+if [[ -f /boot/firmware/config.txt ]] \
+  && ! grep -qE '^[[:space:]]*dtoverlay=i2c-gpio,.*bus=8([,[:space:]]|$)' \
+    /boot/firmware/config.txt; then
+  echo "WARNING: the BNO085 software I2C bus is not configured."
+  echo "Before using the real IMU, run:"
+  echo "  bash ${REPO_ROOT}/onboard/scripts/configure-bno085-i2c.sh"
+  echo "  sudo reboot"
+fi
 echo "Test without hardware input:"
 echo "  bash ${REPO_ROOT}/onboard/scripts/run-policy-print.sh --imu level --duration-s 5"
 echo "Read the BNO085 and print targets:"

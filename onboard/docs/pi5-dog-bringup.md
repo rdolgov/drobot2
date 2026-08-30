@@ -14,6 +14,7 @@ passwords, dashboard tokens, or Wi-Fi credentials in this repository.
 | Board / OS | Raspberry Pi 5, Ubuntu 26.04 LTS arm64 |
 | Python | 3.14.4 |
 | IMU | BNO085 detected on I2C bus 1 at `0x4A` |
+| IMU bus | Software I2C `/dev/i2c-8` on GPIO 2/3 for BNO085 clock stretching |
 | Policy model | `parallel-walking-v22-low-speed-residual-crawl/model_500.onnx` |
 | Model SHA-256 | `ddbc2fa70661a5a81342eb76b884888e3da2a1b88c63ef241cd77afbc95ccfe0` |
 | Policy runtime | ONNX Runtime 1.29.0, 60 Hz, deterministic Beta mean |
@@ -53,6 +54,41 @@ bash onboard/scripts/install-policy-runtime.sh
 
 The installer verifies that the ONNX file is not a Git LFS pointer and checks
 its SHA-256 against the tracked model metadata.
+
+### Required BNO085 I2C setting
+
+The BNO085 uses clock stretching and can be unreliable on Raspberry Pi hardware
+I2C. A typical symptom is `('Was not able to enable feature', 1)` when RL Walk
+tries to enable the accelerometer report. The sensor can still appear normally
+at `0x4A` and return its product ID while every streaming report fails.
+
+The Pi 5 hardware controller accepts only standard bus rates and registered at
+about 97.5 kHz even when `i2c_arm_baudrate=10000` was requested. The tracked
+configuration therefore uses Linux's clock-stretching-compatible software I2C
+controller on the same GPIO 2/3 wires. No sensor rewiring is required.
+
+Configure software bus 8 at approximately 10 kHz once, then reboot:
+
+```bash
+bash onboard/scripts/configure-bno085-i2c.sh
+sudo reboot
+```
+
+The script preserves the previous boot configuration as
+`/boot/firmware/config.txt.drobot-bno085-backup`, disables hardware I2C on GPIO
+2/3, adds the `i2c-gpio` overlay, and sets `DROBOT_BNO085_I2C_BUS=8` for the
+manual dashboard service. After reboot, verify the bus without starting the
+servo controller:
+
+```bash
+ls -l /dev/i2c-8
+sudo i2cdetect -y 8
+```
+
+Do not try to solve this error only with repeated RL Start attempts. If it
+continues on software bus 8, power-cycle the IMU/Pi and check the 3.3 V, ground, SDA,
+and SCL connections. The Pi's persistent 5 A supply warning must also be fixed
+before treating USB or I2C behavior as reliable.
 
 ## Safe commands available now
 

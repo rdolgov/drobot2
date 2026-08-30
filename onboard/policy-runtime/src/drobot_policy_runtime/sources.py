@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 import time
 from dataclasses import dataclass
 from typing import Protocol
@@ -92,10 +93,13 @@ def parse_axis_map(text: str) -> tuple[tuple[int, float], ...]:
 class Bno085ImuSource:
     """Read body-frame policy inputs directly from the Pi's BNO085."""
 
-    def __init__(self, address: int = 0x4A, axis_map: str = "+x,+y,+z") -> None:
+    def __init__(
+        self,
+        address: int = 0x4A,
+        axis_map: str = "+x,+y,+z",
+        i2c_bus: int | None = None,
+    ) -> None:
         try:
-            import board
-            import busio
             from adafruit_bno08x import (
                 BNO_REPORT_ACCELEROMETER,
                 BNO_REPORT_GAME_ROTATION_VECTOR,
@@ -108,8 +112,35 @@ class Bno085ImuSource:
             ) from exc
 
         self._axis_map = parse_axis_map(axis_map)
-        i2c = busio.I2C(board.SCL, board.SDA)
-        self._imu = BNO08X_I2C(i2c, address=address)
+        if i2c_bus is None:
+            configured_bus = os.environ.get("DROBOT_BNO085_I2C_BUS", "").strip()
+            if configured_bus:
+                try:
+                    i2c_bus = int(configured_bus, 10)
+                except ValueError as exc:
+                    raise RuntimeError(
+                        "DROBOT_BNO085_I2C_BUS must be a non-negative integer"
+                    ) from exc
+                if i2c_bus < 0:
+                    raise RuntimeError(
+                        "DROBOT_BNO085_I2C_BUS must be a non-negative integer"
+                    )
+
+        if i2c_bus is None:
+            import board
+            import busio
+
+            self._i2c = busio.I2C(board.SCL, board.SDA)
+        else:
+            try:
+                from adafruit_extended_bus import ExtendedI2C
+            except ImportError as exc:
+                raise RuntimeError(
+                    "Software I2C support is missing; reinstall the package with [bno085]"
+                ) from exc
+            self._i2c = ExtendedI2C(i2c_bus)
+
+        self._imu = BNO08X_I2C(self._i2c, address=address)
         self._imu.enable_feature(BNO_REPORT_ACCELEROMETER)
         self._imu.enable_feature(BNO_REPORT_GYROSCOPE)
         self._imu.enable_feature(BNO_REPORT_GAME_ROTATION_VECTOR)
@@ -142,4 +173,3 @@ class Bno085ImuSource:
             linear_acceleration_body_m_s2=self._to_body(acceleration_sensor),
             monotonic_time_s=time.monotonic(),
         )
-
