@@ -1,6 +1,6 @@
 # Raspberry Pi walking-policy runtime
 
-This package runs the selected V22 low-speed residual-crawl, external-rear-payload,
+This package runs the selected V23 higher-speed straight residual-crawl, external-rear-payload,
 rectangular-shoe policy on a 64-bit
 Raspberry Pi with ONNX Runtime. Its standalone CLI and port 8090 UI are
 intentionally print-only: they read the
@@ -14,7 +14,7 @@ and missed deadlines are skipped rather than replayed as catch-up bursts. The
 model JSON sidecar declares the supported command range, speed-scaled gait
 clock, trained neutral pose, action scales, target slew/packet limits, guarded
 startup ramp/settle contract, and the 2,048-sample distributed-crawl reference.
-V22 reconstructs the same target used in training as
+V23 reconstructs the same target used in training as
 `reference + 0.25 * policy residual` before rate limiting.
 
 The runtime was exercised on `pi5-dog` with Ubuntu 26.04 ARM64, Python 3.14.4,
@@ -38,10 +38,15 @@ format and the planned ROS 2/rosbag2 replacement boundary.
 ## Model
 
 The deployable model is
-`onboard/models/parallel-walking-v22-low-speed-residual-crawl/model_500.onnx`.
+`onboard/models/parallel-walking-v23-higher-speed-straight-residual-crawl/model_1500.onnx`.
 It is exported from
-`simulation/isaac/models/parallel-walking-v22-low-speed-residual-crawl/model_500.pt` with
+`simulation/isaac/models/parallel-walking-v23-higher-speed-straight-residual-crawl/model_1500.pt` with
 `simulation/isaac/rl/parallel_walking/export_policy_onnx.py`.
+
+The model accepts `0.005-0.050 m/s`; the sidecar recommendation remains the
+conservative `0.005 m/s` first-trial setting. Command speed changes both the
+reference stride scale and cadence, so a larger valid value now produces a
+meaningfully faster crawl.
 
 The accompanying JSON file records hashes, startup pose, target dynamics, and
 the full observation/action ordering. The policy consumes:

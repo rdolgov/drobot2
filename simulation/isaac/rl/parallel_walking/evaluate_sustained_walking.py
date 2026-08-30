@@ -44,7 +44,10 @@ sys.path.insert(0, str(package_parent))
 
 import parallel_walking  # noqa: E402, F401
 from parallel_walking import preview_control  # noqa: E402
-from parallel_walking.commanded_walking_env import LEG_NAMES  # noqa: E402
+from parallel_walking.commanded_walking_env import (  # noqa: E402
+    LEG_NAMES,
+    _yaw_from_wxyz,
+)
 
 task = args.task
 env_cfg = load_cfg_from_registry(task, "env_cfg_entry_point")
@@ -71,6 +74,9 @@ for _ in range(args.episodes):
     obs = env.get_observations()
     start_x = float(env.unwrapped._robot.data.root_pos_w.torch[0, 0].item())
     start_y = float(env.unwrapped._robot.data.root_pos_w.torch[0, 1].item())
+    start_yaw = float(
+        _yaw_from_wxyz(env.unwrapped._robot.data.root_quat_w.torch)[0].item()
+    )
     positions = [start_x]
     lateral_positions = [start_y]
     saturated_action_sum = 0.0
@@ -170,6 +176,12 @@ for _ in range(args.episodes):
 
     duration_s = completed_steps / 60.0
     distance_m = positions[-1] - positions[0]
+    final_yaw = float(
+        _yaw_from_wxyz(env.unwrapped._robot.data.root_quat_w.torch)[0].item()
+    )
+    heading_error_rad = math.atan2(
+        math.sin(final_yaw - start_yaw), math.cos(final_yaw - start_yaw)
+    )
     window_speeds = [
         (positions[index] - positions[index - args.window_seconds])
         / args.window_seconds
@@ -181,6 +193,7 @@ for _ in range(args.episodes):
             "duration_s": duration_s,
             "distance_m": distance_m,
             "lateral_displacement_m": lateral_positions[-1] - lateral_positions[0],
+            "final_heading_error_rad": heading_error_rad,
             "mean_speed_m_s": distance_m / max(duration_s, 1.0 / 60.0),
             "minimum_window_speed_m_s": min(window_speeds, default=0.0),
             "final_window_speed_m_s": window_speeds[-1] if window_speeds else 0.0,
@@ -237,6 +250,10 @@ summary = {
     / len(results),
     "mean_abs_lateral_displacement_m": sum(
         abs(float(item["lateral_displacement_m"])) for item in results
+    )
+    / len(results),
+    "mean_abs_final_heading_error_rad": sum(
+        abs(float(item["final_heading_error_rad"])) for item in results
     )
     / len(results),
     "mean_final_window_speed_m_s": sum(

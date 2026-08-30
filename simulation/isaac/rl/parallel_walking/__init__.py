@@ -47,3 +47,8 @@ _register(
     "DrobotCommandedWalkingLowSpeedCrawlExternalRearPayloadEnvCfg",
     "DrobotCommandedWalkingLowSpeedCrawlExternalRearPayloadPPORunnerCfg",
 )
+_register(
+    "Drobot-Commanded-Walk-Higher-Speed-Straight-Crawl-External-Rear-Payload-Direct",
+    "DrobotCommandedWalkingHigherSpeedStraightCrawlExternalRearPayloadEnvCfg",
+    "DrobotCommandedWalkingHigherSpeedStraightCrawlExternalRearPayloadPPORunnerCfg",
+)

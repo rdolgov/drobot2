@@ -120,3 +120,23 @@ class DrobotCommandedWalkingLowSpeedCrawlExternalRearPayloadPPORunnerCfg(
         self.algorithm.learning_rate = 3.0e-4
         self.algorithm.entropy_coef = 0.003
         self.algorithm.desired_kl = 0.015
+
+
+@configclass
+class DrobotCommandedWalkingHigherSpeedStraightCrawlExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedWalkingLowSpeedCrawlExternalRearPayloadPPORunnerCfg
+):
+    """V23 V22-continuation for faster, straighter residual crawling."""
+
+    max_iterations = 1200
+    experiment_name = (
+        "drobot_commanded_walk_v23_higher_speed_straight_crawl_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # Continuation starts from the selected V22 residual actor, so use
+        # smaller updates than the fresh V22 topology search.
+        self.algorithm.learning_rate = 1.0e-4
+        self.algorithm.entropy_coef = 0.001
+        self.algorithm.desired_kl = 0.008

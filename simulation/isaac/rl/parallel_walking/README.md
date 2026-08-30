@@ -117,6 +117,32 @@ Isaac. Deployment reconstructs `reference + 0.25 * policy residual`, then
 applies the same 120 deg/s target limiter. The sidecar is therefore part of the
 model and must always be copied with the ONNX file.
 
+## V23 higher-speed straight residual crawl
+
+`higher-speed-straight-crawl-external-rear-payload` continues from the selected
+V22 checkpoint without changing its 50-value observation or 12-value residual
+action contract. It expands the trained command range to `0.005-0.050 m/s` and
+scales the sequential-crawl cadence from `0.12` to `0.75 Hz` around a 65 mm
+reference stride. The single-foot swing order, 86.25% stance duty, 25% policy
+residual, 60 Hz controller, and 120 deg/s joint-target limiter remain intact.
+
+V23 adds separate costs for lateral velocity, total lateral displacement,
+leaving a 20 mm path corridor, yaw rate, and accumulated heading error. The
+strong V22 action, joint, and body-acceleration costs remain enabled. Continue
+training from the bundled V22 model with:
+
+```powershell
+& .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
+  -CommandSet higher-speed-straight-crawl-external-rear-payload `
+  -Iterations 1200 -NumEnvs 128 -Seed 2301
+```
+
+Evaluate candidate checkpoints at `0.005`, `0.015`, `0.030`, and `0.050 m/s`.
+Selection must consider actual speed, fall/stall rate, lateral displacement,
+final heading error, yaw travel, three-foot support, target-limiter gap, and
+joint/body acceleration together; highest checkpoint number is not itself a
+selection criterion.
+
 ## V20 external rear-payload walking
 
 V20 corrects the battery installation used by V19. The 144 x 68 mm holder

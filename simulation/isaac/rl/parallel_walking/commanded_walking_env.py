@@ -42,6 +42,15 @@ from .commanded_walking_env_cfg import (
 LEG_NAMES = ("front_left", "rear_left", "front_right", "rear_right")
 
 
+def _yaw_from_wxyz(quaternion: torch.Tensor) -> torch.Tensor:
+    """Return wrapped world yaw for Isaac's scalar-first root quaternion."""
+    w, x, y, z = quaternion.unbind(dim=1)
+    return torch.atan2(
+        2.0 * (w * z + x * y),
+        1.0 - 2.0 * (y * y + z * z),
+    )
+
+
 def _author_rectangular_shoes(stage) -> None:
     """Replace env-0 fork-tip spheres with the latest flat CAD shoe proxies."""
     distal_prims = {
@@ -417,8 +426,10 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._failure_out_of_bounds = torch.zeros_like(self._failed)
         self._failure_base_contact = torch.zeros_like(self._failed)
         self._episode_start_position = torch.zeros((self.num_envs, 3), device=self.device)
+        self._episode_start_yaw = torch.zeros(self.num_envs, device=self.device)
         self._episode_velocity_error_sum = torch.zeros(self.num_envs, device=self.device)
         self._episode_yaw_error_sum = torch.zeros(self.num_envs, device=self.device)
+        self._episode_heading_error_sum = torch.zeros(self.num_envs, device=self.device)
         self._episode_commanded_distance = torch.zeros(self.num_envs, device=self.device)
         self._episode_action_saturation_sum = torch.zeros(
             self.num_envs, device=self.device
@@ -468,10 +479,12 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             "alive",
             "lateral_velocity",
             "lateral_displacement",
+            "lateral_corridor",
             "vertical_velocity",
             "roll_pitch_rate",
             "body_tilt",
             "yaw_rate",
+            "heading_error",
             "body_height",
             "action_rate",
             "action_acceleration",
@@ -885,6 +898,16 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         net_lateral_displacement = torch.sum(
             displacement[:, :2] * lateral_direction, dim=1
         )
+        current_yaw = _yaw_from_wxyz(self._robot.data.root_quat_w.torch)
+        heading_error = torch.atan2(
+            torch.sin(current_yaw - self._episode_start_yaw),
+            torch.cos(current_yaw - self._episode_start_yaw),
+        )
+        lateral_corridor_excess = torch.clamp(
+            torch.abs(net_lateral_displacement)
+            - self.cfg.lateral_corridor_half_width_m,
+            min=0.0,
+        )
         active_translation = (
             command_speed > self.cfg.active_translation_threshold_m_s
         )
@@ -1163,6 +1186,13 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                 -self.cfg.penalty_lateral_displacement
                 * torch.square(net_lateral_displacement)
             ),
+            "lateral_corridor": (
+                -self.cfg.penalty_lateral_corridor
+                * torch.square(
+                    lateral_corridor_excess
+                    / max(self.cfg.lateral_corridor_half_width_m, 1.0e-4)
+                )
+            ),
             "vertical_velocity": (
                 -self.cfg.penalty_vertical_velocity * torch.square(linear_velocity[:, 2])
             ),
@@ -1178,6 +1208,13 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                 )
             ),
             "yaw_rate": -self.cfg.penalty_yaw_rate * torch.square(yaw_error),
+            "heading_error": (
+                -self.cfg.penalty_heading_error
+                * torch.square(
+                    heading_error
+                    / max(self.cfg.heading_error_normalizer_rad, 1.0e-4)
+                )
+            ),
             "body_height": -self.cfg.penalty_body_height * torch.square(height_error),
             "action_rate": (
                 -smoothness_scale * self.cfg.penalty_action_rate * action_rate
@@ -1241,6 +1278,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
 
         self._episode_velocity_error_sum += torch.sqrt(velocity_error_squared)
         self._episode_yaw_error_sum += torch.abs(yaw_error)
+        self._episode_heading_error_sum += torch.abs(heading_error)
         self._episode_commanded_distance.copy_(net_commanded_distance)
         self._episode_action_saturation_sum += torch.mean(
             (torch.abs(self._actions) >= 0.98).float(), dim=1
@@ -1392,6 +1430,9 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             ).mean().item()
             log["Metrics/mean_yaw_error_rad_s"] = (
                 self._episode_yaw_error_sum[env_ids] / completed_steps
+            ).mean().item()
+            log["Metrics/mean_heading_error_rad"] = (
+                self._episode_heading_error_sum[env_ids] / completed_steps
             ).mean().item()
             log["Metrics/commanded_distance_m"] = self._episode_commanded_distance[
                 env_ids
@@ -1565,8 +1606,10 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._failure_out_of_bounds[env_ids] = False
         self._failure_base_contact[env_ids] = False
         self._episode_start_position[env_ids] = root_pose[:, :3]
+        self._episode_start_yaw[env_ids] = _yaw_from_wxyz(root_pose[:, 3:7])
         self._episode_velocity_error_sum[env_ids] = 0.0
         self._episode_yaw_error_sum[env_ids] = 0.0
+        self._episode_heading_error_sum[env_ids] = 0.0
         self._episode_commanded_distance[env_ids] = 0.0
         self._episode_action_saturation_sum[env_ids] = 0.0
         self._episode_swing_step_sum[env_ids] = 0.0

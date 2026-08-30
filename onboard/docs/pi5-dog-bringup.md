@@ -15,8 +15,8 @@ passwords, dashboard tokens, or Wi-Fi credentials in this repository.
 | Python | 3.14.4 |
 | IMU | BNO085 detected at `0x4A` |
 | IMU bus | Software I2C `/dev/i2c-8` on GPIO 2/3 for BNO085 clock stretching |
-| Policy model | `parallel-walking-v22-low-speed-residual-crawl/model_500.onnx` |
-| Model SHA-256 | `ddbc2fa70661a5a81342eb76b884888e3da2a1b88c63ef241cd77afbc95ccfe0` |
+| Policy model | `parallel-walking-v23-higher-speed-straight-residual-crawl/model_1500.onnx` |
+| Model SHA-256 | `28e9167ca08e817b86489c16a10d4d43b99364afa8ae985d641b5d45307f83cb` |
 | Policy runtime | ONNX Runtime 1.29.0, 60 Hz, deterministic Beta mean |
 | Motor output | Disabled; policy targets are displayed/printed only |
 | Manual/IK dashboard | Boot service on port 8080; hardware preference with safe demo fallback |
@@ -241,7 +241,7 @@ keeping the manual dashboard as the only servo-bus owner. The standalone port
    velocities feed the observation; stale, missing, or out-of-range feedback
    stops and disarms the test.
 3. **Bounded actuation:** the UI permits a supported `1-60 s` test inside the
-   selected model's declared speed range (`0.003-0.015 m/s` for V22),
+   selected model's declared speed range (`0.005-0.050 m/s` for V23),
    initializes targets from the measured pose, and enforces joint, elapsed-time
    rate, tilt, and telemetry guards. Normal timed completion returns all
    12 joints to calibrated center and keeps torque holding; an explicit stop or

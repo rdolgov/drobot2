@@ -280,10 +280,14 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     # lateral and yaw motion more strongly instead of accepting the drift.
     penalty_lateral_velocity = 5.00
     penalty_lateral_displacement = 8.00
+    lateral_corridor_half_width_m = 0.05
+    penalty_lateral_corridor = 0.0
     penalty_vertical_velocity = 0.20
     penalty_roll_pitch_rate = 0.10
     penalty_body_tilt = 1.50
     penalty_yaw_rate = 5.00
+    heading_error_normalizer_rad = 0.20
+    penalty_heading_error = 0.0
     penalty_body_height = 2.0
     penalty_action_rate = 0.03
     penalty_action_acceleration = 0.12
@@ -518,6 +522,55 @@ class DrobotCommandedWalkingLowSpeedCrawlExternalRearPayloadEnvCfg(
     penalty_yaw_rate = 10.00
     penalty_support_foot_slip = 0.60
     penalty_touchdown_impact = 0.18
+
+
+@configclass
+class DrobotCommandedWalkingHigherSpeedStraightCrawlExternalRearPayloadEnvCfg(
+    DrobotCommandedWalkingLowSpeedCrawlExternalRearPayloadEnvCfg
+):
+    """V23 faster residual crawl with explicit lateral and heading retention."""
+
+    # Start close to V22, then expose the full range over 800 PPO rollouts. The
+    # 65 mm reference and speed-scaled clock correspond to roughly 0.005-0.049
+    # m/s before learned residual corrections and contact losses.
+    initial_forward_speed_min_m_s = 0.010
+    initial_forward_speed_max_m_s = 0.030
+    forward_speed_min_m_s = 0.005
+    forward_speed_max_m_s = 0.050
+    command_curriculum_steps = 51_200
+    episode_horizon_curriculum_steps = 51_200
+
+    gait_speed_min_m_s = 0.005
+    gait_speed_max_m_s = 0.050
+    gait_frequency_min_hz = 0.12
+    gait_frequency_max_hz = 0.75
+    gait_stride_scale_min = 0.65
+    gait_stride_m = 0.065
+    gait_weight_shift_forward_m = 0.008
+
+    reward_forward_velocity_tracking = 2.50
+    reward_instant_progress = 3.00
+    reward_sustained_progress = 4.00
+    penalty_sustained_stall = 7.00
+
+    # V22 already discouraged sideways motion, but its raw squared-displacement
+    # term was weak for a few centimeters of real drift. V23 adds a normalized
+    # 20 mm corridor penalty and prices yaw/heading departure independently.
+    penalty_lateral_velocity = 20.00
+    penalty_lateral_displacement = 40.00
+    lateral_corridor_half_width_m = 0.020
+    penalty_lateral_corridor = 2.50
+    penalty_yaw_rate = 18.00
+    heading_error_normalizer_rad = 0.12
+    penalty_heading_error = 2.00
+
+    # Preserve V22's strong anti-jerk objective at the higher cadence. Candidate
+    # selection may reject later/faster checkpoints if acceleration rises.
+    penalty_action_rate = 0.18
+    penalty_action_acceleration = 0.90
+    penalty_joint_acceleration = 0.30
+    penalty_body_linear_acceleration = 0.55
+    penalty_body_angular_acceleration = 0.45
 
 
 @configclass

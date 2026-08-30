@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 function Get-WalkingContext {
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("forward", "directional", "smooth-payload", "external-rear-payload", "low-speed-external-rear-payload", "low-speed-crawl-external-rear-payload")]
+        [ValidateSet("forward", "directional", "smooth-payload", "external-rear-payload", "low-speed-external-rear-payload", "low-speed-crawl-external-rear-payload", "higher-speed-straight-crawl-external-rear-payload")]
         [string]$CommandSet
     )
 
@@ -32,9 +32,13 @@ function Get-WalkingContext {
         $task = "Drobot-Commanded-Walk-Low-Speed-External-Rear-Payload-Direct"
         $experimentName = "drobot_commanded_walk_v21_low_speed_external_rear_payload"
     }
-    else {
+    elseif ($CommandSet -eq "low-speed-crawl-external-rear-payload") {
         $task = "Drobot-Commanded-Walk-Low-Speed-Crawl-External-Rear-Payload-Direct"
         $experimentName = "drobot_commanded_walk_v22_low_speed_crawl_external_rear_payload"
+    }
+    else {
+        $task = "Drobot-Commanded-Walk-Higher-Speed-Straight-Crawl-External-Rear-Payload-Direct"
+        $experimentName = "drobot_commanded_walk_v23_higher_speed_straight_crawl_external_rear_payload"
     }
     return [PSCustomObject]@{
         RepoRoot = $repoRoot
@@ -42,7 +46,10 @@ function Get-WalkingContext {
         Task = $task
         ExperimentName = $experimentName
         ExperimentRoot = Join-Path $repoRoot "logs\rsl_rl\$experimentName"
-        BundledCheckpoint = if ($CommandSet -in @("low-speed-external-rear-payload", "low-speed-crawl-external-rear-payload")) {
+        BundledCheckpoint = if ($CommandSet -eq "higher-speed-straight-crawl-external-rear-payload") {
+            Join-Path $repoRoot "simulation\isaac\models\parallel-walking-v22-low-speed-residual-crawl\model_500.pt"
+        }
+        elseif ($CommandSet -in @("low-speed-external-rear-payload", "low-speed-crawl-external-rear-payload")) {
             Join-Path $repoRoot "simulation\isaac\models\parallel-walking-v20-external-rear-payload\model_900.pt"
         }
         elseif ($CommandSet -eq "external-rear-payload") {
@@ -54,7 +61,7 @@ function Get-WalkingContext {
         else {
             $null
         }
-        ResetCurriculumOffset = ($CommandSet -in @("low-speed-external-rear-payload", "low-speed-crawl-external-rear-payload"))
+        ResetCurriculumOffset = ($CommandSet -in @("low-speed-external-rear-payload", "low-speed-crawl-external-rear-payload", "higher-speed-straight-crawl-external-rear-payload"))
         TrainScript = Join-Path $PSScriptRoot "train_commanded_walking.py"
         PlayScript = Join-Path $PSScriptRoot "play_commanded_walking.py"
     }
