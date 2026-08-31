@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from itertools import permutations
 
@@ -21,6 +22,7 @@ from simulation.isaac._quadruped_runtime import distributed_push_crawl_by_name
 from . import preview_control
 from .commanded_walking_env_cfg import (
     DISTAL_LINK_LENGTH_M,
+    EFFORT_CAP_NM,
     ORIGINAL_BASE_COM_M,
     ORIGINAL_BASE_INERTIA_KG_M2,
     ORIGINAL_BASE_MASS_KG,
@@ -51,7 +53,7 @@ def _yaw_from_wxyz(quaternion: torch.Tensor) -> torch.Tensor:
     )
 
 
-def _author_rectangular_shoes(stage) -> None:
+def _author_rectangular_shoes(stage, cfg) -> None:
     """Replace env-0 fork-tip spheres with the latest flat CAD shoe proxies."""
     distal_prims = {
         prim.GetName(): prim
@@ -69,12 +71,16 @@ def _author_rectangular_shoes(stage) -> None:
         stage, "/World/Materials/RectangularShoeTreadContact"
     )
     material_api = UsdPhysics.MaterialAPI.Apply(tread_material.GetPrim())
-    material_api.CreateStaticFrictionAttr().Set(1.05)
-    material_api.CreateDynamicFrictionAttr().Set(0.85)
-    material_api.CreateRestitutionAttr().Set(0.02)
+    material_api.CreateStaticFrictionAttr().Set(float(cfg.shoe_static_friction))
+    material_api.CreateDynamicFrictionAttr().Set(float(cfg.shoe_dynamic_friction))
+    material_api.CreateRestitutionAttr().Set(float(cfg.shoe_restitution))
     physx_api = PhysxSchema.PhysxMaterialAPI.Apply(tread_material.GetPrim())
-    physx_api.CreateCompliantContactStiffnessAttr().Set(12000.0)
-    physx_api.CreateCompliantContactDampingAttr().Set(45.0)
+    physx_api.CreateCompliantContactStiffnessAttr().Set(
+        float(cfg.shoe_contact_stiffness)
+    )
+    physx_api.CreateCompliantContactDampingAttr().Set(
+        float(cfg.shoe_contact_damping)
+    )
 
     sole_center_x = (
         DISTAL_LINK_LENGTH_M
@@ -415,6 +421,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                 f"Unknown gait_reference_mode: {self.cfg.gait_reference_mode}"
             )
         self._randomize_rear_payload_estimate()
+        self._randomize_actuator_capacity()
 
         self._steps_since_reset = torch.zeros(
             self.num_envs, dtype=torch.long, device=self.device
@@ -472,6 +479,9 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             "instant_progress",
             "sustained_progress",
             "sustained_stall",
+            "backward_motion",
+            "overspeed",
+            "rearward_pitch",
             "gait_reference",
             "scheduled_stance",
             "scheduled_swing",
@@ -588,6 +598,23 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         ) * jitter_limit
         self._robot.set_coms_index(coms=coms, body_ids=base_ids, env_ids=env_ids)
 
+    def _randomize_actuator_capacity(self) -> None:
+        """Approximate bounded servo torque/rate loss from supply-voltage sag."""
+        effort_low, effort_high = self.cfg.actuator_effort_scale_range
+        rate_low, rate_high = self.cfg.target_velocity_scale_range
+        self._actuator_effort_scale = effort_low + (effort_high - effort_low) * torch.rand(
+            (self.num_envs, 1), device=self.device
+        )
+        self._target_velocity_scale = rate_low + (rate_high - rate_low) * torch.rand(
+            (self.num_envs, 1), device=self.device
+        )
+        joint_count = len(self._robot.joint_names)
+        effort_limits = (
+            EFFORT_CAP_NM
+            * self._actuator_effort_scale.expand(self.num_envs, joint_count)
+        )
+        self._robot.write_joint_effort_limit_to_sim_index(limits=effort_limits)
+
     def _current_episode_horizon_steps(self) -> int:
         curriculum_step = (
             self.common_step_counter + self.cfg.command_curriculum_offset_steps
@@ -605,7 +632,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
         self.scene.articulations["robot"] = self._robot
-        _author_rectangular_shoes(self.scene.stage)
+        _author_rectangular_shoes(self.scene.stage, self.cfg)
         _author_rear_battery_payload(self.scene.stage, self.cfg)
         self._contact_sensor = ContactSensor(self.cfg.contact_sensor)
         self.scene.sensors["contact_sensor"] = self._contact_sensor
@@ -649,7 +676,11 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             desired_targets, limits[:, :, 0], limits[:, :, 1]
         )
         self._desired_targets.copy_(desired_targets)
-        max_delta = self.cfg.target_velocity_limit_rad_s * self.step_dt
+        max_delta = (
+            self.cfg.target_velocity_limit_rad_s
+            * self.step_dt
+            * self._target_velocity_scale
+        )
         self._processed_actions = torch.clamp(
             desired_targets,
             self._previous_targets - max_delta,
@@ -942,6 +973,17 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         sustained_stall = rolling_window_ready & active_translation & (
             rolling_speed < sustained_speed_threshold
         )
+        normalized_backward_velocity = torch.clamp(
+            -commanded_velocity / torch.clamp(command_speed, min=1.0e-4),
+            min=0.0,
+            max=2.0,
+        )
+        normalized_overspeed = torch.clamp(
+            (commanded_velocity - command_speed)
+            / torch.clamp(command_speed, min=1.0e-4),
+            min=0.0,
+            max=2.0,
+        )
         net_commanded_distance = torch.where(
             active_translation,
             net_commanded_distance,
@@ -949,6 +991,21 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         )
         upright_cosine = torch.clamp(
             -self._robot.data.projected_gravity_b.torch[:, 2], 0.0, 1.0
+        )
+        projected_gravity_xy = self._robot.data.projected_gravity_b.torch[:, :2]
+        target_projected_gravity_x = math.sin(self.cfg.target_forward_pitch_rad)
+        body_tilt_error = torch.stack(
+            (
+                projected_gravity_xy[:, 0] - target_projected_gravity_x,
+                projected_gravity_xy[:, 1],
+            ),
+            dim=1,
+        )
+        normalized_rearward_pitch = torch.clamp(
+            (target_projected_gravity_x - projected_gravity_xy[:, 0])
+            / self.cfg.rearward_pitch_normalizer_rad,
+            min=0.0,
+            max=3.0,
         )
         base_height = (
             self._robot.data.root_pos_w.torch[:, 2]
@@ -1168,6 +1225,20 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                 * torch.square(normalized_stall_deficit)
                 * (rolling_window_ready & active_translation).float()
             ),
+            "backward_motion": (
+                -self.cfg.penalty_backward_motion
+                * torch.square(normalized_backward_velocity)
+                * active_translation.float()
+            ),
+            "overspeed": (
+                -self.cfg.penalty_overspeed
+                * torch.square(normalized_overspeed)
+                * active_translation.float()
+            ),
+            "rearward_pitch": (
+                -self.cfg.penalty_rearward_pitch
+                * torch.square(normalized_rearward_pitch)
+            ),
             "gait_reference": (
                 self.cfg.reward_gait_reference * gait_reference_tracking
             ),
@@ -1202,10 +1273,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             ),
             "body_tilt": (
                 -self.cfg.penalty_body_tilt
-                * torch.sum(
-                    torch.square(self._robot.data.projected_gravity_b.torch[:, :2]),
-                    dim=1,
-                )
+                * torch.sum(torch.square(body_tilt_error), dim=1)
             ),
             "yaw_rate": -self.cfg.penalty_yaw_rate * torch.square(yaw_error),
             "heading_error": (

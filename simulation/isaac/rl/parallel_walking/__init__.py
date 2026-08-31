@@ -52,3 +52,8 @@ _register(
     "DrobotCommandedWalkingHigherSpeedStraightCrawlExternalRearPayloadEnvCfg",
     "DrobotCommandedWalkingHigherSpeedStraightCrawlExternalRearPayloadPPORunnerCfg",
 )
+_register(
+    "Drobot-Commanded-Walk-Padded-Feet-Forward-Bias-External-Rear-Payload-Direct",
+    "DrobotCommandedWalkingPaddedFeetForwardBiasExternalRearPayloadEnvCfg",
+    "DrobotCommandedWalkingPaddedFeetForwardBiasExternalRearPayloadPPORunnerCfg",
+)

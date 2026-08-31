@@ -11,6 +11,7 @@ hardware.
 | External rear-battery smooth walking (V20) | [`rl-external-rear-payload-walking-v20.md`](rl-external-rear-payload-walking-v20.md) |
 | Low-speed residual crawl (V22) | [`rl-low-speed-residual-crawl-v22.md`](rl-low-speed-residual-crawl-v22.md) |
 | Higher-speed straight residual crawl (V23) | [`rl-higher-speed-straight-crawl-v23.md`](rl-higher-speed-straight-crawl-v23.md) |
+| Padded-feet forward-bias residual crawl (V24) | [`rl-padded-feet-forward-bias-v24.md`](rl-padded-feet-forward-bias-v24.md) |
 | Original stair task | [`rl-stairs/README.md`](rl-stairs/README.md) |
 | Corrected close-start stair task | [`rl-stairs-v2/README.md`](rl-stairs-v2/README.md) |
 | Hardware-informed stair task | [`rl-stairs-v3/README.md`](rl-stairs-v3/README.md) |

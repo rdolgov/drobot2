@@ -19,6 +19,24 @@ parser.add_argument(
     "--task", default="Drobot-Commanded-Walk-Forward-Direct"
 )
 parser.add_argument("--forward-speed", type=float, default=0.15)
+parser.add_argument(
+    "--reference-weight-shift-forward-m",
+    type=float,
+    default=None,
+    help="Optionally override the task's analytic gait-reference forward shift.",
+)
+parser.add_argument(
+    "--actuator-effort-scale",
+    type=float,
+    default=None,
+    help="Optionally evaluate at one fixed effective actuator-effort scale.",
+)
+parser.add_argument(
+    "--target-velocity-scale",
+    type=float,
+    default=None,
+    help="Optionally evaluate at one fixed effective target-rate scale.",
+)
 args = parser.parse_args()
 if args.seconds < 10 or args.episodes < 1:
     parser.error("evaluation needs at least 10 seconds and one episode")
@@ -58,6 +76,18 @@ env_cfg.seed = 4401
 env_cfg.reset_joint_position_noise_rad = 0.0
 env_cfg.reset_xy_jitter_m = 0.0
 env_cfg.disable_time_limit = True
+if args.reference_weight_shift_forward_m is not None:
+    env_cfg.gait_weight_shift_forward_m = args.reference_weight_shift_forward_m
+if args.actuator_effort_scale is not None:
+    env_cfg.actuator_effort_scale_range = (
+        args.actuator_effort_scale,
+        args.actuator_effort_scale,
+    )
+if args.target_velocity_scale is not None:
+    env_cfg.target_velocity_scale_range = (
+        args.target_velocity_scale,
+        args.target_velocity_scale,
+    )
 preview_control.COMMAND_OVERRIDE = (args.forward_speed, 0.0, 0.0)
 
 env = gym.make(task, cfg=env_cfg)
@@ -71,6 +101,12 @@ results: list[dict[str, float | bool | list[float]]] = []
 for _ in range(args.episodes):
     env.unwrapped._reset_idx(torch.tensor([0], device=env.unwrapped.device))
     env.unwrapped.episode_length_buf.zero_()
+    actuator_effort_scale = float(
+        env.unwrapped._actuator_effort_scale[0, 0].item()
+    )
+    target_velocity_scale = float(
+        env.unwrapped._target_velocity_scale[0, 0].item()
+    )
     obs = env.get_observations()
     start_x = float(env.unwrapped._robot.data.root_pos_w.torch[0, 0].item())
     start_y = float(env.unwrapped._robot.data.root_pos_w.torch[0, 1].item())
@@ -89,6 +125,8 @@ for _ in range(args.episodes):
     three_foot_support_sum = 0.0
     excess_airborne_sum = 0.0
     absolute_yaw_travel_rad = 0.0
+    backward_step_sum = 0.0
+    forward_pitch_sum_rad = 0.0
     previous_action = torch.zeros((12,), device=env.unwrapped.device)
     older_action = torch.zeros((12,), device=env.unwrapped.device)
     previous_joint_velocity = env.unwrapped._robot.data.joint_vel.torch[0].clone()
@@ -126,6 +164,12 @@ for _ in range(args.episodes):
         joint_velocity = env.unwrapped._robot.data.joint_vel.torch[0]
         body_linear_velocity = env.unwrapped._robot.data.root_lin_vel_w.torch[0]
         body_angular_velocity = env.unwrapped._robot.data.root_ang_vel_w.torch[0]
+        body_forward_velocity = env.unwrapped._robot.data.root_lin_vel_b.torch[0, 0]
+        projected_gravity_x = env.unwrapped._robot.data.projected_gravity_b.torch[0, 0]
+        backward_step_sum += float(body_forward_velocity.item() < 0.0)
+        forward_pitch_sum_rad += math.asin(
+            max(-1.0, min(1.0, float(projected_gravity_x.item())))
+        )
         target_limiter_gap_sum += float(
             torch.mean(
                 torch.abs(
@@ -224,6 +268,10 @@ for _ in range(args.episodes):
             "two_or_fewer_foot_support_fraction": excess_airborne_sum
             / max(completed_steps, 1),
             "absolute_yaw_travel_rad": absolute_yaw_travel_rad,
+            "backward_step_fraction": backward_step_sum / max(completed_steps, 1),
+            "mean_forward_pitch_rad": forward_pitch_sum_rad / max(completed_steps, 1),
+            "actuator_effort_scale": actuator_effort_scale,
+            "target_velocity_scale": target_velocity_scale,
             "touchdowns_by_leg": {
                 name: int(touchdown_counts[index].item())
                 for index, name in enumerate(foot_names)
@@ -246,6 +294,7 @@ summary = {
     "episodes": results,
     "task": task,
     "forward_speed_m_s": args.forward_speed,
+    "reference_weight_shift_forward_m": env_cfg.gait_weight_shift_forward_m,
     "mean_distance_m": sum(float(item["distance_m"]) for item in results)
     / len(results),
     "mean_abs_lateral_displacement_m": sum(
@@ -286,6 +335,18 @@ summary = {
     "mean_absolute_yaw_travel_rad": sum(
         float(item["absolute_yaw_travel_rad"]) for item in results
     ) / len(results),
+    "mean_backward_step_fraction": sum(
+        float(item["backward_step_fraction"]) for item in results
+    ) / len(results),
+    "mean_forward_pitch_rad": sum(
+        float(item["mean_forward_pitch_rad"]) for item in results
+    ) / len(results),
+    "minimum_actuator_effort_scale": min(
+        float(item["actuator_effort_scale"]) for item in results
+    ),
+    "minimum_target_velocity_scale": min(
+        float(item["target_velocity_scale"]) for item in results
+    ),
 }
 print("SUSTAINED_EVALUATION_JSON=" + json.dumps(summary, sort_keys=True), flush=True)
 env.close()

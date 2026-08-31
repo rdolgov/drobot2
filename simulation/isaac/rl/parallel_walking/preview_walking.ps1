@@ -2,7 +2,7 @@
 param(
     [ValidateSet("forward", "backward", "left", "right", "stop")]
     [string]$Command = "forward",
-    [ValidateSet("forward", "directional", "smooth-payload", "external-rear-payload", "low-speed-external-rear-payload", "low-speed-crawl-external-rear-payload", "higher-speed-straight-crawl-external-rear-payload")]
+    [ValidateSet("forward", "directional", "smooth-payload", "external-rear-payload", "low-speed-external-rear-payload", "low-speed-crawl-external-rear-payload", "higher-speed-straight-crawl-external-rear-payload", "padded-feet-forward-bias-external-rear-payload")]
     [string]$CommandSet = "forward",
     [string]$Checkpoint = "",
     [int]$Seed = 1701,

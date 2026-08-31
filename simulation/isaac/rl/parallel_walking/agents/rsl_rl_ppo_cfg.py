@@ -140,3 +140,21 @@ class DrobotCommandedWalkingHigherSpeedStraightCrawlExternalRearPayloadPPORunner
         self.algorithm.learning_rate = 1.0e-4
         self.algorithm.entropy_coef = 0.001
         self.algorithm.desired_kl = 0.008
+
+
+@configclass
+class DrobotCommandedWalkingPaddedFeetForwardBiasExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedWalkingHigherSpeedStraightCrawlExternalRearPayloadPPORunnerCfg
+):
+    """V24 conservative V23 continuation for padded feet and forward bias."""
+
+    max_iterations = 1000
+    experiment_name = (
+        "drobot_commanded_walk_v24_padded_feet_forward_bias_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.learning_rate = 7.5e-5
+        self.algorithm.entropy_coef = 0.0005
+        self.algorithm.desired_kl = 0.006

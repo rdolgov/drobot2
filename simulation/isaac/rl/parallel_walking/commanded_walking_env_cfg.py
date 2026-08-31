@@ -246,6 +246,7 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     gait_phase_offsets = (0.0, 0.5, 0.5, 0.0)
     gait_reference_mode = "continuous"
     gait_weight_shift_forward_m = 0.0
+    target_forward_pitch_rad = 0.0
     gait_stride_m = 0.080
     gait_lift_m = 0.025
     gait_start_ramp_s = 0.60
@@ -268,6 +269,10 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     reward_instant_progress = 2.00
     reward_sustained_progress = 4.00
     penalty_sustained_stall = 4.00
+    penalty_backward_motion = 0.0
+    penalty_overspeed = 0.0
+    penalty_rearward_pitch = 0.0
+    rearward_pitch_normalizer_rad = math.radians(3.0)
     reward_gait_reference = 2.00
     reward_scheduled_stance = 0.50
     reward_scheduled_swing = 1.50
@@ -318,6 +323,13 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     rear_payload_size_m = (0.0, 0.0, 0.0)
     rear_payload_combined_mass_scale_range = (1.0, 1.0)
     rear_payload_combined_com_jitter_m = (0.0, 0.0, 0.0)
+    shoe_static_friction = 1.05
+    shoe_dynamic_friction = 0.85
+    shoe_restitution = 0.02
+    shoe_contact_stiffness = 12_000.0
+    shoe_contact_damping = 45.0
+    actuator_effort_scale_range = (1.0, 1.0)
+    target_velocity_scale_range = (1.0, 1.0)
     smoothness_curriculum_steps = 0
     smoothness_initial_scale = 1.0
     joint_acceleration_normalizer_rad_s2 = 40.0
@@ -571,6 +583,56 @@ class DrobotCommandedWalkingHigherSpeedStraightCrawlExternalRearPayloadEnvCfg(
     penalty_joint_acceleration = 0.30
     penalty_body_linear_acceleration = 0.55
     penalty_body_angular_acceleration = 0.45
+
+
+@configclass
+class DrobotCommandedWalkingPaddedFeetForwardBiasExternalRearPayloadEnvCfg(
+    DrobotCommandedWalkingHigherSpeedStraightCrawlExternalRearPayloadEnvCfg
+):
+    """V24 lower-friction Velcro-sole crawl biased against the rear payload."""
+
+    # The new adhesive Velcro-like sole is modestly softer and may slide more
+    # readily than the bare printed tread. Model that uncertainty conservatively
+    # with lower friction, lower contact stiffness, and more damping.
+    shoe_static_friction = 0.75
+    shoe_dynamic_friction = 0.55
+    shoe_restitution = 0.01
+    shoe_contact_stiffness = 7_000.0
+    shoe_contact_damping = 85.0
+
+    # Low charge does not change the battery mass or COM, but voltage sag can
+    # reduce servo torque and achievable target rate. Parallel robots span this
+    # bounded capacity range so the actor cannot rely on ideal fresh-battery
+    # response. Operation below the hardware voltage cutoff is still unsafe.
+    actuator_effort_scale_range = (0.70, 1.00)
+    target_velocity_scale_range = (0.70, 1.00)
+
+    # Shift the analytic crawl support target farther toward the front feet and
+    # ask the learned residual to hold a mild nose-down attitude. This counters
+    # the externally mounted rear battery without changing the measured mass.
+    gait_weight_shift_forward_m = 0.018
+    target_forward_pitch_rad = math.radians(3.0)
+
+    # Preserve the V23 speed range, but make reverse travel unambiguously worse
+    # than slow forward progress under the new padded-foot contact regime.
+    velocity_tracking_sigma_m_s = 0.012
+    reward_forward_velocity_tracking = 4.00
+    reward_instant_progress = 4.00
+    reward_sustained_progress = 5.00
+    minimum_sustained_speed_fraction = 0.55
+    penalty_sustained_stall = 8.00
+    penalty_backward_motion = 10.00
+    penalty_overspeed = 8.00
+
+    # The first V24 continuation reduced reverse motion but obtained extra
+    # progress by exceeding the requested speed and using two-foot support too
+    # often at 0.015 m/s. Keep the slow crawl genuinely commandable and retain
+    # the intended one-leg-at-a-time support topology.
+    reward_scheduled_stance = 2.50
+    reward_three_foot_support = 3.50
+    penalty_excess_airborne_feet = 12.00
+    penalty_body_tilt = 8.00
+    penalty_rearward_pitch = 1.50
 
 
 @configclass

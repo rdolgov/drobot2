@@ -3,13 +3,13 @@
 ## Scope
 
 The port 8080 hardware dashboard can run the selected
-`parallel-walking-v23-higher-speed-straight-residual-crawl/model_1500.onnx` policy as a bounded, supported-robot
+`parallel-walking-v24-padded-feet-forward-bias/model_3248.onnx` policy as a bounded, supported-robot
 commissioning test. The four-leg dashboard remains the only process that opens
 the Feetech serial bus. The policy runner supplies targets to that same session;
 it does not create a second motor owner.
 
-The initial rollout is deliberately short and supported. The selected V22
-model accepts its trained `0.003` through `0.015 m/s` forward range and starts
+The initial rollout is deliberately short and supported. The selected V24
+model accepts its validated `0.005` through `0.030 m/s` forward range and starts
 at the sidecar-recommended `0.005 m/s`. It is not an unattended autonomy mode.
 
 ## Observation and action contract
@@ -71,7 +71,7 @@ and the physical power cutoff is ready. Start is rejected unless:
 Preparation does not run inference. After these checks, each motor is
 re-anchored to its measured policy-neutral position without dropping torque.
 The measured 12-joint vector becomes the policy's initial rate-limiter target,
-preventing a jump from calibrated zero or an assumed pose. Finite V22 policy
+preventing a jump from calibrated zero or an assumed pose. Finite V24 policy
 targets are limited to two degrees per 60 Hz update. A larger finite request is
 clamped and recorded rather than treated as a fault or a reason to disarm.
 

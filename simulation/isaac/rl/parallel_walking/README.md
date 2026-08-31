@@ -143,6 +143,37 @@ final heading error, yaw travel, three-foot support, target-limiter gap, and
 joint/body acceleration together; highest checkpoint number is not itself a
 selection criterion.
 
+## V24 padded-feet forward-bias residual crawl
+
+`padded-feet-forward-bias-external-rear-payload` continues from selected V23
+checkpoint 1500. It models the adhesive Velcro-like sole pads as potentially
+lower-friction and modestly softer than bare printed tread, retains the measured
+external rear payload, and randomizes effective servo effort and target rate
+from 70-100% to cover reasonable supply-voltage sag. It shifts the analytic
+support target forward by 18 mm, targets a mild 3 degree nose-down pitch, and
+explicitly penalizes motion opposite the requested forward command.
+
+Train the continuation with:
+
+```powershell
+& .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
+  -CommandSet padded-feet-forward-bias-external-rear-payload `
+  -Iterations 1000 -NumEnvs 128 -Seed 2401
+```
+
+Evaluate checkpoints at `0.005`, `0.015`, `0.030`, and `0.050 m/s`. Compare
+signed progress and backward-step fraction alongside drift, pitch, support,
+target-limiter backlog, and acceleration. A low battery may reduce real servo
+torque and speed but does not alter battery mass or center of mass; recharge
+before the first real V24 comparison and never operate below its safe cutoff.
+
+The selected release is model 3248. Its deployment sidecar deliberately limits
+commands to `0.005-0.030 m/s` and recommends `0.005 m/s`; the policy was trained
+with the full `0.005-0.050 m/s` cadence range, but the highest command was not
+reliably achievable under simulated target-rate sag. See
+`simulation/docs/rl-padded-feet-forward-bias-v24.md` for rejected continuations,
+fixed-command results, hashes, and review artifacts.
+
 ## V20 external rear-payload walking
 
 V20 corrects the battery installation used by V19. The 144 x 68 mm holder
