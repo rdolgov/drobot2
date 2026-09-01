@@ -174,6 +174,144 @@ reliably achievable under simulated target-rate sag. See
 `simulation/docs/rl-padded-feet-forward-bias-v24.md` for rejected continuations,
 fixed-command results, hashes, and review artifacts.
 
+## V28 forward-biased cycle-gated straight crawl
+
+`forward-biased-cycle-gated-four-leg-straight-crawl-external-rear-payload`
+keeps the statically stable RR/FR/RL/FL crawl but uses a 92 mm opposed swept
+stance, 2-degree nose-down target, 46 mm stride, 24 mm lift, and cadence up to
+0.80 Hz. It requires every foot to stay below 1 N for five consecutive control
+updates in every complete cycle. World-frame drift, cycle-averaged lateral
+velocity, heading error, more-than-one airborne foot, acceleration, and
+sustained effort above the STS3215 rated torque are explicitly penalized.
+
+The simulated motor separates the physical 90%-register transient cap from the
+10 kg-cm continuous/rated threshold. Robust training correlates common torque
+and rate with supply, then adds per-joint mismatch, joint-zero error, rear-COM
+uncertainty, persistent lean/wrench, IMU noise/bias, delay, and common plus
+per-foot Velcro-pad friction.
+
+Train nominal adaptation first, using an explicitly selected checkpoint:
+
+```powershell
+& .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
+  -CommandSet forward-biased-cycle-gated-four-leg-straight-crawl-external-rear-payload `
+  -Checkpoint <selected-checkpoint.pt> `
+  -Iterations 250 -NumEnvs 4096 -Seed 2829 -V25Phase nominal
+```
+
+Do not start the robust phase or export ONNX until held-out deterministic runs
+have zero falls, complete all-four release in every cycle, and meet support,
+straightness, progress, acceleration, and per-joint effort gates. The profile
+is currently experimental and has not replaced the Raspberry Pi policy. See
+`simulation/docs/rl-forward-biased-cycle-gated-v28.md` for research, exact
+configuration, rejected checkpoints, ablations, and selection criteria.
+
+## V29 schedule-matched support straight crawl
+
+`schedule-matched-support-straight-crawl-external-rear-payload` corrects a V28
+reward loophole: the old support score counted planted feet but did not require
+the scheduled swing foot and three named anchors to have the right contact
+identities. V29 requires an exact contact-mask match, adds a missing-anchor
+penalty and a smooth weakest-contact discovery gate, and retains the strict
+five-tick, below-1-N all-four release test.
+
+The current corrected branch also removes a leg-order-dependent cycle payout
+that always favored the final front-left swing, maps a completely missing
+anchor to zero progress quality, and adds short unload/touchdown transition
+windows for smooth contact.
+
+The selected reference keeps the stable opposed 92 mm stance and
+`RR -> FR -> RL -> FL` order. It uses `15 / 20 mm` general/rear forward
+transfer, the internally matched +2-degree stance with no independent center
+offset, a 46 mm stride, 24 mm lift, 8% contact transitions, and phase fractions
+`0.20 / 0.15 / 0.20 / 0.20 / 0.10 / 0.08 / 0.02 / 0.05`. Residual authority is
+`0.10 / 0.12 / 0.15` for abduction/hip/knee. Commands begin at
+`0.008-0.020 m/s` and expand toward the analytic `0.037 m/s` ceiling over
+128,000 policy steps.
+
+The active symmetric nominal experiment continues from rejected diagnostic
+checkpoint V29 `model_4073.pt`:
+
+```powershell
+& .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
+  -CommandSet schedule-matched-support-straight-crawl-external-rear-payload `
+  -Iterations 500 -NumEnvs 4096 -Seed 3007 -V25Phase nominal `
+  -Checkpoint .\logs\rsl_rl\drobot_commanded_walk_v29_schedule_matched_support_straight_crawl_external_rear_payload\2026-08-30_23-54-36_manual-headless\model_4073.pt
+```
+
+Training and checkpoint evaluation are still in progress. Do not export or
+deploy V29 unless deterministic held-out evaluation passes exact contact
+identity, all-four release, support, progress, straightness, acceleration,
+target-limiter, and per-joint effort gates. The current Raspberry Pi policy is
+unchanged. See
+[`../../../docs/rl-schedule-matched-support-v29.md`](../../../docs/rl-schedule-matched-support-v29.md)
+for the reward bug, research basis, geometry sweeps, rejected branches,
+randomization plan, and exact gates.
+
+## V30 symmetry-gated robust straight crawl
+
+`symmetry-gated-robust-straight-crawl-external-rear-payload` is the implemented
+V30 research profile. It keeps the low opposed `RR -> FR -> RL -> FL` crawl and
+50-value deployment observation, adds speed-normalized straight-progress
+gating, Huber path costs, nominal left/right data augmentation without a hard
+mirror loss, and targeted physical domains for lateral COM, assembly tilt,
+servo zeros/rates/strength, battery sag, and Velcro-like traction. Cadence may
+reach `0.85 Hz` (`0.039 m/s` with the 46 mm stride); the stance is not lowered
+further because the analytic hip reference is already near its soft envelope.
+
+The selected reference uses a `-12 mm` empirical lateral transfer and `25 mm`
+forward transfer for rear-leg swings. The latter was selected over 20 and
+30 mm because it improved diagonal-anchor support without the 30 mm case's
+larger reversal and acceleration.
+
+Two nominal continuations were trained on 2026-08-31. The best diagnostic is:
+
+```text
+logs/rsl_rl/drobot_commanded_walk_v30_symmetry_gated_robust_straight_crawl_external_rear_payload/
+  2026-08-31_07-15-11_manual-headless/model_5000.pt
+```
+
+It is **rejected as a release policy**. Across fixed-speed held-out trials it was
+fall-free, walked `0.0143-0.0151 m/s`, stayed within `0.020-0.036 m/m` lateral
+error, and held RMS joint acceleration below `8.9 rad/s2`. Exact scheduled
+contact remained only `0.606-0.618`, support about `0.881-0.884`, all-four
+release `0.75-0.889`, and above-rated effort occupancy about `0.43`. The main
+failure is front-left anchor loss during rear-right swing. Robust training was
+not performed. On 2026-08-31, `model_5000.pt` was exported and selected on the
+Pi at the user's explicit request for a guarded physical trial; V24 remains
+installed for rollback, and this trial does not constitute acceptance.
+
+The diagnostic video is under the same run at
+`videos/play/rl-video-step-0.mp4`. See
+[`../../../docs/rl-symmetry-gated-robust-straight-v30.md`](../../../docs/rl-symmetry-gated-robust-straight-v30.md)
+for research, exact ranges, ablations, evaluation results, and next steps.
+
+## V25 robust straight low-stance residual crawl
+
+`robust-straight-low-stance-external-rear-payload` is a not-yet-trained V24
+`model_3248` continuation. It adds episode-start world-path scoring and bounded
+relative-yaw heading hold, mirrored per-joint strength/rate/zero-offset
+randomization, 0-1 frame command delay, a modest 92 mm opposed low stance, and
+a smooth distributed support push. Its joint-limit-checked 45 mm stride trains
+over `0.005-0.040 m/s`; the sequential RR/FR/RL/FL contact order remains intact.
+
+Run a 350-update nominal adaptation before enabling the robust distribution:
+
+```powershell
+& .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
+  -CommandSet robust-straight-low-stance-external-rear-payload `
+  -Iterations 350 -NumEnvs 128 -Seed 2501 -V25Phase nominal
+
+& .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
+  -CommandSet robust-straight-low-stance-external-rear-payload `
+  -Iterations 1250 -NumEnvs 128 -Seed 2502 -V25Phase robust
+```
+
+The workflow persists V25 curriculum age beside each checkpoint, independent
+of the inherited absolute model iteration. Do not use `-Fresh`. See
+`simulation/docs/rl-robust-straight-low-stance-v25.md` for exact ranges,
+research rationale, export parameters, gates, and current status.
+
 ## V20 external rear-payload walking
 
 V20 corrects the battery installation used by V19. The 144 x 68 mm holder

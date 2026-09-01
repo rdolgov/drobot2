@@ -18,6 +18,7 @@ class ImuSample:
     angular_velocity_body_rad_s: np.ndarray
     projected_gravity_body: np.ndarray
     linear_acceleration_body_m_s2: np.ndarray
+    heading_yaw_rad: float
     monotonic_time_s: float
 
 
@@ -44,6 +45,7 @@ class LevelImuSource:
             angular_velocity_body_rad_s=np.zeros(3, dtype=np.float32),
             projected_gravity_body=np.asarray((0.0, 0.0, -1.0), dtype=np.float32),
             linear_acceleration_body_m_s2=np.asarray((0.0, 0.0, 9.81), dtype=np.float32),
+            heading_yaw_rad=0.0,
             monotonic_time_s=time.monotonic(),
         )
 
@@ -59,15 +61,17 @@ class NeutralJointStateSource:
         )
 
 
-def _quaternion_inverse_rotate(
-    quaternion_xyzw: np.ndarray, vector_world: np.ndarray
-) -> np.ndarray:
+def _quaternion_rotation_matrix(quaternion_xyzw: np.ndarray) -> np.ndarray:
+    """Return the sensor-to-game-world rotation represented by an XYZW quaternion."""
+
     x, y, z, w = (float(value) for value in quaternion_xyzw)
+    if not all(math.isfinite(value) for value in (x, y, z, w)):
+        raise RuntimeError("BNO085 returned a non-finite quaternion")
     norm = math.sqrt(x * x + y * y + z * z + w * w)
     if norm < 1.0e-6:
         raise RuntimeError("BNO085 returned an invalid zero quaternion")
     x, y, z, w = x / norm, y / norm, z / norm, w / norm
-    rotation = np.asarray(
+    return np.asarray(
         (
             (1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)),
             (2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)),
@@ -75,7 +79,31 @@ def _quaternion_inverse_rotate(
         ),
         dtype=np.float32,
     )
+
+
+def _quaternion_inverse_rotate(
+    quaternion_xyzw: np.ndarray, vector_world: np.ndarray
+) -> np.ndarray:
+    rotation = _quaternion_rotation_matrix(quaternion_xyzw)
     return rotation.T @ vector_world
+
+
+def _body_forward_heading_rad(
+    quaternion_xyzw: np.ndarray,
+    axis_map: tuple[tuple[int, float], ...],
+) -> float:
+    """Project mapped body +X into the BNO game-world horizontal plane."""
+
+    # ``axis_map`` declares body[i] = sign * sensor[index].  Its first entry
+    # therefore gives the sensor-frame vector corresponding to body-forward.
+    sensor_forward = np.zeros(3, dtype=np.float32)
+    sensor_index, sign = axis_map[0]
+    sensor_forward[sensor_index] = sign
+    world_forward = _quaternion_rotation_matrix(quaternion_xyzw) @ sensor_forward
+    horizontal_norm = math.hypot(float(world_forward[0]), float(world_forward[1]))
+    if horizontal_norm < 1.0e-4:
+        raise RuntimeError("BNO085 body-forward heading is undefined near vertical")
+    return math.atan2(float(world_forward[1]), float(world_forward[0]))
 
 
 def parse_axis_map(text: str) -> tuple[tuple[int, float], ...]:
@@ -87,6 +115,14 @@ def parse_axis_map(text: str) -> tuple[tuple[int, float], ...]:
         result.append((axes[token[1]], 1.0 if token[0] == "+" else -1.0))
     if len(result) != 3 or len({axis for axis, _ in result}) != 3:
         raise ValueError("axis map must use x, y, and z exactly once")
+    transform = np.zeros((3, 3), dtype=np.float32)
+    for body_axis, (sensor_axis, sign) in enumerate(result):
+        transform[body_axis, sensor_axis] = sign
+    if not math.isclose(float(np.linalg.det(transform)), 1.0, abs_tol=1.0e-6):
+        raise ValueError(
+            "axis map must be a right-handed rigid rotation so gyro yaw and "
+            "quaternion heading use the same sign"
+        )
     return tuple(result)
 
 
@@ -164,12 +200,25 @@ class Bno085ImuSource:
         gravity_sensor = _quaternion_inverse_rotate(
             quaternion_xyzw, np.asarray((0.0, 0.0, -1.0), dtype=np.float32)
         )
-        values = np.concatenate((acceleration_sensor, gyro_sensor, gravity_sensor))
+        heading_yaw_rad = _body_forward_heading_rad(
+            quaternion_xyzw,
+            self._axis_map,
+        )
+        values = np.concatenate(
+            (
+                acceleration_sensor,
+                gyro_sensor,
+                gravity_sensor,
+                quaternion_xyzw,
+                np.asarray((heading_yaw_rad,), dtype=np.float32),
+            )
+        )
         if not np.all(np.isfinite(values)):
             raise RuntimeError("BNO085 sample contains a non-finite value")
         return ImuSample(
             angular_velocity_body_rad_s=self._to_body(gyro_sensor),
             projected_gravity_body=self._to_body(gravity_sensor),
             linear_acceleration_body_m_s2=self._to_body(acceleration_sensor),
+            heading_yaw_rad=heading_yaw_rad,
             monotonic_time_s=time.monotonic(),
         )

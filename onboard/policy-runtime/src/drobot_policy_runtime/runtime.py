@@ -20,6 +20,7 @@ from .contract import (
     SERVO_ID_BY_ACTION_NAME,
     SERVO_VELOCITY_LIMIT_RAD_S,
     GaitClockConfig,
+    HeadingHoldConfig,
     JointTargetConfig,
     normalized_action_to_joint_target,
 )
@@ -52,6 +53,13 @@ class PolicyStepSample:
     rate_limited_target_rad: np.ndarray
     target_elapsed_s: float
     gait_frequency_hz: float
+    heading_hold_enabled: bool
+    heading_reference_yaw_rad: float
+    heading_current_relative_rad: float
+    heading_desired_relative_rad: float
+    heading_error_rad: float
+    heading_correction_rad_s: float
+    effective_yaw_rad_s: float
     missed_deadlines_total: int
 
 
@@ -114,6 +122,7 @@ class WalkingPolicyLoop:
         control_hz: float = 60.0,
         initial_target_rad: np.ndarray | None = None,
         gait_clock: GaitClockConfig | None = None,
+        heading_hold: HeadingHoldConfig | None = None,
         joint_target_config: JointTargetConfig | None = None,
         step_observer: Callable[[PolicyStepSample], None] | None = None,
     ) -> None:
@@ -130,6 +139,11 @@ class WalkingPolicyLoop:
             "gait_clock_config",
             GaitClockConfig(),
         )
+        self.heading_hold = heading_hold or getattr(
+            policy,
+            "heading_hold_config",
+            HeadingHoldConfig(),
+        )
         self.joint_target_config = joint_target_config or getattr(
             policy,
             "joint_target_config",
@@ -141,6 +155,8 @@ class WalkingPolicyLoop:
         self._phase_cycles = 0.0
         self._last_phase_time_s: float | None = None
         self._last_target_time_s: float | None = None
+        self._heading_reference_yaw_rad: float | None = None
+        self._heading_desired_relative_rad = 0.0
         self.previous_action = np.zeros(12, dtype=np.float32)
         initial_target = (
             self.joint_target_config.neutral_array
@@ -174,19 +190,64 @@ class WalkingPolicyLoop:
     def _observation(
         self,
         phase_time_s: float,
-    ) -> tuple[np.ndarray, ImuSample, JointStateSample, float, float, float]:
+    ) -> tuple[
+        np.ndarray,
+        ImuSample,
+        JointStateSample,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+    ]:
         imu = self.imu_source.read()
         joints = self.joint_source.read()
         gait_frequency_hz = self.gait_clock.frequency_hz(
             self.command.forward_m_s,
             self.command.lateral_m_s,
         )
+        phase_elapsed_s = 0.0
         if self._last_phase_time_s is not None:
             phase_elapsed_s = max(0.0, phase_time_s - self._last_phase_time_s)
             self._phase_cycles = (
                 self._phase_cycles + gait_frequency_hz * phase_elapsed_s
             ) % 1.0
         self._last_phase_time_s = phase_time_s
+        if self._heading_reference_yaw_rad is None:
+            self._heading_reference_yaw_rad = float(imu.heading_yaw_rad)
+        else:
+            self._heading_desired_relative_rad = math.atan2(
+                math.sin(
+                    self._heading_desired_relative_rad
+                    + self.command.yaw_rad_s * phase_elapsed_s
+                ),
+                math.cos(
+                    self._heading_desired_relative_rad
+                    + self.command.yaw_rad_s * phase_elapsed_s
+                ),
+            )
+        heading_current_relative_rad = math.atan2(
+            math.sin(float(imu.heading_yaw_rad) - self._heading_reference_yaw_rad),
+            math.cos(float(imu.heading_yaw_rad) - self._heading_reference_yaw_rad),
+        )
+        heading_error_rad = math.atan2(
+            math.sin(
+                heading_current_relative_rad - self._heading_desired_relative_rad
+            ),
+            math.cos(
+                heading_current_relative_rad - self._heading_desired_relative_rad
+            ),
+        )
+        effective_yaw_rad_s, heading_correction_rad_s = (
+            self.heading_hold.effective_yaw_rad_s(
+                self.command.yaw_rad_s,
+                heading_error_rad,
+            )
+        )
         phase_angle = 2.0 * math.pi * self._phase_cycles
         phase_sin = math.sin(phase_angle)
         phase_cos = math.cos(phase_angle)
@@ -196,7 +257,7 @@ class WalkingPolicyLoop:
                     (
                         self.command.forward_m_s,
                         self.command.lateral_m_s,
-                        self.command.yaw_rad_s,
+                        effective_yaw_rad_s,
                         phase_sin,
                         phase_cos,
                     ),
@@ -220,6 +281,12 @@ class WalkingPolicyLoop:
             phase_sin,
             phase_cos,
             gait_frequency_hz,
+            self._heading_reference_yaw_rad,
+            heading_current_relative_rad,
+            self._heading_desired_relative_rad,
+            heading_error_rad,
+            heading_correction_rad_s,
+            effective_yaw_rad_s,
         )
 
     def step(self, start_s: float, now_s: float) -> None:
@@ -230,6 +297,12 @@ class WalkingPolicyLoop:
             phase_sin,
             phase_cos,
             gait_frequency_hz,
+            heading_reference_yaw_rad,
+            heading_current_relative_rad,
+            heading_desired_relative_rad,
+            heading_error_rad,
+            heading_correction_rad_s,
+            effective_yaw_rad_s,
         ) = self._observation(
             now_s,
         )
@@ -247,15 +320,15 @@ class WalkingPolicyLoop:
             if reference_target is None
             else reference_target
         )
-        action_scale = (
-            self.joint_target_config.residual_action_scale
+        residual_scale = (
+            self.joint_target_config.residual_action_scale_array
             if self.joint_target_config.action_mode == "gait_residual"
             else 1.0
         )
         requested_target = np.clip(
             base_target
             + self.joint_target_config.action_scale_array
-            * action_scale
+            * residual_scale
             * np.clip(action, -1.0, 1.0),
             JOINT_LOWER_RAD,
             JOINT_UPPER_RAD,
@@ -286,6 +359,13 @@ class WalkingPolicyLoop:
                         rate_limited_target_rad=target,
                         target_elapsed_s=target_elapsed_s,
                         gait_frequency_hz=gait_frequency_hz,
+                        heading_hold_enabled=self.heading_hold.enabled,
+                        heading_reference_yaw_rad=heading_reference_yaw_rad,
+                        heading_current_relative_rad=heading_current_relative_rad,
+                        heading_desired_relative_rad=heading_desired_relative_rad,
+                        heading_error_rad=heading_error_rad,
+                        heading_correction_rad_s=heading_correction_rad_s,
+                        effective_yaw_rad_s=effective_yaw_rad_s,
                         missed_deadlines_total=self.missed_deadlines,
                     )
                 )

@@ -16,6 +16,10 @@ from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils.configclass import configclass
 from isaaclab_physx.physics import PhysxCfg
 
+from simulation.isaac._quadruped_runtime import (
+    stance_forward_bias_for_body_pitch_m,
+)
+
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 ROBOT_USD = (
     PROJECT_ROOT
@@ -25,6 +29,10 @@ ROBOT_USD = (
     / "quadruped_robot_floating.usdc"
 )
 EFFORT_CAP_NM = 0.8825985
+SUSTAINABLE_RATED_EFFORT_NM = 0.980665
+STALL_EFFORT_NM = 2.941995
+HARDWARE_TORQUE_LIMIT_FRACTION = 0.90
+TRANSIENT_EFFORT_CAP_NM = STALL_EFFORT_NM * HARDWARE_TORQUE_LIMIT_FRACTION
 SERVO_VELOCITY_LIMIT_RAD_S = 4.5836625
 # The rectangular shoe controller uses an 80 mm fore/aft stance.  Equal and
 # opposite hip/knee angles point the distal link (and therefore the shoe's
@@ -38,6 +46,65 @@ STABLE_NEUTRAL_REAR_KNEE_RAD = RECTANGULAR_SHOE_STANCE_ANGLE_RAD
 # 2026-08-13 CAD configuration.  The thin tread is modeled separately so its
 # friction can be changed later without altering the structural shoe.
 DISTAL_LINK_LENGTH_M = 0.159896689
+LOW_SWEPT_STANCE_FORE_AFT_M = 0.092
+LOW_SWEPT_STANCE_ANGLE_RAD = math.asin(
+    LOW_SWEPT_STANCE_FORE_AFT_M / DISTAL_LINK_LENGTH_M
+)
+LOW_SWEPT_STANCE_DOWN_M = (
+    math.sqrt(
+        DISTAL_LINK_LENGTH_M**2 - LOW_SWEPT_STANCE_FORE_AFT_M**2
+    )
+    + DISTAL_LINK_LENGTH_M
+    + 0.031
+)
+LOW_SWEPT_BASE_HEIGHT_M = LOW_SWEPT_STANCE_DOWN_M + (0.375 - 0.329341447)
+FORWARD_BIASED_BODY_PITCH_RAD = math.radians(2.0)
+# V29 spends five percent more of every quarter-step transferring load before
+# lift.  Smooth distributed propulsion already occurs throughout the airborne
+# interval, so the corresponding all-feet-push hold can be shortened safely.
+SCHEDULE_MATCHED_DISTRIBUTED_PUSH_PHASE_FRACTIONS = (
+    0.20,  # weight_transfer
+    0.15,  # lift
+    0.20,  # swing
+    0.20,  # lower
+    0.10,  # firm_plant
+    0.08,  # weight_return
+    0.02,  # all_feet_push
+    0.05,  # step_settle
+)
+FORWARD_BIASED_STANCE_FORWARD_M = stance_forward_bias_for_body_pitch_m(
+    FORWARD_BIASED_BODY_PITCH_RAD,
+    fore_aft_m=LOW_SWEPT_STANCE_FORE_AFT_M,
+)
+FORWARD_BIASED_FRONT_HIP_RAD = math.asin(
+    (LOW_SWEPT_STANCE_FORE_AFT_M + FORWARD_BIASED_STANCE_FORWARD_M)
+    / DISTAL_LINK_LENGTH_M
+)
+FORWARD_BIASED_REAR_HIP_RAD = math.asin(
+    (-LOW_SWEPT_STANCE_FORE_AFT_M + FORWARD_BIASED_STANCE_FORWARD_M)
+    / DISTAL_LINK_LENGTH_M
+)
+FORWARD_BIASED_FRONT_DOWN_M = (
+    math.sqrt(
+        DISTAL_LINK_LENGTH_M**2
+        - (LOW_SWEPT_STANCE_FORE_AFT_M + FORWARD_BIASED_STANCE_FORWARD_M) ** 2
+    )
+    + DISTAL_LINK_LENGTH_M
+    + 0.031
+)
+FORWARD_BIASED_REAR_DOWN_M = (
+    math.sqrt(
+        DISTAL_LINK_LENGTH_M**2
+        - (-LOW_SWEPT_STANCE_FORE_AFT_M + FORWARD_BIASED_STANCE_FORWARD_M) ** 2
+    )
+    + DISTAL_LINK_LENGTH_M
+    + 0.031
+)
+FORWARD_BIASED_BASE_HEIGHT_M = LOW_SWEPT_BASE_HEIGHT_M + 0.5 * (
+    FORWARD_BIASED_FRONT_DOWN_M
+    + FORWARD_BIASED_REAR_DOWN_M
+    - 2.0 * LOW_SWEPT_STANCE_DOWN_M
+)
 RECTANGULAR_SHOE_SOLE_BACK_FROM_FORK_M = 0.024
 RECTANGULAR_SHOE_SOLE_THICKNESS_M = 0.006
 RECTANGULAR_SHOE_LENGTH_FORE_AFT_M = 0.100
@@ -212,6 +279,9 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     action_scale_knee_rad = 0.40
     action_mode = "direct"
     residual_action_scale = 1.0
+    # Optional per-action override in the exported/Isaac action order.  ``None``
+    # preserves the legacy scalar contract for every existing task.
+    residual_action_scale_by_action = None
     # The deployable controller may impose a stricter target slew rate than the
     # actuator itself.  Keeping this configurable lets training reproduce that
     # packet-level behavior exactly.
@@ -245,12 +315,45 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     gait_duty_factor = 0.65
     gait_phase_offsets = (0.0, 0.5, 0.5, 0.0)
     gait_reference_mode = "continuous"
+    gait_smooth_support_push = False
+    gait_distributed_push_phase_fractions = None
+    gait_contact_transition_fraction = 0.0
+    gait_stance_fore_aft_m = 0.080
+    gait_stance_down_m = 0.329341447
     gait_weight_shift_forward_m = 0.0
+    gait_rear_weight_shift_forward_m = None
+    gait_weight_shift_lateral_m = 0.0
+    gait_translate_lateral_weight_shift = False
+    gait_forward_body_pitch_rad = 0.0
+    gait_stance_center_offset_m = 0.0
     target_forward_pitch_rad = 0.0
     gait_stride_m = 0.080
     gait_lift_m = 0.025
     gait_start_ramp_s = 0.60
     gait_reference_sigma = 0.75
+    # Optional crawl-topology constraints.  Legacy profiles retain their
+    # original behavior; V26 enables these as a controlled V25 ablation.
+    require_schedule_matched_support = False
+    gate_progress_by_schedule_matched_support = False
+    schedule_matched_progress_gate_floor = 1.0
+    gate_progress_by_four_leg_release = False
+    gate_progress_by_cycle_four_leg_release = False
+    cycle_progress_gate_exponent = 1.0
+    four_leg_release_target_rate = 0.75
+    four_leg_progress_gate_floor = 1.0
+    randomize_gait_start_phase_quarters = False
+    # Optional differentiable contact-release shaping.  Legacy tasks keep the
+    # existing 1 N binary release test; an opt-in task may reward progressively
+    # unloading a scheduled swing shoe before it becomes fully airborne.
+    use_soft_scheduled_swing_release = False
+    scheduled_swing_release_force_sigma_n = 2.0
+    use_threshold_centered_release_shaping = False
+    scheduled_release_force_threshold_n = 1.0
+    scheduled_release_shaping_width_n = 0.35
+    scheduled_release_min_consecutive_steps = 5
+    use_soft_scheduled_stance_quality = False
+    scheduled_stance_quality_width_n = 1.0
+    use_soft_schedule_matched_progress_gate = False
 
     # Deliberately reproduce quadruped_walk_v1.yaml's successful reward instead
     # of continuing to tune a novel objective.  Net displacement remains a hard
@@ -275,7 +378,10 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     rearward_pitch_normalizer_rad = math.radians(3.0)
     reward_gait_reference = 2.00
     reward_scheduled_stance = 0.50
+    penalty_missing_scheduled_stance = 0.0
     reward_scheduled_swing = 1.50
+    reward_scheduled_release_shaping = 0.0
+    reward_cycle_four_leg_release = 0.0
     reward_upright = 1.00
     # Keep survival far below the motion terms so standing cannot dominate, but
     # retain a small incentive to avoid deliberately terminating an episode.
@@ -293,6 +399,32 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     penalty_yaw_rate = 5.00
     heading_error_normalizer_rad = 0.20
     penalty_heading_error = 0.0
+    # Optional world-path tracking closes the curved-walk loophole in which a
+    # yawed robot earns full forward reward along its own body X axis.  A
+    # heading-hold outer loop maps accumulated yaw error into the existing yaw
+    # command input, preserving the 50-value observation contract.
+    track_episode_world_path = False
+    heading_hold_kp_s = 0.0
+    heading_hold_max_correction_rad_s = 0.0
+    penalty_normalized_lateral_velocity = 0.0
+    normalized_lateral_velocity_speed_floor_m_s = 0.010
+    reward_straight_aligned_progress = 0.0
+    straight_progress_lateral_sigma_m_s = 0.010
+    # Legacy profiles express lateral alignment as an absolute velocity. Newer
+    # low-speed profiles may instead normalize it by commanded speed so the
+    # same angular/path error receives comparable shaping across the curriculum.
+    straight_progress_use_normalized_lateral_velocity = False
+    straight_progress_lateral_ratio_sigma = 0.05
+    straight_progress_heading_sigma_rad = 0.10
+    # Optionally attenuate only positive motion rewards when the robot is not
+    # travelling straight. Negative progress remains fully penalized, avoiding
+    # an exploit in which a poorly aligned policy discounts its own reversal.
+    gate_positive_progress_by_straight_alignment = False
+    straight_progress_gate_floor = 1.0
+    # Quadratic path costs are retained for historical checkpoints. A unit
+    # Huber loss gives new profiles a useful near-line gradient without a large
+    # delayed cliff after the robot has already left the recoverable corridor.
+    use_huber_path_costs = False
     penalty_body_height = 2.0
     penalty_action_rate = 0.03
     penalty_action_acceleration = 0.12
@@ -321,6 +453,11 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     rear_payload_mass_kg = 0.0
     rear_payload_center_m = (0.0, 0.0, 0.0)
     rear_payload_size_m = (0.0, 0.0, 0.0)
+    # Static correction for provisional fully-solid CAD masses.  A value below
+    # one scales every dry link and dry-base inertia while leaving the measured
+    # replacement payload mass independent.
+    dry_robot_mass_scale = 1.0
+    robot_mass_scale_range = (1.0, 1.0)
     rear_payload_combined_mass_scale_range = (1.0, 1.0)
     rear_payload_combined_com_jitter_m = (0.0, 0.0, 0.0)
     shoe_static_friction = 1.05
@@ -328,8 +465,40 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     shoe_restitution = 0.02
     shoe_contact_stiffness = 12_000.0
     shoe_contact_damping = 45.0
+    # ``None`` preserves the authored shared shoe material exactly.  Non-None
+    # ranges opt into a one-time, per-environment PhysX material assignment.
+    shoe_static_friction_randomization_range = None
+    shoe_dynamic_friction_randomization_range = None
+    # Optional episode-consistent surface domain plus per-foot differential.
+    # These are separate from the legacy absolute per-foot ranges above so old
+    # profiles retain bit-for-bit material sampling.
+    shoe_common_static_friction_randomization_range = None
+    shoe_common_dynamic_friction_randomization_range = None
+    shoe_friction_differential_scale_range = (1.0, 1.0)
+    # Peak joint torque available to the implicit drive before the common and
+    # per-joint capacity scales below are applied.  Keep the historical
+    # 0.8826 N*m value as the default so existing tasks/checkpoints retain
+    # identical physics; newer profiles may opt into a higher transient cap.
+    actuator_peak_effort_nm = EFFORT_CAP_NM
     actuator_effort_scale_range = (1.0, 1.0)
     target_velocity_scale_range = (1.0, 1.0)
+    correlate_common_actuator_scales = False
+    actuator_individual_effort_scale_range = (1.0, 1.0)
+    target_individual_velocity_scale_range = (1.0, 1.0)
+    actuator_individual_stiffness_scale_range = (1.0, 1.0)
+    actuator_individual_damping_scale_range = (1.0, 1.0)
+    physical_randomization_nominal_fraction = 1.0
+    mirror_physical_randomization_pairs = False
+    joint_target_bias_abduction_rad = 0.0
+    joint_target_bias_flexion_rad = 0.0
+    control_delay_step_range = (0, 0)
+    reset_roll_pitch_noise_rad = 0.0
+    reset_yaw_noise_rad = 0.0
+    imu_angular_velocity_bias_range_rad_s = 0.0
+    imu_projected_gravity_noise_std = 0.0
+    imu_linear_acceleration_noise_std_g = 0.0
+    base_force_randomization_range_n = (0.0, 0.0, 0.0)
+    base_torque_randomization_range_nm = (0.0, 0.0, 0.0)
     smoothness_curriculum_steps = 0
     smoothness_initial_scale = 1.0
     joint_acceleration_normalizer_rad_s2 = 40.0
@@ -338,6 +507,8 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     penalty_joint_acceleration = 0.0
     penalty_body_linear_acceleration = 0.0
     penalty_body_angular_acceleration = 0.0
+    effort_soft_limit_fraction = 0.85
+    penalty_effort_soft_limit = 0.0
 
 
 @configclass
@@ -633,6 +804,535 @@ class DrobotCommandedWalkingPaddedFeetForwardBiasExternalRearPayloadEnvCfg(
     penalty_excess_airborne_feet = 12.00
     penalty_body_tilt = 8.00
     penalty_rearward_pitch = 1.50
+
+
+@configclass
+class DrobotCommandedWalkingRobustStraightLowStanceExternalRearPayloadEnvCfg(
+    DrobotCommandedWalkingPaddedFeetForwardBiasExternalRearPayloadEnvCfg
+):
+    """V25 straight-path, asymmetric-hardware, smooth aggressive crawl."""
+
+    # A 92 mm opposed fore/hind sweep lowers the body by 7.67 mm while keeping
+    # the broad rectangular soles flat.  The opposed geometry retains the
+    # approximately 304 mm fore/aft foot-center footprint needed by the rear pack;
+    # an all-legs-same-direction pose would reduce it to roughly 120 mm.
+    def __post_init__(self) -> None:
+        # ``robot`` is a configclass instance field in the installed Isaac Lab
+        # release, so it is not available on the parent class while this class
+        # body is being evaluated.  Replace the inherited per-instance value
+        # only after config construction.
+        self.robot = self.robot.replace(
+            init_state=ArticulationCfg.InitialStateCfg(
+                pos=(0.0, 0.0, LOW_SWEPT_BASE_HEIGHT_M),
+                joint_pos={
+                    ".*_hip_abduction": 0.0,
+                    "front_.*_hip_flexion": LOW_SWEPT_STANCE_ANGLE_RAD,
+                    "rear_.*_hip_flexion": -LOW_SWEPT_STANCE_ANGLE_RAD,
+                    "front_.*_knee": -LOW_SWEPT_STANCE_ANGLE_RAD,
+                    "rear_.*_knee": LOW_SWEPT_STANCE_ANGLE_RAD,
+                },
+                joint_vel={".*": 0.0},
+            )
+        )
+    target_base_height_m = LOW_SWEPT_BASE_HEIGHT_M
+    gait_stance_fore_aft_m = LOW_SWEPT_STANCE_FORE_AFT_M
+    gait_stance_down_m = LOW_SWEPT_STANCE_DOWN_M
+    gait_reference_mode = "smooth_distributed_push"
+    gait_smooth_support_push = True
+
+    # Spread propulsion through the three-foot support interval instead of a
+    # one-controller-tick shove, then expose a faster but still sequential
+    # crawl range.  Geometry is deliberately kept inside the 57-degree Isaac
+    # soft limit even after the full residual and a randomized joint-zero bias.
+    initial_forward_speed_min_m_s = 0.008
+    initial_forward_speed_max_m_s = 0.025
+    forward_speed_min_m_s = 0.005
+    forward_speed_max_m_s = 0.040
+    gait_speed_min_m_s = 0.005
+    gait_speed_max_m_s = 0.040
+    gait_frequency_min_hz = 0.12
+    gait_frequency_max_hz = 0.62
+    # Keep transfer and clearance intact at low commands.  Requested speed is
+    # expressed by cadence; joint-space amplitude scaling previously dragged
+    # loaded rear shoes across the floor.
+    gait_stride_scale_min = 1.0
+    gait_stride_m = 0.045
+    gait_lift_m = 0.020
+    gait_weight_shift_forward_m = 0.010
+    # Six millimetres was the best zero-residual compromise in nominal Isaac:
+    # it balanced unloading across all four legs without the 12 mm reference's
+    # larger yaw and alternating diagonal bias. The line reward subtracts this
+    # periodic zero-mean sway while continuing to punish accumulated drift.
+    gait_weight_shift_lateral_m = 0.006
+    gait_start_ramp_s = 1.50
+    # The action contract is joint-kind-major: all four abductions, then all
+    # four sagittal hips, then all four knees.  Preserve enough abduction range
+    # to compensate lateral hardware asymmetry while keeping sagittal residuals
+    # inside the 57-degree Isaac soft limit after joint-zero randomization.
+    residual_action_scale = 0.05
+    residual_action_scale_by_action = (
+        0.20,
+        0.20,
+        0.20,
+        0.20,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+        0.05,
+    )
+    # Four degrees per 60 Hz packet remains below the STS3215 no-load rate,
+    # while per-domain rate scaling trains effective limits down to 2.64 deg.
+    target_velocity_limit_rad_s = math.radians(240.0)
+
+    # Score velocity in the episode-start world frame, not the robot's rotated
+    # body frame.  Heading error drives a bounded outer-loop yaw-rate command
+    # that is present in both simulation and the BNO085 runtime.
+    track_episode_world_path = True
+    heading_hold_kp_s = 1.50
+    heading_hold_max_correction_rad_s = 0.20
+    penalty_lateral_velocity = 0.0
+    penalty_normalized_lateral_velocity = 6.0
+    lateral_corridor_half_width_m = 0.008
+    penalty_lateral_displacement = 60.0
+    penalty_lateral_corridor = 10.0
+    penalty_yaw_rate = 22.0
+    heading_error_normalizer_rad = math.radians(3.0)
+    penalty_heading_error = 8.0
+    reward_straight_aligned_progress = 6.0
+    straight_progress_lateral_sigma_m_s = 0.006
+    straight_progress_heading_sigma_rad = math.radians(4.0)
+
+    # Keep forward motion valuable enough that stronger line/robustness costs
+    # cannot recreate the old stationary bent-knee optimum.
+    reward_forward_velocity_tracking = 6.0
+    reward_instant_progress = 8.0
+    reward_sustained_progress = 12.0
+    penalty_sustained_stall = 14.0
+    penalty_backward_motion = 18.0
+    penalty_overspeed = 8.0
+    # The inherited 12-point pose reward let the first nominal continuation
+    # stay upright while moving slightly backward.  Keep the analytic crawl as
+    # a stabilizing prior, but make actual path progress decisively more valuable.
+    reward_gait_reference = 5.0
+
+    # Target the measured failure modes: rear/lateral mass uncertainty, supply
+    # sag common to the robot, independent leg strength/rate mismatch, small
+    # servo-zero errors, 0-1 frame latency, and persistent lateral/yaw loads.
+    # The URDF's 4.526139 kg ledger is a fully-solid print estimate.  The whole
+    # assembled robot measured 7 lb (3.17514659 kg); after preserving the
+    # measured 0.523179545 kg pack, the dry CAD mass needs a 0.650607608 scale.
+    dry_robot_mass_scale = 0.65060760808206
+    robot_mass_scale_range = (0.96, 1.04)
+    rear_payload_combined_mass_scale_range = (0.955, 1.055)
+    rear_payload_combined_com_jitter_m = (0.008, 0.010, 0.006)
+    actuator_effort_scale_range = (0.75, 1.00)
+    target_velocity_scale_range = (0.75, 1.00)
+    actuator_individual_effort_scale_range = (0.88, 1.00)
+    target_individual_velocity_scale_range = (0.88, 1.00)
+    actuator_individual_stiffness_scale_range = (0.85, 1.15)
+    actuator_individual_damping_scale_range = (0.85, 1.15)
+    physical_randomization_nominal_fraction = 0.25
+    mirror_physical_randomization_pairs = True
+    # Match the measured Velcro-like tread near the V24 nominal while exposing
+    # asymmetric low-grip cases.  Dynamic friction is clamped not to exceed
+    # static friction after sampling.
+    shoe_static_friction_randomization_range = (0.55, 0.90)
+    shoe_dynamic_friction_randomization_range = (0.35, 0.70)
+    joint_target_bias_abduction_rad = math.radians(1.0)
+    joint_target_bias_flexion_rad = math.radians(1.5)
+    control_delay_step_range = (0, 1)
+    reset_roll_pitch_noise_rad = math.radians(2.0)
+    reset_yaw_noise_rad = math.radians(5.0)
+    imu_angular_velocity_bias_range_rad_s = 0.020
+    imu_projected_gravity_noise_std = 0.006
+    imu_linear_acceleration_noise_std_g = 0.020
+    base_force_randomization_range_n = (0.10, 0.40, 0.0)
+    base_torque_randomization_range_nm = (0.025, 0.015, 0.040)
+
+    # Preserve smoothness weights while asking for more stride and cadence, and
+    # add only a soft effort-headroom cost for the lower stance.
+    penalty_action_rate = 0.18
+    penalty_action_acceleration = 0.90
+    penalty_joint_acceleration = 0.30
+    penalty_body_linear_acceleration = 0.55
+    penalty_body_angular_acceleration = 0.45
+    effort_soft_limit_fraction = 0.85
+    penalty_effort_soft_limit = 0.20
+
+
+@configclass
+class DrobotCommandedWalkingBalancedFourLegStraightCrawlExternalRearPayloadEnvCfg(
+    DrobotCommandedWalkingRobustStraightLowStanceExternalRearPayloadEnvCfg
+):
+    """V26b balanced, higher-clearance four-leg straight crawl."""
+
+    # The first controlled V26 ablation retained the V25 reference exactly.  It
+    # proved that schedule-matched support alone was insufficient: rear-left
+    # release still reached zero in some nominal episodes.  V26b therefore gives
+    # the actor enough sagittal authority to unload a mismatched leg, increases
+    # real shoe-edge clearance, and makes the least-active leg decisive.
+    require_schedule_matched_support = True
+    gate_progress_by_four_leg_release = True
+    four_leg_release_target_rate = 0.65
+    four_leg_progress_gate_floor = 0.05
+    randomize_gait_start_phase_quarters = True
+
+    gait_stride_m = 0.050
+    gait_lift_m = 0.028
+    gait_frequency_max_hz = 0.72
+    residual_action_scale_by_action = (
+        0.10,
+        0.10,
+        0.10,
+        0.10,
+        0.15,
+        0.15,
+        0.15,
+        0.15,
+        0.15,
+        0.15,
+        0.15,
+        0.15,
+    )
+    reward_scheduled_swing = 8.0
+    reward_qualified_touchdown = 0.50
+    reward_least_active_swing = 16.0
+
+
+@configclass
+class DrobotCommandedWalkingAdaptiveAsymmetricFourLegStraightCrawlExternalRearPayloadEnvCfg(
+    DrobotCommandedWalkingBalancedFourLegStraightCrawlExternalRearPayloadEnvCfg
+):
+    """V27 straight crawl with corrected transfer and asymmetric adaptation."""
+
+    # Retain the low 92 mm swept stance and four-beat lateral-sequence crawl.
+    # V26's reference had two independent problems: lateral transfer changed
+    # stance width instead of translating the support polygon, and 50/28 mm
+    # stride/lift left essentially no hip-limit margin.  The values below were
+    # selected from the exact 2,048-sample reference table: the worst reference
+    # hip is -55.90 degrees, 1.10 degrees inside the -57-degree soft limit, while
+    # the 46 mm stride at 0.72 Hz still exposes a 0.033 m/s speed range.
+    gait_stride_m = 0.046
+    gait_lift_m = 0.024
+    gait_frequency_max_hz = 0.72
+    gait_translate_lateral_weight_shift = True
+    gait_weight_shift_forward_m = 0.008
+    gait_rear_weight_shift_forward_m = 0.010
+    gait_weight_shift_lateral_m = 0.006
+
+    # Keep meaningful per-leg correction authority, but reduce V26's hip
+    # residual from 0.15 to 0.10.  The knee has ample limit margin and retains
+    # 0.15 authority so a weak or mis-zeroed rear leg can create real shoe
+    # clearance without demanding an unsafe hip target.  Reference, zero-bias,
+    # and residual targets are independently clamped to the soft joint envelope.
+    residual_action_scale_by_action = (
+        0.10,
+        0.10,
+        0.10,
+        0.10,
+        0.10,
+        0.10,
+        0.10,
+        0.10,
+        0.15,
+        0.15,
+        0.15,
+        0.15,
+    )
+
+    # Tighten only cycle-scale/world-path shaping.  Instantaneous lateral
+    # velocity remains unpenalized so the analytic crawl may perform its
+    # necessary zero-mean six-millimetre weight transfer without being driven
+    # toward a stationary or shuffling solution.
+    use_soft_scheduled_swing_release = True
+    # The first nominal shaping stage used 4 N to obtain a useful gradient at
+    # the initially loaded rear shoes.  The continuation tightens to 3 N so a
+    # moderate load is no longer an attractive plateau; quality approaches one
+    # only as the scheduled shoe becomes genuinely unloaded.
+    scheduled_swing_release_force_sigma_n = 3.0
+    penalty_lateral_velocity = 0.0
+    penalty_normalized_lateral_velocity = 8.0
+    lateral_corridor_half_width_m = 0.005
+    penalty_lateral_displacement = 72.0
+    penalty_lateral_corridor = 14.0
+    penalty_heading_error = 10.0
+    reward_straight_aligned_progress = 8.0
+
+
+@configclass
+class DrobotCommandedWalkingForwardBiasedCycleGatedFourLegStraightCrawlExternalRearPayloadEnvCfg(
+    DrobotCommandedWalkingAdaptiveAsymmetricFourLegStraightCrawlExternalRearPayloadEnvCfg
+):
+    """V28 nose-down, cycle-gated crawl with realistic rated torque."""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # Start from the same pose the analytic table describes.  The common
+        # +X foot bias preserves opposed knees and the 304 mm support span while
+        # shortening the front supports and lengthening the rear supports.  A
+        # two-degree pitch is small enough for the compliant tread but moves the
+        # rear pack load forward before either rear shoe is asked to lift.
+        self.robot = self.robot.replace(
+            init_state=ArticulationCfg.InitialStateCfg(
+                pos=(0.0, 0.0, FORWARD_BIASED_BASE_HEIGHT_M),
+                rot=(
+                    0.0,
+                    math.sin(0.5 * FORWARD_BIASED_BODY_PITCH_RAD),
+                    0.0,
+                    math.cos(0.5 * FORWARD_BIASED_BODY_PITCH_RAD),
+                ),
+                joint_pos={
+                    ".*_hip_abduction": 0.0,
+                    "front_.*_hip_flexion": FORWARD_BIASED_FRONT_HIP_RAD,
+                    "rear_.*_hip_flexion": FORWARD_BIASED_REAR_HIP_RAD,
+                    "front_.*_knee": -FORWARD_BIASED_FRONT_HIP_RAD,
+                    "rear_.*_knee": -FORWARD_BIASED_REAR_HIP_RAD,
+                },
+                joint_vel={".*": 0.0},
+            )
+        )
+
+    target_base_height_m = FORWARD_BIASED_BASE_HEIGHT_M
+    gait_forward_body_pitch_rad = FORWARD_BIASED_BODY_PITCH_RAD
+    target_forward_pitch_rad = FORWARD_BIASED_BODY_PITCH_RAD
+
+    # Keep the low 92 mm swept stance and 46/24 mm step geometry that remained
+    # inside the joint envelope.  A modest cadence extension provides a more
+    # assertive upper command without converting the statically stable crawl to
+    # a two-leg dynamic gait.
+    initial_forward_speed_min_m_s = 0.008
+    initial_forward_speed_max_m_s = 0.030
+    forward_speed_max_m_s = 0.045
+    gait_speed_max_m_s = 0.045
+    gait_frequency_max_hz = 0.80
+    # The pitched reference centers the whole-cycle hip envelope at roughly
+    # -52.51..+53.19 degrees.  Four hundredths of a radian plus the 1.5-degree
+    # randomized zero offset remains inside the +/-57-degree soft limit; knees
+    # keep the larger authority needed to create real shoe clearance.
+    residual_action_scale_by_action = (
+        0.10,
+        0.10,
+        0.10,
+        0.10,
+        0.04,
+        0.04,
+        0.04,
+        0.04,
+        0.15,
+        0.15,
+        0.15,
+        0.15,
+    )
+
+    # V27's differentiable force score accepted partially loaded shoes and even
+    # awarded transfer/settle frames as successful swing.  V28 requires every
+    # foot to remain below 1 N for five consecutive 60 Hz controller ticks in a
+    # complete gait cycle.  Only a small threshold-centered sigmoid remains as
+    # discovery shaping; hard release and the all-four cycle event dominate.
+    gate_progress_by_four_leg_release = False
+    gate_progress_by_cycle_four_leg_release = True
+    # Give early per-foot successes a causal discovery gradient without letting
+    # a three-leg cycle earn most of the motion reward.  The fractions after
+    # one/two/three/four qualified feet are approximately 0.004/0.063/0.316/1.
+    cycle_progress_gate_exponent = 4.0
+    four_leg_progress_gate_floor = 0.02
+    use_soft_scheduled_swing_release = False
+    use_threshold_centered_release_shaping = True
+    scheduled_release_force_threshold_n = 1.0
+    scheduled_release_shaping_width_n = 0.35
+    scheduled_release_min_consecutive_steps = 5
+    reward_scheduled_swing = 10.0
+    reward_scheduled_release_shaping = 1.0
+    # A hard all-four event is paid once when the fourth foot qualifies.  Keep
+    # it large enough to matter beside the integrated per-tick swing shaping,
+    # while deterministic selection still requires every completed cycle.
+    reward_cycle_four_leg_release = 120.0
+    reward_least_active_swing = 8.0
+
+    # A valid crawl keeps exactly three feet planted during swing and all four
+    # planted during transfer/settle.  Strengthen that topology modestly rather
+    # than paying for longer swing time, which would increase overlap between
+    # adjacent steps and recreate the two-leg support seen on hardware.
+    reward_scheduled_stance = 3.5
+    reward_three_foot_support = 5.0
+    penalty_excess_airborne_feet = 18.0
+
+    # Score net cycle-scale drift in the episode-start world frame.  The known
+    # six-millimetre analytic weight shift is subtracted before these terms are
+    # evaluated, so the policy may sway temporarily but is not paid for walking
+    # a curved or diagonally biased path.
+    penalty_normalized_lateral_velocity = 10.0
+    penalty_heading_error = 12.0
+    reward_straight_aligned_progress = 10.0
+
+    # The old 0.8826 N*m setting modeled a historical 30% register.  The robot
+    # now runs a 90% register, so use 90% of the documented 30 kg-cm stall
+    # torque as an engineering approximation of the short-duration drive cap.
+    # Do not teach the policy to live there: the soft limit below starts at the
+    # documented 10 kg-cm rated torque and prices sustained use above it.
+    actuator_peak_effort_nm = TRANSIENT_EFFORT_CAP_NM
+    # A 3S supply affects available torque and no-load rate together.  Sample
+    # one episode-consistent voltage factor over an inferred 11.0-12.6 V
+    # operating envelope around the 12 V rating, then add modest independent
+    # servo mismatch.  Deep-undervoltage behavior belongs to a safety stop, not
+    # a locomotion objective.
+    actuator_effort_scale_range = (0.92, 1.05)
+    target_velocity_scale_range = (0.92, 1.05)
+    correlate_common_actuator_scales = True
+    actuator_individual_effort_scale_range = (0.90, 1.05)
+    target_individual_velocity_scale_range = (0.88, 1.05)
+    effort_soft_limit_fraction = (
+        SUSTAINABLE_RATED_EFFORT_NM / TRANSIENT_EFFORT_CAP_NM
+    )
+    penalty_effort_soft_limit = 0.55
+
+    # The new Velcro-like tread can shift grip for every foot together, while
+    # pad wear/installation also creates left-right differences.  Sample a
+    # common surface first and a paired per-foot multiplier second.  These are
+    # engineering priors until a tilt/pull test measures the actual materials.
+    shoe_static_friction_randomization_range = None
+    shoe_dynamic_friction_randomization_range = None
+    shoe_common_static_friction_randomization_range = (0.40, 0.90)
+    shoe_common_dynamic_friction_randomization_range = (0.25, 0.70)
+    shoe_friction_differential_scale_range = (0.85, 1.15)
+
+
+@configclass
+class DrobotCommandedWalkingScheduleMatchedSupportStraightCrawlExternalRearPayloadEnvCfg(
+    DrobotCommandedWalkingForwardBiasedCycleGatedFourLegStraightCrawlExternalRearPayloadEnvCfg
+):
+    """V29 identity-matched, support-first straight crawl curriculum."""
+
+    # Retain the selected low, opposed 92 mm stance and 46/24 mm step geometry.
+    # Only phase timing changes: load transfer gets one additional 60 Hz update
+    # at the 0.8 Hz ceiling without increasing total swing time or duty factor.
+    gait_distributed_push_phase_fractions = (
+        SCHEDULE_MATCHED_DISTRIBUTED_PUSH_PHASE_FRACTIONS
+    )
+    gait_weight_shift_forward_m = 0.015
+    gait_rear_weight_shift_forward_m = 0.020
+    # The +2 degree stance helper already supplies the complete matched
+    # fore/aft bias.  An additional -5 mm offset cancelled most of that geometry
+    # while reset and posture rewards still demanded +2 degrees.
+    gait_stance_center_offset_m = 0.0
+    # Exclude roughly one controller tick at each quintic lift/lower endpoint
+    # from the strict release interval.  This favors gradual unloading and early
+    # touchdown instead of demanding discontinuous contact at phase boundaries.
+    gait_contact_transition_fraction = 0.08
+
+    # A transferred V28 checkpoint starts at the conservative range below and
+    # expands gradually toward the analytic 0.037 m/s ceiling. This teaches the
+    # new contact identity contract before exposing the most aggressive cadence.
+    initial_forward_speed_min_m_s = 0.008
+    initial_forward_speed_max_m_s = 0.020
+    # 46 mm * 0.80 Hz is 0.0368 m/s.  Do not ask residual actions to manufacture
+    # the extra 22 percent implied by the old 0.045 m/s command ceiling.
+    forward_speed_max_m_s = 0.037
+    gait_speed_max_m_s = 0.037
+    command_curriculum_steps = 128_000
+
+    # During swing, all three named anchors must contact and the named swing foot
+    # must release. During transfer and settle, all four must contact. Positive
+    # progress receives only a discovery floor when that exact topology is wrong.
+    gate_progress_by_schedule_matched_support = True
+    schedule_matched_progress_gate_floor = 0.02
+    use_soft_scheduled_stance_quality = True
+    scheduled_stance_quality_width_n = 1.0
+    use_soft_schedule_matched_progress_gate = True
+    reward_three_foot_support = 8.0
+    penalty_missing_scheduled_stance = 12.0
+    penalty_excess_airborne_feet = 24.0
+
+    # The inherited current-cycle gate paid most progress, plus a 120-point
+    # completion event, after the fixed final FL swing.  That phase asymmetry can
+    # directly teach left-biased propulsion.  Exact per-tick topology is already
+    # symmetric; keep all-four cycle release as an evaluation metric only.
+    gate_progress_by_cycle_four_leg_release = False
+    reward_cycle_four_leg_release = 0.0
+
+    # V28 settled around -0.4 degrees despite a +2 degree nose-down target. Keep
+    # the tested geometry and penalize only the rearward error rather than rolling
+    # the rectangular shoes farther onto their compliant tread edges.
+    penalty_rearward_pitch = 4.0
+
+    # V28's 0.04 normalized hip residual was only 0.04 * 0.30 rad = 0.69
+    # degrees, too little to redistribute the rear-pack load. V29 uses 0.12
+    # (2.06 degrees); the final joint target remains clamped to the Isaac soft
+    # envelope before rate limiting.
+    residual_action_scale_by_action = (
+        0.10,
+        0.10,
+        0.10,
+        0.10,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.15,
+        0.15,
+        0.15,
+        0.15,
+    )
+
+
+@configclass
+class DrobotCommandedWalkingSymmetryGatedRobustStraightCrawlExternalRearPayloadEnvCfg(
+    DrobotCommandedWalkingScheduleMatchedSupportStraightCrawlExternalRearPayloadEnvCfg
+):
+    """V30 speed-normalized straight-path and asymmetric-hardware curriculum."""
+
+    # Retain the opposed 92 mm stance and 46/24 mm stride/lift envelope. The
+    # reference hip already approaches the Isaac soft limit, so aggression is
+    # added through a modest cadence increase rather than lower/longer geometry.
+    gait_frequency_max_hz = 0.85
+    # 46 mm * 0.85 Hz = 0.0391 m/s.
+    forward_speed_max_m_s = 0.039
+    gait_speed_max_m_s = 0.039
+
+    # Zero-residual schedule ablations found that the opposite sign reduced net
+    # lateral drift. Use the moderate value: a larger -24 mm shift improved the
+    # endpoint but increased periodic sway, reverse motion, and effort.
+    gait_weight_shift_lateral_m = -0.012
+    # The rear-mounted pack leaves the diagonal front anchor light during a
+    # rear-leg swing.  A controlled 20/25/30 mm ablation selected 25 mm: versus
+    # 20 mm it improved exact contact and three/four-foot support, while 30 mm
+    # added substantially more reversal and joint/body acceleration.
+    gait_rear_weight_shift_forward_m = 0.025
+
+    # Gate forward credit by cycle-scale sideslip relative to requested speed.
+    # The 20% floor preserves discovery gradients; reverse progress is never
+    # attenuated. Smooth Huber corridor/heading terms avoid the former delayed
+    # quadratic cliff while still increasing linearly outside the corridor.
+    straight_progress_use_normalized_lateral_velocity = True
+    straight_progress_lateral_ratio_sigma = 0.05
+    straight_progress_heading_sigma_rad = math.radians(4.0)
+    gate_positive_progress_by_straight_alignment = True
+    straight_progress_gate_floor = 0.20
+    reward_straight_aligned_progress = 5.0
+    use_huber_path_costs = True
+    lateral_corridor_half_width_m = 0.010
+    penalty_lateral_corridor = 3.0
+    heading_error_normalizer_rad = math.radians(5.0)
+    penalty_heading_error = 6.0
+
+    # Train against plausible fixed assembly errors instead of one perfectly
+    # mirrored robot: extra lateral payload-COM uncertainty, persistent roll
+    # moment, and independent abduction zero offsets. Keep a nominal quarter of
+    # environments so robustness does not erase the measured configuration.
+    rear_payload_combined_com_jitter_m = (0.008, 0.015, 0.006)
+    base_torque_randomization_range_nm = (0.040, 0.015, 0.040)
+    joint_target_bias_abduction_rad = math.radians(1.5)
+    # Extend the common supply-strength proxy down to about 10.6 V relative to
+    # the servo's 12 V rating.  This covers a partly discharged 3S pack under
+    # load without teaching the policy to continue through unsafe brownout.
+    actuator_effort_scale_range = (0.88, 1.05)
+    target_velocity_scale_range = (0.88, 1.05)
+    mirror_physical_randomization_pairs = False
+    physical_randomization_nominal_fraction = 0.25
 
 
 @configclass

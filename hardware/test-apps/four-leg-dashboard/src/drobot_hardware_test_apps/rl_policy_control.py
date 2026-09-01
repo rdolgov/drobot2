@@ -15,6 +15,7 @@ from drobot_policy_runtime.contract import (
     JOINT_LOWER_RAD,
     JOINT_UPPER_RAD,
     GaitClockConfig,
+    HeadingHoldConfig,
     JointTargetConfig,
 )
 from drobot_policy_runtime.policy import OnnxWalkingPolicy, load_policy_metadata
@@ -204,6 +205,7 @@ class RlPolicyController:
         self.model_contract_sha256 = sha256_file(self.model_contract_path)
         self.model_metadata = load_policy_metadata(self.model_path)
         self.gait_clock_config = GaitClockConfig.from_metadata(self.model_metadata)
+        self.heading_hold_config = HeadingHoldConfig.from_metadata(self.model_metadata)
         self.joint_target_config = JointTargetConfig.from_metadata(self.model_metadata)
         command_range = self.model_metadata.get("forward_command_range_m_s", {})
         if not isinstance(command_range, Mapping):
@@ -282,6 +284,20 @@ class RlPolicyController:
             ),
             "elapsed_s": 0.0,
             "imu": None,
+            "heading_hold": {
+                "enabled": self.heading_hold_config.enabled,
+                "mode": self.heading_hold_config.mode,
+                "kp_s": self.heading_hold_config.kp_s,
+                "max_correction_rad_s": (
+                    self.heading_hold_config.max_correction_rad_s
+                ),
+                "reference_yaw_rad": None,
+                "current_relative_rad": None,
+                "desired_relative_rad": None,
+                "error_rad": None,
+                "correction_rad_s": 0.0,
+                "effective_yaw_rad_s": 0.0,
+            },
             "targets": [],
             "motor_output_enabled": False,
             "recording": (
@@ -386,6 +402,20 @@ class RlPolicyController:
                 targets=[],
                 motor_output_enabled=True,
                 gait_frequency_hz=self.gait_clock_config.frequency_hz(speed),
+                heading_hold={
+                    "enabled": self.heading_hold_config.enabled,
+                    "mode": self.heading_hold_config.mode,
+                    "kp_s": self.heading_hold_config.kp_s,
+                    "max_correction_rad_s": (
+                        self.heading_hold_config.max_correction_rad_s
+                    ),
+                    "reference_yaw_rad": None,
+                    "current_relative_rad": None,
+                    "desired_relative_rad": None,
+                    "error_rad": None,
+                    "correction_rad_s": 0.0,
+                    "effective_yaw_rad_s": 0.0,
+                },
             )
             if self._recorder is not None:
                 try:
@@ -403,6 +433,14 @@ class RlPolicyController:
                                     "mode": self.gait_clock_config.mode,
                                     "frequency_hz": (
                                         self.gait_clock_config.frequency_hz(speed)
+                                    ),
+                                },
+                                "heading_hold": {
+                                    "enabled": self.heading_hold_config.enabled,
+                                    "mode": self.heading_hold_config.mode,
+                                    "kp_s": self.heading_hold_config.kp_s,
+                                    "max_correction_rad_s": (
+                                        self.heading_hold_config.max_correction_rad_s
                                     ),
                                 },
                                 "start_monotonic_s": self._started_at,
@@ -525,6 +563,20 @@ class RlPolicyController:
                 )
 
     def _record_step(self, sample: PolicyStepSample) -> None:
+        heading_hold = {
+            "enabled": sample.heading_hold_enabled,
+            "mode": self.heading_hold_config.mode,
+            "kp_s": self.heading_hold_config.kp_s,
+            "max_correction_rad_s": self.heading_hold_config.max_correction_rad_s,
+            "reference_yaw_rad": sample.heading_reference_yaw_rad,
+            "current_relative_rad": sample.heading_current_relative_rad,
+            "desired_relative_rad": sample.heading_desired_relative_rad,
+            "error_rad": sample.heading_error_rad,
+            "correction_rad_s": sample.heading_correction_rad_s,
+            "effective_yaw_rad_s": sample.effective_yaw_rad_s,
+        }
+        with self._lock:
+            self._state["heading_hold"] = heading_hold
         if self._recorder is None:
             return
         imu = sample.imu
@@ -542,7 +594,10 @@ class RlPolicyController:
                     "forward_m_s": sample.command.forward_m_s,
                     "lateral_m_s": sample.command.lateral_m_s,
                     "yaw_rad_s": sample.command.yaw_rad_s,
+                    "requested_yaw_rad_s": sample.command.yaw_rad_s,
+                    "effective_yaw_rad_s": sample.effective_yaw_rad_s,
                 },
+                "heading_hold": heading_hold,
                 "gait_clock": {
                     "sin": sample.phase_sin,
                     "cos": sample.phase_cos,
@@ -560,6 +615,7 @@ class RlPolicyController:
                     "linear_acceleration_body_m_s2": (
                         imu.linear_acceleration_body_m_s2.tolist()
                     ),
+                    "heading_yaw_rad": imu.heading_yaw_rad,
                 },
                 "joints": {
                     "position_rad": joints.position_rad.tolist(),
@@ -605,6 +661,7 @@ class RlPolicyController:
                     round(float(value), 5)
                     for value in sample.linear_acceleration_body_m_s2
                 ],
+                "heading_yaw_rad": round(float(sample.heading_yaw_rad), 6),
             }
 
     def _update_targets(

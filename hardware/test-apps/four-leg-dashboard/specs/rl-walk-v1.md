@@ -3,13 +3,13 @@
 ## Scope
 
 The port 8080 hardware dashboard can run the selected
-`parallel-walking-v24-padded-feet-forward-bias/model_3248.onnx` policy as a bounded, supported-robot
+`parallel-walking-v30-symmetry-gated-robust-straight-crawl/model_5000.onnx` policy as a bounded, supported-robot
 commissioning test. The four-leg dashboard remains the only process that opens
 the Feetech serial bus. The policy runner supplies targets to that same session;
 it does not create a second motor owner.
 
-The initial rollout is deliberately short and supported. The selected V24
-model accepts its validated `0.005` through `0.030 m/s` forward range and starts
+The initial rollout is deliberately short and supported. The selected V30
+model accepts its exported `0.005` through `0.039 m/s` forward range and starts
 at the sidecar-recommended `0.005 m/s`. It is not an unattended autonomy mode.
 
 ## Observation and action contract
@@ -31,8 +31,9 @@ The policy produces 12 normalized residual actions in Isaac order. Its JSON side
 declares the trained neutral pose, per-joint action scales, target velocity,
 maximum packet step, and startup ramp/settle tolerance. The tracked contract
 also embeds the exact 2,048-sample distributed-push crawl reference used in
-training. Runtime targets are `reference + 0.25 * policy residual`, mapped to
-physical servo IDs 1-12 and bounded as semantic joint angles. Policy targets
+training. Runtime targets are `reference + policy residual`, using the
+sidecar's per-joint `0.10 / 0.12 / 0.15` abduction/hip/knee scales, mapped to
+physical servo IDs 1-12, and bounded as semantic joint angles. Policy targets
 are limited from actual elapsed monotonic time and the model-declared packet
 cap before the existing servo-session ramp is applied.
 
@@ -71,7 +72,7 @@ and the physical power cutoff is ready. Start is rejected unless:
 Preparation does not run inference. After these checks, each motor is
 re-anchored to its measured policy-neutral position without dropping torque.
 The measured 12-joint vector becomes the policy's initial rate-limiter target,
-preventing a jump from calibrated zero or an assumed pose. Finite V24 policy
+preventing a jump from calibrated zero or an assumed pose. Finite V30 policy
 targets are limited to two degrees per 60 Hz update. A larger finite request is
 clamped and recorded rather than treated as a fault or a reason to disarm.
 

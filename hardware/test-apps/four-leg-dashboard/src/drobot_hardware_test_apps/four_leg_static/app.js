@@ -68,7 +68,7 @@ async function api(
     method,
     headers: {
       "X-Control-Token": token,
-      "X-Drobot-Client-Version": "8",
+      "X-Drobot-Client-Version": "9",
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -356,7 +356,7 @@ async function downloadRecording(recording) {
       {
         headers: {
           "X-Control-Token": token,
-          "X-Drobot-Client-Version": "7",
+          "X-Drobot-Client-Version": "9",
         },
         cache: "no-store",
       },
@@ -801,6 +801,14 @@ function updateSummary(state) {
   }
   if (Number(rl.target_clamp_count || 0) > 0) {
     rlDetail.textContent += ` / step clamps ${Number(rl.target_clamp_count)}`;
+  }
+  const headingHold = rl.heading_hold || {};
+  if (headingHold.enabled) {
+    const headingErrorDeg = Number(headingHold.error_rad || 0) * 180 / Math.PI;
+    const correction = Number(headingHold.correction_rad_s || 0);
+    rlDetail.textContent +=
+      ` / heading error ${headingErrorDeg.toFixed(1)}° / ` +
+      `yaw correction ${correction.toFixed(3)} rad/s`;
   }
 
   const phaseText = crawl.phase.replaceAll("_", " ").toUpperCase();

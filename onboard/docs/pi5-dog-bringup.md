@@ -1,6 +1,6 @@
 # `pi5-dog` bring-up record
 
-Last checked: 2026-08-30
+Last checked: 2026-08-31
 
 This records the current Raspberry Pi state and the safe rollout path from
 print-only policy inference to closed-loop walking. Do not place login
@@ -15,8 +15,8 @@ passwords, dashboard tokens, or Wi-Fi credentials in this repository.
 | Python | 3.14.4 |
 | IMU | BNO085 detected at `0x4A` |
 | IMU bus | Software I2C `/dev/i2c-8` on GPIO 2/3 for BNO085 clock stretching |
-| Policy model | `parallel-walking-v24-padded-feet-forward-bias/model_3248.onnx` |
-| Model SHA-256 | `9f447870002dda069a017f22b9a06009031f6883aa2a82ef8d03079237a326f6` |
+| Policy model | `parallel-walking-v30-symmetry-gated-robust-straight-crawl/model_5000.onnx` |
+| Model SHA-256 | `c93e9e58349326a56fa5846c72fd0c4ba8da3babf12dc2ce2bebdaf2fe01d564` |
 | Policy runtime | ONNX Runtime 1.29.0, 60 Hz, deterministic Beta mean |
 | Motor output | Standalone 8090 tools are print-only; port 8080 provides guarded real control |
 | Manual/IK dashboard | Boot service on port 8080; hardware preference with safe demo fallback |
@@ -241,7 +241,7 @@ keeping the manual dashboard as the only servo-bus owner. The standalone port
    velocities feed the observation; stale, missing, or out-of-range feedback
    stops and disarms the test.
 3. **Bounded actuation:** the UI permits a supported `1-60 s` test inside the
-   selected model's declared speed range (`0.005-0.030 m/s` for V24),
+   selected model's declared speed range (`0.005-0.039 m/s` for V30),
    initializes targets from the measured pose, and enforces joint, elapsed-time
    rate, tilt, and telemetry guards. Normal timed completion returns all
    12 joints to calibrated center and keeps torque holding; an explicit stop or

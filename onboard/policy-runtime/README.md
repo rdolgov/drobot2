@@ -1,7 +1,7 @@
 # Raspberry Pi walking-policy runtime
 
-This package runs the selected V24 padded-feet, forward-bias,
-external-rear-payload residual-crawl policy on a 64-bit
+This package runs the selected V30 symmetry-gated, straight-crawl,
+external-rear-payload residual policy on a 64-bit
 Raspberry Pi with ONNX Runtime. Its standalone CLI and port 8090 UI are
 intentionally print-only: they read the
 BNO085, assembles the exact 50-value observation, runs deterministic inference
@@ -14,8 +14,20 @@ and missed deadlines are skipped rather than replayed as catch-up bursts. The
 model JSON sidecar declares the supported command range, speed-scaled gait
 clock, trained neutral pose, action scales, target slew/packet limits, guarded
 startup ramp/settle contract, and the 2,048-sample distributed-crawl reference.
-V24 reconstructs the same target used in training as
-`reference + 0.25 * policy residual` before rate limiting.
+V30 reconstructs the same target used in training as the analytic reference
+plus policy residuals scaled by `0.10 / 0.12 / 0.15` for
+abduction/hip/knee before rate limiting.
+
+Models may also opt into a metadata-gated relative-heading hold without
+changing the 50-value observation shape. At the beginning of each policy run,
+the loop captures the BNO085 game-rotation heading as zero. It integrates the
+operator's requested yaw rate into a desired relative heading and puts
+`requested yaw - bounded proportional heading correction` into the existing
+command-yaw observation slot. Sidecars without an enabled `heading_hold`
+object retain the legacy requested-yaw behavior exactly. The game rotation
+vector deliberately avoids magnetic-north corrections near motors and power
+wiring, so it is suitable for short relative-heading holds but can drift over
+long runs.
 
 The runtime was exercised on `pi5-dog` with Ubuntu 26.04 ARM64, Python 3.14.4,
 ONNX Runtime 1.29.0, and the BNO085 detected at I2C address `0x4A`.
@@ -38,18 +50,18 @@ format and the planned ROS 2/rosbag2 replacement boundary.
 ## Model
 
 The deployable model is
-`onboard/models/parallel-walking-v24-padded-feet-forward-bias/model_3248.onnx`.
+`onboard/models/parallel-walking-v30-symmetry-gated-robust-straight-crawl/model_5000.onnx`.
 It is exported from
-`simulation/isaac/models/parallel-walking-v24-padded-feet-forward-bias/model_3248.pt` with
+`logs/rsl_rl/drobot_commanded_walk_v30_symmetry_gated_robust_straight_crawl_external_rear_payload/2026-08-31_07-15-11_manual-headless/model_5000.pt` with
 `simulation/isaac/rl/parallel_walking/export_policy_onnx.py`.
 
-The deployed sidecar accepts the validated `0.005-0.030 m/s` range; its
+The deployed sidecar accepts the exported `0.005-0.039 m/s` range; its
 recommendation remains the conservative `0.005 m/s` first-trial setting.
-V24 models the adhesive Velcro-like soles, shifts the analytic support target
-18 mm forward for the rear battery, penalizes reverse and overspeed motion, and
-was trained with 70-100% effective servo effort/rate. A larger valid command
-changes both reference stride scale and cadence, but low supply voltage can
-still prevent the servos from reaching the requested cadence.
+V30 models the adhesive Velcro-like soles and external rear battery, uses a
+25 mm rear-swing load transfer and -12 mm lateral reference correction, and
+penalizes reverse motion, path drift, and jerk. A larger valid command changes
+cadence up to 0.85 Hz, but low supply voltage can still prevent the servos from
+reaching the requested cadence.
 
 The accompanying JSON file records hashes, startup pose, target dynamics, and
 the full observation/action ordering. The policy consumes:
@@ -114,7 +126,9 @@ bash onboard/scripts/run-policy-print.sh \
 Confirm the mounting transform while the robot is supported. When level,
 projected gravity should be approximately `[0, 0, -1]`; rotations about each
 body axis must have the expected sign before any policy output is connected to
-motors.
+motors. Heading is derived by rotating the configured body-forward axis into
+the BNO085 game-world frame, so the same signed permutation applies to both
+tilt and relative-yaw feedback.
 
 ## Browser dashboard
 

@@ -5,7 +5,10 @@ from isaaclab_rl.rsl_rl import (
     RslRlMLPModelCfg,
     RslRlOnPolicyRunnerCfg,
     RslRlPpoAlgorithmCfg,
+    RslRlSymmetryCfg,
 )
+
+from ..left_right_symmetry import compute_left_right_symmetric_states
 
 
 @configclass
@@ -158,3 +161,140 @@ class DrobotCommandedWalkingPaddedFeetForwardBiasExternalRearPayloadPPORunnerCfg
         self.algorithm.learning_rate = 7.5e-5
         self.algorithm.entropy_coef = 0.0005
         self.algorithm.desired_kl = 0.006
+
+
+@configclass
+class DrobotCommandedWalkingRobustStraightLowStanceExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedWalkingPaddedFeetForwardBiasExternalRearPayloadPPORunnerCfg
+):
+    """V25 V24-continuation for asymmetric hardware and straight travel."""
+
+    max_iterations = 1600
+    experiment_name = (
+        "drobot_commanded_walk_v25_robust_straight_low_stance_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # V25 retains V24's actor contract but changes the stance, analytic gait,
+        # and physical-randomization distribution.  Keep continuation updates
+        # conservative while restoring enough exploration to adapt to mirrored
+        # per-joint asymmetry rather than preserving one nominal compensation.
+        self.algorithm.learning_rate = 7.5e-5
+        self.algorithm.entropy_coef = 0.001
+        self.algorithm.desired_kl = 0.006
+        self.algorithm.symmetry_cfg = RslRlSymmetryCfg(
+            use_data_augmentation=True,
+            use_mirror_loss=False,
+            data_augmentation_func=compute_left_right_symmetric_states,
+        )
+
+
+@configclass
+class DrobotCommandedWalkingBalancedFourLegStraightCrawlExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedWalkingRobustStraightLowStanceExternalRearPayloadPPORunnerCfg
+):
+    """V26 controlled V25 ablation with explicit bilateral symmetry loss."""
+
+    experiment_name = (
+        "drobot_commanded_walk_v26_balanced_four_leg_straight_crawl_"
+        "external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.symmetry_cfg = RslRlSymmetryCfg(
+            use_data_augmentation=True,
+            use_mirror_loss=True,
+            data_augmentation_func=compute_left_right_symmetric_states,
+            mirror_loss_coeff=1.0,
+        )
+
+
+@configclass
+class DrobotCommandedWalkingAdaptiveAsymmetricFourLegStraightCrawlExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedWalkingBalancedFourLegStraightCrawlExternalRearPayloadPPORunnerCfg
+):
+    """V27 corrected-reference policy that permits learned leg asymmetry."""
+
+    experiment_name = (
+        "drobot_commanded_walk_v27_adaptive_asymmetric_four_leg_straight_crawl_"
+        "external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # The real robot, rear payload, printed link tolerances, and independent
+        # actuators need not be exactly bilateral.  Disable action-level mirror
+        # constraints in both phases so the policy can compensate an observed
+        # bias.  Mirrored domain samples still cover both directions and prevent
+        # one fixed hardware bias from becoming the only solution.
+        self.algorithm.symmetry_cfg = RslRlSymmetryCfg(
+            use_data_augmentation=False,
+            use_mirror_loss=False,
+            data_augmentation_func=compute_left_right_symmetric_states,
+        )
+
+
+@configclass
+class DrobotCommandedWalkingForwardBiasedCycleGatedFourLegStraightCrawlExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedWalkingAdaptiveAsymmetricFourLegStraightCrawlExternalRearPayloadPPORunnerCfg
+):
+    """V28 deterministic-mean consolidation around the forward-biased crawl."""
+
+    experiment_name = (
+        "drobot_commanded_walk_v28_forward_biased_cycle_gated_four_leg_"
+        "straight_crawl_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # V27's sampled Beta tails occasionally released the rear shoes while
+        # its deployable mean action did not.  Remove the explicit entropy bonus
+        # so return improvements consolidate into the deterministic policy mean.
+        self.algorithm.learning_rate = 5.0e-5
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.desired_kl = 0.004
+
+
+@configclass
+class DrobotCommandedWalkingScheduleMatchedSupportStraightCrawlExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedWalkingForwardBiasedCycleGatedFourLegStraightCrawlExternalRearPayloadPPORunnerCfg
+):
+    """V29 support-identity correction and gradual speed continuation."""
+
+    experiment_name = (
+        "drobot_commanded_walk_v29_schedule_matched_support_straight_crawl_"
+        "external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # The reward landscape changes sharply when wrong-foot support loses
+        # progress credit. Use a smaller continuation step while keeping the
+        # deployable deterministic mean consolidated.
+        self.algorithm.learning_rate = 5.0e-5
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.desired_kl = 0.004
+
+
+@configclass
+class DrobotCommandedWalkingSymmetryGatedRobustStraightCrawlExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedWalkingScheduleMatchedSupportStraightCrawlExternalRearPayloadPPORunnerCfg
+):
+    """V30 straight-path gating with symmetry data augmentation."""
+
+    experiment_name = (
+        "drobot_commanded_walk_v30_symmetry_gated_robust_straight_crawl_"
+        "external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # Mirrored samples teach an unbiased geometric prior while mirror loss
+        # stays off, allowing the actor to compensate each randomized assembly.
+        self.algorithm.symmetry_cfg = RslRlSymmetryCfg(
+            use_data_augmentation=True,
+            use_mirror_loss=False,
+            data_augmentation_func=compute_left_right_symmetric_states,
+        )

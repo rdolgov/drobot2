@@ -133,6 +133,74 @@ class GaitClockConfig:
         )
         return float(self.stride_scale_min + fraction * (1.0 - self.stride_scale_min))
 
+
+@dataclass(frozen=True)
+class HeadingHoldConfig:
+    """Model-declared relative-yaw feedback through the existing yaw command."""
+
+    enabled: bool = False
+    mode: str = "disabled"
+    kp_s: float = 0.0
+    max_correction_rad_s: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.mode not in {"disabled", "relative_yaw_feedback"}:
+            raise ValueError(f"Unsupported heading-hold mode: {self.mode}")
+        if not math.isfinite(self.kp_s) or self.kp_s < 0.0:
+            raise ValueError("Heading-hold kp must be finite and non-negative")
+        if (
+            not math.isfinite(self.max_correction_rad_s)
+            or self.max_correction_rad_s < 0.0
+        ):
+            raise ValueError(
+                "Heading-hold maximum correction must be finite and non-negative"
+            )
+        if self.enabled:
+            if self.mode != "relative_yaw_feedback":
+                raise ValueError(
+                    "Enabled heading hold requires relative_yaw_feedback mode"
+                )
+            if self.kp_s <= 0.0 or self.max_correction_rad_s <= 0.0:
+                raise ValueError(
+                    "Enabled heading hold requires positive kp and correction limit"
+                )
+
+    @classmethod
+    def from_metadata(
+        cls,
+        metadata: Mapping[str, Any] | None,
+    ) -> HeadingHoldConfig:
+        payload = dict(metadata or {})
+        heading = payload.get("heading_hold")
+        if not isinstance(heading, Mapping) or not bool(heading.get("enabled", False)):
+            return cls()
+        return cls(
+            enabled=True,
+            mode=str(heading.get("mode", "relative_yaw_feedback")),
+            kp_s=float(heading["kp_s"]),
+            max_correction_rad_s=float(heading["max_correction_rad_s"]),
+        )
+
+    def effective_yaw_rad_s(
+        self,
+        requested_yaw_rad_s: float,
+        heading_error_rad: float,
+    ) -> tuple[float, float]:
+        """Return effective yaw input and the bounded feedback correction."""
+
+        requested = float(requested_yaw_rad_s)
+        error = float(heading_error_rad)
+        if not math.isfinite(requested) or not math.isfinite(error):
+            raise ValueError("Heading-hold inputs must be finite")
+        if not self.enabled:
+            return requested, 0.0
+        correction = max(
+            -self.max_correction_rad_s,
+            min(self.max_correction_rad_s, self.kp_s * error),
+        )
+        return requested - correction, correction
+
+
 ACTION_NAMES = (
     "front_left_hip_abduction",
     "rear_left_hip_abduction",
@@ -194,6 +262,7 @@ class JointTargetConfig:
     startup_position_tolerance_deg: float = 5.0
     action_mode: str = "direct"
     residual_action_scale: float = 1.0
+    residual_action_scale_by_action: tuple[float, ...] | None = None
     reference_start_ramp_s: float = 0.0
     reference_joint_position_rad: tuple[tuple[float, ...], ...] = ()
 
@@ -202,6 +271,11 @@ class JointTargetConfig:
             raise ValueError("neutral joint position must contain 12 values")
         if len(self.action_scale_rad) != ACTION_SIZE:
             raise ValueError("action scale must contain 12 values")
+        if (
+            self.residual_action_scale_by_action is not None
+            and len(self.residual_action_scale_by_action) != ACTION_SIZE
+        ):
+            raise ValueError("per-action residual scale must contain 12 values")
         values = (
             *self.neutral_joint_position_rad,
             *self.action_scale_rad,
@@ -211,6 +285,7 @@ class JointTargetConfig:
             self.startup_settle_s,
             self.startup_position_tolerance_deg,
             self.residual_action_scale,
+            *(self.residual_action_scale_by_action or ()),
             self.reference_start_ramp_s,
             *(value for row in self.reference_joint_position_rad for value in row),
         )
@@ -236,6 +311,11 @@ class JointTargetConfig:
             raise ValueError("action mode must be 'direct' or 'gait_residual'")
         if not 0.0 < self.residual_action_scale <= 1.0:
             raise ValueError("residual action scale must be in (0, 1]")
+        if self.residual_action_scale_by_action is not None and any(
+            not 0.0 < value <= 1.0
+            for value in self.residual_action_scale_by_action
+        ):
+            raise ValueError("per-action residual scales must be in (0, 1]")
         if not 0.0 <= self.reference_start_ramp_s <= 10.0:
             raise ValueError("reference start ramp must be in [0, 10] seconds")
         if any(len(row) != ACTION_SIZE for row in self.reference_joint_position_rad):
@@ -258,6 +338,12 @@ class JointTargetConfig:
         action_contract = payload.get("action_contract")
         if not isinstance(action_contract, Mapping):
             action_contract = {}
+        residual_scales = action_contract.get("residual_scale_by_action")
+        if residual_scales is not None and not isinstance(
+            residual_scales,
+            (list, tuple),
+        ):
+            raise TypeError("per-action residual scale must be an array")
         gait_reference = payload.get("gait_reference")
         if not isinstance(gait_reference, Mapping):
             gait_reference = {}
@@ -294,6 +380,11 @@ class JointTargetConfig:
             ),
             action_mode=str(action_contract.get("mode", "direct")),
             residual_action_scale=float(action_contract.get("residual_scale", 1.0)),
+            residual_action_scale_by_action=(
+                None
+                if residual_scales is None
+                else tuple(float(value) for value in residual_scales)
+            ),
             reference_start_ramp_s=float(gait_reference.get("start_ramp_s", 0.0)),
             reference_joint_position_rad=tuple(
                 tuple(float(value) for value in row) for row in reference_rows
@@ -307,6 +398,16 @@ class JointTargetConfig:
     @property
     def action_scale_array(self) -> np.ndarray:
         return np.asarray(self.action_scale_rad, dtype=np.float32)
+
+    @property
+    def residual_action_scale_array(self) -> np.ndarray:
+        if self.residual_action_scale_by_action is None:
+            return np.full(
+                ACTION_SIZE,
+                self.residual_action_scale,
+                dtype=np.float32,
+            )
+        return np.asarray(self.residual_action_scale_by_action, dtype=np.float32)
 
     @property
     def reference_array(self) -> np.ndarray | None:
@@ -352,7 +453,7 @@ def normalized_action_to_joint_target(
         base_target = np.asarray(reference_target_rad, dtype=np.float32)
         if base_target.shape != (ACTION_SIZE,) or not np.all(np.isfinite(base_target)):
             raise ValueError("reference target must contain 12 finite values")
-        action = target_config.residual_action_scale * action
+        action = target_config.residual_action_scale_array * action
     else:
         base_target = target_config.neutral_array
     desired = np.clip(

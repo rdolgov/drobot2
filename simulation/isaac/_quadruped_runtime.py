@@ -28,6 +28,9 @@ TORQUE_PROFILES_NM = {
 
 # Both printable upper-arm links use the same fork-axis spacing.
 LINK_LENGTH_M = 0.159896689
+HIP_FORE_AFT_HALF_SPACING_M = 0.060
+HIP_LINK_TO_FLEXION_OUTWARD_M = 0.0286117
+HIP_LINK_TO_FLEXION_DROP_M = 0.095696689
 RECTANGULAR_SHOE_CONTACT_EXTENSION_M = 0.031
 RECTANGULAR_SHOE_HALF_FORE_AFT_M = 0.050
 RECTANGULAR_SHOE_EFFECTIVE_DISTAL_LENGTH_M = (
@@ -177,6 +180,13 @@ def smoothstep(value: float) -> float:
     return value * value * (3.0 - 2.0 * value)
 
 
+def smootherstep(value: float) -> float:
+    """Return a quintic transition with zero velocity and acceleration at both ends."""
+
+    value = min(max(float(value), 0.0), 1.0)
+    return value * value * value * (value * (value * 6.0 - 15.0) + 10.0)
+
+
 def leg_ik(
     leg: str,
     down_m: float,
@@ -237,6 +247,56 @@ def flat_sole_down_m(world_forward_m: float) -> float:
         math.sqrt(LINK_LENGTH_M**2 - world_forward_m**2)
         + RECTANGULAR_SHOE_EFFECTIVE_DISTAL_LENGTH_M
     )
+
+
+def stance_forward_bias_for_body_pitch_m(
+    body_pitch_rad: float,
+    *,
+    fore_aft_m: float,
+) -> float:
+    """Resolve a common foot-X bias for a mild nose-down stance.
+
+    The robot has no ankle, so an arbitrary body pitch and independently chosen
+    foot X/Z targets are over-constrained.  A common positive foot-X bias keeps
+    the proven opposed-knee geometry and the full fore/aft support span while
+    shortening the front support legs and lengthening the rear support legs.
+    The resulting front/rear depth difference corresponds to the requested
+    positive (nose-down) body pitch.  Zero preserves every legacy reference.
+    """
+
+    body_pitch_rad = float(body_pitch_rad)
+    fore_aft_m = float(fore_aft_m)
+    if not math.isfinite(body_pitch_rad) or not math.isfinite(fore_aft_m):
+        raise ValueError("Body pitch and stance fore/aft offset must be finite")
+    if fore_aft_m <= 0.0 or fore_aft_m >= LINK_LENGTH_M:
+        raise ValueError("Stance fore/aft offset exceeds flat-sole reach")
+    if body_pitch_rad < 0.0 or body_pitch_rad > math.radians(3.0):
+        raise ValueError("Forward body pitch must be between 0 and 3 degrees")
+    if math.isclose(body_pitch_rad, 0.0, abs_tol=1.0e-12):
+        return 0.0
+
+    support_span_m = 2.0 * (HIP_FORE_AFT_HALF_SPACING_M + fore_aft_m)
+
+    def resolved_pitch(forward_bias_m: float) -> float:
+        rear_down_m = math.sqrt(
+            LINK_LENGTH_M**2 - (-fore_aft_m + forward_bias_m) ** 2
+        )
+        front_down_m = math.sqrt(
+            LINK_LENGTH_M**2 - (fore_aft_m + forward_bias_m) ** 2
+        )
+        return math.atan2(rear_down_m - front_down_m, support_span_m)
+
+    lower_m = 0.0
+    upper_m = LINK_LENGTH_M - fore_aft_m - 1.0e-6
+    if resolved_pitch(upper_m) < body_pitch_rad:
+        raise ValueError("Requested body pitch exceeds the available stance reach")
+    for _ in range(64):
+        midpoint_m = 0.5 * (lower_m + upper_m)
+        if resolved_pitch(midpoint_m) < body_pitch_rad:
+            lower_m = midpoint_m
+        else:
+            upper_m = midpoint_m
+    return 0.5 * (lower_m + upper_m)
 
 
 def flat_sole_leg_ik(leg: str, world_forward_m: float) -> tuple[float, float]:
@@ -521,11 +581,32 @@ def distributed_push_crawl_by_name(
     support_extension_m: float,
     weight_shift_forward_m: float,
     weight_shift_lateral_m: float,
+    rear_weight_shift_forward_m: float | None = None,
+    translate_lateral_weight_shift: bool = False,
+    forward_body_pitch_rad: float = 0.0,
+    stance_center_offset_m: float = 0.0,
     down_m: float = DEFAULT_STANCE_DOWN_M,
     fore_aft_m: float = DEFAULT_STANCE_FORE_AFT_M,
     abduction_deg: float = DEFAULT_ABDUCTION_DEG,
+    smooth_support_push: bool = False,
+    phase_fractions: Iterable[float] | None = None,
+    contact_transition_fraction: float = 0.0,
 ) -> tuple[dict[str, float], dict[str, object]]:
-    """Return a four-beat crawl with every planted rectangular sole flat."""
+    """Return a four-beat crawl with phase-timed body-weight transfer.
+
+    ``smooth_support_push`` preserves the proven one-leg-at-a-time contact
+    sequence and the exact step endpoints, but spreads both the selected-foot
+    advance and common rearward support motion across lift, swing, and lower.
+    Quintic transitions give zero velocity and acceleration at the endpoints.
+    A non-zero lateral shift deliberately rolls the no-ankle rectangular shoes
+    a few degrees so the body can move inside the remaining three-foot support
+    polygon before a foot is lifted; sagittal support targets remain flat.  Its
+    sign is retained so the commanded body-shift convention can be ablated in
+    simulation rather than being silently treated as an unsigned magnitude.
+    The legacy gait concentrates support motion into a seven-percent
+    ``all_feet_push`` phase and foot advance into a twenty-percent swing phase;
+    either can become only a few 60 Hz controller updates at a faster clock.
+    """
     if period_s <= 0.0:
         raise ValueError("Distributed-push period must be positive")
     if stride_m <= 0.0 or lift_m <= 0.0:
@@ -534,20 +615,67 @@ def distributed_push_crawl_by_name(
         raise ValueError(
             "Rectangular flat-sole crawl requires zero support extension"
         )
-    if weight_shift_forward_m < 0.0 or weight_shift_lateral_m < 0.0:
-        raise ValueError("Distributed-push weight shifts must be non-negative")
-    if not math.isclose(weight_shift_lateral_m, 0.0, abs_tol=1e-12):
-        raise ValueError("Flat-sole crawl requires zero lateral weight shift")
+    if weight_shift_forward_m < 0.0:
+        raise ValueError("Distributed-push forward shift must be non-negative")
+    if (
+        not math.isfinite(weight_shift_lateral_m)
+        or abs(weight_shift_lateral_m) > 0.030
+    ):
+        raise ValueError(
+            "Distributed-push lateral shift must be finite and within +/-30 mm"
+        )
+    if (
+        rear_weight_shift_forward_m is not None
+        and rear_weight_shift_forward_m < 0.0
+    ):
+        raise ValueError("Rear distributed-push forward shift must be non-negative")
     if not math.isclose(abduction_deg, 0.0, abs_tol=1e-12):
         raise ValueError("Flat-sole crawl requires zero hip abduction")
+    if (
+        not math.isfinite(stance_center_offset_m)
+        or abs(stance_center_offset_m) > 0.030
+    ):
+        raise ValueError("Stance center offset must be finite and within +/-30 mm")
+    if (
+        not math.isfinite(contact_transition_fraction)
+        or not 0.0 <= contact_transition_fraction < 0.5
+    ):
+        raise ValueError("Contact transition fraction must be in [0, 0.5)")
     nominal_flat_down_m = flat_sole_down_m(fore_aft_m)
     if not math.isclose(down_m, nominal_flat_down_m, abs_tol=0.002):
         raise ValueError(
             "Flat-sole stance depth does not match its fore/aft offset: "
             f"configured={down_m:.4f} m, expected={nominal_flat_down_m:.4f} m"
         )
-    if not math.isclose(sum(value for _name, value in DISTRIBUTED_PUSH_PHASES), 1.0):
-        raise AssertionError("Distributed-push phase fractions do not total one step")
+    if phase_fractions is None:
+        phase_layout = DISTRIBUTED_PUSH_PHASES
+    else:
+        configured_fractions = tuple(float(value) for value in phase_fractions)
+        if len(configured_fractions) != len(DISTRIBUTED_PUSH_PHASES):
+            raise ValueError(
+                "Distributed-push phase fractions must contain "
+                f"{len(DISTRIBUTED_PUSH_PHASES)} values"
+            )
+        if any(value <= 0.0 for value in configured_fractions):
+            raise ValueError("Distributed-push phase fractions must be positive")
+        phase_layout = tuple(
+            (name, configured_fractions[index])
+            for index, (name, _legacy_fraction) in enumerate(
+                DISTRIBUTED_PUSH_PHASES
+            )
+        )
+    if not math.isclose(
+        sum(value for _name, value in phase_layout),
+        1.0,
+        rel_tol=0.0,
+        abs_tol=1.0e-9,
+    ):
+        raise ValueError("Distributed-push phase fractions must total one step")
+    pitch_forward_bias_m = stance_forward_bias_for_body_pitch_m(
+        forward_body_pitch_rad,
+        fore_aft_m=fore_aft_m,
+    )
+    stance_forward_bias_m = pitch_forward_bias_m + stance_center_offset_m
 
     cycle_phase = (max(0.0, gait_time_s) / period_s) % 1.0
     step_count = len(DISTRIBUTED_PUSH_SWING_ORDER)
@@ -556,12 +684,12 @@ def distributed_push_crawl_by_name(
     step_u = (cycle_phase - step_index * step_fraction) / step_fraction
     swing_leg = DISTRIBUTED_PUSH_SWING_ORDER[step_index]
 
-    phase_name = DISTRIBUTED_PUSH_PHASES[-1][0]
+    phase_name = phase_layout[-1][0]
     phase_u = 1.0
     phase_start = 0.0
-    for candidate_name, candidate_fraction in DISTRIBUTED_PUSH_PHASES:
+    for candidate_name, candidate_fraction in phase_layout:
         phase_end = phase_start + candidate_fraction
-        if step_u < phase_end or candidate_name == DISTRIBUTED_PUSH_PHASES[-1][0]:
+        if step_u < phase_end or candidate_name == phase_layout[-1][0]:
             phase_name = candidate_name
             phase_u = min(
                 max((step_u - phase_start) / candidate_fraction, 0.0),
@@ -582,8 +710,24 @@ def distributed_push_crawl_by_name(
         for leg in LEGS:
             offsets[leg] -= push_increment
 
-    if phase_name == "swing":
-        offsets[swing_leg] += stride_m * smoothstep(phase_u)
+    transition = smootherstep if smooth_support_push else smoothstep
+    airborne_start = phase_layout[0][1]
+    airborne_end = airborne_start + sum(
+        fraction
+        for name, fraction in phase_layout
+        if name in ("lift", "swing", "lower")
+    )
+    airborne_u = min(
+        max((step_u - airborne_start) / (airborne_end - airborne_start), 0.0),
+        1.0,
+    )
+    if smooth_support_push:
+        # Move the selected foot throughout the entire airborne interval.  At
+        # one cycle per second this provides roughly eight 60 Hz targets rather
+        # than squeezing the full stride into the three-tick legacy swing.
+        offsets[swing_leg] += stride_m * transition(airborne_u)
+    elif phase_name == "swing":
+        offsets[swing_leg] += stride_m * transition(phase_u)
     elif phase_name in (
         "lower",
         "firm_plant",
@@ -592,42 +736,68 @@ def distributed_push_crawl_by_name(
         "step_settle",
     ):
         offsets[swing_leg] += stride_m
-    if phase_name == "all_feet_push":
+    if smooth_support_push:
+        # Begin after weight transfer and finish before firm planting.  The
+        # selected foot is airborne during this interval, while the other three
+        # feet share a continuous stance push.  Subtracting the same completed
+        # increment from all four offsets keeps the legacy cycle endpoints.
+        push = push_increment * transition(airborne_u)
+        offsets = {leg: offset - push for leg, offset in offsets.items()}
+    elif phase_name == "all_feet_push":
         push = push_increment * smoothstep(phase_u)
         offsets = {leg: offset - push for leg, offset in offsets.items()}
     elif phase_name == "step_settle":
         offsets = {leg: offset - push_increment for leg, offset in offsets.items()}
 
     if phase_name == "weight_transfer":
-        transfer = smoothstep(phase_u)
+        transfer = transition(phase_u)
     elif phase_name == "weight_return":
-        transfer = 1.0 - smoothstep(phase_u)
+        transfer = 1.0 - transition(phase_u)
     elif phase_name in ("all_feet_push", "step_settle"):
         transfer = 0.0
     else:
         transfer = 1.0
-    body_shift_forward_m = -_front_sign(swing_leg) * weight_shift_forward_m * transfer
+    active_forward_shift_m = (
+        float(rear_weight_shift_forward_m)
+        if rear_weight_shift_forward_m is not None
+        and swing_leg.startswith("rear_")
+        else weight_shift_forward_m
+    )
+    body_shift_forward_m = (
+        -_front_sign(swing_leg) * active_forward_shift_m * transfer
+    )
     body_shift_lateral_m = -_side_sign(swing_leg) * weight_shift_lateral_m * transfer
 
     forward_by_leg = {
-        leg: _front_sign(leg) * fore_aft_m + offsets[leg] - body_shift_forward_m
+        leg: (
+            _front_sign(leg) * fore_aft_m
+            + offsets[leg]
+            - body_shift_forward_m
+            + stance_forward_bias_m
+        )
         for leg in LEGS
     }
     flat_down_by_leg = {
         leg: flat_sole_down_m(forward_by_leg[leg]) for leg in LEGS
     }
     down_by_leg = dict(flat_down_by_leg)
-    swing_is_airborne = phase_name in (
+    swing_trajectory_active = phase_name in (
         "lift",
         "swing",
         "lower",
     )
-    if phase_name == "lift":
-        down_by_leg[swing_leg] -= lift_m * smoothstep(phase_u)
+    if smooth_support_push and swing_trajectory_active:
+        if airborne_u < 0.5:
+            lift_fraction = transition(2.0 * airborne_u)
+        else:
+            lift_fraction = 1.0 - transition(2.0 * airborne_u - 1.0)
+        down_by_leg[swing_leg] -= lift_m * lift_fraction
+    elif phase_name == "lift":
+        down_by_leg[swing_leg] -= lift_m * transition(phase_u)
     elif phase_name == "swing":
         down_by_leg[swing_leg] -= lift_m
     elif phase_name == "lower":
-        down_by_leg[swing_leg] -= lift_m * (1.0 - smoothstep(phase_u))
+        down_by_leg[swing_leg] -= lift_m * (1.0 - transition(phase_u))
     nominal_abduction = math.radians(abduction_deg)
     foot_delta_lateral_m = -body_shift_lateral_m
     abduction_by_leg: dict[str, float] = {}
@@ -635,7 +805,33 @@ def distributed_push_crawl_by_name(
         nominal_leg_down = down_by_leg[leg]
         vertical = nominal_leg_down * math.cos(nominal_abduction)
         outward = nominal_leg_down * math.sin(nominal_abduction)
-        shifted_outward = outward + _side_sign(leg) * foot_delta_lateral_m
+        if translate_lateral_weight_shift:
+            # Include the exact hip-abduction-to-flexion offset from the URDF.
+            # The requested body shift is implemented by translating all four
+            # foot targets by the opposite world-Y delta while retaining stance
+            # width.  The legacy side-sign cancellation instead widened one
+            # rear phase and narrowed the mirrored phase.
+            total_down = HIP_LINK_TO_FLEXION_DROP_M + nominal_leg_down
+            radius = math.hypot(HIP_LINK_TO_FLEXION_OUTWARD_M, total_down)
+            desired_outward = (
+                HIP_LINK_TO_FLEXION_OUTWARD_M
+                + _side_sign(leg) * foot_delta_lateral_m
+            )
+            if abs(desired_outward) >= radius:
+                raise ValueError(
+                    "Lateral weight transfer exceeds hip-abduction reach"
+                )
+            joint_abduction = math.asin(desired_outward / radius) - math.asin(
+                HIP_LINK_TO_FLEXION_OUTWARD_M / radius
+            )
+            # Pose construction below applies -side_sign; cancel it here so the
+            # final left/right joint coordinates translate in one world direction.
+            abduction_by_leg[leg] = math.degrees(
+                -_side_sign(leg) * joint_abduction
+            )
+            continue
+        else:
+            shifted_outward = outward + _side_sign(leg) * foot_delta_lateral_m
         down_by_leg[leg] = math.hypot(vertical, shifted_outward)
         abduction_by_leg[leg] = math.degrees(math.atan2(shifted_outward, vertical))
 
@@ -643,7 +839,7 @@ def distributed_push_crawl_by_name(
     sole_pitch_by_leg_deg: dict[str, float] = {}
     shoe_edge_clearance_by_leg_m: dict[str, float] = {}
     for leg in LEGS:
-        if leg == swing_leg and swing_is_airborne:
+        if leg == swing_leg and swing_trajectory_active:
             hip_flexion, knee = leg_ik(
                 leg,
                 down_by_leg[leg],
@@ -670,22 +866,50 @@ def distributed_push_crawl_by_name(
             0.0,
         )
     pose = _command_knees_downward(pose)
+    # The quintic trajectory has zero vertical motion at both ends.  Requiring
+    # a binary release at the first lift sample and forbidding touchdown until
+    # the final lower sample encourages abrupt contact changes.  Reserve a
+    # small transition window at each end in which settled support is expected;
+    # the strict release identity remains enforced through the core swing.
+    swing_contact_expected_airborne = swing_trajectory_active
+    if swing_contact_expected_airborne and contact_transition_fraction > 0.0:
+        swing_contact_expected_airborne = (
+            contact_transition_fraction
+            <= airborne_u
+            <= 1.0 - contact_transition_fraction
+        )
     expected_support_legs = (
         [leg for leg in LEGS if leg != swing_leg]
-        if swing_is_airborne
+        if swing_contact_expected_airborne
         else list(LEGS)
+    )
+    laterally_flat_support = math.isclose(
+        body_shift_lateral_m,
+        0.0,
+        abs_tol=1e-12,
     )
     return pose, {
         "cycle_phase": cycle_phase,
         "phase": phase_name,
         "phase_progress": phase_u,
         "swing_leg": swing_leg,
+        "swing_trajectory_active": swing_trajectory_active,
+        "swing_contact_expected_airborne": swing_contact_expected_airborne,
+        "contact_transition_fraction": float(contact_transition_fraction),
         "expected_support_legs": expected_support_legs,
         "foot_offsets_m": dict(offsets),
         "planted_forward_m": dict(forward_by_leg),
-        "flat_sole_support": True,
-        "flat_sole_nominal_support": True,
-        "all_planted_soles_flat": True,
+        "flat_sole_support": laterally_flat_support,
+        "flat_sole_nominal_support": math.isclose(
+            weight_shift_lateral_m,
+            0.0,
+            abs_tol=1e-12,
+        ),
+        "smooth_support_push": bool(smooth_support_push),
+        "phase_fractions": tuple(value for _name, value in phase_layout),
+        "all_planted_soles_flat": laterally_flat_support,
+        "sagittal_support_soles_flat": True,
+        "support_soles_roll_for_weight_shift": not laterally_flat_support,
         "support_extension_holds_contact_x": False,
         "flat_support_down_m": dict(flat_down_by_leg),
         "sole_pitch_deg": sole_pitch_by_leg_deg,
@@ -694,6 +918,15 @@ def distributed_push_crawl_by_name(
         "support_extension_m": 0.0,
         "support_extension_progress": 0.0,
         "active_support_extension_m": 0.0,
+        "body_shift_forward_m": body_shift_forward_m,
+        "body_shift_lateral_m": body_shift_lateral_m,
+        "active_weight_shift_forward_m": active_forward_shift_m,
+        "translate_lateral_weight_shift": bool(translate_lateral_weight_shift),
+        "foot_delta_lateral_m": foot_delta_lateral_m,
+        "forward_body_pitch_rad": float(forward_body_pitch_rad),
+        "pitch_forward_bias_m": pitch_forward_bias_m,
+        "stance_center_offset_m": float(stance_center_offset_m),
+        "stance_forward_bias_m": stance_forward_bias_m,
     }
 
 

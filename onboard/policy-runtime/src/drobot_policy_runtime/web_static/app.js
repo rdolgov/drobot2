@@ -65,10 +65,21 @@ function render(state) {
   speedValue.textContent = `${Number(speed.value).toFixed(2)} m/s`;
 
   const imu = state.imu;
+  const heading = state.heading_hold;
   byId("imu").innerHTML = [
     vectorCard("Angular velocity", imu?.angular_velocity_rad_s, "rad/s - x y z"),
     vectorCard("Projected gravity", imu?.projected_gravity, "normalized - x y z"),
     vectorCard("Linear acceleration", imu?.linear_acceleration_m_s2, "m/s&sup2; - x y z"),
+    vectorCard(
+      "Relative heading",
+      heading ? [heading.current_relative_rad, heading.desired_relative_rad, heading.error_rad] : null,
+      "rad - current / desired / error",
+    ),
+    vectorCard(
+      heading?.enabled ? "Heading correction" : "Heading correction (disabled)",
+      heading ? [heading.correction_rad_s, heading.effective_yaw_rad_s] : null,
+      "rad/s - feedback / effective command",
+    ),
   ].join("");
 
   byId("motors").innerHTML = (state.motors || []).map((motor) => `

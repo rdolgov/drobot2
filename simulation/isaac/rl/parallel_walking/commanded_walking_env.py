@@ -22,7 +22,6 @@ from simulation.isaac._quadruped_runtime import distributed_push_crawl_by_name
 from . import preview_control
 from .commanded_walking_env_cfg import (
     DISTAL_LINK_LENGTH_M,
-    EFFORT_CAP_NM,
     ORIGINAL_BASE_COM_M,
     ORIGINAL_BASE_INERTIA_KG_M2,
     ORIGINAL_BASE_MASS_KG,
@@ -42,14 +41,60 @@ from .commanded_walking_env_cfg import (
 )
 
 LEG_NAMES = ("front_left", "rear_left", "front_right", "rear_right")
+EXPECTED_ACTION_ORDER = tuple(
+    f"{leg}_{joint_kind}"
+    for joint_kind in ("hip_abduction", "hip_flexion", "knee")
+    for leg in LEG_NAMES
+)
 
 
-def _yaw_from_wxyz(quaternion: torch.Tensor) -> torch.Tensor:
-    """Return wrapped world yaw for Isaac's scalar-first root quaternion."""
-    w, x, y, z = quaternion.unbind(dim=1)
+def _yaw_from_xyzw(quaternion: torch.Tensor) -> torch.Tensor:
+    """Return wrapped world yaw for Isaac Lab's Warp ``xyzw`` quaternion."""
+    x, y, z, w = quaternion.unbind(dim=1)
     return torch.atan2(
         2.0 * (w * z + x * y),
         1.0 - 2.0 * (y * y + z * z),
+    )
+
+
+def _quaternion_from_rpy_xyzw(
+    roll: torch.Tensor,
+    pitch: torch.Tensor,
+    yaw: torch.Tensor,
+) -> torch.Tensor:
+    """Return Isaac Lab ``xyzw`` quaternions for intrinsic RPY angles."""
+    half_roll = 0.5 * roll
+    half_pitch = 0.5 * pitch
+    half_yaw = 0.5 * yaw
+    cr, sr = torch.cos(half_roll), torch.sin(half_roll)
+    cp, sp = torch.cos(half_pitch), torch.sin(half_pitch)
+    cy, sy = torch.cos(half_yaw), torch.sin(half_yaw)
+    return torch.stack(
+        (
+            sr * cp * cy - cr * sp * sy,
+            cr * sp * cy + sr * cp * sy,
+            cr * cp * sy - sr * sp * cy,
+            cr * cp * cy + sr * sp * sy,
+        ),
+        dim=1,
+    )
+
+
+def _multiply_quaternions_xyzw(
+    lhs: torch.Tensor,
+    rhs: torch.Tensor,
+) -> torch.Tensor:
+    """Hamilton-product Isaac Lab ``xyzw`` quaternion batches."""
+    lx, ly, lz, lw = lhs.unbind(dim=1)
+    rx, ry, rz, rw = rhs.unbind(dim=1)
+    return torch.stack(
+        (
+            lw * rx + lx * rw + ly * rz - lz * ry,
+            lw * ry - lx * rz + ly * rw + lz * rx,
+            lw * rz + lx * ry - ly * rx + lz * rw,
+            lw * rw - lx * rx - ly * ry - lz * rz,
+        ),
+        dim=1,
     )
 
 
@@ -263,6 +308,11 @@ def _author_rear_battery_payload(stage, cfg) -> None:
     dry_inertia = dry_inertia_about_original - dry_mass * _parallel_axis(
         dry_com - original_com
     )
+    dry_mass_scale = float(cfg.dry_robot_mass_scale)
+    if not math.isfinite(dry_mass_scale) or dry_mass_scale <= 0.0:
+        raise ValueError("dry_robot_mass_scale must be finite and positive")
+    dry_mass *= dry_mass_scale
+    dry_inertia *= dry_mass_scale
 
     payload_mass = float(cfg.rear_payload_mass_kg)
     payload_center = np.asarray(cfg.rear_payload_center_m, dtype=np.float64)
@@ -331,6 +381,41 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         **kwargs,
     ):
         super().__init__(cfg, render_mode, **kwargs)
+        scheduled_release_force_sigma_n = float(
+            self.cfg.scheduled_swing_release_force_sigma_n
+        )
+        if (
+            not math.isfinite(scheduled_release_force_sigma_n)
+            or scheduled_release_force_sigma_n <= 0.0
+        ):
+            raise ValueError(
+                "scheduled_swing_release_force_sigma_n must be finite and positive"
+            )
+        self._scheduled_release_force_sigma_n = scheduled_release_force_sigma_n
+        release_force_threshold_n = float(
+            self.cfg.scheduled_release_force_threshold_n
+        )
+        release_shaping_width_n = float(
+            self.cfg.scheduled_release_shaping_width_n
+        )
+        release_consecutive_steps = int(
+            self.cfg.scheduled_release_min_consecutive_steps
+        )
+        if not math.isfinite(release_force_threshold_n) or release_force_threshold_n <= 0.0:
+            raise ValueError(
+                "scheduled_release_force_threshold_n must be finite and positive"
+            )
+        if not math.isfinite(release_shaping_width_n) or release_shaping_width_n <= 0.0:
+            raise ValueError(
+                "scheduled_release_shaping_width_n must be finite and positive"
+            )
+        if release_consecutive_steps <= 0:
+            raise ValueError(
+                "scheduled_release_min_consecutive_steps must be positive"
+            )
+        self._scheduled_release_force_threshold_n = release_force_threshold_n
+        self._scheduled_release_shaping_width_n = release_shaping_width_n
+        self._scheduled_release_min_consecutive_steps = release_consecutive_steps
         self._actions = torch.zeros(
             self.num_envs, gym.spaces.flatdim(self.single_action_space), device=self.device
         )
@@ -338,6 +423,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._older_actions = torch.zeros_like(self._actions)
         self._previous_targets = self._robot.data.default_joint_pos.torch.clone()
         self._desired_targets = self._previous_targets.clone()
+        self._previous_requested_targets = self._previous_targets.clone()
         self._previous_joint_velocity = self._robot.data.joint_vel.torch.clone()
         self._previous_body_linear_velocity = (
             self._robot.data.root_lin_vel_w.torch.clone()
@@ -346,6 +432,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             self._robot.data.root_ang_vel_w.torch.clone()
         )
         self._commands = torch.zeros((self.num_envs, 3), device=self.device)
+        self._nominal_yaw_command = torch.zeros(self.num_envs, device=self.device)
         self._joint_scale = torch.tensor(
             [
                 self.cfg.action_scale_abduction_rad
@@ -358,8 +445,33 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             dtype=torch.float32,
             device=self.device,
         )
-        if len(self._robot.joint_names) != 12:
-            raise RuntimeError(f"Expected 12 joints, got {self._robot.joint_names}")
+        if tuple(self._robot.joint_names) != EXPECTED_ACTION_ORDER:
+            raise RuntimeError(
+                "Isaac articulation joint order does not match the exported/onboard "
+                f"action contract: expected {EXPECTED_ACTION_ORDER}, got "
+                f"{tuple(self._robot.joint_names)}"
+            )
+        configured_residual_scales = self.cfg.residual_action_scale_by_action
+        if configured_residual_scales is None:
+            configured_residual_scales = (
+                float(self.cfg.residual_action_scale),
+            ) * len(EXPECTED_ACTION_ORDER)
+        if len(configured_residual_scales) != len(EXPECTED_ACTION_ORDER):
+            raise ValueError(
+                "residual_action_scale_by_action must contain one value for each "
+                f"action in {EXPECTED_ACTION_ORDER}"
+            )
+        self._residual_action_scale = torch.tensor(
+            configured_residual_scales,
+            dtype=torch.float32,
+            device=self.device,
+        )
+        if not torch.all(torch.isfinite(self._residual_action_scale)):
+            raise ValueError("residual action scales must be finite")
+        if torch.any(self._residual_action_scale <= 0.0) or torch.any(
+            self._residual_action_scale > 1.0
+        ):
+            raise ValueError("residual action scales must be within (0, 1]")
         self._leg_phase_offsets = torch.tensor(
             self.cfg.gait_phase_offsets, dtype=torch.float32, device=self.device
         )
@@ -395,12 +507,28 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             raise RuntimeError(
                 f"Expected four foot sensors, got {self._foot_sensor_names}"
             )
+        self._foot_leg_names = tuple(
+            next(
+                (
+                    leg
+                    for leg in LEG_NAMES
+                    if leg in str(sensor_name)
+                ),
+                "",
+            )
+            for sensor_name in self._foot_sensor_names
+        )
+        if set(self._foot_leg_names) != set(LEG_NAMES) or len(
+            set(self._foot_leg_names)
+        ) != len(LEG_NAMES):
+            raise RuntimeError(
+                "Foot sensors must identify front-left, rear-left, front-right, "
+                f"and rear-right exactly once; got {self._foot_sensor_names}"
+            )
         self._foot_phase_offsets = torch.tensor(
             [
-                self._leg_phase_offsets[
-                    next(i for i, leg in enumerate(LEG_NAMES) if leg in name)
-                ].item()
-                for name in self._foot_sensor_names
+                self._leg_phase_offsets[LEG_NAMES.index(leg_name)].item()
+                for leg_name in self._foot_leg_names
             ],
             dtype=torch.float32,
             device=self.device,
@@ -412,9 +540,32 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             raise RuntimeError(
                 f"Expected four distal rigid bodies, got {self._foot_body_names}"
             )
+        self._base_body_ids, base_body_names = self._robot.find_bodies("base_link")
+        if len(self._base_body_ids) != 1:
+            raise RuntimeError(f"Expected one base_link body, got {base_body_names}")
+        self._base_body_ids = torch.as_tensor(
+            self._base_body_ids, dtype=torch.int32, device=self.device
+        )
+        self._initialize_physical_randomization()
         self._distributed_reference_joint_pos: torch.Tensor | None = None
         self._distributed_reference_contact: torch.Tensor | None = None
-        if self.cfg.gait_reference_mode == "distributed_push":
+        self._distributed_reference_lateral_shift: torch.Tensor | None = None
+        self._distributed_reference_lateral_shift_phase_derivative: (
+            torch.Tensor | None
+        ) = None
+        self._stance_forward_bias_m = 0.0
+        # DirectRLEnv increments the episode step before asking for reward.  Cache
+        # the exact phase/reference applied to physics so reward and diagnostics
+        # do not accidentally score the following 60 Hz gait tick.
+        self._applied_gait_reference: torch.Tensor | None = None
+        self._applied_scheduled_contact: torch.Tensor | None = None
+        self._applied_gait_phase: torch.Tensor | None = None
+        self._applied_expected_lateral_displacement: torch.Tensor | None = None
+        self._applied_expected_lateral_velocity: torch.Tensor | None = None
+        if self.cfg.gait_reference_mode in (
+            "distributed_push",
+            "smooth_distributed_push",
+        ):
             self._build_distributed_reference_table()
         elif self.cfg.gait_reference_mode != "continuous":
             raise RuntimeError(
@@ -422,9 +573,17 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             )
         self._randomize_rear_payload_estimate()
         self._randomize_actuator_capacity()
+        self._randomize_foot_materials()
+        self._initialize_episode_perturbation_buffers()
 
         self._steps_since_reset = torch.zeros(
             self.num_envs, dtype=torch.long, device=self.device
+        )
+        # A phase-zero reset always presents the rear-right step first.  Profiles
+        # that enforce four-leg participation can instead start on any quarter
+        # cycle so PPO sees each physical leg as the first loaded swing leg.
+        self._gait_phase_offset = torch.zeros(
+            self.num_envs, dtype=torch.float32, device=self.device
         )
         self._failed = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self._failure_nonfinite = torch.zeros_like(self._failed)
@@ -434,9 +593,18 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._failure_base_contact = torch.zeros_like(self._failed)
         self._episode_start_position = torch.zeros((self.num_envs, 3), device=self.device)
         self._episode_start_yaw = torch.zeros(self.num_envs, device=self.device)
+        self._episode_forward_direction_w = torch.zeros(
+            (self.num_envs, 2), device=self.device
+        )
+        self._episode_lateral_direction_w = torch.zeros_like(
+            self._episode_forward_direction_w
+        )
         self._episode_velocity_error_sum = torch.zeros(self.num_envs, device=self.device)
         self._episode_yaw_error_sum = torch.zeros(self.num_envs, device=self.device)
         self._episode_heading_error_sum = torch.zeros(self.num_envs, device=self.device)
+        self._episode_straight_progress_gate_sum = torch.zeros(
+            self.num_envs, device=self.device
+        )
         self._episode_commanded_distance = torch.zeros(self.num_envs, device=self.device)
         self._episode_action_saturation_sum = torch.zeros(
             self.num_envs, device=self.device
@@ -452,6 +620,42 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_scheduled_swing_success_by_foot = torch.zeros(
             (self.num_envs, 4), device=self.device
         )
+        self._episode_scheduled_release_quality_by_foot = torch.zeros(
+            (self.num_envs, 4), device=self.device
+        )
+        self._episode_scheduled_swing_opportunity_by_foot = torch.zeros(
+            (self.num_envs, 4), device=self.device
+        )
+        self._episode_four_leg_progress_gate_sum = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self._previous_applied_gait_phase = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self._gait_phase_initialized = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self._cycle_release_full_cycle_active = torch.zeros_like(
+            self._gait_phase_initialized
+        )
+        self._cycle_release_consecutive_steps = torch.zeros(
+            (self.num_envs, 4), dtype=torch.long, device=self.device
+        )
+        self._cycle_release_pass_by_foot = torch.zeros(
+            (self.num_envs, 4), dtype=torch.bool, device=self.device
+        )
+        self._last_completed_cycle_all_four_release = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self._episode_completed_gait_cycles = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self._episode_all_four_release_cycles = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self._episode_cycle_release_qualifications_by_foot = torch.zeros(
+            (self.num_envs, 4), device=self.device
+        )
         self._episode_command_speed_sum = torch.zeros(self.num_envs, device=self.device)
         self._episode_base_height_sum = torch.zeros(self.num_envs, device=self.device)
         self._sustained_window_steps = max(
@@ -459,6 +663,26 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         )
         self._rolling_command_speed = torch.zeros(
             (self.num_envs, self._sustained_window_steps), device=self.device
+        )
+        minimum_gait_frequency_hz = (
+            1.0 / self.cfg.gait_period_s
+            if self.cfg.gait_clock_mode == "fixed"
+            else self.cfg.gait_frequency_min_hz
+        )
+        if minimum_gait_frequency_hz <= 0.0:
+            raise ValueError("minimum gait frequency must be positive")
+        self._lateral_cycle_history_steps = max(
+            3,
+            int(math.ceil(1.0 / (minimum_gait_frequency_hz * self.step_dt)))
+            + 2,
+        )
+        self._lateral_displacement_history = torch.zeros(
+            (self.num_envs, self._lateral_cycle_history_steps),
+            device=self.device,
+        )
+        self._episode_cycle_lateral_speed_sum = torch.zeros(
+            self.num_envs,
+            device=self.device,
         )
         self._env_indices = torch.arange(self.num_envs, device=self.device)
         self._episode_min_rolling_speed = torch.full(
@@ -474,6 +698,12 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_body_angular_acceleration_squared_sum = torch.zeros(
             self.num_envs, device=self.device
         )
+        self._episode_effort_soft_limit_step_sum = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self._episode_max_applied_effort_fraction = torch.zeros(
+            self.num_envs, device=self.device
+        )
         reward_term_names = (
             "forward_velocity_tracking",
             "instant_progress",
@@ -484,10 +714,14 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             "rearward_pitch",
             "gait_reference",
             "scheduled_stance",
+            "missing_scheduled_stance",
             "scheduled_swing",
+            "scheduled_release_shaping",
+            "cycle_four_leg_release",
             "upright",
             "alive",
             "lateral_velocity",
+            "normalized_lateral_velocity",
             "lateral_displacement",
             "lateral_corridor",
             "vertical_velocity",
@@ -506,6 +740,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             "joint_acceleration",
             "body_linear_acceleration",
             "body_angular_acceleration",
+            "effort_soft_limit",
             "support_foot_slip",
             "touchdown_impact",
             "qualified_touchdown",
@@ -513,6 +748,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             "three_foot_support",
             "excess_airborne_feet",
             "termination",
+            "straight_aligned_progress",
         )
         self._episode_reward_term_sums = {
             name: torch.zeros(self.num_envs, device=self.device)
@@ -525,6 +761,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         sample_count = 2048
         joint_positions: list[list[float]] = []
         scheduled_contacts: list[list[bool]] = []
+        lateral_shifts: list[float] = []
         for sample_index in range(sample_count):
             phase = sample_index / sample_count
             pose, state = distributed_push_crawl_by_name(
@@ -534,15 +771,32 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                 lift_m=self.cfg.gait_lift_m,
                 support_extension_m=0.0,
                 weight_shift_forward_m=self.cfg.gait_weight_shift_forward_m,
-                weight_shift_lateral_m=0.0,
-                down_m=0.329341447,
-                fore_aft_m=0.080,
+                weight_shift_lateral_m=self.cfg.gait_weight_shift_lateral_m,
+                rear_weight_shift_forward_m=(
+                    self.cfg.gait_rear_weight_shift_forward_m
+                ),
+                translate_lateral_weight_shift=(
+                    self.cfg.gait_translate_lateral_weight_shift
+                ),
+                forward_body_pitch_rad=self.cfg.gait_forward_body_pitch_rad,
+                stance_center_offset_m=self.cfg.gait_stance_center_offset_m,
+                down_m=self.cfg.gait_stance_down_m,
+                fore_aft_m=self.cfg.gait_stance_fore_aft_m,
                 abduction_deg=0.0,
+                smooth_support_push=self.cfg.gait_smooth_support_push,
+                phase_fractions=(
+                    self.cfg.gait_distributed_push_phase_fractions
+                ),
+                contact_transition_fraction=(
+                    self.cfg.gait_contact_transition_fraction
+                ),
             )
             joint_positions.append(
                 [float(pose[name]) for name in self._robot.joint_names]
             )
             support_legs = set(state["expected_support_legs"])
+            self._stance_forward_bias_m = float(state["stance_forward_bias_m"])
+            lateral_shifts.append(float(state["body_shift_lateral_m"]))
             scheduled_contacts.append(
                 [
                     next(leg for leg in LEG_NAMES if leg in foot_name)
@@ -560,60 +814,527 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             dtype=torch.bool,
             device=self.device,
         )
+        self._distributed_reference_lateral_shift = torch.tensor(
+            lateral_shifts,
+            dtype=torch.float32,
+            device=self.device,
+        )
+        # Central periodic finite difference with respect to normalized cycle
+        # phase. Multiplying this table by gait frequency yields m/s.
+        self._distributed_reference_lateral_shift_phase_derivative = 0.5 * sample_count * (
+            torch.roll(self._distributed_reference_lateral_shift, shifts=-1)
+            - torch.roll(self._distributed_reference_lateral_shift, shifts=1)
+        )
+
+    def _initialize_physical_randomization(self) -> None:
+        """Choose the fixed nominal-domain subset and mirrored joint pairs."""
+        nominal_fraction = float(self.cfg.physical_randomization_nominal_fraction)
+        if not 0.0 <= nominal_fraction <= 1.0:
+            raise ValueError(
+                "physical_randomization_nominal_fraction must be in [0, 1]"
+            )
+        nominal_count = min(
+            self.num_envs,
+            max(0, int(round(nominal_fraction * self.num_envs))),
+        )
+        self._physical_randomization_active = torch.ones(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        if nominal_count == self.num_envs:
+            self._physical_randomization_active.zero_()
+        elif nominal_count > 0:
+            nominal_ids = torch.randperm(
+                self.num_envs, device=self.device
+            )[:nominal_count]
+            self._physical_randomization_active[nominal_ids] = False
+        # Existing V24 domains predate the nominal-subset option.  Only opt them
+        # into the mask when a task explicitly reserves a nontrivial subset.
+        self._mask_existing_physical_randomization = nominal_fraction < 1.0
+        self._mirrored_joint_pairs = tuple(
+            (
+                self._robot.joint_names.index(f"{left_leg}_{joint_suffix}"),
+                self._robot.joint_names.index(f"{right_leg}_{joint_suffix}"),
+            )
+            for left_leg, right_leg in (
+                ("front_left", "front_right"),
+                ("rear_left", "rear_right"),
+            )
+            for joint_suffix in ("hip_abduction", "hip_flexion", "knee")
+        )
+        self._mirrored_foot_pairs = tuple(
+            (
+                next(
+                    index
+                    for index, name in enumerate(self._foot_body_names)
+                    if left_leg in name
+                ),
+                next(
+                    index
+                    for index, name in enumerate(self._foot_body_names)
+                    if right_leg in name
+                ),
+            )
+            for left_leg, right_leg in (
+                ("front_left", "front_right"),
+                ("rear_left", "rear_right"),
+            )
+        )
+
+    def _sample_paired_scale(
+        self,
+        value_range: tuple[float, float],
+        item_count: int,
+        pairs: Sequence[tuple[int, int]],
+        *,
+        nominal_value: float = 1.0,
+    ) -> torch.Tensor:
+        """Sample per-item values, optionally mirrored around the range midpoint."""
+        low, high = (float(value) for value in value_range)
+        if low > high:
+            raise ValueError(f"Invalid randomization range: {value_range}")
+        if low == high:
+            values = torch.full(
+                (self.num_envs, item_count), low, device=self.device
+            )
+        else:
+            values = low + (high - low) * torch.rand(
+                (self.num_envs, item_count), device=self.device
+            )
+        if self.cfg.mirror_physical_randomization_pairs and low != high:
+            for first_id, second_id in pairs:
+                first = low + (high - low) * torch.rand(
+                    self.num_envs, device=self.device
+                )
+                second = low + high - first
+                swap = torch.rand(self.num_envs, device=self.device) < 0.5
+                values[:, first_id] = torch.where(swap, second, first)
+                values[:, second_id] = torch.where(swap, first, second)
+        values[~self._physical_randomization_active] = nominal_value
+        return values
+
+    def _sample_joint_target_bias(self) -> torch.Tensor:
+        """Return fixed per-joint zero offsets, with optional mirrored signs."""
+        joint_count = len(self._robot.joint_names)
+        limits = torch.tensor(
+            [
+                self.cfg.joint_target_bias_abduction_rad
+                if name.endswith("hip_abduction")
+                else self.cfg.joint_target_bias_flexion_rad
+                for name in self._robot.joint_names
+            ],
+            dtype=torch.float32,
+            device=self.device,
+        )
+        if torch.any(limits < 0.0):
+            raise ValueError("joint target bias limits must be non-negative")
+        if not torch.any(limits > 0.0):
+            return torch.zeros(
+                (self.num_envs, joint_count), device=self.device
+            )
+        biases = (
+            2.0 * torch.rand((self.num_envs, joint_count), device=self.device)
+            - 1.0
+        ) * limits
+        if self.cfg.mirror_physical_randomization_pairs:
+            for first_id, second_id in self._mirrored_joint_pairs:
+                limit = limits[first_id]
+                first = (2.0 * torch.rand(self.num_envs, device=self.device) - 1.0) * limit
+                second = -first
+                swap = torch.rand(self.num_envs, device=self.device) < 0.5
+                biases[:, first_id] = torch.where(swap, second, first)
+                biases[:, second_id] = torch.where(swap, first, second)
+        biases[~self._physical_randomization_active] = 0.0
+        return biases
+
+    def _randomize_foot_materials(self) -> None:
+        """Assign per-environment friction to all shapes on each distal body."""
+        static_range = self.cfg.shoe_static_friction_randomization_range
+        dynamic_range = self.cfg.shoe_dynamic_friction_randomization_range
+        common_static_range = (
+            self.cfg.shoe_common_static_friction_randomization_range
+        )
+        common_dynamic_range = (
+            self.cfg.shoe_common_dynamic_friction_randomization_range
+        )
+        self._foot_static_friction = torch.full(
+            (self.num_envs, 4),
+            float(self.cfg.shoe_static_friction),
+            device=self.device,
+        )
+        self._foot_dynamic_friction = torch.full(
+            (self.num_envs, 4),
+            float(self.cfg.shoe_dynamic_friction),
+            device=self.device,
+        )
+        uses_common_surface = (
+            common_static_range is not None
+            or common_dynamic_range is not None
+        )
+        if uses_common_surface and (
+            common_static_range is None or common_dynamic_range is None
+        ):
+            raise ValueError(
+                "common static and dynamic friction ranges must be configured together"
+            )
+        if uses_common_surface and (
+            static_range is not None or dynamic_range is not None
+        ):
+            raise ValueError(
+                "common-surface friction cannot be combined with legacy absolute "
+                "per-foot friction ranges"
+            )
+        if static_range is None and dynamic_range is None and not uses_common_surface:
+            return
+        if uses_common_surface:
+            static_low, static_high = (
+                float(value) for value in common_static_range
+            )
+            dynamic_low, dynamic_high = (
+                float(value) for value in common_dynamic_range
+            )
+            if not 0.0 < static_low <= static_high:
+                raise ValueError("common static friction range must be positive and ordered")
+            if not 0.0 < dynamic_low <= dynamic_high:
+                raise ValueError("common dynamic friction range must be positive and ordered")
+            surface_draw = torch.rand((self.num_envs, 1), device=self.device)
+            common_static = static_low + (static_high - static_low) * surface_draw
+            common_dynamic = dynamic_low + (dynamic_high - dynamic_low) * surface_draw
+            differential = self._sample_paired_scale(
+                self.cfg.shoe_friction_differential_scale_range,
+                4,
+                self._mirrored_foot_pairs,
+            )
+            self._foot_static_friction = common_static * differential
+            self._foot_dynamic_friction = common_dynamic * differential
+            nominal = ~self._physical_randomization_active
+            self._foot_static_friction[nominal] = float(
+                self.cfg.shoe_static_friction
+            )
+            self._foot_dynamic_friction[nominal] = float(
+                self.cfg.shoe_dynamic_friction
+            )
+        elif static_range is not None:
+            self._foot_static_friction = self._sample_paired_scale(
+                static_range,
+                4,
+                self._mirrored_foot_pairs,
+                nominal_value=float(self.cfg.shoe_static_friction),
+            )
+        if not uses_common_surface and dynamic_range is not None:
+            self._foot_dynamic_friction = self._sample_paired_scale(
+                dynamic_range,
+                4,
+                self._mirrored_foot_pairs,
+                nominal_value=float(self.cfg.shoe_dynamic_friction),
+            )
+        self._foot_dynamic_friction = torch.minimum(
+            self._foot_dynamic_friction,
+            self._foot_static_friction,
+        )
+
+        # Isaac Lab's public articulation API does not expose per-body shape
+        # ranges.  This is the same backend mapping used by its official rigid-
+        # body-material randomizer and is deliberately confined to init time.
+        shape_count_by_body: list[int] = []
+        for link_path in self._robot.root_view.link_paths[0]:
+            link_view = self._robot._physics_sim_view.create_rigid_body_view(
+                link_path
+            )
+            shape_count_by_body.append(int(link_view.max_shapes))
+        if sum(shape_count_by_body) != int(self._robot.root_view.max_shapes):
+            raise RuntimeError(
+                "Could not map distal-body friction to articulation shapes: "
+                f"counted {sum(shape_count_by_body)}, expected "
+                f"{self._robot.root_view.max_shapes}"
+            )
+        backend_foot_ids = self._robot.map_body_ids_to_backend(
+            self._foot_body_ids
+        )
+        materials = wp.to_torch(
+            self._robot.root_view.get_material_properties()
+        ).clone()
+        static_values = self._foot_static_friction.to(materials.device)
+        dynamic_values = self._foot_dynamic_friction.to(materials.device)
+        for foot_index, backend_body_id in enumerate(backend_foot_ids):
+            body_id = int(backend_body_id)
+            shape_start = sum(shape_count_by_body[:body_id])
+            shape_end = shape_start + shape_count_by_body[body_id]
+            materials[:, shape_start:shape_end, 0] = static_values[
+                :, foot_index
+            ].unsqueeze(1)
+            materials[:, shape_start:shape_end, 1] = dynamic_values[
+                :, foot_index
+            ].unsqueeze(1)
+        material_env_ids = torch.arange(
+            self.num_envs, dtype=torch.int32, device=materials.device
+        )
+        self._robot.root_view.set_material_properties(
+            wp.from_torch(materials.contiguous(), dtype=wp.float32),
+            wp.from_torch(material_env_ids, dtype=wp.int32),
+        )
+
+    def _initialize_episode_perturbation_buffers(self) -> None:
+        """Allocate reset-time IMU and persistent-load domains."""
+        if self.cfg.imu_projected_gravity_noise_std < 0.0:
+            raise ValueError("projected-gravity noise standard deviation must be non-negative")
+        if self.cfg.imu_linear_acceleration_noise_std_g < 0.0:
+            raise ValueError("linear-acceleration noise standard deviation must be non-negative")
+        self._imu_angular_velocity_bias = torch.zeros(
+            (self.num_envs, 3), device=self.device
+        )
+        self._base_force_b = torch.zeros(
+            (self.num_envs, 1, 3), device=self.device
+        )
+        self._base_torque_b = torch.zeros_like(self._base_force_b)
+
+    def _randomize_episode_perturbations(self, env_ids: torch.Tensor) -> None:
+        """Resample fixed-for-an-episode sensor bias and body-frame wrench."""
+        count = len(env_ids)
+        active = self._physical_randomization_active[env_ids].float().unsqueeze(1)
+        gyro_limit = float(self.cfg.imu_angular_velocity_bias_range_rad_s)
+        if gyro_limit < 0.0:
+            raise ValueError("IMU angular-velocity bias range must be non-negative")
+        if gyro_limit > 0.0:
+            self._imu_angular_velocity_bias[env_ids] = (
+                2.0 * torch.rand((count, 3), device=self.device) - 1.0
+            ) * gyro_limit * active
+        else:
+            self._imu_angular_velocity_bias[env_ids] = 0.0
+
+        force_limit = torch.tensor(
+            self.cfg.base_force_randomization_range_n,
+            dtype=torch.float32,
+            device=self.device,
+        )
+        torque_limit = torch.tensor(
+            self.cfg.base_torque_randomization_range_nm,
+            dtype=torch.float32,
+            device=self.device,
+        )
+        if force_limit.shape != (3,) or torque_limit.shape != (3,):
+            raise ValueError("base force and torque ranges must each have three axes")
+        if torch.any(force_limit < 0.0) or torch.any(torque_limit < 0.0):
+            raise ValueError("base force and torque ranges must be non-negative")
+        if torch.any(force_limit > 0.0):
+            self._base_force_b[env_ids, 0] = (
+                2.0 * torch.rand((count, 3), device=self.device) - 1.0
+            ) * force_limit * active
+        else:
+            self._base_force_b[env_ids] = 0.0
+        if torch.any(torque_limit > 0.0):
+            self._base_torque_b[env_ids, 0] = (
+                2.0 * torch.rand((count, 3), device=self.device) - 1.0
+            ) * torque_limit * active
+        else:
+            self._base_torque_b[env_ids] = 0.0
+        if torch.any(force_limit > 0.0) or torch.any(torque_limit > 0.0):
+            self._robot.permanent_wrench_composer.set_forces_and_torques_index(
+                forces=self._base_force_b[env_ids],
+                torques=self._base_torque_b[env_ids],
+                body_ids=self._base_body_ids,
+                env_ids=env_ids,
+            )
 
     def _randomize_rear_payload_estimate(self) -> None:
-        """Spread the measured payload uncertainty across vectorized robots."""
-        if not self.cfg.rear_payload_enabled:
-            return
+        """Apply measured dry mass and bounded whole-robot/payload domains."""
         base_ids, base_names = self._robot.find_bodies("base_link")
         if len(base_ids) != 1:
             raise RuntimeError(f"Expected one base_link body, got {base_names}")
         base_ids = torch.as_tensor(base_ids, dtype=torch.int32, device=self.device)
+        all_body_ids = torch.arange(
+            len(self._robot.body_names), dtype=torch.int32, device=self.device
+        )
         env_ids = torch.arange(
             self.num_envs, dtype=torch.int32, device=self.device
         )
-        low, high = self.cfg.rear_payload_combined_mass_scale_range
-        mass_scale = low + (high - low) * torch.rand(
+        dry_scale = float(self.cfg.dry_robot_mass_scale)
+        if not math.isfinite(dry_scale) or dry_scale <= 0.0:
+            raise ValueError("dry_robot_mass_scale must be finite and positive")
+        global_low, global_high = self.cfg.robot_mass_scale_range
+        if not 0.0 < global_low <= global_high:
+            raise ValueError("robot_mass_scale_range must be positive and ordered")
+        global_scale = global_low + (global_high - global_low) * torch.rand(
             (self.num_envs, 1), device=self.device
         )
-        masses = self._robot.data.body_mass.torch[:, base_ids.long()] * mass_scale
-        inertias = (
-            self._robot.data.body_inertia.torch[:, base_ids.long()] * mass_scale.unsqueeze(-1)
+        if self._mask_existing_physical_randomization:
+            global_scale[~self._physical_randomization_active] = 1.0
+        # The base was already reconstructed from scaled dry inertia plus the
+        # independently measured pack during USD authoring.  Scale only the
+        # remaining dry links here, then apply the bounded whole-robot domain.
+        static_body_scale = torch.full(
+            (1, len(self._robot.body_names)),
+            dry_scale,
+            dtype=torch.float32,
+            device=self.device,
         )
+        static_body_scale[:, base_ids.long()] = 1.0
+        masses = (
+            self._robot.data.body_mass.torch
+            * static_body_scale
+            * global_scale
+        )
+        inertias = (
+            self._robot.data.body_inertia.torch
+            * static_body_scale.unsqueeze(-1)
+            * global_scale.unsqueeze(-1)
+        )
+        if self.cfg.rear_payload_enabled:
+            payload_low, payload_high = (
+                self.cfg.rear_payload_combined_mass_scale_range
+            )
+            if not 0.0 < payload_low <= payload_high:
+                raise ValueError(
+                    "rear_payload_combined_mass_scale_range must be positive and ordered"
+                )
+            payload_scale = payload_low + (payload_high - payload_low) * torch.rand(
+                (self.num_envs, 1), device=self.device
+            )
+            if self._mask_existing_physical_randomization:
+                payload_scale[~self._physical_randomization_active] = 1.0
+            masses[:, base_ids.long()] *= payload_scale
+            inertias[:, base_ids.long()] *= payload_scale.unsqueeze(-1)
         self._robot.set_masses_index(
-            masses=masses, body_ids=base_ids, env_ids=env_ids
+            masses=masses, body_ids=all_body_ids, env_ids=env_ids
         )
         self._robot.set_inertias_index(
-            inertias=inertias, body_ids=base_ids, env_ids=env_ids
+            inertias=inertias, body_ids=all_body_ids, env_ids=env_ids
         )
 
+        if not self.cfg.rear_payload_enabled:
+            return
         jitter_limit = torch.tensor(
             self.cfg.rear_payload_combined_com_jitter_m,
             dtype=torch.float32,
             device=self.device,
         )
         coms = self._robot.data.body_com_pose_b.torch[:, base_ids.long()].clone()
-        coms[:, :, :3] += (
+        com_jitter = (
             2.0 * torch.rand((self.num_envs, 1, 3), device=self.device) - 1.0
         ) * jitter_limit
+        if self._mask_existing_physical_randomization:
+            com_jitter[~self._physical_randomization_active] = 0.0
+        coms[:, :, :3] += com_jitter
         self._robot.set_coms_index(coms=coms, body_ids=base_ids, env_ids=env_ids)
 
     def _randomize_actuator_capacity(self) -> None:
-        """Approximate bounded servo torque/rate loss from supply-voltage sag."""
+        """Approximate common and per-joint servo strength, rate, and gain spread."""
+        peak_effort_nm = float(self.cfg.actuator_peak_effort_nm)
+        if not math.isfinite(peak_effort_nm) or peak_effort_nm <= 0.0:
+            raise ValueError("actuator_peak_effort_nm must be finite and positive")
         effort_low, effort_high = self.cfg.actuator_effort_scale_range
         rate_low, rate_high = self.cfg.target_velocity_scale_range
+        if not 0.0 < effort_low <= effort_high:
+            raise ValueError("actuator_effort_scale_range must be positive and ordered")
+        if not 0.0 < rate_low <= rate_high:
+            raise ValueError("target_velocity_scale_range must be positive and ordered")
         self._actuator_effort_scale = effort_low + (effort_high - effort_low) * torch.rand(
             (self.num_envs, 1), device=self.device
         )
-        self._target_velocity_scale = rate_low + (rate_high - rate_low) * torch.rand(
-            (self.num_envs, 1), device=self.device
-        )
+        if self.cfg.correlate_common_actuator_scales:
+            common_draw = (
+                self._actuator_effort_scale - effort_low
+            ) / max(effort_high - effort_low, torch.finfo(torch.float32).eps)
+            self._target_velocity_scale = (
+                rate_low + (rate_high - rate_low) * common_draw
+            )
+        else:
+            self._target_velocity_scale = rate_low + (rate_high - rate_low) * torch.rand(
+                (self.num_envs, 1), device=self.device
+            )
+        if self._mask_existing_physical_randomization:
+            nominal = ~self._physical_randomization_active
+            self._actuator_effort_scale[nominal] = 1.0
+            self._target_velocity_scale[nominal] = 1.0
         joint_count = len(self._robot.joint_names)
-        effort_limits = (
-            EFFORT_CAP_NM
-            * self._actuator_effort_scale.expand(self.num_envs, joint_count)
+        individual_effort = self._sample_paired_scale(
+            self.cfg.actuator_individual_effort_scale_range,
+            joint_count,
+            self._mirrored_joint_pairs,
         )
+        individual_rate = self._sample_paired_scale(
+            self.cfg.target_individual_velocity_scale_range,
+            joint_count,
+            self._mirrored_joint_pairs,
+        )
+        if torch.any(individual_effort <= 0.0):
+            raise ValueError("individual actuator effort scales must be positive")
+        if torch.any(individual_rate <= 0.0):
+            raise ValueError("individual target velocity scales must be positive")
+        self._actuator_effort_scale_by_joint = (
+            self._actuator_effort_scale * individual_effort
+        )
+        self._target_velocity_scale_by_joint = (
+            self._target_velocity_scale * individual_rate
+        )
+        effort_limits = peak_effort_nm * self._actuator_effort_scale_by_joint
+        self._actuator_effort_limit_by_joint = effort_limits
+        # For implicit actuators PhysX owns the real drive clamp, while Isaac
+        # Lab's actuator object independently clips its approximate torque
+        # telemetry.  Keep both limits synchronized: otherwise a >1 capacity
+        # scale changes the physics but reported ``applied_torque`` remains
+        # clipped at the authored 0.8826 N*m cap.
+        for actuator in self._robot.actuators.values():
+            joint_ids = actuator.joint_indices
+            if joint_ids is None:
+                joint_ids = slice(None)
+            actuator_limits = effort_limits[:, joint_ids]
+            actuator.effort_limit.copy_(actuator_limits)
+            actuator.effort_limit_sim.copy_(actuator_limits)
         self._robot.write_joint_effort_limit_to_sim_index(limits=effort_limits)
+
+        stiffness_range = self.cfg.actuator_individual_stiffness_scale_range
+        damping_range = self.cfg.actuator_individual_damping_scale_range
+        self._actuator_stiffness_scale_by_joint = self._sample_paired_scale(
+            stiffness_range,
+            joint_count,
+            self._mirrored_joint_pairs,
+        )
+        self._actuator_damping_scale_by_joint = self._sample_paired_scale(
+            damping_range,
+            joint_count,
+            self._mirrored_joint_pairs,
+        )
+        if torch.any(self._actuator_stiffness_scale_by_joint <= 0.0):
+            raise ValueError("individual actuator stiffness scales must be positive")
+        if torch.any(self._actuator_damping_scale_by_joint <= 0.0):
+            raise ValueError("individual actuator damping scales must be positive")
+        if tuple(stiffness_range) != (1.0, 1.0):
+            self._robot.write_joint_stiffness_to_sim_index(
+                stiffness=(
+                    self._robot.data.default_joint_stiffness.torch
+                    * self._actuator_stiffness_scale_by_joint
+                )
+            )
+        if tuple(damping_range) != (1.0, 1.0):
+            self._robot.write_joint_damping_to_sim_index(
+                damping=(
+                    self._robot.data.default_joint_damping.torch
+                    * self._actuator_damping_scale_by_joint
+                )
+            )
+
+        self._joint_target_bias = self._sample_joint_target_bias()
+        delay_low, delay_high = (
+            int(value) for value in self.cfg.control_delay_step_range
+        )
+        if not 0 <= delay_low <= delay_high <= 1:
+            raise ValueError("control_delay_step_range must be within [0, 1]")
+        if delay_low == delay_high:
+            self._control_delay_steps = torch.full(
+                (self.num_envs,),
+                delay_low,
+                dtype=torch.long,
+                device=self.device,
+            )
+        else:
+            self._control_delay_steps = torch.randint(
+                delay_low,
+                delay_high + 1,
+                (self.num_envs,),
+                dtype=torch.long,
+                device=self.device,
+            )
+        self._control_delay_steps[~self._physical_randomization_active] = 0
 
     def _current_episode_horizon_steps(self) -> int:
         curriculum_step = (
@@ -659,10 +1380,24 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._older_actions.copy_(self._previous_actions)
         self._previous_actions.copy_(self._actions)
         self._actions = torch.clamp(actions, -1.0, 1.0)
+        applied_gait_phase = self._gait_phase()
+        gait_reference, scheduled_contact = self._gait_targets(
+            phase=applied_gait_phase
+        )
+        (
+            expected_lateral_displacement,
+            expected_lateral_velocity,
+        ) = self._gait_expected_lateral_motion()
+        self._applied_gait_reference = gait_reference
+        self._applied_scheduled_contact = scheduled_contact
+        self._applied_gait_phase = applied_gait_phase
+        self._applied_expected_lateral_displacement = (
+            expected_lateral_displacement
+        )
+        self._applied_expected_lateral_velocity = expected_lateral_velocity
         if self.cfg.action_mode == "gait_residual":
-            gait_reference, _scheduled_contact = self._gait_targets()
             normalized_target = (
-                gait_reference + self.cfg.residual_action_scale * self._actions
+                gait_reference + self._residual_action_scale * self._actions
             )
         elif self.cfg.action_mode == "direct":
             normalized_target = self._actions
@@ -670,19 +1405,25 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             raise RuntimeError(f"Unknown action_mode: {self.cfg.action_mode}")
         desired_targets = self._robot.data.default_joint_pos.torch + (
             self._joint_scale * normalized_target
-        )
+        ) + self._joint_target_bias
         limits = self._robot.data.soft_joint_pos_limits.torch
         desired_targets = torch.clamp(
             desired_targets, limits[:, :, 0], limits[:, :, 1]
         )
-        self._desired_targets.copy_(desired_targets)
+        delayed_targets = torch.where(
+            (self._control_delay_steps > 0).unsqueeze(1),
+            self._previous_requested_targets,
+            desired_targets,
+        )
+        self._previous_requested_targets.copy_(desired_targets)
+        self._desired_targets.copy_(delayed_targets)
         max_delta = (
             self.cfg.target_velocity_limit_rad_s
             * self.step_dt
-            * self._target_velocity_scale
+            * self._target_velocity_scale_by_joint
         )
         self._processed_actions = torch.clamp(
-            desired_targets,
+            delayed_targets,
             self._previous_targets - max_delta,
             self._previous_targets + max_delta,
         )
@@ -702,7 +1443,8 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
     def _gait_phase(self) -> torch.Tensor:
         frequency_hz, _stride_scale = self._gait_schedule()
         return torch.remainder(
-            self._steps_since_reset.float() * self.step_dt * frequency_hz,
+            self._steps_since_reset.float() * self.step_dt * frequency_hz
+            + self._gait_phase_offset,
             1.0,
         )
 
@@ -745,9 +1487,13 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         )
         return frequency_hz, stride_scale
 
-    def _gait_targets(self) -> tuple[torch.Tensor, torch.Tensor]:
+    def _gait_targets(
+        self,
+        phase: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Return deployable smooth joint references and scheduled contacts."""
-        phase = self._gait_phase()
+        if phase is None:
+            phase = self._gait_phase()
         _frequency_hz, stride_scale = self._gait_schedule()
         if self._distributed_reference_joint_pos is not None:
             sample_count = self._distributed_reference_joint_pos.shape[0]
@@ -776,7 +1522,12 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                 torch.ones_like(scheduled_contact),
                 scheduled_contact,
             )
-            return torch.clamp(reference, -1.0, 1.0), scheduled_contact
+            # This is a normalized *base joint reference*, not an actor action.
+            # It may legitimately exceed one action-scale unit before the bounded
+            # residual is added.  Deployment uses the exported joint table in the
+            # same way, so clipping here would train against a smaller gait than
+            # the Raspberry Pi later executes.
+            return reference, scheduled_contact
         leg_phase = torch.remainder(
             phase.unsqueeze(1) + self._leg_phase_offsets.unsqueeze(0), 1.0
         )
@@ -805,13 +1556,12 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         stride_offset = stride_offset * ramp
         lift = lift * ramp
 
-        nominal_forward = 0.080 * self._leg_front_sign.unsqueeze(0)
-        world_forward = nominal_forward + stride_offset
-        default_down = (
-            (DISTAL_LINK_LENGTH_M**2 - 0.080**2) ** 0.5
-            + DISTAL_LINK_LENGTH_M
-            + 0.031
+        nominal_forward = (
+            self.cfg.gait_stance_fore_aft_m
+            * self._leg_front_sign.unsqueeze(0)
         )
+        world_forward = nominal_forward + stride_offset
+        default_down = self.cfg.gait_stance_down_m
         down = default_down - lift
         distal_contact_length = DISTAL_LINK_LENGTH_M + 0.031
         cosine_knee = torch.clamp(
@@ -853,16 +1603,152 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         )
         return reference, scheduled_contact
 
+    def _gait_expected_lateral_motion(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return phase-locked body sway displacement and velocity.
+
+        Straight-path scoring removes only this zero-mean reference motion.
+        Accumulated drift and any residual lateral velocity remain penalized.
+        """
+
+        zeros = torch.zeros(self.num_envs, device=self.device)
+        if (
+            self._distributed_reference_lateral_shift is None
+            or self._distributed_reference_lateral_shift_phase_derivative is None
+        ):
+            return zeros, zeros
+        phase = self._gait_phase()
+        frequency_hz, stride_scale = self._gait_schedule()
+        sample_count = self._distributed_reference_lateral_shift.shape[0]
+        table_index = torch.remainder(
+            torch.floor(phase * sample_count).long(),
+            sample_count,
+        )
+        ramp = torch.clamp(
+            self._steps_since_reset.float()
+            * self.step_dt
+            / self.cfg.gait_start_ramp_s,
+            0.0,
+            1.0,
+        )
+        motion_scale = ramp * stride_scale
+        shift = self._distributed_reference_lateral_shift[table_index]
+        expected_displacement = shift * motion_scale
+        expected_velocity = (
+            self._distributed_reference_lateral_shift_phase_derivative[table_index]
+            * frequency_hz
+            * motion_scale
+        )
+        ramp_velocity = torch.where(
+            ramp < 1.0,
+            stride_scale / max(self.cfg.gait_start_ramp_s, 1.0e-4),
+            torch.zeros_like(ramp),
+        )
+        expected_velocity = expected_velocity + shift * ramp_velocity
+        return expected_displacement, expected_velocity
+
+    def _set_episode_path_frame(self, env_ids: torch.Tensor) -> None:
+        """Latch the translational command in each episode's start-world frame."""
+        start_yaw = self._episode_start_yaw[env_ids]
+        start_forward = torch.stack(
+            (torch.cos(start_yaw), torch.sin(start_yaw)), dim=1
+        )
+        start_lateral = torch.stack(
+            (-torch.sin(start_yaw), torch.cos(start_yaw)), dim=1
+        )
+        translation = self._commands[env_ids, :2]
+        speed = torch.linalg.norm(translation, dim=1)
+        body_direction = translation / torch.clamp(
+            speed.unsqueeze(1), min=1.0e-4
+        )
+        world_direction = (
+            body_direction[:, 0:1] * start_forward
+            + body_direction[:, 1:2] * start_lateral
+        )
+        world_direction = torch.where(
+            (speed > 1.0e-4).unsqueeze(1),
+            world_direction,
+            start_forward,
+        )
+        self._episode_forward_direction_w[env_ids] = world_direction
+        self._episode_lateral_direction_w[env_ids] = torch.stack(
+            (-world_direction[:, 1], world_direction[:, 0]), dim=1
+        )
+
+    def _update_heading_hold_command(self) -> None:
+        """Map accumulated heading drift into the existing yaw-rate command."""
+        maximum = float(self.cfg.heading_hold_max_correction_rad_s)
+        gain = float(self.cfg.heading_hold_kp_s)
+        if maximum <= 0.0 or gain <= 0.0:
+            return
+        heading_error = self._episode_heading_error()
+        correction = torch.clamp(
+            -gain * heading_error,
+            min=-maximum,
+            max=maximum,
+        )
+        self._commands[:, 2] = self._nominal_yaw_command + correction
+
+    def _episode_heading_error(self) -> torch.Tensor:
+        """Return wrapped yaw error about the integrated nominal yaw-rate path."""
+        current_yaw = _yaw_from_xyzw(self._robot.data.root_quat_w.torch)
+        if (
+            self.cfg.track_episode_world_path
+            or (
+                self.cfg.heading_hold_kp_s > 0.0
+                and self.cfg.heading_hold_max_correction_rad_s > 0.0
+            )
+        ):
+            desired_yaw = self._episode_start_yaw + self._nominal_yaw_command * (
+                self._steps_since_reset.float() * self.step_dt
+            )
+        else:
+            desired_yaw = self._episode_start_yaw
+        return torch.atan2(
+            torch.sin(current_yaw - desired_yaw),
+            torch.cos(current_yaw - desired_yaw),
+        )
+
     def _get_observations(self) -> dict[str, torch.Tensor]:
+        self._update_heading_hold_command()
         gait_angle = 2.0 * torch.pi * self._gait_phase()
         gait_clock = torch.stack((torch.sin(gait_angle), torch.cos(gait_angle)), dim=1)
+        imu_angular_velocity = (
+            self._imu_sensor.data.ang_vel_b.torch
+            + self._imu_angular_velocity_bias
+        )
+        projected_gravity = self._robot.data.projected_gravity_b.torch
+        gravity_noise_std = float(self.cfg.imu_projected_gravity_noise_std)
+        if gravity_noise_std > 0.0:
+            active = self._physical_randomization_active.unsqueeze(1)
+            noisy_gravity = projected_gravity + gravity_noise_std * torch.randn_like(
+                projected_gravity
+            )
+            noisy_gravity = noisy_gravity / torch.clamp(
+                torch.linalg.norm(noisy_gravity, dim=1, keepdim=True),
+                min=1.0e-6,
+            )
+            projected_gravity = torch.where(
+                active,
+                noisy_gravity,
+                projected_gravity,
+            )
+        linear_acceleration_g = self._imu_sensor.data.lin_acc_b.torch / 9.81
+        acceleration_noise_std = float(
+            self.cfg.imu_linear_acceleration_noise_std_g
+        )
+        if acceleration_noise_std > 0.0:
+            linear_acceleration_g = linear_acceleration_g + (
+                acceleration_noise_std
+                * torch.randn_like(linear_acceleration_g)
+                * self._physical_randomization_active.float().unsqueeze(1)
+            )
         policy_observation = torch.cat(
             (
                 self._commands,
                 gait_clock,
-                self._imu_sensor.data.ang_vel_b.torch,
-                self._robot.data.projected_gravity_b.torch,
-                self._imu_sensor.data.lin_acc_b.torch / 9.81,
+                imu_angular_velocity,
+                projected_gravity,
+                linear_acceleration_g,
                 self._robot.data.joint_pos.torch - self._robot.data.default_joint_pos.torch,
                 self._robot.data.joint_vel.torch / SERVO_VELOCITY_LIMIT_RAD_S,
                 self._previous_actions,
@@ -891,18 +1777,51 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
     def _get_rewards(self) -> torch.Tensor:
         linear_velocity = self._robot.data.root_lin_vel_b.torch
         angular_velocity = self._robot.data.root_ang_vel_b.torch
-        forward_error = linear_velocity[:, 0] - self._commands[:, 0]
-        velocity_error_squared = torch.square(forward_error)
-        yaw_error = angular_velocity[:, 2] - self._commands[:, 2]
-        velocity_tracking = torch.exp(
-            -velocity_error_squared / self.cfg.velocity_tracking_sigma_m_s**2
-        )
         command_speed = torch.linalg.norm(self._commands[:, :2], dim=1)
         command_direction = self._commands[:, :2] / torch.clamp(
             command_speed.unsqueeze(1), min=1.0e-4
         )
-        commanded_velocity = torch.sum(
-            linear_velocity[:, :2] * command_direction, dim=1
+        displacement = self._robot.data.root_pos_w.torch - self._episode_start_position
+        if self.cfg.track_episode_world_path:
+            world_velocity_xy = self._robot.data.root_lin_vel_w.torch[:, :2]
+            commanded_velocity = torch.sum(
+                world_velocity_xy * self._episode_forward_direction_w,
+                dim=1,
+            )
+            lateral_velocity = torch.sum(
+                world_velocity_xy * self._episode_lateral_direction_w,
+                dim=1,
+            )
+            net_commanded_distance = torch.sum(
+                displacement[:, :2] * self._episode_forward_direction_w,
+                dim=1,
+            )
+            net_lateral_displacement = torch.sum(
+                displacement[:, :2] * self._episode_lateral_direction_w,
+                dim=1,
+            )
+            forward_error = commanded_velocity - command_speed
+        else:
+            # Preserve the established V24 body-frame scoring exactly when the
+            # episode-world path feature is disabled.
+            commanded_velocity = torch.sum(
+                linear_velocity[:, :2] * command_direction, dim=1
+            )
+            lateral_velocity = linear_velocity[:, 1]
+            net_commanded_distance = torch.sum(
+                displacement[:, :2] * command_direction, dim=1
+            )
+            lateral_direction = torch.stack(
+                (-command_direction[:, 1], command_direction[:, 0]), dim=1
+            )
+            net_lateral_displacement = torch.sum(
+                displacement[:, :2] * lateral_direction, dim=1
+            )
+            forward_error = linear_velocity[:, 0] - self._commands[:, 0]
+        velocity_error_squared = torch.square(forward_error)
+        yaw_error = angular_velocity[:, 2] - self._commands[:, 2]
+        velocity_tracking = torch.exp(
+            -velocity_error_squared / self.cfg.velocity_tracking_sigma_m_s**2
         )
         rolling_slots = torch.remainder(
             self._steps_since_reset, self._sustained_window_steps
@@ -919,28 +1838,128 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         rolling_window_ready = (
             self._steps_since_reset + 1 >= self._sustained_window_steps
         )
-        displacement = self._robot.data.root_pos_w.torch - self._episode_start_position
-        net_commanded_distance = torch.sum(
-            displacement[:, :2] * command_direction, dim=1
+        heading_error = self._episode_heading_error()
+        if (
+            self._applied_expected_lateral_displacement is None
+            or self._applied_expected_lateral_velocity is None
+        ):
+            raise RuntimeError("Applied gait phase was not cached before reward")
+        expected_lateral_displacement = (
+            self._applied_expected_lateral_displacement
         )
-        lateral_direction = torch.stack(
-            (-command_direction[:, 1], command_direction[:, 0]), dim=1
+        expected_lateral_velocity = self._applied_expected_lateral_velocity
+        lateral_tracking_displacement = (
+            net_lateral_displacement - expected_lateral_displacement
         )
-        net_lateral_displacement = torch.sum(
-            displacement[:, :2] * lateral_direction, dim=1
+        lateral_tracking_velocity = lateral_velocity - expected_lateral_velocity
+        gait_frequency_hz, _stride_scale = self._gait_schedule()
+        cycle_steps = torch.clamp(
+            torch.round(
+                1.0
+                / (
+                    torch.clamp(
+                        gait_frequency_hz,
+                        min=self.cfg.gait_frequency_min_hz,
+                    )
+                    * self.step_dt
+                )
+            ).long(),
+            min=1,
+            max=self._lateral_cycle_history_steps - 2,
         )
-        current_yaw = _yaw_from_wxyz(self._robot.data.root_quat_w.torch)
-        heading_error = torch.atan2(
-            torch.sin(current_yaw - self._episode_start_yaw),
-            torch.cos(current_yaw - self._episode_start_yaw),
+        lateral_history_slot = torch.remainder(
+            self._steps_since_reset,
+            self._lateral_cycle_history_steps,
         )
+        lateral_lookback_slot = torch.remainder(
+            lateral_history_slot - cycle_steps,
+            self._lateral_cycle_history_steps,
+        )
+        prior_cycle_displacement = self._lateral_displacement_history[
+            self._env_indices,
+            lateral_lookback_slot,
+        ]
+        completed_cycle = self._steps_since_reset >= cycle_steps
+        cycle_averaged_lateral_velocity = (
+            net_lateral_displacement - prior_cycle_displacement
+        ) / (cycle_steps.float() * self.step_dt)
+        startup_lateral_velocity = lateral_tracking_displacement / torch.clamp(
+            (self._steps_since_reset.float() + 1.0) * self.step_dt,
+            min=self.step_dt,
+        )
+        cycle_averaged_lateral_velocity = torch.where(
+            completed_cycle,
+            cycle_averaged_lateral_velocity,
+            startup_lateral_velocity,
+        )
+        self._lateral_displacement_history[
+            self._env_indices,
+            lateral_history_slot,
+        ] = net_lateral_displacement
         lateral_corridor_excess = torch.clamp(
-            torch.abs(net_lateral_displacement)
+            torch.abs(lateral_tracking_displacement)
             - self.cfg.lateral_corridor_half_width_m,
             min=0.0,
         )
         active_translation = (
             command_speed > self.cfg.active_translation_threshold_m_s
+        )
+        normalized_lateral_velocity = torch.clamp(
+            torch.abs(cycle_averaged_lateral_velocity)
+            / torch.clamp(
+                command_speed,
+                min=self.cfg.normalized_lateral_velocity_speed_floor_m_s,
+            ),
+            min=0.0,
+            max=2.0,
+        )
+        if self.cfg.straight_progress_use_normalized_lateral_velocity:
+            straight_lateral_error = (
+                normalized_lateral_velocity
+                / max(self.cfg.straight_progress_lateral_ratio_sigma, 1.0e-4)
+            )
+        else:
+            straight_lateral_error = (
+                cycle_averaged_lateral_velocity
+                / max(self.cfg.straight_progress_lateral_sigma_m_s, 1.0e-4)
+            )
+        straight_alignment = torch.exp(
+            -torch.square(straight_lateral_error)
+            -torch.square(
+                heading_error
+                / max(self.cfg.straight_progress_heading_sigma_rad, 1.0e-4)
+            )
+        )
+        if self.cfg.gate_positive_progress_by_straight_alignment:
+            straight_gate_floor = min(
+                max(float(self.cfg.straight_progress_gate_floor), 0.0), 1.0
+            )
+            straight_progress_gate = torch.where(
+                active_translation,
+                straight_gate_floor
+                + (1.0 - straight_gate_floor) * straight_alignment,
+                torch.ones_like(straight_alignment),
+            )
+        else:
+            straight_progress_gate = torch.ones_like(straight_alignment)
+        instant_progress = torch.where(
+            active_translation,
+            torch.clamp(
+                commanded_velocity / torch.clamp(command_speed, min=1.0e-4),
+                min=-1.0,
+                max=1.0,
+            ),
+            torch.zeros_like(commanded_velocity),
+        )
+        straight_aligned_progress = torch.where(
+            active_translation,
+            torch.clamp(
+                commanded_velocity / torch.clamp(command_speed, min=1.0e-4),
+                min=0.0,
+                max=1.0,
+            )
+            * straight_alignment,
+            torch.zeros_like(commanded_velocity),
         )
         sustained_progress = torch.where(
             active_translation,
@@ -951,6 +1970,41 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             ),
             torch.zeros_like(rolling_speed),
         )
+        gated_instant_progress = torch.where(
+            instant_progress > 0.0,
+            instant_progress * straight_progress_gate,
+            instant_progress,
+        )
+        gated_sustained_progress = torch.where(
+            sustained_progress > 0.0,
+            sustained_progress * straight_progress_gate,
+            sustained_progress,
+        )
+        lateral_corridor_normalized = (
+            lateral_corridor_excess
+            / max(self.cfg.lateral_corridor_half_width_m, 1.0e-4)
+        )
+        heading_error_normalized = (
+            heading_error
+            / max(self.cfg.heading_error_normalizer_rad, 1.0e-4)
+        )
+        if self.cfg.use_huber_path_costs:
+            lateral_corridor_cost = torch.where(
+                lateral_corridor_normalized <= 1.0,
+                0.5 * torch.square(lateral_corridor_normalized),
+                lateral_corridor_normalized - 0.5,
+            )
+            absolute_heading_error_normalized = torch.abs(
+                heading_error_normalized
+            )
+            heading_error_cost = torch.where(
+                absolute_heading_error_normalized <= 1.0,
+                0.5 * torch.square(heading_error_normalized),
+                absolute_heading_error_normalized - 0.5,
+            )
+        else:
+            lateral_corridor_cost = torch.square(lateral_corridor_normalized)
+            heading_error_cost = torch.square(heading_error_normalized)
         if self.cfg.scale_sustained_speed_with_command:
             sustained_speed_threshold = torch.minimum(
                 torch.full_like(
@@ -1079,7 +2133,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                 / torch.clamp(
                     self._joint_scale
                     * (
-                        self.cfg.residual_action_scale
+                        self._residual_action_scale
                         if self.cfg.action_mode == "gait_residual"
                         else 1.0
                     ),
@@ -1120,40 +2174,287 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             torch.square(self._robot.data.joint_vel.torch / SERVO_VELOCITY_LIMIT_RAD_S),
             dim=1,
         )
+        effort_capacity = torch.clamp(
+            self._actuator_effort_limit_by_joint,
+            min=1.0e-4,
+        )
+        applied_effort_fraction = torch.abs(
+            self._robot.data.applied_torque.torch
+        ) / effort_capacity
+        effort_soft_limit = float(self.cfg.effort_soft_limit_fraction)
+        if not 0.0 <= effort_soft_limit < 1.0:
+            raise ValueError("effort_soft_limit_fraction must be in [0, 1)")
+        normalized_effort_excess = torch.clamp(
+            (applied_effort_fraction - effort_soft_limit)
+            / max(1.0 - effort_soft_limit, 1.0e-4),
+            min=0.0,
+            max=3.0,
+        )
+        effort_soft_limit_penalty = torch.mean(
+            torch.square(normalized_effort_excess), dim=1
+        )
+        effort_soft_limit_rate = torch.mean(
+            (applied_effort_fraction > effort_soft_limit).float(), dim=1
+        )
+        maximum_applied_effort_fraction = torch.amax(
+            applied_effort_fraction, dim=1
+        )
 
         foot_forces = self._foot_forces()
-        foot_contact = foot_forces > 1.0
-        gait_reference, scheduled_contact = self._gait_targets()
+        foot_contact = foot_forces > self._scheduled_release_force_threshold_n
+        if (
+            self._applied_gait_reference is None
+            or self._applied_scheduled_contact is None
+            or self._applied_gait_phase is None
+        ):
+            raise RuntimeError("Applied gait reference was not cached before reward")
+        gait_reference = self._applied_gait_reference
+        scheduled_contact = self._applied_scheduled_contact
+        applied_gait_phase = self._applied_gait_phase
         scheduled_swing = ~scheduled_contact
         stance_count = torch.clamp(scheduled_contact.float().sum(dim=1), min=1.0)
         swing_count = scheduled_swing.float().sum(dim=1)
-        scheduled_stance_score = (
-            (foot_contact & scheduled_contact).float().sum(dim=1) / stance_count
+        stance_quality_width_n = float(self.cfg.scheduled_stance_quality_width_n)
+        if not math.isfinite(stance_quality_width_n) or stance_quality_width_n <= 0.0:
+            raise ValueError("scheduled_stance_quality_width_n must be positive")
+        threshold_centered_stance_quality = torch.sigmoid(
+            (foot_forces - self._scheduled_release_force_threshold_n)
+            / stance_quality_width_n
         )
-        scheduled_swing_score = torch.where(
-            swing_count > 0.0,
-            ((~foot_contact) & scheduled_swing).float().sum(dim=1)
-            / torch.clamp(swing_count, min=1.0),
-            torch.ones_like(swing_count),
+        # A raw sigmoid assigns 0.269 quality to a completely unloaded foot when
+        # the contact threshold and width are both 1 N.  Normalize the contact
+        # half of the sigmoid so force at or below the threshold maps to zero;
+        # otherwise a missing anchor retains about 28% of positive progress.
+        scheduled_stance_contact_quality = torch.clamp(
+            2.0 * threshold_centered_stance_quality - 1.0,
+            min=0.0,
+            max=1.0,
         )
+        if self.cfg.use_soft_scheduled_stance_quality:
+            scheduled_stance_score = torch.sum(
+                scheduled_stance_contact_quality * scheduled_contact.float(),
+                dim=1,
+            ) / stance_count
+            missing_scheduled_stance = torch.sum(
+                (1.0 - scheduled_stance_contact_quality)
+                * scheduled_contact.float(),
+                dim=1,
+            ) / stance_count
+        else:
+            scheduled_stance_score = (
+                (foot_contact & scheduled_contact).float().sum(dim=1)
+                / stance_count
+            )
+            missing_scheduled_stance = (
+                ((~foot_contact) & scheduled_contact).float().sum(dim=1)
+                / stance_count
+            )
+        threshold_centered_release_quality = torch.sigmoid(
+            (self._scheduled_release_force_threshold_n - foot_forces)
+            / self._scheduled_release_shaping_width_n
+        )
+        scheduled_release_gate_quality = torch.clamp(
+            2.0 * threshold_centered_release_quality - 1.0,
+            min=0.0,
+            max=1.0,
+        )
+        if self.cfg.use_threshold_centered_release_shaping:
+            scheduled_release_quality = (
+                threshold_centered_release_quality
+                * scheduled_swing.float()
+            )
+        else:
+            scheduled_release_quality = (
+                torch.exp(
+                    -torch.square(
+                        foot_forces
+                        / self._scheduled_release_force_sigma_n
+                    )
+                )
+                * scheduled_swing.float()
+            )
         scheduled_swing_success = ((~foot_contact) & scheduled_swing).float()
+        scheduled_swing_opportunity = scheduled_swing.float()
+        scheduled_release_shaping_score = torch.where(
+            swing_count > 0.0,
+            scheduled_release_quality.sum(dim=1)
+            / torch.clamp(swing_count, min=1.0),
+            torch.zeros_like(swing_count),
+        )
+        if self.cfg.gate_progress_by_cycle_four_leg_release:
+            # A transfer/settle frame is not a swing success.  This closes the
+            # V27 loophole where roughly 45% of a cycle earned full swing reward
+            # even if no shoe ever left the floor.
+            scheduled_swing_score = torch.where(
+                swing_count > 0.0,
+                scheduled_swing_success.sum(dim=1)
+                / torch.clamp(swing_count, min=1.0),
+                torch.zeros_like(swing_count),
+            )
+        elif self.cfg.use_soft_scheduled_swing_release:
+            scheduled_swing_score = torch.where(
+                swing_count > 0.0,
+                scheduled_release_quality.sum(dim=1)
+                / torch.clamp(swing_count, min=1.0),
+                torch.ones_like(swing_count),
+            )
+        else:
+            scheduled_swing_score = torch.where(
+                swing_count > 0.0,
+                scheduled_swing_success.sum(dim=1)
+                / torch.clamp(swing_count, min=1.0),
+                torch.ones_like(swing_count),
+            )
+
+        cycle_wrapped = self._gait_phase_initialized & (
+            applied_gait_phase < self._previous_applied_gait_phase
+        )
+        completed_cycle_all_four_release = torch.all(
+            self._cycle_release_pass_by_foot,
+            dim=1,
+        )
+        completed_full_cycle = (
+            cycle_wrapped & self._cycle_release_full_cycle_active
+        )
+        next_last_completed_cycle_release = torch.where(
+            completed_full_cycle,
+            completed_cycle_all_four_release,
+            self._last_completed_cycle_all_four_release,
+        )
+        cycle_release_pass_before = torch.where(
+            cycle_wrapped.unsqueeze(1),
+            torch.zeros_like(self._cycle_release_pass_by_foot),
+            self._cycle_release_pass_by_foot,
+        )
+        consecutive_release_steps_before = torch.where(
+            cycle_wrapped.unsqueeze(1),
+            torch.zeros_like(self._cycle_release_consecutive_steps),
+            self._cycle_release_consecutive_steps,
+        )
+        release_now = (~foot_contact) & scheduled_swing
+        consecutive_release_steps = torch.where(
+            release_now,
+            consecutive_release_steps_before + 1,
+            torch.zeros_like(consecutive_release_steps_before),
+        )
+        qualified_cycle_release = (
+            consecutive_release_steps
+            >= self._scheduled_release_min_consecutive_steps
+        )
+        cycle_release_pass = (
+            cycle_release_pass_before | qualified_cycle_release
+        )
+        newly_qualified_cycle_release = (
+            cycle_release_pass & ~cycle_release_pass_before
+        )
+        current_cycle_all_four_release = torch.all(
+            cycle_release_pass,
+            dim=1,
+        )
+        current_cycle_all_four_release_before = torch.all(
+            cycle_release_pass_before,
+            dim=1,
+        )
+        cycle_four_leg_release_event = (
+            current_cycle_all_four_release
+            & ~current_cycle_all_four_release_before
+        ).float()
+        prospective_swing_success = (
+            self._episode_scheduled_swing_success_by_foot
+            + scheduled_swing_success
+        )
+        prospective_release_quality = (
+            self._episode_scheduled_release_quality_by_foot
+            + scheduled_release_quality
+        )
+        prospective_swing_opportunity = (
+            self._episode_scheduled_swing_opportunity_by_foot
+            + scheduled_swing_opportunity
+        )
+        scheduled_release_rate_by_foot = prospective_swing_success / torch.clamp(
+            prospective_swing_opportunity,
+            min=1.0,
+        )
+        scheduled_release_quality_by_foot = (
+            prospective_release_quality
+            / torch.clamp(prospective_swing_opportunity, min=1.0)
+        )
+        progress_release_rate_by_foot = (
+            scheduled_release_quality_by_foot
+            if self.cfg.use_soft_scheduled_swing_release
+            else scheduled_release_rate_by_foot
+        )
+        minimum_progress_release_rate = torch.amin(
+            progress_release_rate_by_foot,
+            dim=1,
+        )
+        if self.cfg.gate_progress_by_cycle_four_leg_release:
+            gate_floor = float(self.cfg.four_leg_progress_gate_floor)
+            gate_exponent = float(self.cfg.cycle_progress_gate_exponent)
+            if not 0.0 <= gate_floor <= 1.0:
+                raise ValueError("four_leg_progress_gate_floor must be in [0, 1]")
+            if not math.isfinite(gate_exponent) or gate_exponent <= 0.0:
+                raise ValueError("cycle_progress_gate_exponent must be positive")
+            # Gate causally from the current cycle.  Carrying the previous
+            # cycle's pass forward let an alternating good/bad policy receive
+            # full progress credit throughout every bad cycle.  A fourth power
+            # retains a small discovery gradient for one-to-three qualified
+            # feet but makes the fourth foot decisive.
+            qualified_foot_fraction = torch.mean(
+                cycle_release_pass.float(), dim=1
+            )
+            cycle_gate_pass = torch.pow(
+                qualified_foot_fraction,
+                gate_exponent,
+            )
+            four_leg_progress_gate = (
+                gate_floor + (1.0 - gate_floor) * cycle_gate_pass
+            )
+        elif self.cfg.gate_progress_by_four_leg_release:
+            gate_floor = float(self.cfg.four_leg_progress_gate_floor)
+            gate_target = float(self.cfg.four_leg_release_target_rate)
+            if not 0.0 <= gate_floor <= 1.0:
+                raise ValueError("four_leg_progress_gate_floor must be in [0, 1]")
+            if not 0.0 < gate_target <= 1.0:
+                raise ValueError("four_leg_release_target_rate must be in (0, 1]")
+            four_leg_progress_gate = gate_floor + (1.0 - gate_floor) * torch.clamp(
+                minimum_progress_release_rate / gate_target,
+                min=0.0,
+                max=1.0,
+            )
+        else:
+            four_leg_progress_gate = torch.ones_like(
+                minimum_progress_release_rate
+            )
+        release_activity_by_foot = (
+            self._episode_scheduled_release_quality_by_foot
+            if self.cfg.use_soft_scheduled_swing_release
+            else self._episode_scheduled_swing_success_by_foot
+        )
         least_success_count = torch.amin(
-            self._episode_scheduled_swing_success_by_foot,
+            release_activity_by_foot,
             dim=1,
             keepdim=True,
         )
         least_active_foot = (
-            self._episode_scheduled_swing_success_by_foot
+            release_activity_by_foot
             <= least_success_count + 0.5
         )
-        least_active_swing = torch.sum(
-            (
-                scheduled_swing_success
-                - (foot_contact & scheduled_swing).float()
+        if self.cfg.use_soft_scheduled_swing_release:
+            least_active_swing = torch.sum(
+                (2.0 * scheduled_release_quality - scheduled_swing.float())
+                * least_active_foot.float(),
+                dim=1,
             )
-            * least_active_foot.float(),
-            dim=1,
-        )
+        else:
+            least_active_swing = torch.sum(
+                (
+                    scheduled_swing_success
+                    - (foot_contact & scheduled_swing).float()
+                )
+                * least_active_foot.float(),
+                dim=1,
+            )
         if self.cfg.action_mode == "gait_residual":
             gait_reference_error = torch.mean(torch.square(self._actions), dim=1)
         else:
@@ -1170,7 +2471,48 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             :, self._foot_sensor_ids
         ]
         airborne_count = torch.sum((~foot_contact).float(), dim=1)
-        three_foot_support = (airborne_count <= 1.0).float()
+        schedule_matched_support = torch.all(
+            foot_contact == scheduled_contact,
+            dim=1,
+        )
+        if self.cfg.require_schedule_matched_support:
+            # Match contact identities, not only the number of planted feet.
+            # The old count-only check gave full support credit when a scheduled
+            # rear swing foot stayed planted and a front anchor unloaded instead.
+            three_foot_support = schedule_matched_support.float()
+        else:
+            three_foot_support = (airborne_count <= 1.0).float()
+        if self.cfg.gate_progress_by_schedule_matched_support:
+            topology_gate_floor = float(
+                self.cfg.schedule_matched_progress_gate_floor
+            )
+            if not 0.0 <= topology_gate_floor <= 1.0:
+                raise ValueError(
+                    "schedule_matched_progress_gate_floor must be in [0, 1]"
+                )
+            if self.cfg.use_soft_schedule_matched_progress_gate:
+                desired_contact_quality = torch.where(
+                    scheduled_contact,
+                    scheduled_stance_contact_quality,
+                    scheduled_release_gate_quality,
+                )
+                weakest_desired_contact_quality = torch.amin(
+                    desired_contact_quality,
+                    dim=1,
+                )
+                schedule_matched_progress_gate = (
+                    topology_gate_floor
+                    + (1.0 - topology_gate_floor)
+                    * weakest_desired_contact_quality
+                )
+            else:
+                schedule_matched_progress_gate = torch.where(
+                    schedule_matched_support,
+                    torch.ones_like(airborne_count),
+                    torch.full_like(airborne_count, topology_gate_floor),
+                )
+        else:
+            schedule_matched_progress_gate = torch.ones_like(airborne_count)
         excess_airborne_feet = torch.square(
             torch.clamp(airborne_count - 1.0, min=0.0)
         )
@@ -1202,23 +2544,29 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         # displacement and falls remain separate metrics so exploits stay visible.
         reward_terms = {
             "forward_velocity_tracking": (
-                self.cfg.reward_forward_velocity_tracking * velocity_tracking
+                self.cfg.reward_forward_velocity_tracking
+                * velocity_tracking
+                * straight_progress_gate
+                * four_leg_progress_gate
+                * schedule_matched_progress_gate
             ),
             "instant_progress": (
                 self.cfg.reward_instant_progress
-                * torch.where(
-                    active_translation,
-                    torch.clamp(
-                        commanded_velocity
-                        / torch.clamp(command_speed, min=1.0e-4),
-                        min=-1.0,
-                        max=1.0,
-                    ),
-                    torch.zeros_like(commanded_velocity),
-                )
+                * gated_instant_progress
+                * four_leg_progress_gate
+                * schedule_matched_progress_gate
+            ),
+            "straight_aligned_progress": (
+                self.cfg.reward_straight_aligned_progress
+                * straight_aligned_progress
+                * four_leg_progress_gate
+                * schedule_matched_progress_gate
             ),
             "sustained_progress": (
-                self.cfg.reward_sustained_progress * sustained_progress
+                self.cfg.reward_sustained_progress
+                * gated_sustained_progress
+                * four_leg_progress_gate
+                * schedule_matched_progress_gate
             ),
             "sustained_stall": (
                 -self.cfg.penalty_sustained_stall
@@ -1245,24 +2593,39 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             "scheduled_stance": (
                 self.cfg.reward_scheduled_stance * scheduled_stance_score
             ),
+            "missing_scheduled_stance": (
+                -self.cfg.penalty_missing_scheduled_stance
+                * torch.square(missing_scheduled_stance)
+            ),
             "scheduled_swing": (
                 self.cfg.reward_scheduled_swing * scheduled_swing_score
+            ),
+            "scheduled_release_shaping": (
+                self.cfg.reward_scheduled_release_shaping
+                * scheduled_release_shaping_score
+            ),
+            "cycle_four_leg_release": (
+                self.cfg.reward_cycle_four_leg_release
+                * cycle_four_leg_release_event
             ),
             "upright": self.cfg.reward_upright * upright_cosine,
             "alive": torch.full_like(upright_cosine, self.cfg.reward_alive),
             "lateral_velocity": (
-                -self.cfg.penalty_lateral_velocity * torch.square(linear_velocity[:, 1])
+                -self.cfg.penalty_lateral_velocity
+                * torch.square(lateral_tracking_velocity)
+            ),
+            "normalized_lateral_velocity": (
+                -self.cfg.penalty_normalized_lateral_velocity
+                * torch.square(normalized_lateral_velocity)
+                * active_translation.float()
             ),
             "lateral_displacement": (
                 -self.cfg.penalty_lateral_displacement
-                * torch.square(net_lateral_displacement)
+                * torch.square(lateral_tracking_displacement)
             ),
             "lateral_corridor": (
                 -self.cfg.penalty_lateral_corridor
-                * torch.square(
-                    lateral_corridor_excess
-                    / max(self.cfg.lateral_corridor_half_width_m, 1.0e-4)
-                )
+                * lateral_corridor_cost
             ),
             "vertical_velocity": (
                 -self.cfg.penalty_vertical_velocity * torch.square(linear_velocity[:, 2])
@@ -1278,10 +2641,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             "yaw_rate": -self.cfg.penalty_yaw_rate * torch.square(yaw_error),
             "heading_error": (
                 -self.cfg.penalty_heading_error
-                * torch.square(
-                    heading_error
-                    / max(self.cfg.heading_error_normalizer_rad, 1.0e-4)
-                )
+                * heading_error_cost
             ),
             "body_height": -self.cfg.penalty_body_height * torch.square(height_error),
             "action_rate": (
@@ -1318,6 +2678,10 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                 * self.cfg.penalty_body_angular_acceleration
                 * normalized_body_angular_acceleration
             ),
+            "effort_soft_limit": (
+                -self.cfg.penalty_effort_soft_limit
+                * effort_soft_limit_penalty
+            ),
             "support_foot_slip": (
                 -self.cfg.penalty_support_foot_slip * support_foot_slip
             ),
@@ -1347,6 +2711,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_velocity_error_sum += torch.sqrt(velocity_error_squared)
         self._episode_yaw_error_sum += torch.abs(yaw_error)
         self._episode_heading_error_sum += torch.abs(heading_error)
+        self._episode_straight_progress_gate_sum += straight_progress_gate
         self._episode_commanded_distance.copy_(net_commanded_distance)
         self._episode_action_saturation_sum += torch.mean(
             (torch.abs(self._actions) >= 0.98).float(), dim=1
@@ -1358,8 +2723,35 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         )
         self._episode_qualified_touchdown_by_foot += qualified_touchdown.float()
         self._episode_scheduled_swing_success_by_foot += scheduled_swing_success
+        self._episode_scheduled_release_quality_by_foot += (
+            scheduled_release_quality
+        )
+        self._episode_scheduled_swing_opportunity_by_foot += (
+            scheduled_swing_opportunity
+        )
+        self._episode_four_leg_progress_gate_sum += four_leg_progress_gate
+        self._episode_completed_gait_cycles += completed_full_cycle.float()
+        self._episode_all_four_release_cycles += (
+            completed_full_cycle & completed_cycle_all_four_release
+        ).float()
+        self._episode_cycle_release_qualifications_by_foot += (
+            newly_qualified_cycle_release.float()
+        )
+        self._cycle_release_consecutive_steps.copy_(
+            consecutive_release_steps
+        )
+        self._cycle_release_pass_by_foot.copy_(cycle_release_pass)
+        self._last_completed_cycle_all_four_release.copy_(
+            next_last_completed_cycle_release
+        )
+        self._cycle_release_full_cycle_active |= cycle_wrapped
+        self._previous_applied_gait_phase.copy_(applied_gait_phase)
+        self._gait_phase_initialized.fill_(True)
         self._episode_command_speed_sum += command_speed
         self._episode_base_height_sum += base_height
+        self._episode_cycle_lateral_speed_sum += torch.abs(
+            cycle_averaged_lateral_velocity
+        )
         self._episode_stall_step_sum += sustained_stall.float()
         self._episode_joint_acceleration_squared_sum += joint_acceleration_squared
         self._episode_body_linear_acceleration_squared_sum += (
@@ -1367,6 +2759,11 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         )
         self._episode_body_angular_acceleration_squared_sum += (
             body_angular_acceleration_squared
+        )
+        self._episode_effort_soft_limit_step_sum += effort_soft_limit_rate
+        self._episode_max_applied_effort_fraction = torch.maximum(
+            self._episode_max_applied_effort_fraction,
+            maximum_applied_effort_fraction,
         )
         self._episode_min_rolling_speed = torch.where(
             rolling_window_ready & active_translation,
@@ -1432,6 +2829,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             self._commands[env_ids] = torch.tensor(
                 override, dtype=torch.float32, device=self.device
             )
+            self._nominal_yaw_command[env_ids] = self._commands[env_ids, 2]
             return
 
         if self.cfg.command_profile == "forward":
@@ -1454,6 +2852,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             self._commands[env_ids, 0] = torch.empty(
                 count, device=self.device
             ).uniform_(speed_min, speed_max)
+            self._nominal_yaw_command[env_ids] = self._commands[env_ids, 2]
             return
         if self.cfg.command_profile != "directional":
             raise ValueError(f"Unknown command profile: {self.cfg.command_profile}")
@@ -1483,6 +2882,7 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._commands[env_ids[turning], 0] = turn_speed[turning]
         self._commands[env_ids[left], 2] = turn_rate[left]
         self._commands[env_ids[right], 2] = -turn_rate[right]
+        self._nominal_yaw_command[env_ids] = self._commands[env_ids, 2]
 
     def _reset_idx(self, env_ids: Sequence[int] | torch.Tensor | None):
         if env_ids is None:
@@ -1502,6 +2902,10 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
             log["Metrics/mean_heading_error_rad"] = (
                 self._episode_heading_error_sum[env_ids] / completed_steps
             ).mean().item()
+            log["Metrics/mean_straight_progress_gate"] = (
+                self._episode_straight_progress_gate_sum[env_ids]
+                / completed_steps
+            ).mean().item()
             log["Metrics/commanded_distance_m"] = self._episode_commanded_distance[
                 env_ids
             ].mean().item()
@@ -1513,13 +2917,35 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                 self._robot.data.root_pos_w.torch[env_ids]
                 - self._episode_start_position[env_ids]
             )
-            log["Metrics/net_forward_displacement_m"] = displacement[:, 0].mean().item()
-            log["Metrics/net_lateral_displacement_m"] = displacement[:, 1].mean().item()
+            if self.cfg.track_episode_world_path:
+                net_forward_displacement = torch.sum(
+                    displacement[:, :2]
+                    * self._episode_forward_direction_w[env_ids],
+                    dim=1,
+                )
+                net_lateral_displacement = torch.sum(
+                    displacement[:, :2]
+                    * self._episode_lateral_direction_w[env_ids],
+                    dim=1,
+                )
+            else:
+                net_forward_displacement = displacement[:, 0]
+                net_lateral_displacement = displacement[:, 1]
+            log["Metrics/net_forward_displacement_m"] = (
+                net_forward_displacement.mean().item()
+            )
+            log["Metrics/net_lateral_displacement_m"] = (
+                net_lateral_displacement.mean().item()
+            )
             log["Metrics/target_speed_m_s"] = (
                 self._episode_command_speed_sum[env_ids] / completed_steps
             ).mean().item()
             log["Metrics/mean_base_height_m"] = (
                 self._episode_base_height_sum[env_ids] / completed_steps
+            ).mean().item()
+            log["Metrics/mean_cycle_averaged_lateral_speed_m_s"] = (
+                self._episode_cycle_lateral_speed_sum[env_ids]
+                / completed_steps
             ).mean().item()
             valid_minimum_speed = torch.where(
                 torch.isfinite(self._episode_min_rolling_speed[env_ids]),
@@ -1547,6 +2973,15 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                 self._episode_body_angular_acceleration_squared_sum[env_ids]
                 / completed_steps
             ).mean().item()
+            log["Metrics/effort_soft_limit_rate"] = (
+                self._episode_effort_soft_limit_step_sum[env_ids]
+                / completed_steps
+            ).mean().item()
+            log["Metrics/maximum_applied_effort_fraction"] = (
+                self._episode_max_applied_effort_fraction[env_ids]
+                .mean()
+                .item()
+            )
             if self.cfg.smoothness_curriculum_steps > 0:
                 fraction = min(
                     float(
@@ -1603,6 +3038,89 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                         env_ids, foot_index
                     ].mean().item()
                 )
+                opportunities = self._episode_scheduled_swing_opportunity_by_foot[
+                    env_ids, foot_index
+                ]
+                successes = self._episode_scheduled_swing_success_by_foot[
+                    env_ids, foot_index
+                ]
+                quality_sum = self._episode_scheduled_release_quality_by_foot[
+                    env_ids, foot_index
+                ]
+                release_rate = torch.where(
+                    opportunities > 0.0,
+                    successes / torch.clamp(opportunities, min=1.0),
+                    torch.zeros_like(successes),
+                )
+                release_quality = torch.where(
+                    opportunities > 0.0,
+                    quality_sum / torch.clamp(opportunities, min=1.0),
+                    torch.zeros_like(quality_sum),
+                )
+                log[f"Metrics/scheduled_release_rate_{leg_name}"] = (
+                    release_rate.mean().item()
+                )
+                log[f"Metrics/scheduled_release_quality_{leg_name}"] = (
+                    release_quality.mean().item()
+                )
+                log[f"Metrics/scheduled_swing_opportunities_{leg_name}"] = (
+                    opportunities.mean().item()
+                )
+                log[f"Metrics/cycle_release_qualifications_{leg_name}"] = (
+                    self._episode_cycle_release_qualifications_by_foot[
+                        env_ids, foot_index
+                    ].mean().item()
+                )
+            all_release_rates = torch.where(
+                self._episode_scheduled_swing_opportunity_by_foot[env_ids] > 0.0,
+                self._episode_scheduled_swing_success_by_foot[env_ids]
+                / torch.clamp(
+                    self._episode_scheduled_swing_opportunity_by_foot[env_ids],
+                    min=1.0,
+                ),
+                torch.zeros_like(
+                    self._episode_scheduled_swing_success_by_foot[env_ids]
+                ),
+            )
+            log["Metrics/minimum_scheduled_release_rate"] = torch.amin(
+                all_release_rates,
+                dim=1,
+            ).mean().item()
+            all_release_qualities = torch.where(
+                self._episode_scheduled_swing_opportunity_by_foot[env_ids] > 0.0,
+                self._episode_scheduled_release_quality_by_foot[env_ids]
+                / torch.clamp(
+                    self._episode_scheduled_swing_opportunity_by_foot[env_ids],
+                    min=1.0,
+                ),
+                torch.zeros_like(
+                    self._episode_scheduled_release_quality_by_foot[env_ids]
+                ),
+            )
+            log["Metrics/minimum_scheduled_release_quality"] = torch.amin(
+                all_release_qualities,
+                dim=1,
+            ).mean().item()
+            log["Metrics/mean_four_leg_progress_gate"] = (
+                self._episode_four_leg_progress_gate_sum[env_ids]
+                / completed_steps
+            ).mean().item()
+            completed_gait_cycles = self._episode_completed_gait_cycles[env_ids]
+            all_four_release_cycles = self._episode_all_four_release_cycles[
+                env_ids
+            ]
+            log["Metrics/completed_gait_cycles"] = (
+                completed_gait_cycles.mean().item()
+            )
+            log["Metrics/all_four_release_cycles"] = (
+                all_four_release_cycles.mean().item()
+            )
+            log["Metrics/all_four_release_cycle_rate"] = torch.where(
+                completed_gait_cycles > 0.0,
+                all_four_release_cycles
+                / torch.clamp(completed_gait_cycles, min=1.0),
+                torch.zeros_like(completed_gait_cycles),
+            ).mean().item()
             log["Metrics/fall_rate"] = (
                 (self._failed[env_ids] & completed).float().sum()
                 / torch.clamp(completed.float().sum(), min=1.0)
@@ -1634,7 +3152,10 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
                     high=self._current_episode_horizon_steps(),
                 )
 
-        joint_position = self._robot.data.default_joint_pos.torch[env_ids].clone()
+        joint_position = (
+            self._robot.data.default_joint_pos.torch[env_ids].clone()
+            + self._joint_target_bias[env_ids]
+        )
         joint_position += self.cfg.reset_joint_position_noise_rad * (
             2.0 * torch.rand_like(joint_position) - 1.0
         )
@@ -1644,6 +3165,33 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         root_pose[:, :2] += self.cfg.reset_xy_jitter_m * (
             2.0 * torch.rand((len(env_ids), 2), device=self.device) - 1.0
         )
+        roll_pitch_limit = float(self.cfg.reset_roll_pitch_noise_rad)
+        yaw_limit = float(self.cfg.reset_yaw_noise_rad)
+        if roll_pitch_limit < 0.0 or yaw_limit < 0.0:
+            raise ValueError("reset attitude noise limits must be non-negative")
+        if roll_pitch_limit > 0.0 or yaw_limit > 0.0:
+            attitude_active = self._physical_randomization_active[
+                env_ids
+            ].float()
+            roll_pitch = (
+                2.0 * torch.rand((len(env_ids), 2), device=self.device) - 1.0
+            ) * roll_pitch_limit * attitude_active.unsqueeze(1)
+            yaw = (
+                2.0 * torch.rand(len(env_ids), device=self.device) - 1.0
+            ) * yaw_limit * attitude_active
+            attitude_noise = _quaternion_from_rpy_xyzw(
+                roll_pitch[:, 0],
+                roll_pitch[:, 1],
+                yaw,
+            )
+            root_pose[:, 3:7] = _multiply_quaternions_xyzw(
+                attitude_noise,
+                root_pose[:, 3:7],
+            )
+            root_pose[:, 3:7] = root_pose[:, 3:7] / torch.clamp(
+                torch.linalg.norm(root_pose[:, 3:7], dim=1, keepdim=True),
+                min=1.0e-6,
+            )
         root_velocity = torch.zeros_like(self._robot.data.default_root_vel.torch[env_ids])
 
         self._robot.write_root_pose_to_sim_index(root_pose=root_pose, env_ids=env_ids)
@@ -1658,15 +3206,40 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         )
 
         self._sample_commands(env_ids)
+        self._randomize_episode_perturbations(env_ids)
         self._actions[env_ids] = 0.0
         self._previous_actions[env_ids] = 0.0
         self._older_actions[env_ids] = 0.0
         self._previous_targets[env_ids] = joint_position
         self._desired_targets[env_ids] = joint_position
+        self._previous_requested_targets[env_ids] = joint_position
         self._previous_joint_velocity[env_ids] = 0.0
         self._previous_body_linear_velocity[env_ids] = 0.0
         self._previous_body_angular_velocity[env_ids] = 0.0
         self._steps_since_reset[env_ids] = 0
+        if self.cfg.randomize_gait_start_phase_quarters:
+            self._gait_phase_offset[env_ids] = torch.randint(
+                0,
+                4,
+                (len(env_ids),),
+                device=self.device,
+            ).float() * 0.25
+        else:
+            self._gait_phase_offset[env_ids] = 0.0
+        self._previous_applied_gait_phase[env_ids] = self._gait_phase_offset[
+            env_ids
+        ]
+        self._gait_phase_initialized[env_ids] = False
+        # A phase-zero reset begins at the true cycle boundary, so its first
+        # wrap completes a full four-leg cycle.  Non-zero quarter offsets begin
+        # part-way through a cycle and intentionally become eligible only after
+        # their first wrap.
+        self._cycle_release_full_cycle_active[env_ids] = (
+            self._gait_phase_offset[env_ids] == 0.0
+        )
+        self._cycle_release_consecutive_steps[env_ids] = 0
+        self._cycle_release_pass_by_foot[env_ids] = False
+        self._last_completed_cycle_all_four_release[env_ids] = False
         self._failed[env_ids] = False
         self._failure_nonfinite[env_ids] = False
         self._failure_low_height[env_ids] = False
@@ -1674,10 +3247,12 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._failure_out_of_bounds[env_ids] = False
         self._failure_base_contact[env_ids] = False
         self._episode_start_position[env_ids] = root_pose[:, :3]
-        self._episode_start_yaw[env_ids] = _yaw_from_wxyz(root_pose[:, 3:7])
+        self._episode_start_yaw[env_ids] = _yaw_from_xyzw(root_pose[:, 3:7])
+        self._set_episode_path_frame(env_ids)
         self._episode_velocity_error_sum[env_ids] = 0.0
         self._episode_yaw_error_sum[env_ids] = 0.0
         self._episode_heading_error_sum[env_ids] = 0.0
+        self._episode_straight_progress_gate_sum[env_ids] = 0.0
         self._episode_commanded_distance[env_ids] = 0.0
         self._episode_action_saturation_sum[env_ids] = 0.0
         self._episode_swing_step_sum[env_ids] = 0.0
@@ -1685,13 +3260,23 @@ class DrobotCommandedWalkingEnv(DirectRLEnv):
         self._episode_qualified_touchdown_count[env_ids] = 0.0
         self._episode_qualified_touchdown_by_foot[env_ids] = 0.0
         self._episode_scheduled_swing_success_by_foot[env_ids] = 0.0
+        self._episode_scheduled_release_quality_by_foot[env_ids] = 0.0
+        self._episode_scheduled_swing_opportunity_by_foot[env_ids] = 0.0
+        self._episode_four_leg_progress_gate_sum[env_ids] = 0.0
+        self._episode_completed_gait_cycles[env_ids] = 0.0
+        self._episode_all_four_release_cycles[env_ids] = 0.0
+        self._episode_cycle_release_qualifications_by_foot[env_ids] = 0.0
         self._episode_command_speed_sum[env_ids] = 0.0
         self._episode_base_height_sum[env_ids] = 0.0
         self._rolling_command_speed[env_ids] = 0.0
+        self._lateral_displacement_history[env_ids] = 0.0
+        self._episode_cycle_lateral_speed_sum[env_ids] = 0.0
         self._episode_min_rolling_speed[env_ids] = torch.inf
         self._episode_stall_step_sum[env_ids] = 0.0
         self._episode_joint_acceleration_squared_sum[env_ids] = 0.0
         self._episode_body_linear_acceleration_squared_sum[env_ids] = 0.0
         self._episode_body_angular_acceleration_squared_sum[env_ids] = 0.0
+        self._episode_effort_soft_limit_step_sum[env_ids] = 0.0
+        self._episode_max_applied_effort_fraction[env_ids] = 0.0
         for term_sum in self._episode_reward_term_sums.values():
             term_sum[env_ids] = 0.0

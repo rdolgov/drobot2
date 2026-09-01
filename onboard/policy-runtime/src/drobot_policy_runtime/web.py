@@ -19,7 +19,7 @@ import numpy as np
 
 from .contract import ACTION_NAMES, SERVO_ID_BY_ACTION_NAME
 from .policy import OnnxWalkingPolicy
-from .runtime import MotorSink, PolicyCommand, WalkingPolicyLoop
+from .runtime import MotorSink, PolicyCommand, PolicyStepSample, WalkingPolicyLoop
 from .sources import (
     Bno085ImuSource,
     ImuSample,
@@ -73,6 +73,7 @@ class RecordingImuSource:
                     round(float(value), 5)
                     for value in sample.linear_acceleration_body_m_s2
                 ],
+                "heading_yaw_rad": round(float(sample.heading_yaw_rad), 6),
                 "sample_time_s": round(sample.monotonic_time_s, 6),
             }
         )
@@ -120,6 +121,21 @@ class PolicySupervisor:
         self._thread: threading.Thread | None = None
         self._loop: WalkingPolicyLoop | None = None
         self._lock = threading.RLock()
+        heading = self._policy.heading_hold_config
+        self.state.update(
+            heading_hold={
+                "enabled": heading.enabled,
+                "mode": heading.mode,
+                "kp_s": heading.kp_s,
+                "max_correction_rad_s": heading.max_correction_rad_s,
+                "reference_yaw_rad": None,
+                "current_relative_rad": None,
+                "desired_relative_rad": None,
+                "error_rad": None,
+                "correction_rad_s": 0.0,
+                "effective_yaw_rad_s": 0.0,
+            }
+        )
 
     def start(self, forward_m_s: float) -> None:
         if not 0.0 <= forward_m_s <= 0.20:
@@ -136,6 +152,7 @@ class PolicySupervisor:
                 DashboardMotorSink(self.state),
                 command=PolicyCommand(forward_m_s=forward_m_s),
                 control_hz=self._control_hz,
+                step_observer=self._update_policy_step,
             )
             self.state.update(
                 running=True,
@@ -149,6 +166,24 @@ class PolicySupervisor:
                 daemon=True,
             )
             self._thread.start()
+
+    def _update_policy_step(self, sample: PolicyStepSample) -> None:
+        self.state.update(
+            heading_hold={
+                "enabled": sample.heading_hold_enabled,
+                "mode": self._policy.heading_hold_config.mode,
+                "kp_s": self._policy.heading_hold_config.kp_s,
+                "max_correction_rad_s": (
+                    self._policy.heading_hold_config.max_correction_rad_s
+                ),
+                "reference_yaw_rad": sample.heading_reference_yaw_rad,
+                "current_relative_rad": sample.heading_current_relative_rad,
+                "desired_relative_rad": sample.heading_desired_relative_rad,
+                "error_rad": sample.heading_error_rad,
+                "correction_rad_s": sample.heading_correction_rad_s,
+                "effective_yaw_rad_s": sample.effective_yaw_rad_s,
+            }
+        )
 
     def _run(self) -> None:
         try:

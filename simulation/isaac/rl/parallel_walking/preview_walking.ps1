@@ -2,7 +2,7 @@
 param(
     [ValidateSet("forward", "backward", "left", "right", "stop")]
     [string]$Command = "forward",
-    [ValidateSet("forward", "directional", "smooth-payload", "external-rear-payload", "low-speed-external-rear-payload", "low-speed-crawl-external-rear-payload", "higher-speed-straight-crawl-external-rear-payload", "padded-feet-forward-bias-external-rear-payload")]
+    [ValidateSet("forward", "directional", "smooth-payload", "external-rear-payload", "low-speed-external-rear-payload", "low-speed-crawl-external-rear-payload", "higher-speed-straight-crawl-external-rear-payload", "padded-feet-forward-bias-external-rear-payload", "robust-straight-low-stance-external-rear-payload", "balanced-four-leg-straight-crawl-external-rear-payload", "adaptive-asymmetric-four-leg-straight-crawl-external-rear-payload", "forward-biased-cycle-gated-four-leg-straight-crawl-external-rear-payload", "schedule-matched-support-straight-crawl-external-rear-payload", "symmetry-gated-robust-straight-crawl-external-rear-payload")]
     [string]$CommandSet = "forward",
     [string]$Checkpoint = "",
     [int]$Seed = 1701,
@@ -15,6 +15,21 @@ param(
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "walking_workflow_common.ps1")
 $context = Get-WalkingContext -CommandSet $CommandSet
+$lowSpeedProfiles = @(
+    "low-speed-external-rear-payload",
+    "low-speed-crawl-external-rear-payload",
+    "higher-speed-straight-crawl-external-rear-payload",
+    "padded-feet-forward-bias-external-rear-payload",
+    "robust-straight-low-stance-external-rear-payload",
+    "balanced-four-leg-straight-crawl-external-rear-payload",
+    "adaptive-asymmetric-four-leg-straight-crawl-external-rear-payload",
+    "forward-biased-cycle-gated-four-leg-straight-crawl-external-rear-payload",
+    "schedule-matched-support-straight-crawl-external-rear-payload",
+    "symmetry-gated-robust-straight-crawl-external-rear-payload"
+)
+if ($null -eq $ForwardSpeed -and $Command -eq "forward") {
+    $ForwardSpeed = if ($CommandSet -in $lowSpeedProfiles) { 0.015 } else { 0.15 }
+}
 $source = Resolve-WalkingCheckpoint -Context $context -Checkpoint $Checkpoint
 if ($null -eq $source) {
     throw "No $CommandSet walking checkpoint exists yet. Run train_walking_visible.ps1 or train_walking_headless.ps1 first."

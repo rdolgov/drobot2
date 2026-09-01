@@ -50,8 +50,11 @@ Every line contains:
 
 - sequence number, policy elapsed time, and monotonic timestamps for the policy,
   IMU sample, and joint sample;
-- commanded forward/lateral/yaw velocity and gait-clock sine/cosine;
+- commanded forward/lateral/yaw velocity, the effective yaw input seen by the
+  actor, and gait-clock sine/cosine;
 - body-frame angular velocity, projected gravity, and linear acceleration;
+- BNO085 game-world yaw plus relative-heading reference, desired heading,
+  error, bounded correction, and whether model metadata enabled heading hold;
 - 12 measured joint positions and derived joint velocities in policy order;
 - the exact 50-value observation passed to ONNX and the 12-value policy action;
 - the action-derived requested target and the velocity-limited target sent to

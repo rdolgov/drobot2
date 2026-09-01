@@ -60,7 +60,7 @@ DEFAULT_RECORDINGS_DIR = (
     Path.home() / ".local" / "share" / "drobot2" / "rl-recordings"
 )
 STATIC_DIR = Path(__file__).with_name("four_leg_static")
-LAN_CLIENT_VERSION = "8"
+LAN_CLIENT_VERSION = "9"
 RL_TARGET_STEP_LIMIT_DEG = 2.0
 
 
@@ -600,6 +600,11 @@ class FourLegSession:
                         "joint_velocity_normalized[12]",
                         "previous_action[12]",
                     ],
+                    "yaw_command_semantics": (
+                        "The policy observation contains effective yaw after the "
+                        "model-declared heading correction; requested and effective "
+                        "yaw are recorded separately in each sample"
+                    ),
                     "target_rate_limit": "actual elapsed monotonic time",
                     "missed_deadline_policy": "skip; never replay catch-up bursts",
                 },

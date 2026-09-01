@@ -57,3 +57,33 @@ _register(
     "DrobotCommandedWalkingPaddedFeetForwardBiasExternalRearPayloadEnvCfg",
     "DrobotCommandedWalkingPaddedFeetForwardBiasExternalRearPayloadPPORunnerCfg",
 )
+_register(
+    "Drobot-Commanded-Walk-Robust-Straight-Low-Stance-External-Rear-Payload-Direct",
+    "DrobotCommandedWalkingRobustStraightLowStanceExternalRearPayloadEnvCfg",
+    "DrobotCommandedWalkingRobustStraightLowStanceExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Walk-Balanced-Four-Leg-Straight-Crawl-External-Rear-Payload-Direct",
+    "DrobotCommandedWalkingBalancedFourLegStraightCrawlExternalRearPayloadEnvCfg",
+    "DrobotCommandedWalkingBalancedFourLegStraightCrawlExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Walk-Adaptive-Asymmetric-Four-Leg-Straight-Crawl-External-Rear-Payload-Direct",
+    "DrobotCommandedWalkingAdaptiveAsymmetricFourLegStraightCrawlExternalRearPayloadEnvCfg",
+    "DrobotCommandedWalkingAdaptiveAsymmetricFourLegStraightCrawlExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Walk-Forward-Biased-Cycle-Gated-Four-Leg-Straight-Crawl-External-Rear-Payload-Direct",
+    "DrobotCommandedWalkingForwardBiasedCycleGatedFourLegStraightCrawlExternalRearPayloadEnvCfg",
+    "DrobotCommandedWalkingForwardBiasedCycleGatedFourLegStraightCrawlExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Walk-Schedule-Matched-Support-Straight-Crawl-External-Rear-Payload-Direct",
+    "DrobotCommandedWalkingScheduleMatchedSupportStraightCrawlExternalRearPayloadEnvCfg",
+    "DrobotCommandedWalkingScheduleMatchedSupportStraightCrawlExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Walk-Symmetry-Gated-Robust-Straight-Crawl-External-Rear-Payload-Direct",
+    "DrobotCommandedWalkingSymmetryGatedRobustStraightCrawlExternalRearPayloadEnvCfg",
+    "DrobotCommandedWalkingSymmetryGatedRobustStraightCrawlExternalRearPayloadPPORunnerCfg",
+)

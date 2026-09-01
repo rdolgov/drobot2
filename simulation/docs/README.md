@@ -12,6 +12,10 @@ hardware.
 | Low-speed residual crawl (V22) | [`rl-low-speed-residual-crawl-v22.md`](rl-low-speed-residual-crawl-v22.md) |
 | Higher-speed straight residual crawl (V23) | [`rl-higher-speed-straight-crawl-v23.md`](rl-higher-speed-straight-crawl-v23.md) |
 | Padded-feet forward-bias residual crawl (V24) | [`rl-padded-feet-forward-bias-v24.md`](rl-padded-feet-forward-bias-v24.md) |
+| Robust straight low-stance residual crawl design (V25) | [`rl-robust-straight-low-stance-v25.md`](rl-robust-straight-low-stance-v25.md) |
+| Forward-biased cycle-gated straight crawl (V28) | [`rl-forward-biased-cycle-gated-v28.md`](rl-forward-biased-cycle-gated-v28.md) |
+| Schedule-matched support straight crawl (V29, rejected V30 bootstrap) | [`rl-schedule-matched-support-v29.md`](rl-schedule-matched-support-v29.md) |
+| Symmetry-gated robust straight crawl research profile (V30, nominal candidate rejected) | [`rl-symmetry-gated-robust-straight-v30.md`](rl-symmetry-gated-robust-straight-v30.md) |
 | Original stair task | [`rl-stairs/README.md`](rl-stairs/README.md) |
 | Corrected close-start stair task | [`rl-stairs-v2/README.md`](rl-stairs-v2/README.md) |
 | Hardware-informed stair task | [`rl-stairs-v3/README.md`](rl-stairs-v3/README.md) |
