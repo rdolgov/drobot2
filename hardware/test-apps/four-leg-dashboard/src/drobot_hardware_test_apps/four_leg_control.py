@@ -3105,8 +3105,10 @@ class FourLegRequestHandler(BaseHTTPRequestHandler):
             )
             return
         if path == "/app.js":
+            script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+            script = script.replace("__LAN_CLIENT_VERSION__", LAN_CLIENT_VERSION)
             self._send_bytes(
-                (STATIC_DIR / "app.js").read_bytes(),
+                script.encode("utf-8"),
                 content_type="text/javascript; charset=utf-8",
             )
             return

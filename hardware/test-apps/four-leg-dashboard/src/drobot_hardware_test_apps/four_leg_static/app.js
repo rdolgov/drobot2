@@ -1,6 +1,8 @@
 "use strict";
 
 const token = document.body.dataset.controlToken;
+const clientVersion = "__LAN_CLIENT_VERSION__";
+const reloadStorageKey = "drobot-four-leg-reload-attempt";
 const legGrid = document.querySelector("#legGrid");
 const notice = document.querySelector("#notice");
 const connection = document.querySelector("#connection");
@@ -70,7 +72,7 @@ async function api(
     method,
     headers: {
       "X-Control-Token": token,
-      "X-Drobot-Client-Version": "11",
+      "X-Drobot-Client-Version": clientVersion,
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -79,13 +81,33 @@ async function api(
     signal,
   });
   const payload = await response.json();
-  if (response.status === 403 && !reloadingAfterServerRestart) {
-    reloadingAfterServerRestart = true;
-    window.location.reload();
-    return new Promise(() => {});
+  if (response.status === 403) {
+    // Keep the attempt across navigation: an unchanged server/client mismatch
+    // must produce an error instead of repeatedly reloading the same page.
+    let mayReload = false;
+    try {
+      const identity = `${clientVersion}:${token}`;
+      mayReload = sessionStorage.getItem(reloadStorageKey) !== identity;
+      sessionStorage.setItem(reloadStorageKey, identity);
+    } catch (_error) {
+      // Without persistent tab storage, show the error rather than risk a loop.
+    }
+    if (mayReload && !reloadingAfterServerRestart) {
+      reloadingAfterServerRestart = true;
+      window.location.reload();
+      return new Promise(() => {});
+    }
+    throw new Error("Dashboard connection was rejected. Refresh once manually; automatic reload stopped.");
   }
   if (!response.ok) {
     throw new Error(payload.error || `Request failed (${response.status})`);
+  }
+  if (path === "/api/state") {
+    try {
+      sessionStorage.removeItem(reloadStorageKey);
+    } catch (_error) {
+      // Storage may be unavailable in private browsing.
+    }
   }
   return payload;
 }
