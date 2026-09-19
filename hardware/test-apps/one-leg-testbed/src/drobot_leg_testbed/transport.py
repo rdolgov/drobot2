@@ -19,6 +19,8 @@ REG_PRESENT_SPEED = 58
 REG_PRESENT_VOLTAGE = 62
 REG_PRESENT_TEMPERATURE = 63
 REG_PRESENT_CURRENT = 69
+REG_STATUS_BLOCK_FIRST = REG_TORQUE_ENABLE
+REG_STATUS_BLOCK_LENGTH = REG_PRESENT_CURRENT + 2 - REG_STATUS_BLOCK_FIRST
 
 POSITION_MODE = 0
 MIDDLE_POSITION = 2048
@@ -438,25 +440,35 @@ class STSBus:
 
     def status(self, motor: MotorConfig) -> MotorStatus:
         model = self.require_motor(motor)
-        position, speed = self.read_position_speed(motor.servo_id)
+        packet = self._require_open()
+        data, result, error = packet.readTxRx(
+            motor.servo_id,
+            REG_STATUS_BLOCK_FIRST,
+            REG_STATUS_BLOCK_LENGTH,
+        )
+        self._check(f"read status block ID {motor.servo_id}", result, error)
+        if len(data) != REG_STATUS_BLOCK_LENGTH:
+            raise CommunicationError(
+                f"Status block for ID {motor.servo_id} contained {len(data)} "
+                f"bytes; expected {REG_STATUS_BLOCK_LENGTH}"
+            )
+
+        def byte_offset(address: int) -> int:
+            return address - REG_STATUS_BLOCK_FIRST
+
+        def word_at(address: int) -> int:
+            offset = byte_offset(address)
+            return int(packet.scs_makeword(data[offset], data[offset + 1]))
+
+        position = packet.scs_tohost(word_at(REG_PRESENT_POSITION), 15)
+        speed = packet.scs_tohost(word_at(REG_PRESENT_SPEED), 15)
         return MotorStatus(
             servo_id=motor.servo_id,
             model_number=model,
             raw_position=int(position),
             raw_speed=int(speed),
-            voltage_v=self._read1(
-                motor.servo_id,
-                REG_PRESENT_VOLTAGE,
-            )
-            / 10.0,
-            temperature_c=self._read1(
-                motor.servo_id,
-                REG_PRESENT_TEMPERATURE,
-            ),
-            current_ma=self._read2(
-                motor.servo_id,
-                REG_PRESENT_CURRENT,
-            )
-            * 6.5,
-            torque_enabled=bool(self._read1(motor.servo_id, REG_TORQUE_ENABLE)),
+            voltage_v=float(data[byte_offset(REG_PRESENT_VOLTAGE)]) / 10.0,
+            temperature_c=int(data[byte_offset(REG_PRESENT_TEMPERATURE)]),
+            current_ma=word_at(REG_PRESENT_CURRENT) * 6.5,
+            torque_enabled=bool(data[byte_offset(REG_TORQUE_ENABLE)]),
         )

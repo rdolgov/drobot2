@@ -87,3 +87,73 @@ _register(
     "DrobotCommandedWalkingSymmetryGatedRobustStraightCrawlExternalRearPayloadEnvCfg",
     "DrobotCommandedWalkingSymmetryGatedRobustStraightCrawlExternalRearPayloadPPORunnerCfg",
 )
+_register(
+    "Drobot-Commanded-Run-Fast-Stop-External-Rear-Payload-Direct",
+    "DrobotCommandedRunningFastStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningFastStopExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Run-Hardware-Matched-Stop-External-Rear-Payload-Direct",
+    "DrobotCommandedRunningHardwareMatchedStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningHardwareMatchedStopExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Run-Applied-Target-History-Stop-External-Rear-Payload-Direct",
+    "DrobotCommandedRunningAppliedTargetHistoryStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningAppliedTargetHistoryStopExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Run-Integrated-Target-Velocity-Stop-External-Rear-Payload",
+    "DrobotCommandedRunningIntegratedTargetVelocityStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningIntegratedTargetVelocityStopExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Run-Command-Scaled-High-Speed-Stop-External-Rear-Payload",
+    "DrobotCommandedRunningCommandScaledHighSpeedStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningCommandScaledHighSpeedStopExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Run-Flat-Sole-High-Speed-Stop-External-Rear-Payload",
+    "DrobotCommandedRunningFlatSoleHighSpeedStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningFlatSoleHighSpeedStopExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Run-Flat-Sole-Residual-Stop-External-Rear-Payload",
+    "DrobotCommandedRunningFlatSoleResidualRunStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningFlatSoleResidualRunStopExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Run-Straight-Low-Abduction-Long-Stop-External-Rear-Payload",
+    "DrobotCommandedRunningStraightLowAbductionLongStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningStraightLowAbductionLongStopExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Run-Reference-Driven-Straight-Stop-External-Rear-Payload",
+    "DrobotCommandedRunningReferenceDrivenStraightStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningReferenceDrivenStraightStopExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Run-Speed-Faithful-Straight-Stop-External-Rear-Payload",
+    "DrobotCommandedRunningSpeedFaithfulStraightStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningSpeedFaithfulStraightStopExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Run-Phase-Normalized-Speed-Stop-External-Rear-Payload",
+    "DrobotCommandedRunningPhaseNormalizedSpeedStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningPhaseNormalizedSpeedStopExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Run-Learned-Cycle-Residual-Stop-External-Rear-Payload",
+    "DrobotCommandedRunningLearnedCycleResidualStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningLearnedCycleResidualStopExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Run-Foot-Warp-Trot-Residual-Stop-External-Rear-Payload",
+    "DrobotCommandedRunningFootWarpTrotResidualStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningFootWarpTrotResidualStopExternalRearPayloadPPORunnerCfg",
+)
+_register(
+    "Drobot-Commanded-Run-Flat-Contact-Hardware-Matched-Stop-External-Rear-Payload",
+    "DrobotCommandedRunningFlatContactHardwareMatchedStopExternalRearPayloadEnvCfg",
+    "DrobotCommandedRunningFlatContactHardwareMatchedStopExternalRearPayloadPPORunnerCfg",
+)

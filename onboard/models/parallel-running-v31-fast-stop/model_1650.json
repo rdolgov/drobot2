@@ -1,0 +1,150 @@
+{
+  "format": "drobot-walking-policy-v2",
+  "source_checkpoint": "model_1650.pt",
+  "source_checkpoint_sha256": "7ef75a7e5da7fd4eb7d6863eb5a4c8f9913fef213b5a5ad02adebe42f5ab620b",
+  "source_iteration": 1650,
+  "onnx_sha256": "9faa1336cbe351b94b2dbdc70509d0d140c8288df2d279c74aebf00ce1cae174",
+  "control_hz": 60,
+  "gait_period_s": 0.8,
+  "gait_clock": {
+    "mode": "speed_scaled",
+    "integrated_phase": true,
+    "park_at_standstill": true,
+    "period_s": 0.8,
+    "standstill_deadband_m_s": 0.004,
+    "speed_min_m_s": 0.06,
+    "speed_max_m_s": 0.2,
+    "frequency_min_hz": 0.9,
+    "frequency_max_hz": 2.4,
+    "stride_scale_min": 0.7
+  },
+  "gait_contract": {
+    "pattern": "diagonal_trot",
+    "duty_factor": 0.6,
+    "phase_offsets_fl_rl_fr_rr": [
+      0.0,
+      0.5,
+      0.5,
+      0.0
+    ]
+  },
+  "heading_hold": {
+    "enabled": true,
+    "mode": "relative_yaw_feedback",
+    "kp_s": 1.5,
+    "max_correction_rad_s": 0.2
+  },
+  "forward_command_range_m_s": {
+    "min": 0.05,
+    "max": 0.2,
+    "recommended": 0.08
+  },
+  "action_contract": {
+    "mode": "direct",
+    "residual_scale": 1.0,
+    "residual_scale_by_action": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "observation_count": 50,
+  "action_count": 12,
+  "joint_target_contract": {
+    "neutral_joint_position_rad": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.5239596454,
+      -0.5239596454,
+      0.5239596454,
+      -0.5239596454,
+      -0.5239596454,
+      0.5239596454,
+      -0.5239596454,
+      0.5239596454
+    ],
+    "action_scale_rad": [
+      0.12,
+      0.12,
+      0.12,
+      0.12,
+      0.3,
+      0.3,
+      0.3,
+      0.3,
+      0.4,
+      0.4,
+      0.4,
+      0.4
+    ],
+    "target_velocity_limit_rad_s": 4.18879020478639,
+    "max_target_step_rad": 0.06981317007977318
+  },
+  "startup": {
+    "mode": "prepared_neutral",
+    "ramp_rate_deg_s": 45.0,
+    "settle_s": 0.5,
+    "position_tolerance_deg": 5.0
+  },
+  "observation_order": [
+    "command_forward_m_s[1]",
+    "command_lateral_m_s[1]",
+    "command_yaw_rad_s[1]",
+    "gait_clock_sin[1]",
+    "gait_clock_cos[1]",
+    "imu_angular_velocity_body_rad_s[3]",
+    "projected_gravity_body[3]",
+    "imu_linear_acceleration_body_over_9_81[3]",
+    "joint_position_error_rad[12]",
+    "joint_velocity_over_4_5836625[12]",
+    "previous_normalized_action[12]"
+  ],
+  "action_order": [
+    "front_left_hip_abduction",
+    "rear_left_hip_abduction",
+    "front_right_hip_abduction",
+    "rear_right_hip_abduction",
+    "front_left_hip_flexion",
+    "rear_left_hip_flexion",
+    "front_right_hip_flexion",
+    "rear_right_hip_flexion",
+    "front_left_knee",
+    "rear_left_knee",
+    "front_right_knee",
+    "rear_right_knee"
+  ],
+  "run_stop_contract": {
+    "trained_run_duration_s": [
+      4.5,
+      6.5
+    ],
+    "trained_graceful_ramp_s": [
+      0.35,
+      0.9
+    ],
+    "trained_abrupt_stop_fraction": 0.35,
+    "recommended_stop_ramp_s": 0.6,
+    "recommended_stopped_hold_s": 1.0,
+    "stopped_stance": {
+      "all_four_feet": true,
+      "fore_aft_m": 0.08,
+      "down_m": 0.329341447,
+      "stance_center_offset_m": 0.0,
+      "target_body_pitch_rad": 0.0,
+      "target_base_height_m": 0.375
+    }
+  },
+  "training_task": "Drobot-Commanded-Run-Fast-Stop-External-Rear-Payload-Direct",
+  "training_profile": "fast-run-stop-external-rear-payload"
+}

@@ -6,7 +6,10 @@ instructions stay with the package that owns them.
 
 ## Shared documents
 
+- [Executable Drobot2 modeling manual](../simulation/mathematical_model/Drobot2_Model_Manual.ipynb) — step-by-step mathematics and Python implementations, ending in a reusable kinematics and dynamics model; [setup and API](../simulation/mathematical_model/README.md).
+- [Drobot2 mathematical model](../outputs/robot-math/index.html) — illustrated transforms, forward/inverse kinematics, Jacobians, dynamics, contacts and ankle extension; [scope and sources](../outputs/robot-math/README.md).
 - [Repository layout and ownership](repository-layout.md)
+- [V2 pitch-ankle running investigation](../cad/docs/ankle-v2.md) and [proposed RL comparison](../simulation/docs/rl-ankle-v2-study.md)
 
 ## Package documentation
 

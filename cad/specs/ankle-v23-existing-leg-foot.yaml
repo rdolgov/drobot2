@@ -1,0 +1,31 @@
+schema_version: 1
+revision: mechanical_ankle_V2.3_R3_solid_sole_existing_leg_foot
+units: mm
+source: drobot_cad/parts/ankle_v23_existing_leg.py
+printed_parts_per_leg: 1
+reuse_existing_lower_leg: true
+lower_leg_source: drobot_cad/parts/upper_arm.py
+servo_variant: Waveshare_Feetech_ST3215
+servo_case_attached_to: new_printed_foot
+servo_output_attached_to: existing_distal_fork
+motor_socket_source: drobot_cad.parts.st3215_motor_bay.gen_step
+motor_socket_modified: false
+servo_catalog_pose_xyz_mm: [25.5, 0.0, 7.475]
+servo_catalog_pose_rotation_xyz_deg: [90.0, 0.0, 0.0]
+bay_attachment_xyz_mm: [36.6117, 0.0, -1.95]
+sole_length_width_thickness_mm: [100.0, 60.0, 6.0]
+cable_gap_below_bay_mm: 0.0
+post_count: 0
+sole_cable_channel: false
+sole_full_thickness_mm: 6.0
+cable_routing: not_prescribed_by_this_revision
+fusion_overlap_mm: 0.4
+axis_to_sole_top_mm: 36.2117
+axis_to_bare_contact_mm: 42.2117
+tread_thickness_mm: 1.0
+expected_print_envelope_mm: [60.0, 100.0, 21.6]
+sole_to_mount_screws: 0
+fork_to_servo_hardware: same_short_screws_wheels_hubs_and_spacers_as_existing_knee
+case_fixings: same_four_fixings_as_existing_ST3215_bays
+verification: not_run
+RL_model: saved_V2.1_policies_do_not_match_this_revision

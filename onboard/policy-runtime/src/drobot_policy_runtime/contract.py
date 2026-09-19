@@ -135,6 +135,100 @@ class GaitClockConfig:
 
 
 @dataclass(frozen=True)
+class RunStopConfig:
+    """Model-declared graceful-stop schedule shared by simulation and runtime."""
+
+    recommended_ramp_s: float = 0.0
+    recommended_hold_s: float = 0.0
+    ramp_shape: str = "linear"
+    phase_alignment_enabled: bool = False
+    ramp_start_phase_cycles: float = 0.0
+    phase_tolerance_cycles: float = 0.0
+    maximum_phase_alignment_wait_s: float = 0.0
+
+    def __post_init__(self) -> None:
+        values = (
+            self.recommended_ramp_s,
+            self.recommended_hold_s,
+            self.ramp_start_phase_cycles,
+            self.phase_tolerance_cycles,
+            self.maximum_phase_alignment_wait_s,
+        )
+        if not all(math.isfinite(value) for value in values):
+            raise ValueError("run/stop contract values must be finite")
+        if not 0.0 <= self.recommended_ramp_s <= 5.0:
+            raise ValueError("recommended stop ramp must be in [0, 5] seconds")
+        if not 0.0 <= self.recommended_hold_s <= 10.0:
+            raise ValueError("recommended stopped hold must be in [0, 10] seconds")
+        if self.ramp_shape not in {"linear", "cubic_smoothstep"}:
+            raise ValueError(
+                "run/stop ramp shape must be 'linear' or 'cubic_smoothstep'"
+            )
+        if not 0.0 <= self.ramp_start_phase_cycles < 1.0:
+            raise ValueError("stop ramp start phase must be in [0, 1)")
+        if not 0.0 <= self.phase_tolerance_cycles <= 0.25:
+            raise ValueError("stop phase tolerance must be in [0, 0.25] cycles")
+        if not 0.0 <= self.maximum_phase_alignment_wait_s <= 5.0:
+            raise ValueError("maximum stop phase wait must be in [0, 5] seconds")
+        if self.phase_alignment_enabled and (
+            self.recommended_ramp_s <= 0.0
+            or self.phase_tolerance_cycles <= 0.0
+            or self.maximum_phase_alignment_wait_s <= 0.0
+        ):
+            raise ValueError(
+                "phase-aligned stopping requires a positive ramp, tolerance, and wait"
+            )
+
+    @classmethod
+    def from_metadata(cls, metadata: Mapping[str, Any] | None) -> RunStopConfig:
+        payload = dict(metadata or {})
+        contract = payload.get("run_stop_contract")
+        if not isinstance(contract, Mapping):
+            return cls()
+        alignment = contract.get("phase_alignment")
+        if not isinstance(alignment, Mapping):
+            alignment = {}
+        return cls(
+            recommended_ramp_s=float(
+                contract.get("recommended_stop_ramp_s", 0.0)
+            ),
+            recommended_hold_s=float(
+                contract.get("recommended_stopped_hold_s", 1.0)
+            ),
+            ramp_shape=str(contract.get("ramp_shape", "linear")),
+            phase_alignment_enabled=bool(alignment.get("enabled", False)),
+            ramp_start_phase_cycles=float(
+                alignment.get("ramp_start_phase_cycles", 0.0)
+            ),
+            phase_tolerance_cycles=float(
+                alignment.get("phase_tolerance_cycles", 0.0)
+            ),
+            maximum_phase_alignment_wait_s=float(
+                alignment.get("maximum_wait_s", 0.0)
+            ),
+        )
+
+    def ramp_command_scale(self, progress: float) -> float:
+        bounded = float(np.clip(progress, 0.0, 1.0))
+        if self.ramp_shape == "cubic_smoothstep":
+            bounded = bounded * bounded * (3.0 - 2.0 * bounded)
+        return 1.0 - bounded
+
+    def alignment_delay_s(self, phase_cycles: float, frequency_hz: float) -> float:
+        if not self.phase_alignment_enabled or frequency_hz <= 0.0:
+            return 0.0
+        phase = float(phase_cycles) % 1.0
+        forward_cycles = (self.ramp_start_phase_cycles - phase) % 1.0
+        circular_error = min(forward_cycles, 1.0 - forward_cycles)
+        if circular_error <= self.phase_tolerance_cycles:
+            return 0.0
+        return min(
+            forward_cycles / float(frequency_hz),
+            self.maximum_phase_alignment_wait_s,
+        )
+
+
+@dataclass(frozen=True)
 class HeadingHoldConfig:
     """Model-declared relative-yaw feedback through the existing yaw command."""
 
@@ -256,15 +350,22 @@ class JointTargetConfig:
         float(value) for value in ACTION_SCALE_RAD
     )
     target_velocity_limit_rad_s: float = SERVO_VELOCITY_LIMIT_RAD_S
+    target_velocity_limit_rad_s_by_action: tuple[float, ...] | None = None
     max_target_step_rad: float = MAX_TARGET_STEP_RAD
     startup_ramp_rate_deg_s: float = 45.0
     startup_settle_s: float = 0.5
     startup_position_tolerance_deg: float = 5.0
     action_mode: str = "direct"
+    integrated_stop_action_scale: float = 0.0
+    integrated_stop_target_residual_scale: float = 0.0
     residual_action_scale: float = 1.0
     residual_action_scale_by_action: tuple[float, ...] | None = None
+    gait_residual_stop_action_scale: float = 1.0
     reference_start_ramp_s: float = 0.0
     reference_joint_position_rad: tuple[tuple[float, ...], ...] = ()
+    reference_low_joint_position_rad: tuple[tuple[float, ...], ...] = ()
+    reference_blend_speed_min_m_s: float | None = None
+    reference_blend_speed_max_m_s: float | None = None
 
     def __post_init__(self) -> None:
         if len(self.neutral_joint_position_rad) != ACTION_SIZE:
@@ -276,18 +377,38 @@ class JointTargetConfig:
             and len(self.residual_action_scale_by_action) != ACTION_SIZE
         ):
             raise ValueError("per-action residual scale must contain 12 values")
+        if (
+            self.target_velocity_limit_rad_s_by_action is not None
+            and len(self.target_velocity_limit_rad_s_by_action) != ACTION_SIZE
+        ):
+            raise ValueError("per-action target velocity limit must contain 12 values")
         values = (
             *self.neutral_joint_position_rad,
             *self.action_scale_rad,
             self.target_velocity_limit_rad_s,
+            *(self.target_velocity_limit_rad_s_by_action or ()),
             self.max_target_step_rad,
             self.startup_ramp_rate_deg_s,
             self.startup_settle_s,
             self.startup_position_tolerance_deg,
+            self.integrated_stop_action_scale,
+            self.integrated_stop_target_residual_scale,
             self.residual_action_scale,
             *(self.residual_action_scale_by_action or ()),
+            self.gait_residual_stop_action_scale,
             self.reference_start_ramp_s,
             *(value for row in self.reference_joint_position_rad for value in row),
+            *(value for row in self.reference_low_joint_position_rad for value in row),
+            *(
+                ()
+                if self.reference_blend_speed_min_m_s is None
+                else (self.reference_blend_speed_min_m_s,)
+            ),
+            *(
+                ()
+                if self.reference_blend_speed_max_m_s is None
+                else (self.reference_blend_speed_max_m_s,)
+            ),
         )
         if not all(math.isfinite(value) for value in values):
             raise ValueError("joint target contract values must be finite")
@@ -299,6 +420,10 @@ class JointTargetConfig:
             raise ValueError("action scales must be positive")
         if self.target_velocity_limit_rad_s <= 0.0:
             raise ValueError("target velocity limit must be positive")
+        if self.target_velocity_limit_rad_s_by_action is not None and any(
+            value <= 0.0 for value in self.target_velocity_limit_rad_s_by_action
+        ):
+            raise ValueError("per-action target velocity limits must be positive")
         if self.max_target_step_rad <= 0.0:
             raise ValueError("maximum target step must be positive")
         if not 1.0 <= self.startup_ramp_rate_deg_s <= 180.0:
@@ -307,8 +432,21 @@ class JointTargetConfig:
             raise ValueError("startup settle time must be in [0, 10] seconds")
         if not 0.1 <= self.startup_position_tolerance_deg <= 15.0:
             raise ValueError("startup position tolerance must be in [0.1, 15] deg")
-        if self.action_mode not in {"direct", "gait_residual"}:
-            raise ValueError("action mode must be 'direct' or 'gait_residual'")
+        if self.action_mode not in {
+            "direct",
+            "gait_residual",
+            "integrated_target_velocity",
+        }:
+            raise ValueError(
+                "action mode must be 'direct', 'gait_residual', or "
+                "'integrated_target_velocity'"
+            )
+        if not 0.0 <= self.integrated_stop_action_scale <= 1.0:
+            raise ValueError("integrated stop action scale must be in [0, 1]")
+        if not 0.0 <= self.integrated_stop_target_residual_scale <= 1.0:
+            raise ValueError(
+                "integrated stop target residual scale must be in [0, 1]"
+            )
         if not 0.0 < self.residual_action_scale <= 1.0:
             raise ValueError("residual action scale must be in (0, 1]")
         if self.residual_action_scale_by_action is not None and any(
@@ -316,10 +454,40 @@ class JointTargetConfig:
             for value in self.residual_action_scale_by_action
         ):
             raise ValueError("per-action residual scales must be in (0, 1]")
+        if not 0.0 <= self.gait_residual_stop_action_scale <= 1.0:
+            raise ValueError("zero-command gait residual scale must be in [0, 1]")
         if not 0.0 <= self.reference_start_ramp_s <= 10.0:
             raise ValueError("reference start ramp must be in [0, 10] seconds")
         if any(len(row) != ACTION_SIZE for row in self.reference_joint_position_rad):
             raise ValueError("each gait reference sample must contain 12 values")
+        if any(
+            len(row) != ACTION_SIZE
+            for row in self.reference_low_joint_position_rad
+        ):
+            raise ValueError("each low-speed gait reference sample must contain 12 values")
+        has_low_reference = bool(self.reference_low_joint_position_rad)
+        has_blend_minimum = self.reference_blend_speed_min_m_s is not None
+        has_blend_maximum = self.reference_blend_speed_max_m_s is not None
+        if has_low_reference != (has_blend_minimum and has_blend_maximum):
+            raise ValueError(
+                "a low-speed gait reference requires both blend-speed bounds"
+            )
+        if has_blend_minimum != has_blend_maximum:
+            raise ValueError("both gait reference blend-speed bounds are required")
+        if has_low_reference:
+            if len(self.reference_low_joint_position_rad) != len(
+                self.reference_joint_position_rad
+            ):
+                raise ValueError(
+                    "low- and high-speed gait reference tables must have equal length"
+                )
+            if not (
+                self.reference_blend_speed_min_m_s
+                < self.reference_blend_speed_max_m_s
+            ):
+                raise ValueError(
+                    "gait reference maximum blend speed must exceed minimum"
+                )
         if self.action_mode == "gait_residual" and not self.reference_joint_position_rad:
             raise ValueError("gait-residual policies require a joint reference table")
 
@@ -344,12 +512,25 @@ class JointTargetConfig:
             (list, tuple),
         ):
             raise TypeError("per-action residual scale must be an array")
+        target_velocity_limits = target.get(
+            "target_velocity_limit_rad_s_by_action"
+        )
+        if target_velocity_limits is not None and not isinstance(
+            target_velocity_limits,
+            (list, tuple),
+        ):
+            raise TypeError("per-action target velocity limit must be an array")
         gait_reference = payload.get("gait_reference")
         if not isinstance(gait_reference, Mapping):
             gait_reference = {}
         reference_rows = gait_reference.get("joint_position_rad", ())
         if not isinstance(reference_rows, (list, tuple)):
             raise TypeError("gait reference joint positions must be an array")
+        low_reference_rows = gait_reference.get(
+            "low_speed_joint_position_rad", ()
+        )
+        if not isinstance(low_reference_rows, (list, tuple)):
+            raise TypeError("low-speed gait reference joint positions must be an array")
         return cls(
             neutral_joint_position_rad=tuple(
                 float(value)
@@ -368,6 +549,11 @@ class JointTargetConfig:
                     SERVO_VELOCITY_LIMIT_RAD_S,
                 )
             ),
+            target_velocity_limit_rad_s_by_action=(
+                None
+                if target_velocity_limits is None
+                else tuple(float(value) for value in target_velocity_limits)
+            ),
             max_target_step_rad=float(
                 target.get("max_target_step_rad", MAX_TARGET_STEP_RAD)
             ),
@@ -379,15 +565,38 @@ class JointTargetConfig:
                 startup.get("position_tolerance_deg", 5.0)
             ),
             action_mode=str(action_contract.get("mode", "direct")),
+            integrated_stop_action_scale=float(
+                action_contract.get("zero_command_policy_velocity_scale", 0.0)
+            ),
+            integrated_stop_target_residual_scale=float(
+                action_contract.get("zero_command_policy_target_scale", 0.0)
+            ),
             residual_action_scale=float(action_contract.get("residual_scale", 1.0)),
             residual_action_scale_by_action=(
                 None
                 if residual_scales is None
                 else tuple(float(value) for value in residual_scales)
             ),
+            gait_residual_stop_action_scale=float(
+                action_contract.get("zero_command_residual_scale", 1.0)
+            ),
             reference_start_ramp_s=float(gait_reference.get("start_ramp_s", 0.0)),
             reference_joint_position_rad=tuple(
                 tuple(float(value) for value in row) for row in reference_rows
+            ),
+            reference_low_joint_position_rad=tuple(
+                tuple(float(value) for value in row)
+                for row in low_reference_rows
+            ),
+            reference_blend_speed_min_m_s=(
+                None
+                if "blend_speed_min_m_s" not in gait_reference
+                else float(gait_reference["blend_speed_min_m_s"])
+            ),
+            reference_blend_speed_max_m_s=(
+                None
+                if "blend_speed_max_m_s" not in gait_reference
+                else float(gait_reference["blend_speed_max_m_s"])
             ),
         )
 
@@ -410,10 +619,53 @@ class JointTargetConfig:
         return np.asarray(self.residual_action_scale_by_action, dtype=np.float32)
 
     @property
+    def target_velocity_limit_array(self) -> np.ndarray:
+        if self.target_velocity_limit_rad_s_by_action is None:
+            return np.full(
+                ACTION_SIZE,
+                self.target_velocity_limit_rad_s,
+                dtype=np.float32,
+            )
+        return np.asarray(
+            self.target_velocity_limit_rad_s_by_action,
+            dtype=np.float32,
+        )
+
+    @property
     def reference_array(self) -> np.ndarray | None:
         if not self.reference_joint_position_rad:
             return None
         return np.asarray(self.reference_joint_position_rad, dtype=np.float32)
+
+    @property
+    def reference_low_array(self) -> np.ndarray | None:
+        if not self.reference_low_joint_position_rad:
+            return None
+        return np.asarray(
+            self.reference_low_joint_position_rad, dtype=np.float32
+        )
+
+    def reference_blend_fraction(
+        self,
+        forward_m_s: float,
+        lateral_m_s: float = 0.0,
+    ) -> float:
+        """Return the high-speed table weight for the current command."""
+
+        if self.reference_low_array is None:
+            return 1.0
+        command_speed = math.hypot(float(forward_m_s), float(lateral_m_s))
+        return float(
+            np.clip(
+                (command_speed - self.reference_blend_speed_min_m_s)
+                / (
+                    self.reference_blend_speed_max_m_s
+                    - self.reference_blend_speed_min_m_s
+                ),
+                0.0,
+                1.0,
+            )
+        )
 
 # Physical manifest order is FL, FR, RL, RR, while Isaac's tensor order is
 # FL, RL, FR, RR inside each joint type.
@@ -447,6 +699,22 @@ def normalized_action_to_joint_target(
         raise ValueError("elapsed_s must be finite and non-negative")
     target_config = config or JointTargetConfig()
     action = np.clip(np.asarray(action, dtype=np.float32), -1.0, 1.0)
+    # The wall-time velocity bound prevents compressed scheduler iterations from
+    # advancing the target too quickly. The per-packet cap also avoids a large
+    # jump after a delayed cycle and matches the guarded hardware sink.
+    max_delta = np.minimum(
+        target_config.target_velocity_limit_array * step_duration_s,
+        target_config.max_target_step_rad,
+    )
+    if target_config.action_mode == "integrated_target_velocity":
+        # Here the policy output is a fraction of the executable target speed,
+        # not an absolute normalized pose.  Impossible packet-to-packet jumps
+        # therefore cannot enter the motor pipeline.
+        return np.clip(
+            previous_target_rad + max_delta * action,
+            JOINT_LOWER_RAD,
+            JOINT_UPPER_RAD,
+        ).astype(np.float32)
     if target_config.action_mode == "gait_residual":
         if reference_target_rad is None:
             raise ValueError("gait-residual action requires a reference target")
@@ -460,13 +728,6 @@ def normalized_action_to_joint_target(
         base_target + target_config.action_scale_array * action,
         JOINT_LOWER_RAD,
         JOINT_UPPER_RAD,
-    )
-    # The wall-time velocity bound prevents compressed scheduler iterations from
-    # advancing the target too quickly. The per-packet cap also avoids a large
-    # jump after a delayed cycle and matches the guarded hardware sink.
-    max_delta = min(
-        target_config.target_velocity_limit_rad_s * step_duration_s,
-        target_config.max_target_step_rad,
     )
     return np.clip(
         desired,

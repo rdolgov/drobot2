@@ -1,0 +1,124 @@
+{
+  "status": "completed",
+  "seed": 2511,
+  "recording": true,
+  "trials": [
+    {
+      "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-08_transfer-2311\\model_2999.pt",
+      "speed_command_m_s": 0.018,
+      "mean": {
+        "forward_m_s": 0.005662246766394212,
+        "planted_stance_fraction": 0.7042442093988486,
+        "stance_contact_fraction": 0.9591627070758957,
+        "stance_tilt_deg": 3.6424684449361977,
+        "stance_slip_m_s": 0.0013144621992818252,
+        "stop_speed_m_s": 0.004258863546541155,
+        "lateral_drift_abs_m": 0.10146205872297287,
+        "qualified_stride_m": 0.03756458718668331,
+        "qualified_steps_min_leg": 0.0,
+        "swing_clear_fraction": 0.6409395973154363,
+        "reference_stance_sweep_m": 0.09344160620895547,
+        "target_rate_limited_fraction": 0.008438818565400843,
+        "fall_fraction": 0.0,
+        "qualified_stride_min_leg_m": 0.0,
+        "supported_steps_min_leg": 0.0,
+        "all_four_supported_3steps": 0.0,
+        "supported_swing_clear_min_leg": 0.0,
+        "rear_supported_swing_clear_fraction": 0.47544642857142855,
+        "rear_supported_unload_fraction": 0.07954545454545454,
+        "supported_center_triangle_margin_m": 0.01627820795188078
+      },
+      "score": 4.705165841434445,
+      "episodes": [
+        {
+          "env": 0,
+          "nominal": true,
+          "failed": false,
+          "forward_m_s": 0.005662246766394212,
+          "forward_displacement_m": 0.21096426248550415,
+          "lateral_drift_m": -0.10146205872297287,
+          "lateral_drift_abs_m": 0.10146205872297287,
+          "qualified_stride_m": 0.03756458718668331,
+          "qualified_steps_min_leg": 0.0,
+          "qualified_steps_per_leg": [
+            5.0,
+            0.0,
+            3.0,
+            3.0
+          ],
+          "qualified_stride_per_leg_m": [
+            0.04330660700798035,
+            0.0,
+            0.032903239130973816,
+            0.032655902206897736
+          ],
+          "qualified_stride_min_leg_m": 0.0,
+          "supported_steps_per_leg": [
+            5.0,
+            0.0,
+            3.0,
+            3.0
+          ],
+          "supported_steps_min_leg": 0.0,
+          "all_four_supported_3steps": false,
+          "supported_swing_clear_per_leg": [
+            0.8348214285714286,
+            0.0,
+            0.7713004484304933,
+            0.9508928571428571
+          ],
+          "supported_swing_clear_min_leg": 0.0,
+          "rear_supported_swing_clear_fraction": 0.47544642857142855,
+          "supported_unload_per_leg": [
+            0.0,
+            0.0,
+            0.12643678160919541,
+            0.1590909090909091
+          ],
+          "rear_supported_unload_fraction": 0.07954545454545454,
+          "late_transfer_load_fraction_per_leg": [
+            0.21537315014792585,
+            0.21464893325130538,
+            0.14011595193724866,
+            0.12479586450552399
+          ],
+          "supported_center_triangle_margin_m": 0.01627820795188078,
+          "swing_clear_fraction": 0.6409395973154363,
+          "reference_stance_sweep_m": 0.09344160620895547,
+          "target_rate_limited_fraction": 0.008438818565400843,
+          "planted_stance_fraction": 0.7042442093988486,
+          "stance_contact_fraction": 0.9591627070758957,
+          "stance_tilt_deg": 3.6424684449361977,
+          "stance_slip_m_s": 0.0013144621992818252,
+          "ankle_abs_velocity_rad_s": 0.2406942758670937,
+          "ankle_range_deg": [
+            33.685387483033125,
+            22.17488906443393,
+            18.328466859402486,
+            35.36746230539826
+          ],
+          "stop_speed_m_s": 0.004258863546541155
+        }
+      ],
+      "video": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v23-transfer\\walk-seed2311\\model_2999-0.02mps-learned.mp4",
+      "frames": 1440,
+      "duration_s": 48.0
+    }
+  ],
+  "scope": "nominal recording",
+  "flat_contact": "force plus corner-height proxy; no pressure sensor",
+  "mass_kg": 3.444019908818,
+  "ankle_mode": "learned",
+  "model": "V2.3_R3_solid_sole_retained_leg",
+  "objective": "rear_unloading_and_weight_transfer",
+  "leg_order": [
+    "front_left",
+    "rear_left",
+    "front_right",
+    "rear_right"
+  ],
+  "evaluation_commands": [
+    0.015,
+    0.021
+  ]
+}

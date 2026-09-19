@@ -1,0 +1,258 @@
+{
+  "schema": "drobot.ankle-v2-study.proposal.v1",
+  "status": "Broader study proposal retained; an isolated first-seed PPO pilot completed for all three designs on 2026-09-12",
+  "runnable": false,
+  "implemented_pilot": {
+    "runnable": true,
+    "training_launcher": "simulation/isaac/rl/ankle_v2/run_pilot.ps1",
+    "record": "simulation/docs/rl-ankle-v2-training-20260912.md",
+    "batch_directory": "simulation/reviews/ankle-v2-training/20260912-071916-seed1901",
+    "seeds_run": [1901],
+    "iterations_per_variant": 500,
+    "num_envs": 128,
+    "status": "completed",
+    "total_environment_transitions": 12288000,
+    "summary": "simulation/reviews/ankle-v2-training/20260912-071916-seed1901/training_summary.json",
+    "checkpoint_archive": "simulation/isaac/models/ankle-v2-pilot/20260912-071916-seed1901",
+    "conclusion": "No active-ankle speed advantage demonstrated by the pilot training telemetry; no held-out evaluation or running claim",
+    "scope": "Limited first-seed training pilot; full randomization, held-out evaluation, hardware integration and the remaining seeds are not included"
+  },
+  "created": "2026-09-11",
+  "model_revision": "mechanical v2, independent of gait V43/V44 naming",
+  "question": "Does an actuated pitch ankle raise maximum sustained forward speed under the same actuator, contact and stability constraints after paying for its added mass?",
+  "source_of_truth": "The three standalone URDF files are canonical; this file specifies a future experiment, not executable Isaac Lab configuration.",
+  "variants": [
+    {
+      "id": "rigid_baseline",
+      "urdf": "cad/exports/urdf/quadruped_robot_v2_ankle_baseline.urdf",
+      "nominal_mass_kg": 3.18,
+      "action_order": [
+        "front_left_hip_abduction",
+        "rear_left_hip_abduction",
+        "front_right_hip_abduction",
+        "rear_right_hip_abduction",
+        "front_left_hip_flexion",
+        "rear_left_hip_flexion",
+        "front_right_hip_flexion",
+        "rear_right_hip_flexion",
+        "front_left_knee",
+        "rear_left_knee",
+        "front_right_knee",
+        "rear_right_knee"
+      ],
+      "actor_observations": 50,
+      "critic_observations_without_history": 58,
+      "ankle_joint_type": "fixed"
+    },
+    {
+      "id": "weighted_locked",
+      "urdf": "cad/exports/urdf/quadruped_robot_v2_ankle_locked.urdf",
+      "nominal_mass_kg": 3.5,
+      "action_order": [
+        "front_left_hip_abduction",
+        "rear_left_hip_abduction",
+        "front_right_hip_abduction",
+        "rear_right_hip_abduction",
+        "front_left_hip_flexion",
+        "rear_left_hip_flexion",
+        "front_right_hip_flexion",
+        "rear_right_hip_flexion",
+        "front_left_knee",
+        "rear_left_knee",
+        "front_right_knee",
+        "rear_right_knee"
+      ],
+      "actor_observations": 50,
+      "critic_observations_without_history": 58,
+      "ankle_joint_type": "fixed"
+    },
+    {
+      "id": "active_pitch",
+      "urdf": "cad/exports/urdf/quadruped_robot_v2_ankle_active.urdf",
+      "nominal_mass_kg": 3.5,
+      "action_order": [
+        "front_left_hip_abduction",
+        "rear_left_hip_abduction",
+        "front_right_hip_abduction",
+        "rear_right_hip_abduction",
+        "front_left_hip_flexion",
+        "rear_left_hip_flexion",
+        "front_right_hip_flexion",
+        "rear_right_hip_flexion",
+        "front_left_knee",
+        "rear_left_knee",
+        "front_right_knee",
+        "rear_right_knee",
+        "front_left_ankle_pitch",
+        "rear_left_ankle_pitch",
+        "front_right_ankle_pitch",
+        "rear_right_ankle_pitch"
+      ],
+      "actor_observations": 62,
+      "critic_observations_without_history": 70,
+      "ankle_joint_type": "revolute"
+    }
+  ],
+  "common": {
+    "algorithm": "PPO with bounded position-target actions and an asymmetric critic",
+    "actor_inputs": [
+      "command:3",
+      "gait clock sin/cos:2",
+      "IMU angular velocity, gravity and linear acceleration:9",
+      "joint position error:N",
+      "joint velocity:N",
+      "previous controller-applied normalized target:N"
+    ],
+    "privileged_critic_inputs": [
+      "true base linear velocity:3",
+      "base height:1",
+      "four foot contacts:4"
+    ],
+    "foot_body_order": [
+      "front_left_foot_link",
+      "rear_left_foot_link",
+      "front_right_foot_link",
+      "rear_right_foot_link"
+    ],
+    "train_from_scratch": true,
+    "actor_hidden_dims": [
+      256,
+      256
+    ],
+    "critic_hidden_dims": [
+      256,
+      256
+    ],
+    "policy_hz": 60,
+    "control_packet_cap_deg": 2,
+    "initial_target_velocity_limits_deg_s": {
+      "hip_abduction": 60,
+      "hip_flexion": 100,
+      "knee": 100,
+      "ankle_pitch": 100
+    },
+    "effort_sustainable_cap_nm": 0.8825985,
+    "stall_torque_reference_nm": 2.941995,
+    "hardware_torque_fraction": 0.9,
+    "no_load_speed_rad_s": 4.712389,
+    "torque_speed_rule": "tau_abs <= min(0.8825985, 0.90 * 2.941995 * max(0, 1 - abs(joint_velocity)/4.712389)); conservative screening approximation, not identified servo physics",
+    "feet": {
+      "sole_size_fore_aft_lateral_thickness_m": [
+        0.1,
+        0.06,
+        0.006
+      ],
+      "tread_size_m": [
+        0.094,
+        0.054,
+        0.001
+      ],
+      "pivot_to_upper_sole_m": 0.024
+    },
+    "passive_ankle_damping_nm_s_rad": 0.08,
+    "passive_ankle_friction_nm": 0.02,
+    "training_seeds": [
+      1901,
+      1902,
+      1903,
+      1904,
+      1905
+    ],
+    "evaluation_seeds": [
+      2901,
+      2902,
+      2903,
+      2904,
+      2905
+    ],
+    "proposed_initial_budget": {
+      "num_envs": 128,
+      "num_steps_per_env": 64,
+      "iterations_per_variant_per_seed": 500,
+      "environment_steps_per_variant_per_seed": 4096000,
+      "scope": "pilot, not a convergence claim; extend all variants equally if none learns a usable baseline"
+    },
+    "initial_command_speed_band_m_s": [
+      0,
+      0.14
+    ],
+    "later_command_speed_bands_m_s": [
+      [
+        0.05,
+        0.22
+      ],
+      [
+        0.05,
+        0.3
+      ]
+    ],
+    "evaluation_speed_grid_m_s": [
+      0.05,
+      0.1,
+      0.14,
+      0.18,
+      0.22,
+      0.3
+    ],
+    "evaluation_moving_seconds": 30,
+    "evaluation_stop_hold_seconds": 5,
+    "maximum_speed_requires": [
+      ">=90% mean requested forward speed after startup",
+      "no fall in the 30 s moving window",
+      "absolute lateral displacement / forward displacement <=0.05",
+      "absolute heading drift <=10 degrees",
+      "all four feet participate without persistent dragging",
+      "settled speed <0.01 m/s in final 2 s of a 5 s stop hold",
+      "no persistent ankle position/rate/effort saturation"
+    ],
+    "success_margin_over_baseline": 0.15,
+    "selection": "Use held-out seeds and report dispersion, failed seeds and equal-budget checkpoints. Active must beat both rigid baseline and weighted locked; a >15% speed margin is a proposed engineering gate, not a measured result.",
+    "measure_running_separately": "Log all-feet-airborne intervals with contact force and clearance, duty factors and synchronized video; increasing walking/trotting speed alone is not proof of aerial running."
+  },
+  "randomization_to_implement": {
+    "mass_scale_range": [
+      0.96,
+      1.04
+    ],
+    "friction_coefficient_range": [
+      0.5,
+      1
+    ],
+    "per_joint_effort_scale_range": [
+      0.75,
+      1
+    ],
+    "per_joint_rate_scale_range": [
+      0.75,
+      1
+    ],
+    "control_latency_frames": [
+      0,
+      1,
+      2
+    ],
+    "extras": [
+      "rear payload COM offsets",
+      "joint zero error",
+      "backlash/deadband",
+      "contact compliance",
+      "asymmetric loaded actuator response",
+      "correlated supply sag for 16 motors"
+    ],
+    "caution": "The recorded ~0.3 s phase-equivalent lag is not a fixed transport delay. Fit a load-dependent response model from independent data before hardware conclusions; matching one scalar delay is insufficient."
+  },
+  "integration_required": [
+    "Create a separate Isaac Lab task/import path with foot-link contact sensors; do not call the existing rectangular-shoe, dry-mass or rear-payload authoring functions on these already populated URDFs.",
+    "Import as floating-base with fixed-joint handling that preserves the four foot sensor bodies. Resolve joints by explicit name order, never native backend index.",
+    "Port action/state shapes, target limiters, actuator handling, heading/stop logic, rewards and selected evaluation metrics to arbitrary named 12/16-joint sets.",
+    "Use foot-frame transforms and all sole corners for contact, tilt and clearance. Use toe-down allowance only where a moving stance or swing can justify it; require flat quiet feet at stop.",
+    "Implement coupled torque-speed clipping, energy accounting including ankle torque, joint/contact observation history if actuator memory is modeled, and matched randomization.",
+    "Adapt symmetry maps and export metadata; legacy 50-input/12-output ONNX and hardware profiles cannot operate these 16-joint policies.",
+    "The 2026-09-12 request authorized and completed asset import and a limited first-seed training pilot. Structural validation, mechanical-fit review and held-out evaluation were not run; request those checks explicitly before claiming physical readiness or measured performance."
+  ],
+  "optional_followups": [
+    "Passive spring/damper ankle without motor as a separate lighter design; a disabled geared servo is not a passive spring.",
+    "Smaller/lighter or compliant rounded feet and improved hip/knee actuator fidelity as alternative designs under the same experiment budget.",
+    "A motor mounted higher on the shank with a belt/cable linkage if added distal inertia dominates; transmission backlash and compliance must be modeled."
+  ]
+}

@@ -1,0 +1,78 @@
+schema_version: 1
+revision: mechanical_ankle_V2.1_print_prototype
+source: drobot_cad/parts/ankle_v2_printable.py
+units: mm
+scope: printable_parts_and_assembly_only
+coordinate_system:
+  origin: ankle_axis
+  positive_x: downward_from_lower_leg_toward_sole
+  positive_y: sole_long_axis
+  positive_z: ankle_axle
+  print_entries: rotated_and_translated_to_build_plate
+parts_per_leg:
+  ankle_v2_lower_leg: 1
+  ankle_v2_sole: 1
+  ankle_v2_cheek: 2
+motor:
+  exact_variant: Waveshare_Feetech_ST3215
+  existing_knee_motor_reused: true
+  added_motors_per_leg: 1
+  cavity_source: drobot_cad.parts.st3215_motor_bay.gen_step
+  cavity_modified: false
+  axle_spacing_mm: 159.896689
+  ankle_case_points: toward_knee
+  stock_metal_wheels: required_on_both_sides
+  printed_splines: false
+  wheel_bolt_circle_mm: 14.0
+  wheel_holes_per_side: 4
+  source_wheel_outer_planes_local_y_mm: [-27.65, 9.6]
+sole:
+  footprint_mm: [100.0, 60.0]
+  plate_thickness_mm: 6.0
+  axis_to_top_face_mm: 24.0
+  axis_to_bare_contact_face_mm: 30.0
+  separate_tread_thickness_mm: 1.0
+  slots_per_sole: 4
+  slot_axis: axle_direction
+  cheek_adjustment_per_side_mm: 1.2
+  underside_head_recess_mm: 2.2
+cheeks:
+  identical_parts: true
+  plate_thickness_mm: 7.0
+  widened_flange_thickness_mm: 10.0
+  nominal_allowance_per_wheel_face_mm: 0.2
+  shaft_screw_access_diameter_mm: 6.0
+  wheel_hole_clearance_mm: 3.4
+  wheel_screw_counterbore_mm: [5.8, 3.0]
+  captive_nut_af_mm: 5.8
+  nut_loading: open_outer_face_slots
+  sole_bolt_axis_from_inner_face_mm: 4.0
+  nut_count_per_cheek: 2
+hardware_per_leg:
+  ST3215_added_with_stock_wheels_and_center_screws: 1
+  M3x6_ISO4762_socket_head_screws: 8
+  M3x10_ISO7380_button_head_screws: 4
+  M3_ISO4032_hex_nuts: 4
+  servo_case_fixings: same_type_used_in_existing_ST3215_bays_four_per_socket
+printing_intent:
+  material: PLA_or_PLA_plus_fit_prototype
+  layer_height_mm: 0.2
+  walls: 5
+  infill_percent: 40
+  sole: flat_contact_face_down_as_exported
+  cheek: flat_inner_wheel_face_down_as_exported
+  lower_leg: broad_side_down_as_exported_local_socket_support_may_be_needed
+  slicer_profile_validated: false
+verification:
+  geometry_checks: not_run
+  interference_sweep: not_run
+  strength_analysis: not_run
+  physical_fit: not_run
+  mesh_closure: awaiting_explicit_authorization
+  motion_or_training: separate_V21_RL_training_started_no_hardware_motion
+limitations:
+  - replacement_lower_leg_not_a_clip_on_adapter
+  - adjustable_cheeks_must_not_preload_the_servo_axially
+  - no_designed_hard_stops_or_qualified_motion_range
+  - first_print_is_for_fit_and_assembly
+  - prior_RL_policy_has_different_mass_and_geometry

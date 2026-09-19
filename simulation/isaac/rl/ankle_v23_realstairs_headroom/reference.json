@@ -1,0 +1,54 @@
+{
+  "rise_m": 0.18,
+  "stair_count": 4,
+  "tread_m": 0.25,
+  "phase_s": 36.0,
+  "dt_s": 0.016666666666666666,
+  "phases": [
+    {
+      "phase": 0,
+      "leg": 2,
+      "foot_goal": [
+        0.20500000000000002,
+        -0.198696689,
+        0.18
+      ]
+    },
+    {
+      "phase": 1,
+      "leg": 0,
+      "foot_goal": [
+        0.20499999821186066,
+        0.19869668781757355,
+        0.18000000715255737
+      ]
+    }
+  ],
+  "order": [
+    2,
+    0
+  ],
+  "evidence": "two planned front placements on 180 mm tread; not full climb",
+  "time_scale": 2.0,
+  "starting_knee_branch": "rear-left reversed within existing limits",
+  "static_calculation_source": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v23-curriculum\\20260915\\realstairs-reverse-knee-reference\\calculation.json",
+  "plan_generator": "calculate_realstairs_reverse.py + finalize_realstairs_reference.py",
+  "maximum_joint_reference_rate_deg_s": [
+    3.4148168563842773,
+    3.3124537467956543,
+    3.5433568954467773,
+    3.421719789505005,
+    21.18939781188965,
+    13.68687915802002,
+    16.53701400756836,
+    34.20182800292969,
+    44.23503494262695,
+    33.36109924316406,
+    24.33807945251465,
+    61.892372131347656,
+    36.13301467895508,
+    17.33783721923828,
+    28.86280632019043,
+    43.45680236816406
+  ]
+}

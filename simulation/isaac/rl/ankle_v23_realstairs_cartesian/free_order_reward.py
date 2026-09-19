@@ -1,0 +1,70 @@
+"""Full-height foot/tread progress with no prescribed order of foot motion."""
+import json
+import torch
+
+
+def features(env):
+    local,gap,surface,contact,planted,levels=env._geometry()
+    sole=local.mean(2)
+    next_level=(env.credited_levels+1).clamp(max=4)
+    height=next_level.float()*.18
+    edge=.34+(next_level.float()-1.)*.25
+    lo=local[:,:,:,0].amin(2);hi=local[:,:,:,0].amax(2)
+    bottom=local[:,:,:,2].amin(2)
+    forces=env.contacts.data.net_forces_w.torch[:,env.foot_sensors,2].clamp(min=0.)
+    quality=torch.exp(-(gap.abs().amax(2)/.025).square())*(forces/3.).clamp(0.,1.)
+    quality*=torch.exp(-((surface.amax(2)-surface.amin(2))/.025).square())
+    support=torch.stack([quality[:,env.triangles[i]].amin(1) for i in range(4)],1)
+    margin=torch.stack([env._support_margin(sole,torch.full_like(env.selected_leg,i)) for i in range(4)],1)
+    clearance=((bottom-(height-.18))/.195).clamp(0.,1.)
+    approach=(1.-((edge+.008-lo).clamp(min=0.)/.30)).clamp(0.,1.)
+    unload=(1.-forces/16.).clamp(0.,1.)
+    landing=torch.exp(-((sole[:,:,2]-height)/.035).square())*quality
+    score=torch.where(env.over_edges,4.+4.*landing,3.*clearance+3.*clearance*approach+unload)
+    score*=env.credited_levels.lt(4)
+    # No body-height bonus, fixed heading, or requirement to gather all feet
+    # on one tread. Strict actual-contact success checks remain separate.
+    potential=((.1+.9*support)*score).sum(1)
+    potential+=.5*(support*(.5+.5*(margin/.06).clamp(-1.,1.))).sum(1)
+    root=env.robot.data.root_pos_w.torch-env.scene.env_origins
+    potential+=3.*root[:,0].clamp(-.2,1.8)
+    target_x=(edge+.008-lo).clamp(min=0.)-(hi-edge-.242).clamp(min=0.)
+    delta=torch.stack((target_x,sole[:,:,1].clamp(-.55,.55)-sole[:,:,1],
+                       torch.where(env.over_edges,height,height+.015)-sole[:,:,2]),2)
+    obs=torch.cat((env.credited_levels.float()/4.,env.over_edges.float(),next_level.float()/4.,
+                   delta.flatten(1),support,margin.clamp(-.2,.2)/.1),1)
+    return dict(local=local,sole=sole,gap=gap,planted=planted,levels=levels,lo=lo,bottom=bottom,
+                height=height,edge=edge,force=forces,quality=quality,support=support,margin=margin,
+                clearance=clearance,delta=delta,potential=potential,obs=obs,next_level=next_level)
+
+
+def reward(env,slip,power,new_goal,new_full):
+    f=features(env)
+    env.over_edges |= (f['lo']>f['edge']+.004)&(f['bottom']>f['height']+.008)
+    good=f['planted']&(f['levels']>=f['next_level'])&(slip<.025)
+    good &= (~env.fallen & (env.range_peak<=.02))[:,None]
+    env.landing_timers=torch.where(good,env.landing_timers+env.step_dt,0.)
+    landed=(env.landing_timers>=.25)&(env.credited_levels<f['next_level'])
+    env.credited_levels=torch.where(landed,f['next_level'],env.credited_levels)
+    env.over_edges[landed]=False
+    env.landing_timers[landed]=0.
+    f=features(env)
+    terminal=env.fallen|env.success|env.curriculum_top
+    next_phi=torch.where(terminal,0.,f['potential'])
+    shaping=torch.where(torch.isfinite(env.reward_potential),env.cfg.shaping_gamma*next_phi-env.reward_potential,0.)
+    env.reward_potential=f['potential'].detach().clone()
+    q=env.robot.data.joint_pos.torch[:,env.ids]
+    excess=torch.maximum(q-env.limits[:,:,1],env.limits[:,:,0]-q).clamp(min=0.)
+    cost=.03+.003*power+.01*(env.actions-env.last_actions).square().mean(1)+.25*(excess/.05).square().mean(1)
+    value=shaping-cost*env.step_dt+8.*landed.sum(1)+20.*new_goal-12.*env.fallen+120.*new_full+120.*env.curriculum_top
+    # Retain compatible diagnostic keys, now mean over all four free-order feet.
+    metrics=dict(selected_load=f['force'].mean(1),support_quality=f['support'].mean(1),
+        support_margin_m=f['margin'].mean(1),selected_clearance=f['clearance'].mean(1),
+        credited_level_sum=env.credited_levels.float().sum(1),waypoint_distance_m=f['delta'].norm(dim=2).mean(1),shaping=shaping)
+    for k,v in metrics.items():env.task_sums[k]+=v
+    if env.common_step_counter%20==0:
+        with env.metrics_file.with_suffix('.progress.jsonl').open('a') as stream:
+            stream.write(json.dumps({'step':env.common_step_counter,'reset_variant':env.reset_variant[:8].cpu().tolist(),
+                'credited_levels':env.credited_levels[:8].cpu().tolist(),'over_edge':env.over_edges[:8].cpu().tolist(),
+                **{k:v[:8].cpu().tolist() for k,v in metrics.items()}})+'\n')
+    return value

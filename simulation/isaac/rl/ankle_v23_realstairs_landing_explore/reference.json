@@ -1,0 +1,67 @@
+{
+  "rise_m": 0.18,
+  "tread_m": 0.25,
+  "stair_count": 4,
+  "phase_s": 12.0,
+  "dt_s": 0.016666666666666666,
+  "order": [
+    3
+  ],
+  "phases": [
+    {
+      "phase": 0,
+      "leg": 3,
+      "foot_goal": [
+        0.20500000000000002,
+        -0.198696689,
+        0.18
+      ],
+      "mode": "mixed_reset_goal_exploration"
+    }
+  ],
+  "goal_feet": [
+    [
+      0.33,
+      0.198696689,
+      0.18
+    ],
+    [
+      0.20500000000000002,
+      0.198696689,
+      0.18
+    ],
+    [
+      0.33,
+      -0.198696689,
+      0.18
+    ],
+    [
+      0.20500000000000002,
+      -0.198696689,
+      0.18
+    ]
+  ],
+  "reset_library": [
+    {
+      "name": "near",
+      "probability": 0.6
+    },
+    {
+      "name": "high",
+      "probability": 0.15
+    },
+    {
+      "name": "edge",
+      "probability": 0.1
+    },
+    {
+      "name": "floor37",
+      "probability": 0.075
+    },
+    {
+      "name": "floor57",
+      "probability": 0.075
+    }
+  ],
+  "evidence": "disconnected reset poses; no claim of a connecting path or a floor-start climb"
+}

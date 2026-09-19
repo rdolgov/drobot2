@@ -1,0 +1,26 @@
+{
+  "schema": "drobot.v44-study35-offline-bundle.v1",
+  "deployment_allowed": false,
+  "source_study_manifest_sha256": "fa184f94e519452a96cf9432cdc310024dcb6e725d5111a4a32c08b7bee4c9f7",
+  "checkpoint": "logs/rsl_rl/drobot_v44_ablation_swing-tilt-credit-34/2026-09-06_13-19-18_lc34_98258b197e564089ab55941f1fc43ff9/model_396.pt",
+  "checkpoint_sha256": "2dcfc9327852635618d505ae8f0c13ea3eaa1a0cb7457e38cf000bf9134b537f",
+  "selected_env_sha256": "ff61d9e550323c26516db168465fe2a3d7d57a09bcf153b5b725853cec531fce",
+  "canonical_trace_sha256": "9ddf99ed1f1c91ca9fd6e3989c50d8f33c4b8ee6b433e7ae57660c3f276bd232",
+  "files": {
+    "onboard/models/experimental-v44-study35/policy.onnx": "c6e4fb830f0e61fe5a2f898b47444a0e048962eaa311d2ca7182fed3c34fa4ae",
+    "onboard/models/experimental-v44-study35/policy.onnx.data": "f0c9ce3921993cdbf6d9b269ba520544a37fd6625ace2a8a13e3165cf196c10d",
+    "onboard/models/experimental-v44-study35/policy.json": "eb96636b78cfd0f730a4e5e94b2171f76df003537437c62eb7441818acca05a4",
+    "onboard/models/experimental-v44-study35/high.json": "86030cb4de7248453d9f8d8e42be739c581215ee0074febfd9ceba5b94594864",
+    "onboard/models/experimental-v44-study35/low.json": "757efe413813930ba9db87f6af7735a932bbb3532b33adca9dacbcff022415eb",
+    "onboard/policy-runtime/src/drobot_policy_runtime/v44_study35.py": "b29c9dcefabbf464af6dd443b0be3b447e587bb88b716baea864baa9731235e5",
+    "onboard/policy-runtime/src/drobot_policy_runtime/_v44_projection.py": "bc607ca8851892f4f6c8906788394c15f4ed02f8328a979581b41651a588b50a",
+    "onboard/policy-runtime/src/drobot_policy_runtime/_v44_geometry.py": "7e103dbad20d43542cfc479ad5ee3532d2bad67d4b409469f98178a3d5ae66a9",
+    "onboard/policy-runtime/src/drobot_policy_runtime/policy.py": "29dd0e9771c313c203dc7910bdb1ebc5d75d05771cfb58eb8789b1373bf273aa",
+    "onboard/policy-runtime/src/drobot_policy_runtime/runtime.py": "d3f8b315073d42ff9c98ed5df2df2152f5a6f6cbd99e8303569816875d889bd8",
+    "onboard/policy-runtime/src/drobot_policy_runtime/contract.py": "d182df39f4eb692489c25641d342bafd2995bfbeb77b9f53da1dcce0d968bef7",
+    "onboard/policy-runtime/src/drobot_policy_runtime/sources.py": "3a268cc3a3ecd476debc73c53f706d1f6e4d334026317d605cee79ed1ca9cb7a",
+    "onboard/policy-runtime/src/drobot_policy_runtime/__init__.py": "86fa838b5c7c6267aa7a1cbf5b6ceca615093d04bace79bb5fbe11af59c5cceb",
+    "onboard/scripts/prepare-v44-study35.py": "2e8fcab390987dceede5e4e504f44c15f01efdaa5441dab7ce45bb74a67a63bb"
+  },
+  "note": "Preparation is not verification; see offline check report. Original study qualification/export guards are unchanged."
+}

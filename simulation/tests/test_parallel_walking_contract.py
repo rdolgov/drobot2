@@ -23,6 +23,9 @@ def test_python_entrypoints_and_environment_parse() -> None:
         "preview_control.py",
         "bootstrap_walking_from_sb3.py",
         "evaluate_sustained_walking.py",
+        "evaluate_run_stop.py",
+        "export_policy_onnx.py",
+        "generate_phase_foot_warp_reference.py",
         "agents/rsl_rl_ppo_cfg.py",
     ):
         ast.parse(_source(relative), filename=relative)
@@ -220,10 +223,36 @@ def test_v22_uses_deployable_distributed_crawl_residual() -> None:
     assert "gait_frequency_max_hz = 0.30" in cfg
     assert "target_velocity_limit_rad_s = math.radians(120.0)" in cfg
     assert "distributed_push_crawl_by_name" in env
-    assert (
-        "gait_reference + self.cfg.residual_action_scale * self._actions" in env
-    )
+    assert "normalized_target = gait_reference + (" in env
+    assert "self._residual_action_scale" in env
     assert '"action_contract"' in exporter
     assert '"joint_position_rad": reference_joint_position_rad' in exporter
     assert "three_or_four_foot_support_fraction" in evaluator
     assert "mean_target_limiter_gap_rad" in evaluator
+
+
+def test_v43_exports_the_exact_blended_foot_warp_contract() -> None:
+    registration = _source("__init__.py")
+    cfg = _source("commanded_walking_env_cfg.py")
+    env = _source("commanded_walking_env.py")
+    exporter = _source("export_policy_onnx.py")
+    evaluator = _source("evaluate_run_stop.py")
+
+    assert (
+        "Drobot-Commanded-Run-Foot-Warp-Trot-Residual-Stop-External-Rear-Payload"
+        in registration
+    )
+    assert "DrobotCommandedRunningFootWarpTrotResidualStopExternalRearPayloadEnvCfg" in cfg
+    assert 'gait_reference_mode = "phase_table"' in cfg
+    assert "gait_phase_reference_low_path" in cfg
+    assert "gait_phase_reference_blend_speed_min_m_s = 0.10" in cfg
+    assert "gait_phase_reference_blend_speed_max_m_s = 0.14" in cfg
+    assert "gait_duty_factor = 0.46" in cfg
+    assert "residual_action_scale_by_action = (" in cfg
+    assert "torch.lerp(" in env
+    assert 'V43_TRAINING_PROFILE = (' in exporter
+    assert '"--reference-phase-table-path"' in exporter
+    assert '"low_speed_joint_position_rad": reference_low_phase_rows' in exporter
+    assert '"ramp_shape": "cubic_smoothstep" if is_v43 else "linear"' in exporter
+    assert '"ramp_start_phase_cycles": 0.05 if is_v43 else 0.0' in exporter
+    assert '"--ramp-start-phase-cycles"' in evaluator

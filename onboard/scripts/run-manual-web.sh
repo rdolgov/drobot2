@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Small single-sample actor; avoid a CPU thread pool per matrix-vector product.
+export OPENBLAS_NUM_THREADS=1
+export OMP_NUM_THREADS=1
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 VENV_DIR="${REPO_ROOT}/onboard/.manual-venv"
@@ -10,7 +14,8 @@ HTTP_BIND="${DROBOT_MANUAL_BIND:-0.0.0.0}"
 HTTP_PORT="${DROBOT_MANUAL_PORT:-8080}"
 DEMO_MODE="${DROBOT_MANUAL_DEMO:-true}"
 FALLBACK_DEMO="${DROBOT_MANUAL_FALLBACK_DEMO:-false}"
-RL_MODEL="${DROBOT_RL_MODEL:-${REPO_ROOT}/onboard/models/parallel-walking-v30-symmetry-gated-robust-straight-crawl/model_5000.onnx}"
+RL_MODEL="${DROBOT_RL_MODEL:-${REPO_ROOT}/onboard/models/ankle-v23-transfer-seed2311/policy.npz}"
+RL_MODEL_OPTION="${DROBOT_RL_MODEL_OPTION-}"
 RL_IMU_AXIS_MAP="${DROBOT_RL_IMU_AXIS_MAP:-+x,+y,+z}"
 
 if [[ ! -x "${VENV_DIR}/bin/drobot-four-leg-web" ]]; then
@@ -28,6 +33,9 @@ ARGS=(
   --rl-model "${RL_MODEL}"
   --rl-imu-axis-map "${RL_IMU_AXIS_MAP}"
 )
+if [[ -n "${RL_MODEL_OPTION}" && "${RL_MODEL_OPTION}" != "${RL_MODEL}" ]]; then
+  ARGS+=(--rl-model-option "${RL_MODEL_OPTION}")
+fi
 case "${DEMO_MODE,,}" in
   true|1|yes) ARGS+=(--demo) ;;
   false|0|no)

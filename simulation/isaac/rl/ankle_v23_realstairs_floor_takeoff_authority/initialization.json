@@ -1,0 +1,360 @@
+{
+  "initial_actions": [
+    [
+      0.23721315467049808,
+      0.23766665300248271,
+      -0.21359650884826703,
+      -0.23454466964443932,
+      0.14815668796356554,
+      0.10339707011993714,
+      0.17498657173516804,
+      -0.11579115726647878,
+      -0.09665298914649179,
+      -0.23905615481070502,
+      -0.26844588247007073,
+      0.059370212284094254,
+      -0.05312319115194045,
+      0.3897864977635347,
+      0.7270613245926608,
+      0.0037248622568214337
+    ],
+    [
+      0.016423314337762705,
+      0.016423314337762708,
+      -0.008981784007481444,
+      -0.016423314337762708,
+      0.4081239528553313,
+      0.24366918489102182,
+      0.4169412486253607,
+      -0.40325515334389184,
+      -0.43584490484901056,
+      -0.43584490484901056,
+      -0.43584490484901056,
+      0.43584490484901056,
+      0.4177186026703232,
+      0.6912945485895289,
+      0.4312079699779876,
+      -0.4177186026703232
+    ],
+    [
+      -0.6689888129996943,
+      -0.6795797892896139,
+      0.7924185683631931,
+      0.34356436384014244,
+      -0.7503933836477182,
+      -0.9188629948863893,
+      0.9689306924107044,
+      -0.21514079615026077,
+      0.16060568162315578,
+      0.11570439894444025,
+      -0.7609732441101396,
+      -0.16440604080274682,
+      0.6078192063034014,
+      0.8507727202796413,
+      -0.19193892897921047,
+      -0.9958730901736624
+    ]
+  ],
+  "static_loads": [
+    {
+      "equilibrium_found": true,
+      "com_m": [
+        0.17452165366672906,
+        -0.023421644849830163,
+        0.32115298235121303
+      ],
+      "all_sole_centers_m": [
+        [
+          0.28303583182977066,
+          0.1985986522432059,
+          0.0019879847627799208
+        ],
+        [
+          0.11303569249646891,
+          0.1985980072171165,
+          0.0019932842597406575
+        ],
+        [
+          0.261765984896709,
+          -0.20202532613749707,
+          0.01257500493434563
+        ],
+        [
+          0.11693666580456893,
+          -0.1987444369738965,
+          0.001956799802041831
+        ]
+      ],
+      "stance": [
+        true,
+        true,
+        false,
+        true
+      ],
+      "assumption": "specified stance corners, friction pyramid, bounded PD setpoint headroom",
+      "stiffness": 30.0,
+      "control_fraction": 0.995,
+      "target_reserve_degrees": 0.04,
+      "friction_coefficient": 0.85,
+      "contact_corners": {
+        "0": [
+          0,
+          2
+        ],
+        "1": [
+          0,
+          2
+        ],
+        "3": [
+          1,
+          3
+        ]
+      },
+      "stance_corner_z_span_m": {
+        "front_left": 3.191891195797325e-16,
+        "rear_left": 3.3306690738754696e-16,
+        "rear_right": 4.440892098500626e-16
+      },
+      "minimum_peak_torque_ratio_at_85pct_strength": 0.06762740531601343,
+      "minimum_peak_torque_nm": 0.05073466951718478,
+      "joint_torques_nm": {
+        "front_left_hip_abduction": 0.05073,
+        "rear_left_hip_abduction": 0.05073,
+        "front_right_hip_abduction": 0.05073,
+        "rear_right_hip_abduction": -0.05073,
+        "front_left_hip_flexion": -0.05073,
+        "rear_left_hip_flexion": -0.05073,
+        "front_right_hip_flexion": 0.05073,
+        "rear_right_hip_flexion": 0.05073,
+        "front_left_knee": 0.05073,
+        "rear_left_knee": 0.05073,
+        "front_right_knee": -0.05073,
+        "rear_right_knee": -0.05073,
+        "front_left_ankle_pitch": -0.05073,
+        "rear_left_ankle_pitch": -0.05073,
+        "front_right_ankle_pitch": 0.00539,
+        "rear_right_ankle_pitch": 0.05073
+      },
+      "foot_normal_force_n": [
+        11.607208786346286,
+        5.589979420883929,
+        0,
+        16.58864709827435
+      ],
+      "required_setpoints_rad": [
+        0.10298624562881356,
+        0.10318313222506874,
+        -0.0927330634604156,
+        -0.10182772111640938,
+        0.15437357422470005,
+        0.10773577283734857,
+        0.182329281866289,
+        -0.12064993525797832,
+        -0.15106304952343103,
+        -0.37363098722499577,
+        -0.41956543709656563,
+        0.09279221882000406,
+        -0.03228885526278446,
+        0.2369164866936783,
+        0.4419158067857009,
+        0.0022640119254191816
+      ]
+    },
+    {
+      "equilibrium_found": true,
+      "com_m": [
+        0.06855622570768256,
+        -0.009462559567568064,
+        0.3072498967991119
+      ],
+      "all_sole_centers_m": [
+        [
+          -0.003757268791529052,
+          0.19922499464558757,
+          -3.8939054342046475e-09
+        ],
+        [
+          -0.123965415157606,
+          0.07901684299603937,
+          -4.62870823614292e-09
+        ],
+        [
+          0.28000000615370535,
+          -0.07901683486889112,
+          -3.883650248615034e-09
+        ],
+        [
+          0.15979185162986134,
+          -0.1992249946472008,
+          -3.8939054342046475e-09
+        ]
+      ],
+      "stance": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "assumption": "all stance corners, friction pyramid mu=.9, bounded PD setpoint headroom",
+      "stiffness": 30.0,
+      "control_fraction": 0.995,
+      "stance_corner_z_span_m": {
+        "front_left": 2.7932141599684712e-09,
+        "rear_left": 2.7932141599684712e-09,
+        "front_right": 2.8317736211480593e-09,
+        "rear_right": 2.7932141599684712e-09
+      },
+      "minimum_peak_torque_ratio_at_85pct_strength": 0.285128353516748,
+      "minimum_peak_torque_nm": 0.2139057785531488,
+      "joint_torques_nm": {
+        "front_left_hip_abduction": 0.21391,
+        "rear_left_hip_abduction": 0.21391,
+        "front_right_hip_abduction": -0.11698,
+        "rear_right_hip_abduction": -0.21391,
+        "front_left_hip_flexion": -0.06171,
+        "rear_left_hip_flexion": -0.21391,
+        "front_right_hip_flexion": 0.21391,
+        "rear_right_hip_flexion": 0.21391,
+        "front_left_knee": 0.21391,
+        "rear_left_knee": 0.21391,
+        "front_right_knee": 0.21391,
+        "rear_right_knee": -0.21391,
+        "front_left_ankle_pitch": -0.21391,
+        "rear_left_ankle_pitch": -0.21391,
+        "front_right_ankle_pitch": 0.03206,
+        "rear_right_ankle_pitch": 0.21391
+      },
+      "foot_normal_force_n": [
+        9.019701389638794,
+        10.103469158520824,
+        4.195374054274094,
+        10.467290703070855
+      ],
+      "required_setpoints_rad": [
+        0.007130192618438289,
+        0.007130192618438291,
+        -0.003899447377883865,
+        -0.00713019261843829,
+        0.42524947199470475,
+        0.2538939248513493,
+        0.4344367552805629,
+        -0.42017637004368635,
+        -0.6812004577111516,
+        -0.6812004577111516,
+        -0.6812004577111516,
+        0.6812004577111516,
+        0.2538939248513493,
+        0.42017637004368635,
+        0.2620929094970186,
+        -0.2538939248513493
+      ]
+    },
+    {
+      "equilibrium_found": true,
+      "com_m": [
+        0.4108115465828836,
+        -0.03166167256218212,
+        0.421584959197752
+      ],
+      "all_sole_centers_m": [
+        [
+          0.521475005576815,
+          0.1245077963925736,
+          0.1845383443317731
+        ],
+        [
+          0.39632140541739,
+          0.2513417274473456,
+          0.1800000000537659
+        ],
+        [
+          0.4689441472250373,
+          -0.37524842728587127,
+          0.18000000009609757
+        ],
+        [
+          0.28677982410550773,
+          -0.08342307418911434,
+          0.038920004112085085
+        ]
+      ],
+      "stance": [
+        true,
+        true,
+        true,
+        false
+      ],
+      "assumption": "specified stance corners, friction pyramid, bounded PD setpoint headroom",
+      "stiffness": 30.0,
+      "control_fraction": 0.995,
+      "target_reserve_degrees": 0.05,
+      "friction_coefficient": 0.85,
+      "contact_corners": {
+        "0": [
+          2
+        ],
+        "1": [
+          0,
+          2
+        ],
+        "2": [
+          1,
+          3
+        ]
+      },
+      "stance_corner_z_span_m": {
+        "front_left": 0.0,
+        "rear_left": 2.4091839634365897e-14,
+        "front_right": 2.5568436257117355e-13
+      },
+      "minimum_peak_torque_ratio_at_85pct_strength": 0.9795079803989937,
+      "minimum_peak_torque_nm": 0.7348354331024539,
+      "joint_torques_nm": {
+        "front_left_hip_abduction": 0.64356,
+        "rear_left_hip_abduction": 0.73484,
+        "front_right_hip_abduction": 0.73484,
+        "rear_right_hip_abduction": -0.05911,
+        "front_left_hip_flexion": 0.62515,
+        "rear_left_hip_flexion": 0.73484,
+        "front_right_hip_flexion": -0.73484,
+        "rear_right_hip_flexion": -0.02634,
+        "front_left_knee": 0.45397,
+        "rear_left_knee": 0.25557,
+        "front_right_knee": 0.73484,
+        "rear_right_knee": -0.06359,
+        "front_left_ankle_pitch": 0.18362,
+        "rear_left_ankle_pitch": 0.10556,
+        "front_right_ankle_pitch": -0.01282,
+        "rear_right_ankle_pitch": -0.01638
+      },
+      "foot_normal_force_n": [
+        2.5587205396153663,
+        17.170812571453663,
+        14.056302194435553,
+        0
+      ],
+      "required_setpoints_rad": [
+        -0.29044192896560106,
+        -0.29504000822118737,
+        0.3440290376629527,
+        0.1491586923705646,
+        -0.7818810632210695,
+        -0.9574199227395478,
+        1.009588539129855,
+        -0.2241684403165843,
+        0.2510174206822635,
+        0.18083930463165837,
+        -1.1893573067542165,
+        -0.25695716297086735,
+        0.3694391461186566,
+        0.5171089430238666,
+        -0.11666257547250555,
+        -0.6053025311817082
+      ]
+    }
+  ],
+  "physical_motor_joint_rate_limits": "unchanged",
+  "reset_evidence": "Variant 0: compact all-four-floor pose, FR collision box at floor; unchanged 2 mm settling offset. Variants 1/2 unchanged. No hover or near-goal reset.",
+  "control": "velocity-action PPO at 60 Hz; Beta(8,8) fresh policy; gamma=.9997 lambda=.995 rollout=256",
+  "success": "only floor-start all-four on fourth tread for one second is full climb"
+}

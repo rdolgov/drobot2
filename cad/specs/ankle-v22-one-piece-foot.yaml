@@ -1,0 +1,32 @@
+schema_version: 1
+revision: mechanical_ankle_V2.2_one_piece_foot
+units: mm
+source: drobot_cad/parts/ankle_v22_one_piece.py
+replaces_per_leg:
+  ankle_v2_sole: 1
+  ankle_v2_cheek: 2
+new_print_count_per_leg: 1
+sole_length_width_thickness_mm: [100.0, 60.0, 6.0]
+axis_to_sole_top_mm: 24.0
+axis_to_bare_contact_face_mm: 30.0
+fixed_inner_wheel_face_gap_mm: 37.25
+cheek_thickness_mm: 7.0
+root_flange_axial_width_mm: 10.0
+root_flange_fore_aft_width_mm: 30.0
+fusion_overlap_into_sole_mm: 0.4
+wheel_pcd_mm: 14.0
+wheel_hole_clearance_mm: 3.4
+wheel_counterbore_diameter_depth_mm: [5.8, 3.0]
+center_screw_access_mm: 6.0
+expected_print_envelope_mm: [60.0, 100.0, 42.5]
+retained_hardware_per_leg:
+  M3x6_wheel_screws: 8
+  stock_metal_servo_wheels: 2
+  stock_center_retaining_screws: 2
+removed_hardware_per_leg:
+  M3x10_sole_screws: 4
+  M3_hex_nuts: 4
+axial_adjustment: none_fixed_catalog_span
+print_orientation: sole_flat_on_bed_cheeks_upright
+verification: not_run_as_requested
+running_RL_assets: unchanged_V2.1_bolted_foot

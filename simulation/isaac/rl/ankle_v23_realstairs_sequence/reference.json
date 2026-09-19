@@ -1,0 +1,66 @@
+{
+  "rise_m": 0.18,
+  "tread_m": 0.25,
+  "stair_count": 4,
+  "phase_s": 36.0,
+  "dt_s": 0.016666666666666666,
+  "order": [
+    2,
+    1,
+    0
+  ],
+  "phases": [
+    {
+      "phase": 0,
+      "leg": 2,
+      "foot_goal": [
+        0.22499999403953552,
+        -0.19869668781757355,
+        0.18000000715255737
+      ]
+    },
+    {
+      "phase": 1,
+      "leg": 1,
+      "foot_goal": [
+        -0.02500000037252903,
+        0.19869668781757355,
+        0.0
+      ]
+    },
+    {
+      "phase": 2,
+      "leg": 0,
+      "foot_goal": [
+        0.22499999403953552,
+        0.19869668781757355,
+        0.18000000715255737
+      ]
+    }
+  ],
+  "evidence": "geometric/static reference; FR up, RL floor advance, FL up with weight transfer; not a full climb",
+  "maximum_joint_reference_rate_deg_s": [
+    4.007212162017822,
+    3.3124537467956543,
+    5.351098537445068,
+    3.065311908721924,
+    14.992127418518066,
+    12.595243453979492,
+    14.399335861206055,
+    34.20182800292969,
+    29.51076889038086,
+    33.36109924316406,
+    24.7534236907959,
+    61.892372131347656,
+    15.529748916625977,
+    13.769455909729004,
+    28.86280632019043,
+    43.45680236816406
+  ],
+  "reference_calculations": [
+    "realstairs-first-loaded-clear-reference",
+    "realstairs-rear-diagonal-descent-reference",
+    "realstairs-after-rear-loaded-reference"
+  ],
+  "swing_floor_constraint": "rear-left traction corners constrained above floor during swing"
+}

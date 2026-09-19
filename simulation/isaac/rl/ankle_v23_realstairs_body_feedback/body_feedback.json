@@ -1,0 +1,11 @@
+{
+  "evidence": "differential kinematic calculation, not dynamic validation",
+  "source": "URDF finite differences at 0.2-second reference intervals; interpolation and endpoint hold",
+  "damping_m_per_rad": 0.015,
+  "position_gain": 0.55,
+  "orientation_gain": 0.55,
+  "joint_correction_limit_rad": 0.12,
+  "filter_s": 0.12,
+  "privileged": true,
+  "physical_motor_and_joint_limits": "unchanged"
+}

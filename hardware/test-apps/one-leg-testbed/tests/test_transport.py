@@ -4,6 +4,13 @@ from pathlib import Path
 
 from drobot_leg_testbed.model import load_config
 from drobot_leg_testbed.transport import (
+    REG_PRESENT_CURRENT,
+    REG_PRESENT_POSITION,
+    REG_PRESENT_SPEED,
+    REG_PRESENT_TEMPERATURE,
+    REG_PRESENT_VOLTAGE,
+    REG_STATUS_BLOCK_FIRST,
+    REG_STATUS_BLOCK_LENGTH,
     REG_TORQUE_ENABLE,
     SET_MIDDLE_COMMAND,
     STSBus,
@@ -184,3 +191,65 @@ def test_group_read_returns_signed_position_and_speed() -> None:
 
     assert values == {1: (2048, 120), 3: (-19, -50)}
     assert bus.feedback_mode == "group_sync_read"
+
+
+def test_status_reads_one_contiguous_register_block(monkeypatch) -> None:
+    calls: list[tuple[int, int, int]] = []
+    data = [0] * REG_STATUS_BLOCK_LENGTH
+
+    def offset(address: int) -> int:
+        return address - REG_STATUS_BLOCK_FIRST
+
+    data[offset(REG_TORQUE_ENABLE)] = 1
+    data[offset(REG_PRESENT_POSITION) : offset(REG_PRESENT_POSITION) + 2] = [
+        0x13,
+        0x80,
+    ]
+    data[offset(REG_PRESENT_SPEED) : offset(REG_PRESENT_SPEED) + 2] = [
+        0x78,
+        0x00,
+    ]
+    data[offset(REG_PRESENT_VOLTAGE)] = 119
+    data[offset(REG_PRESENT_TEMPERATURE)] = 42
+    data[offset(REG_PRESENT_CURRENT) : offset(REG_PRESENT_CURRENT) + 2] = [
+        100,
+        0,
+    ]
+
+    class Packet:
+        @staticmethod
+        def scs_makeword(low: int, high: int) -> int:
+            return low | (high << 8)
+
+        @staticmethod
+        def scs_tohost(value: int, sign_bit: int) -> int:
+            if value & (1 << sign_bit):
+                return -(value & ~(1 << sign_bit))
+            return value
+
+        def readTxRx(
+            self,
+            servo_id: int,
+            address: int,
+            length: int,
+        ) -> tuple[list[int], int, int]:
+            calls.append((servo_id, address, length))
+            return data, 0, 0
+
+    config = load_config(ROOT / "leg.example.toml")
+    motor = config.motor(1)
+    bus = STSBus("demo", config.bus.baudrate)
+    bus.packet = Packet()
+    bus._comm_success = 0
+    monkeypatch.setattr(bus, "require_motor", lambda _motor: 777)
+
+    status = bus.status(motor)
+
+    assert calls == [(motor.servo_id, REG_STATUS_BLOCK_FIRST, 31)]
+    assert status.model_number == 777
+    assert status.raw_position == -19
+    assert status.raw_speed == 120
+    assert status.voltage_v == 11.9
+    assert status.temperature_c == 42
+    assert status.current_ma == 650.0
+    assert status.torque_enabled is True

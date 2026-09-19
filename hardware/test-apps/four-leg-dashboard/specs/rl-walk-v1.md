@@ -1,16 +1,18 @@
-# Guarded RL walk V1
+# Guarded RL locomotion V1
 
 ## Scope
 
-The port 8080 hardware dashboard can run the selected
-`parallel-walking-v30-symmetry-gated-robust-straight-crawl/model_5000.onnx` policy as a bounded, supported-robot
-commissioning test. The four-leg dashboard remains the only process that opens
+The port 8080 hardware dashboard exposes the selected V43 run/stop policy and
+V30 crawl policy as distinct, bounded, supported-robot commissioning modes.
+V43 is selected by default; the selector can switch back to V30 only while all
+motors are disarmed. The four-leg dashboard remains the only process that opens
 the Feetech serial bus. The policy runner supplies targets to that same session;
 it does not create a second motor owner.
 
-The initial rollout is deliberately short and supported. The selected V30
-model accepts its exported `0.005` through `0.039 m/s` forward range and starts
-at the sidecar-recommended `0.005 m/s`. It is not an unattended autonomy mode.
+The initial V43 rollout is deliberately short and supported. Training spans
+`0.10` through `0.14 m/s`; the sidecar recommends `0.12 m/s`, but commissioning
+must begin at the trained minimum `0.10 m/s`. This is not an unattended
+autonomy mode.
 
 ## Observation and action contract
 
@@ -21,21 +23,21 @@ contains:
 2. BNO085 body gyro, projected gravity, and acceleration (9);
 3. 12 live calibrated joint-position errors;
 4. 12 joint velocities computed from encoder differences; and
-5. 12 previous normalized policy actions.
+5. 12 previous values using the history semantics declared by the model.
 
 An independent background source requests encoder feedback at 100 Hz and the
 policy consumes its latest complete cached sample. Feedback is rejected after
 120 ms. The actual achieved USB/servo rate is measured in recordings rather
 than assumed from the requested polling rate.
-The policy produces 12 normalized residual actions in Isaac order. Its JSON sidecar
-declares the trained neutral pose, per-joint action scales, target velocity,
-maximum packet step, and startup ramp/settle tolerance. The tracked contract
-also embeds the exact 2,048-sample distributed-push crawl reference used in
-training. Runtime targets are `reference + policy residual`, using the
-sidecar's per-joint `0.10 / 0.12 / 0.15` abduction/hip/knee scales, mapped to
-physical servo IDs 1-12, and bounded as semantic joint angles. Policy targets
-are limited from actual elapsed monotonic time and the model-declared packet
-cap before the existing servo-session ramp is applied.
+The policy produces 12 normalized actions in Isaac order. Each JSON sidecar
+declares whether they are direct actions or gait-reference residuals, along
+with the trained neutral pose, per-joint action scales, target velocity,
+maximum packet step, and startup ramp/settle tolerance. V43 uses a speed-blended
+256-sample foot-warp reference, bounded residuals, and previous applied-target
+history; V30 retains its exported crawl-reference residual contract. Targets map to
+physical servo IDs 1-12 and remain bounded as semantic joint angles. Policy
+targets are limited from actual elapsed monotonic time and the model-declared
+packet cap before the existing servo-session ramp is applied.
 
 While the policy is active, encoder position/speed uses the SDK's synchronous
 group read for registers 56–59 across all 12 IDs, with a sequential fallback
@@ -47,10 +49,20 @@ last full electrical snapshot plus live policy targets and encoder positions;
 normal full telemetry resumes immediately after the policy disarms. This keeps
 browser refreshes from blocking inference.
 
-The 60 Hz motor-output worker sends all pending targets with one synchronous
-group write, so the four legs begin each update from the same bus packet. Both
-the inference scheduler and motor scheduler skip missed slots instead of
-replaying compressed catch-up updates.
+Policy inference publishes one complete 12-joint snapshot through a dedicated,
+short-held latest-target buffer; it never waits for a USB read or write while
+holding the main servo-session lock. The 60 Hz motor-output worker consumes the
+newest snapshot and sends all changed targets with one synchronous group write,
+so the four legs begin each update from the same bus packet. If the bus is late,
+intermediate policy snapshots are replaced rather than replayed. Both the
+inference scheduler and motor scheduler skip missed slots instead of replaying
+compressed catch-up updates.
+
+Each recording includes observation, inference, and target-handoff durations.
+Each physical group write adds a `motor_output` event with bus duration, target
+age, policy sequence, desired 12-joint target, and the servo targets actually
+sent. This separates a healthy 60 Hz inference loop from a slower physical bus
+or actuator in subsequent analysis.
 
 ## Start interlock
 
@@ -72,18 +84,21 @@ and the physical power cutoff is ready. Start is rejected unless:
 Preparation does not run inference. After these checks, each motor is
 re-anchored to its measured policy-neutral position without dropping torque.
 The measured 12-joint vector becomes the policy's initial rate-limiter target,
-preventing a jump from calibrated zero or an assumed pose. Finite V30 policy
-targets are limited to two degrees per 60 Hz update. A larger finite request is
-clamped and recorded rather than treated as a fault or a reason to disarm.
+preventing a jump from calibrated zero or an assumed pose. Finite targets use
+the selected model's packet limit, capped by the dashboard at four degrees per
+60 Hz update. V30 and V43 both retain their trained two-degree cap. A larger
+finite request is clamped and recorded rather
+than treated as a fault or a reason to disarm.
 
 ## Completion and runtime stops
 
 The operator selects a forward command inside the model-declared range and a
-duration from `1` through `60 seconds`. Normal timed completion stops policy
-output, keeps all 12 motors armed, and sets every desired semantic joint angle
-to calibrated zero. The existing bounded motion worker ramps into the same pose
-as **CENTER ALL 12**, then holds torque so the robot does not collapse when the
-trial timer ends.
+duration from `1` through `60 seconds`. For V43, the duration is the full-speed
+portion. The runtime then waits at most `0.50 s` to reach phase
+`0.05 +/- 0.03` cycles, applies a sidecar-declared `0.90 s` cubic-smoothstep
+command ramp, suppresses residual actions at zero command, runs for another
+`2.0 s`, and leaves all 12 motors holding calibrated center. V30 retains the
+existing normal-completion transition to calibrated center with torque holding.
 
 Every path below requests policy stop and disarms all 12 motors:
 
@@ -122,11 +137,12 @@ sudo systemctl restart drobot-manual-web.service
 ```
 
 Open `http://pi5-dog.local:8080/`, confirm hardware mode, `12 / 12` online,
-plausible voltage, and no fault. With the robot supported, acknowledge the RL
-interlock and press **PREPARE RL STANCE**. Wait for the RL panel to report
-`policy stance ready`, then start at `0.003 m/s` while the feet cannot strike the
-bench. **CENTER ALL 12** is a calibrated service pose; it is no longer presented
-as the trained RL start pose.
+plausible voltage, and no fault. Select the intended policy while disarmed. With
+the robot supported, acknowledge the RL interlock and press **PREPARE RL
+STANCE**. Wait for the RL panel to report `policy stance ready`, then begin V43
+at `0.10 m/s` for three to five seconds while the feet cannot strike the bench.
+**CENTER ALL 12** is a calibrated service pose; it is not presented as the
+trained RL start or V43 stopped pose.
 
 ## ROS 2 migration
 

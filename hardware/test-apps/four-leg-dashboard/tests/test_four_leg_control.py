@@ -57,6 +57,58 @@ def _session() -> tuple[FourLegSession, FourLegDemoBus, FakeClock]:
     return session, bus, clock
 
 
+def test_rl_actual_bus_packets_obey_model_cap_after_coalesced_targets() -> None:
+    from types import SimpleNamespace
+
+    import numpy as np
+    from drobot_policy_runtime.contract import ACTION_NAMES, SERVO_ID_BY_ACTION_NAME, JointTargetConfig
+
+    session, _bus, clock = _session()
+    try:
+        session.center_all(safety_ack=True, confirmation="CENTER ALL 12")
+        by_id = {
+            motor.servo_id: (profile, motor, session.controllers[profile.number])
+            for profile in session.profiles
+            for motor in profile.config.motors
+        }
+        session.rl_motor_order = tuple(by_id[SERVO_ID_BY_ACTION_NAME[name]] for name in ACTION_NAMES)
+        config = JointTargetConfig(
+            target_velocity_limit_rad_s_by_action=(math.radians(60),) * 4 + (math.radians(90),) * 8,
+            max_target_step_rad=math.radians(2),
+        )
+        session.rl_controller = SimpleNamespace(
+            active=True, joint_target_config=config, record_event=lambda *args: None,
+        )
+        initial = {
+            (profile.number, motor.name): controller.targets_deg[motor.name]
+            for profile, motor, controller in session.rl_motor_order
+        }
+        session._prime_rl_output_locked(initial)
+        # Represent a replaced queue (or an older sender) six degrees ahead.
+        # The output guard must stand on its own, even if producer checks change.
+        with session.rl_target_lock:
+            session.rl_pending_target_deg = {key: value + 6.0 for key, value in initial.items()}
+            session.rl_pending_target_sequence = 3
+            session.rl_pending_target_queued_at_s = clock()
+        clock.advance(0.05)
+        session.advance_once(elapsed_s=0.05)
+        first = session._read_rl_applied_target()
+        initial_rad = np.radians(list(initial.values()))
+        np.testing.assert_allclose(first.joint_target_rad - initial_rad, math.radians(2), atol=1e-6)
+
+        # A second packet shortly afterwards is limited by actual elapsed time
+        # on each joint class, even though several degrees remain desired.
+        clock.advance(0.005)
+        session.advance_once(elapsed_s=0.005)
+        second = session._read_rl_applied_target()
+        expected_step = np.array(config.target_velocity_limit_rad_s_by_action) * 0.005
+        np.testing.assert_allclose(second.joint_target_rad - first.joint_target_rad, expected_step, atol=1e-6)
+        assert second.sequence == first.sequence + 1
+    finally:
+        session.rl_controller = None
+        session.close()
+
+
 def test_manifest_loads_verified_ids_and_directions() -> None:
     dashboard = load_dashboard_config(MANIFEST)
 
@@ -396,11 +448,11 @@ def test_rl_ui_exposes_bounded_custom_speed_and_duration() -> None:
     script = (static_dir / "app.js").read_text(encoding="utf-8")
 
     assert 'id="rlSpeed" type="number"' in html
-    assert 'min="0.04" max="0.10"' in html
-    assert 'max="0.10" step="0.001"' in html
+    assert 'min="0.10" max="0.14"' in html
+    assert 'max="0.14" step="0.001"' in html
     assert 'id="rlDuration" type="number"' in html
     assert 'min="1" max="60"' in html
-    assert "START RL WALK" in html
+    assert "START RL POLICY" in html
     assert "physical cutoff is ready" in html
     assert 'id="prepareRl"' in html
     assert "PREPARE RL STANCE" in html
@@ -502,6 +554,47 @@ def test_rl_request_bounds_follow_selected_model_metadata(tmp_path: Path) -> Non
             session.rl_controller.validate_request(0.005, 0.5)
         with pytest.raises(ValueError, match="duration"):
             session.rl_controller.validate_request(0.005, 61.0)
+    finally:
+        session.close()
+
+
+def test_v43_request_bounds_and_phase_aligned_stop_come_from_model(
+    tmp_path: Path,
+) -> None:
+    dashboard = load_dashboard_config(MANIFEST)
+    bus = FourLegDemoBus(dashboard)
+    model_path = (
+        REPO_ROOT
+        / "onboard"
+        / "models"
+        / "parallel-running-v43-foot-warp-trot-residual"
+        / "model_399.onnx"
+    )
+    session = FourLegSession(
+        dashboard,
+        bus,
+        persist_calibration=False,
+        rl_model_path=model_path,
+        recordings_dir=tmp_path,
+    )
+    session.start(start_worker=False)
+    try:
+        controller = session.rl_controller
+        assert controller is not None
+        assert controller.validate_request(0.10, 10.0) == (0.10, 10.0)
+        assert controller.validate_request(0.14, 10.0) == (0.14, 10.0)
+        assert controller.recommended_forward_m_s == pytest.approx(0.12)
+        assert controller.normal_stop_ramp_s == pytest.approx(0.90)
+        assert controller.normal_stop_hold_s == pytest.approx(2.0)
+        assert controller.run_stop_config.ramp_shape == "cubic_smoothstep"
+        assert controller.run_stop_config.phase_alignment_enabled is True
+        assert controller.run_stop_config.ramp_start_phase_cycles == pytest.approx(0.05)
+        assert controller.joint_target_config.gait_residual_stop_action_scale == 0.0
+        assert len(controller.joint_target_config.reference_joint_position_rad) == 256
+        assert (
+            len(controller.joint_target_config.reference_low_joint_position_rad)
+            == 256
+        )
     finally:
         session.close()
 

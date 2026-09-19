@@ -5,17 +5,20 @@ from .contract import (
     OBSERVATION_SIZE,
     HeadingHoldConfig,
     JointTargetConfig,
+    RunStopConfig,
 )
 from .policy import OnnxWalkingPolicy
 from .runtime import WalkingPolicyLoop
-from .sources import Bno085ImuSource, LevelImuSource, NeutralJointStateSource
+from .sources import BackgroundImuSource, Bno085ImuSource, LevelImuSource, NeutralJointStateSource
 
 __all__ = [
     "ACTION_NAMES",
     "OBSERVATION_SIZE",
     "Bno085ImuSource",
+    "BackgroundImuSource",
     "HeadingHoldConfig",
     "JointTargetConfig",
+    "RunStopConfig",
     "LevelImuSource",
     "NeutralJointStateSource",
     "OnnxWalkingPolicy",

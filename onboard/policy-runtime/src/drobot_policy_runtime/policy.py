@@ -16,10 +16,14 @@ from .contract import (
     GaitClockConfig,
     HeadingHoldConfig,
     JointTargetConfig,
+    RunStopConfig,
 )
 
 
-EXPECTED_OBSERVATION_ORDER = (
+ACTION_HISTORY_REQUESTED = "requested_action"
+ACTION_HISTORY_APPLIED_TARGET = "applied_target"
+
+OBSERVATION_ORDER_PREFIX = (
     "command_forward_m_s[1]",
     "command_lateral_m_s[1]",
     "command_yaw_rad_s[1]",
@@ -30,7 +34,12 @@ EXPECTED_OBSERVATION_ORDER = (
     "imu_linear_acceleration_body_over_9_81[3]",
     "joint_position_error_rad[12]",
     "joint_velocity_over_4_5836625[12]",
+)
+EXPECTED_OBSERVATION_ORDER = OBSERVATION_ORDER_PREFIX + (
     "previous_normalized_action[12]",
+)
+APPLIED_TARGET_OBSERVATION_ORDER = OBSERVATION_ORDER_PREFIX + (
+    "previous_applied_normalized_target[12]",
 )
 
 
@@ -49,6 +58,29 @@ def _validate_policy_metadata(
     metadata_path: Path,
 ) -> None:
     """Reject sidecars that would silently reorder or reinterpret the actor."""
+
+    from .v44_study35 import validate_metadata, HIGH_SHA256, LOW_SHA256
+    experimental = validate_metadata(payload)
+    external = payload.get("onnx_external_data_sha256", {})
+    if not isinstance(external, dict):
+        raise ValueError("External ONNX data checksums must be an object")
+    for name, digest in external.items():
+        asset = model_path.parent / name
+        if (Path(name).name != name or "/" in name or "\\" in name
+            or asset.resolve().parent != model_path.parent.resolve()
+            or not isinstance(digest, str) or _sha256(asset) != digest):
+            raise ValueError("External ONNX data checksum/path mismatch")
+    if experimental:
+        if set(external) != {"policy.onnx.data"}:
+            raise ValueError("Study35 requires bound external ONNX weights")
+        for name, expected, key in (("high", HIGH_SHA256, "joint_position_rad"),
+                                    ("low", LOW_SHA256, "low_speed_joint_position_rad")):
+            asset = model_path.parent / (name + ".json")
+            if asset.resolve().parent != model_path.parent.resolve() or _sha256(asset) != expected:
+                raise ValueError("Study35 reference checksum mismatch")
+            reference = json.loads(asset.read_text())
+            if reference["joint_position_rad"] != payload["gait_reference"][key]:
+                raise ValueError("Study35 embedded reference differs from bound asset")
 
     expected_hash = payload.get("onnx_sha256")
     if expected_hash is not None and model_path.is_file():
@@ -74,10 +106,62 @@ def _validate_policy_metadata(
             f"runtime requires {ACTION_SIZE}"
         )
 
+    observation_scales = payload.get("observation_scales", {})
+    if not isinstance(observation_scales, dict):
+        raise ValueError("Policy metadata observation_scales must be an object")
+    command_scales = observation_scales.get(
+        "command_forward_lateral_yaw",
+        (1.0, 1.0, 1.0),
+    )
+    if (
+        not isinstance(command_scales, (list, tuple))
+        or len(command_scales) != 3
+    ):
+        raise ValueError("Policy command observation scales must contain three values")
+    command_scale_array = np.asarray(command_scales, dtype=np.float32)
+    if not np.all(np.isfinite(command_scale_array)) or np.any(
+        command_scale_array <= 0.0
+    ):
+        raise ValueError("Policy command observation scales must be finite and positive")
+
+    action_contract = payload.get("action_contract", {})
+    if not isinstance(action_contract, dict):
+        raise ValueError("Policy metadata action_contract must be an object")
+    action_mode = action_contract.get("mode", "direct")
+    if action_mode == "integrated_target_velocity" and action_contract.get(
+        "output_semantics"
+    ) != "fraction_of_elapsed_time_target_velocity_limit":
+        raise ValueError(
+            "Integrated-target-velocity policy metadata must declare its "
+            "elapsed-time velocity output semantics"
+        )
+    if action_mode == "integrated_target_velocity" and action_contract.get(
+        "zero_command_target_behavior"
+    ) != "slew_to_neutral":
+        raise ValueError(
+            "Integrated-target-velocity policy metadata must declare neutral "
+            "homing at zero command"
+        )
+
+    action_history_mode = payload.get(
+        "action_history_mode", ACTION_HISTORY_REQUESTED
+    )
+    if action_history_mode not in (
+        ACTION_HISTORY_REQUESTED,
+        ACTION_HISTORY_APPLIED_TARGET,
+    ):
+        raise ValueError(
+            f"Unsupported policy action_history_mode: {action_history_mode!r}"
+        )
+    expected_observation_order = (
+        APPLIED_TARGET_OBSERVATION_ORDER
+        if action_history_mode == ACTION_HISTORY_APPLIED_TARGET
+        else EXPECTED_OBSERVATION_ORDER
+    )
     observation_order = payload.get("observation_order")
     if (
         observation_order is not None
-        and tuple(observation_order) != EXPECTED_OBSERVATION_ORDER
+        and tuple(observation_order) != expected_observation_order
     ):
         raise ValueError("Policy metadata observation order does not match the runtime")
     action_order = payload.get("action_order")
@@ -100,7 +184,7 @@ def load_policy_metadata(model_path: str | Path) -> dict[str, Any]:
 
 
 class OnnxWalkingPolicy:
-    def __init__(self, model_path: str | Path) -> None:
+    def __init__(self, model_path: str | Path, *, allow_experimental_offline: bool = False) -> None:
         try:
             import onnxruntime as ort
         except ImportError as exc:
@@ -110,9 +194,27 @@ class OnnxWalkingPolicy:
         if not path.is_file():
             raise FileNotFoundError(f"Walking policy not found: {path}")
         self.metadata = load_policy_metadata(path)
+        from .v44_study35 import Study35Mapper
+        self.experimental_mapper = None
+        if self.metadata.get("experimental_target_mapping") is not None:
+            if not allow_experimental_offline:
+                raise ValueError("Study35 is offline-only; hardware/web loading is disabled")
+            self.experimental_mapper = Study35Mapper(self.metadata)
         self.gait_clock_config = GaitClockConfig.from_metadata(self.metadata)
         self.heading_hold_config = HeadingHoldConfig.from_metadata(self.metadata)
         self.joint_target_config = JointTargetConfig.from_metadata(self.metadata)
+        self.run_stop_config = RunStopConfig.from_metadata(self.metadata)
+        self.action_history_mode = self.metadata.get(
+            "action_history_mode", ACTION_HISTORY_REQUESTED
+        )
+        observation_scales = self.metadata.get("observation_scales", {})
+        self.command_observation_scale = np.asarray(
+            observation_scales.get(
+                "command_forward_lateral_yaw",
+                (1.0, 1.0, 1.0),
+            ),
+            dtype=np.float32,
+        )
         options = ort.SessionOptions()
         options.intra_op_num_threads = 1
         options.inter_op_num_threads = 1

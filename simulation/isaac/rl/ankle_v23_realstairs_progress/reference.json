@@ -1,0 +1,44 @@
+{
+  "rise_m": 0.18,
+  "tread_m": 0.25,
+  "stair_count": 4,
+  "phases": [
+    {
+      "mode": "contact_driven",
+      "leg": 2
+    }
+  ],
+  "goal_feet": [
+    [
+      0.3,
+      0.2,
+      0.18
+    ],
+    [
+      0.20999999999999996,
+      0.2,
+      0.18
+    ],
+    [
+      0.3,
+      -0.2,
+      0.18
+    ],
+    [
+      0.20999999999999996,
+      -0.2,
+      0.18
+    ]
+  ],
+  "goal_feet_use": "first-tread diagnostic only; actual reward uses tread regions for each selected foot",
+  "reset_probabilities": [
+    0.25,
+    0.25,
+    0.5
+  ],
+  "reset_labels": [
+    "straight_floor",
+    "oblique_floor",
+    "three_on_first_RR_floor"
+  ]
+}

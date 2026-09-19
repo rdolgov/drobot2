@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -12,6 +13,7 @@ from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--checkpoint", required=True)
+parser.add_argument("--output", type=Path, default=None)
 parser.add_argument("--seconds", type=int, default=30)
 parser.add_argument("--episodes", type=int, default=3)
 parser.add_argument("--window-seconds", type=int, default=5)
@@ -48,6 +50,15 @@ parser.add_argument(
     help=(
         "Optionally override the task's phase-timed shift away from the "
         "scheduled swing leg."
+    ),
+)
+parser.add_argument(
+    "--reference-diagonal-support-lateral-shift-m",
+    type=float,
+    default=None,
+    help=(
+        "Optionally override the signed coordinated lateral body transfer "
+        "used by a diagonal-trot reference."
     ),
 )
 parser.add_argument(
@@ -90,6 +101,33 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--reference-frequency-hz",
+    type=float,
+    default=None,
+    help="Optionally force one analytic gait frequency for diagnosis.",
+)
+parser.add_argument(
+    "--reference-phase-table-scale",
+    type=float,
+    default=None,
+    help=(
+        "Optionally scale a loaded phase-table trajectory about the neutral "
+        "joint pose before simulation."
+    ),
+)
+parser.add_argument(
+    "--reference-phase-table-path",
+    type=Path,
+    default=None,
+    help="Optionally load a different generated phase-table reference.",
+)
+parser.add_argument(
+    "--reference-duty-factor",
+    type=float,
+    default=None,
+    help="Optionally override the analytic stance fraction for diagnosis.",
+)
+parser.add_argument(
     "--actuator-effort-scale",
     type=float,
     default=None,
@@ -102,12 +140,54 @@ parser.add_argument(
     help="Optionally evaluate at one fixed effective target-rate scale.",
 )
 parser.add_argument(
+    "--integrated-action-frequency-gain",
+    type=float,
+    default=None,
+    help=(
+        "Optionally override the linear cadence normalization gain used by an "
+        "integrated-target-velocity profile."
+    ),
+)
+parser.add_argument(
+    "--integrated-action-abduction-frequency-gain",
+    type=float,
+    default=None,
+    help=(
+        "Optionally override cadence normalization on the four hip-abduction "
+        "actions independently of the sagittal joints."
+    ),
+)
+parser.add_argument(
     "--zero-policy-actions",
     action="store_true",
     help=(
-        "Force the learned residual action to zero while retaining the analytic "
-        "gait reference. This isolates reference-gait mechanics from the policy."
+        "Force gait-residual mode with a zero residual. This applies only the "
+        "analytic gait reference and isolates its mechanics from the policy."
     ),
+)
+parser.add_argument(
+    "--flat-sole-reference",
+    action="store_true",
+    help=(
+        "Keep rectangular support soles level during the analytic fore/aft "
+        "sweep. Intended for reference-only gait-mechanics diagnosis."
+    ),
+)
+parser.add_argument(
+    "--phase-reference-output",
+    type=Path,
+    default=None,
+    help=(
+        "Optionally export the steady executable joint trajectory as a periodic "
+        "phase table for a later residual-policy experiment."
+    ),
+)
+parser.add_argument("--phase-reference-bins", type=int, default=256)
+parser.add_argument("--phase-reference-start-seconds", type=float, default=3.0)
+parser.add_argument(
+    "--phase-reference-scale-about-neutral",
+    type=float,
+    default=1.0,
 )
 parser.add_argument(
     "--disable-rear-payload",
@@ -122,6 +202,12 @@ if args.seconds < 10 or args.episodes < 1:
     parser.error("evaluation needs at least 10 seconds and one episode")
 if not 1 <= args.window_seconds <= args.seconds:
     parser.error("--window-seconds must be within the evaluation duration")
+if not 32 <= args.phase_reference_bins <= 2048:
+    parser.error("--phase-reference-bins must be in [32, 2048]")
+if not 0.0 <= args.phase_reference_start_seconds < args.seconds:
+    parser.error("phase-reference start must be within the evaluation")
+if not 0.25 <= args.phase_reference_scale_about_neutral <= 2.0:
+    parser.error("phase-reference scale must be in [0.25, 2.0]")
 
 app_launcher = AppLauncher(headless=True)
 simulation_app = app_launcher.app
@@ -150,6 +236,14 @@ task = args.task
 env_cfg = load_cfg_from_registry(task, "env_cfg_entry_point")
 agent_cfg = load_cfg_from_registry(task, "rsl_rl_cfg_entry_point")
 agent_cfg = handle_deprecated_rsl_rl_cfg(agent_cfg, metadata.version("rsl-rl-lib"))
+if args.zero_policy_actions:
+    # Direct and integrated-velocity policies interpret a zero action as a
+    # stationary joint command, not as the analytic gait.  Force residual mode
+    # so this diagnostic consistently means "reference only" for every task.
+    env_cfg.action_mode = "gait_residual"
+    env_cfg.action_history_mode = "requested_action"
+if args.flat_sole_reference:
+    env_cfg.gait_flat_sole_support = True
 env_cfg.scene.num_envs = 1
 env_cfg.seed = args.seed
 env_cfg.reset_joint_position_noise_rad = 0.0
@@ -175,10 +269,17 @@ if args.reference_rear_weight_shift_forward_m is not None:
     )
 if args.reference_weight_shift_lateral_m is not None:
     env_cfg.gait_weight_shift_lateral_m = args.reference_weight_shift_lateral_m
+if args.reference_diagonal_support_lateral_shift_m is not None:
+    env_cfg.gait_diagonal_support_lateral_shift_m = (
+        args.reference_diagonal_support_lateral_shift_m
+    )
 if args.reference_stride_m is not None:
     env_cfg.gait_stride_m = args.reference_stride_m
 if args.reference_lift_m is not None:
     env_cfg.gait_lift_m = args.reference_lift_m
+    # A scalar diagnostic override must not be shadowed by a profile's newer
+    # per-leg lift tuple.
+    env_cfg.gait_lift_by_leg_m = None
 if args.reference_stance_fore_aft_m is not None:
     env_cfg.gait_stance_fore_aft_m = args.reference_stance_fore_aft_m
 if args.reference_stance_down_m is not None:
@@ -188,6 +289,24 @@ if args.reference_forward_body_pitch_rad is not None:
     env_cfg.target_forward_pitch_rad = args.reference_forward_body_pitch_rad
 if args.reference_stance_center_offset_m is not None:
     env_cfg.gait_stance_center_offset_m = args.reference_stance_center_offset_m
+if args.reference_frequency_hz is not None:
+    if args.reference_frequency_hz <= 0.0:
+        parser.error("--reference-frequency-hz must be positive")
+    env_cfg.gait_frequency_min_hz = args.reference_frequency_hz
+    env_cfg.gait_frequency_max_hz = args.reference_frequency_hz
+if args.reference_phase_table_scale is not None:
+    if not 0.25 <= args.reference_phase_table_scale <= 2.0:
+        parser.error("--reference-phase-table-scale must be in [0.25, 2.0]")
+    env_cfg.gait_phase_reference_scale_about_neutral = (
+        args.reference_phase_table_scale
+    )
+if args.reference_phase_table_path is not None:
+    env_cfg.gait_reference_mode = "phase_table"
+    env_cfg.gait_phase_reference_path = str(args.reference_phase_table_path.resolve())
+if args.reference_duty_factor is not None:
+    if not 0.4 <= args.reference_duty_factor < 1.0:
+        parser.error("--reference-duty-factor must be within [0.4, 1.0)")
+    env_cfg.gait_duty_factor = args.reference_duty_factor
 if args.actuator_effort_scale is not None:
     env_cfg.actuator_effort_scale_range = (
         args.actuator_effort_scale,
@@ -198,6 +317,12 @@ if args.target_velocity_scale is not None:
         args.target_velocity_scale,
         args.target_velocity_scale,
     )
+if args.integrated_action_frequency_gain is not None:
+    env_cfg.integrated_action_frequency_gain = args.integrated_action_frequency_gain
+if args.integrated_action_abduction_frequency_gain is not None:
+    env_cfg.integrated_action_abduction_frequency_gain = (
+        args.integrated_action_abduction_frequency_gain
+    )
 preview_control.COMMAND_OVERRIDE = (args.forward_speed, 0.0, 0.0)
 
 env = gym.make(task, cfg=env_cfg)
@@ -207,6 +332,12 @@ checkpoint = str(Path(args.checkpoint).resolve())
 runner.load(checkpoint)
 policy = runner.get_inference_policy(device=env.unwrapped.device)
 
+phase_reference_sum = torch.zeros(
+    (args.phase_reference_bins, 12), device=env.unwrapped.device
+)
+phase_reference_count = torch.zeros(
+    args.phase_reference_bins, device=env.unwrapped.device
+)
 results: list[dict[str, object]] = []
 for _ in range(args.episodes):
     env.unwrapped._reset_idx(torch.tensor([0], device=env.unwrapped.device))
@@ -270,6 +401,21 @@ for _ in range(args.episodes):
             device=env.unwrapped.device,
         ),
     )[0].clone()
+    base_force_b = getattr(
+        env.unwrapped,
+        "_base_force_b",
+        torch.zeros((1, 1, 3), device=env.unwrapped.device),
+    )[0, 0].clone()
+    base_torque_b = getattr(
+        env.unwrapped,
+        "_base_torque_b",
+        torch.zeros((1, 1, 3), device=env.unwrapped.device),
+    )[0, 0].clone()
+    rear_payload_com_jitter_m = getattr(
+        env.unwrapped,
+        "_rear_payload_com_jitter",
+        torch.zeros((1, 3), device=env.unwrapped.device),
+    )[0].clone()
     obs = env.get_observations()
     start_x = float(env.unwrapped._robot.data.root_pos_w.torch[0, 0].item())
     start_y = float(env.unwrapped._robot.data.root_pos_w.torch[0, 1].item())
@@ -324,6 +470,24 @@ for _ in range(args.episodes):
         (12,), device=env.unwrapped.device
     )
     maximum_applied_effort_fraction_by_joint = torch.zeros(
+        (12,), device=env.unwrapped.device
+    )
+    signed_action_sum_by_joint = torch.zeros(
+        (12,), device=env.unwrapped.device
+    )
+    absolute_action_sum_by_joint = torch.zeros(
+        (12,), device=env.unwrapped.device
+    )
+    maximum_absolute_action_by_joint = torch.zeros(
+        (12,), device=env.unwrapped.device
+    )
+    signed_applied_reference_error_sum_by_joint = torch.zeros(
+        (12,), device=env.unwrapped.device
+    )
+    absolute_applied_reference_error_sum_by_joint = torch.zeros(
+        (12,), device=env.unwrapped.device
+    )
+    maximum_absolute_applied_reference_error_by_joint = torch.zeros(
         (12,), device=env.unwrapped.device
     )
     previous_action = torch.zeros((12,), device=env.unwrapped.device)
@@ -405,6 +569,12 @@ for _ in range(args.episodes):
         # Keep environment state as ordinary tensors so another episode can
         # reset it in-place after deterministic inference completes.
         actions = actions.clone()
+        signed_action_sum_by_joint += actions[0]
+        absolute_action_sum_by_joint += torch.abs(actions[0])
+        maximum_absolute_action_by_joint = torch.maximum(
+            maximum_absolute_action_by_joint,
+            torch.abs(actions[0]),
+        )
         saturated_action_sum += float(
             torch.mean((torch.abs(actions[0]) >= 0.98).float()).item()
         )
@@ -422,6 +592,41 @@ for _ in range(args.episodes):
             # discontinuity into the terminal trial's measurements.
             fell = True
             break
+        if (
+            args.phase_reference_output is not None
+            and step / 60.0 >= args.phase_reference_start_seconds
+        ):
+            phase_bin = int(
+                math.floor(
+                    float(env.unwrapped._applied_gait_phase[0].item())
+                    * args.phase_reference_bins
+                )
+            ) % args.phase_reference_bins
+            # Remove episode-specific calibration bias so the table remains a
+            # canonical model-space target. Nominal extraction uses zero bias,
+            # while this subtraction prevents an accidental randomized export.
+            phase_reference_sum[phase_bin] += (
+                env.unwrapped._processed_actions[0]
+                - env.unwrapped._joint_target_bias[0]
+            )
+            phase_reference_count[phase_bin] += 1.0
+        applied_normalized_target = (
+            env.unwrapped._processed_actions[0]
+            - env.unwrapped._robot.data.default_joint_pos.torch[0]
+            - env.unwrapped._joint_target_bias[0]
+        ) / env.unwrapped._joint_scale
+        applied_reference_error = (
+            applied_normalized_target
+            - env.unwrapped._applied_gait_reference[0]
+        )
+        signed_applied_reference_error_sum_by_joint += applied_reference_error
+        absolute_applied_reference_error_sum_by_joint += torch.abs(
+            applied_reference_error
+        )
+        maximum_absolute_applied_reference_error_by_joint = torch.maximum(
+            maximum_absolute_applied_reference_error_by_joint,
+            torch.abs(applied_reference_error),
+        )
         joint_velocity = env.unwrapped._robot.data.joint_vel.torch[0]
         body_linear_velocity = env.unwrapped._robot.data.root_lin_vel_w.torch[0]
         body_angular_velocity = env.unwrapped._robot.data.root_ang_vel_w.torch[0]
@@ -660,6 +865,44 @@ for _ in range(args.episodes):
             / max(completed_steps, 1),
             "mean_abs_action_acceleration_per_step2": action_acceleration_sum
             / max(completed_steps, 1),
+            "mean_action_by_joint": {
+                name: float(
+                    signed_action_sum_by_joint[index].item()
+                    / max(completed_steps, 1)
+                )
+                for index, name in enumerate(env.unwrapped._robot.joint_names)
+            },
+            "mean_abs_action_by_joint": {
+                name: float(
+                    absolute_action_sum_by_joint[index].item()
+                    / max(completed_steps, 1)
+                )
+                for index, name in enumerate(env.unwrapped._robot.joint_names)
+            },
+            "maximum_abs_action_by_joint": {
+                name: float(maximum_absolute_action_by_joint[index].item())
+                for index, name in enumerate(env.unwrapped._robot.joint_names)
+            },
+            "mean_applied_reference_error_by_joint": {
+                name: float(
+                    signed_applied_reference_error_sum_by_joint[index].item()
+                    / max(completed_steps, 1)
+                )
+                for index, name in enumerate(env.unwrapped._robot.joint_names)
+            },
+            "mean_abs_applied_reference_error_by_joint": {
+                name: float(
+                    absolute_applied_reference_error_sum_by_joint[index].item()
+                    / max(completed_steps, 1)
+                )
+                for index, name in enumerate(env.unwrapped._robot.joint_names)
+            },
+            "maximum_abs_applied_reference_error_by_joint": {
+                name: float(
+                    maximum_absolute_applied_reference_error_by_joint[index].item()
+                )
+                for index, name in enumerate(env.unwrapped._robot.joint_names)
+            },
             "rms_joint_acceleration_rad_s2": math.sqrt(
                 joint_acceleration_squared_sum / max(completed_steps, 1)
             ),
@@ -736,6 +979,15 @@ for _ in range(args.episodes):
             ],
             "foot_dynamic_friction": [
                 float(value) for value in foot_dynamic_friction.tolist()
+            ],
+            "base_force_body_n": [
+                float(value) for value in base_force_b.tolist()
+            ],
+            "base_torque_body_nm": [
+                float(value) for value in base_torque_b.tolist()
+            ],
+            "rear_payload_com_jitter_m": [
+                float(value) for value in rear_payload_com_jitter_m.tolist()
             ],
             "effort_soft_limit_fraction": env_cfg.effort_soft_limit_fraction,
             "effort_soft_limit_by_joint_nm": [
@@ -873,6 +1125,20 @@ summary = {
     "joint_order": list(env.unwrapped._robot.joint_names),
     "foot_order": foot_names,
     "forward_speed_m_s": args.forward_speed,
+    "target_velocity_limit_rad_s_by_action": [
+        float(value)
+        for value in env.unwrapped._target_velocity_limit_by_joint.tolist()
+    ],
+    "integrated_action_scale_with_gait_frequency": (
+        env_cfg.integrated_action_scale_with_gait_frequency
+    ),
+    "integrated_action_reference_frequency_hz": (
+        env_cfg.integrated_action_reference_frequency_hz
+    ),
+    "integrated_action_frequency_gain": env_cfg.integrated_action_frequency_gain,
+    "integrated_action_abduction_frequency_gain": (
+        env_cfg.integrated_action_abduction_frequency_gain
+    ),
     "zero_policy_actions": args.zero_policy_actions,
     "rear_payload_enabled": env_cfg.rear_payload_enabled,
     "reference_weight_shift_forward_m": env_cfg.gait_weight_shift_forward_m,
@@ -880,6 +1146,9 @@ summary = {
         env_cfg.gait_rear_weight_shift_forward_m
     ),
     "reference_weight_shift_lateral_m": env_cfg.gait_weight_shift_lateral_m,
+    "reference_diagonal_support_lateral_shift_m": (
+        env_cfg.gait_diagonal_support_lateral_shift_m
+    ),
     "reference_stride_m": env_cfg.gait_stride_m,
     "reference_lift_m": env_cfg.gait_lift_m,
     "reference_forward_body_pitch_rad": env_cfg.gait_forward_body_pitch_rad,
@@ -1279,6 +1548,75 @@ summary = {
         ),
     },
 }
+serialized_summary = json.dumps(summary, indent=2, sort_keys=True)
 print("SUSTAINED_EVALUATION_JSON=" + json.dumps(summary, sort_keys=True), flush=True)
+if args.output is not None:
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(serialized_summary + "\n", encoding="utf-8")
+if args.phase_reference_output is not None:
+    missing_bins = torch.nonzero(
+        phase_reference_count <= 0.0, as_tuple=False
+    ).flatten()
+    if len(missing_bins) > 0:
+        raise RuntimeError(
+            "phase-reference extraction did not visit every bin; increase "
+            f"--seconds or reduce --phase-reference-bins (missing {len(missing_bins)})"
+        )
+    phase_reference = phase_reference_sum / phase_reference_count.unsqueeze(1)
+    # A short circular five-bin mean removes contact-solver chatter while
+    # retaining the learned stride. The table is periodic by construction.
+    phase_reference = (
+        torch.roll(phase_reference, shifts=-2, dims=0)
+        + torch.roll(phase_reference, shifts=-1, dims=0)
+        + phase_reference
+        + torch.roll(phase_reference, shifts=1, dims=0)
+        + torch.roll(phase_reference, shifts=2, dims=0)
+    ) / 5.0
+    neutral = env.unwrapped._robot.data.default_joint_pos.torch[0]
+    phase_reference = neutral + (
+        phase_reference - neutral
+    ) * args.phase_reference_scale_about_neutral
+    limits = env.unwrapped._robot.data.soft_joint_pos_limits.torch[0]
+    phase_reference = torch.clamp(
+        phase_reference,
+        limits[:, 0].unsqueeze(0),
+        limits[:, 1].unsqueeze(0),
+    )
+    checkpoint_path = Path(args.checkpoint).resolve()
+    digest = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
+    try:
+        source_checkpoint = checkpoint_path.relative_to(Path.cwd()).as_posix()
+    except ValueError:
+        source_checkpoint = checkpoint_path.name
+    reference_payload = {
+        "schema": "drobot.phase-joint-reference.v1",
+        "source_checkpoint": source_checkpoint,
+        "source_checkpoint_sha256": digest,
+        "task": task,
+        "forward_speed_m_s": args.forward_speed,
+        "domain_mode": args.domain_mode,
+        "sample_count": args.phase_reference_bins,
+        "source_start_seconds": args.phase_reference_start_seconds,
+        "source_episode_count": args.episodes,
+        "circular_smoothing_bins": 5,
+        "scale_about_neutral": args.phase_reference_scale_about_neutral,
+        "joint_order": list(env.unwrapped._robot.joint_names),
+        "neutral_joint_position_rad": [
+            float(value) for value in neutral.detach().cpu().tolist()
+        ],
+        "joint_position_rad": [
+            [float(value) for value in row]
+            for row in phase_reference.detach().cpu().tolist()
+        ],
+    }
+    serialized_reference = json.dumps(reference_payload, indent=2, sort_keys=True)
+    args.phase_reference_output.parent.mkdir(parents=True, exist_ok=True)
+    args.phase_reference_output.write_text(
+        serialized_reference + "\n", encoding="utf-8"
+    )
+    print(
+        "PHASE_REFERENCE_JSON=" + json.dumps(reference_payload, sort_keys=True),
+        flush=True,
+    )
 env.close()
 simulation_app.close()

@@ -1,0 +1,85 @@
+{
+  "schema": "drobot.ankle-v23-transfer.numpy.v1",
+  "source_checkpoint": "simulation/isaac/models/ankle-v23-transfer/seed2311-model_2999.pt",
+  "source_checkpoint_sha256": "d0b1e4e31fe39919dcedefd2e816dc48b34aeadfd366ccbaf9b9d4c32f7d069d",
+  "weights_sha256": "6eb6077d125bf40bafffe078b32b7fa6c4482e0e182f23a2591fe1e4ee52664a",
+  "iteration": 2999,
+  "seed": 2311,
+  "observation_size": 82,
+  "action_size": 16,
+  "action_names": [
+    "front_left_hip_abduction",
+    "rear_left_hip_abduction",
+    "front_right_hip_abduction",
+    "rear_right_hip_abduction",
+    "front_left_hip_flexion",
+    "rear_left_hip_flexion",
+    "front_right_hip_flexion",
+    "rear_right_hip_flexion",
+    "front_left_knee",
+    "rear_left_knee",
+    "front_right_knee",
+    "rear_right_knee",
+    "front_left_ankle_pitch",
+    "rear_left_ankle_pitch",
+    "front_right_ankle_pitch",
+    "rear_right_ankle_pitch"
+  ],
+  "servo_ids": [
+    1,
+    7,
+    4,
+    10,
+    2,
+    8,
+    5,
+    11,
+    3,
+    9,
+    6,
+    12,
+    13,
+    15,
+    14,
+    16
+  ],
+  "observation_order": [
+    "command_xyz_times_10[3]",
+    "clock_sin_cos[2]",
+    "imu_angular_velocity_body[3]",
+    "projected_gravity_body[3]",
+    "imu_linear_acceleration_body_over_9_81[3]",
+    "joint_position_minus_neutral[16]",
+    "joint_velocity_times_0_25[16]",
+    "previous_applied_target_normalized[16]",
+    "filtered_action[16]",
+    "expected_stance[4]"
+  ],
+  "actor": {
+    "hidden_dims": [
+      256,
+      256,
+      128
+    ],
+    "activation": "elu",
+    "distribution": "beta_deterministic_mean",
+    "normalization_epsilon": 0.01
+  },
+  "forward_command_range_m_s": {
+    "min": 0.015,
+    "max": 0.021,
+    "recommended": 0.018
+  },
+  "gait_period_s": 6.436314363143632,
+  "run_stop_contract": {
+    "recommended_stop_ramp_s": 1.0,
+    "recommended_stopped_hold_s": 1.0,
+    "ramp_shape": "linear"
+  },
+  "experimental_notice": "Experimental 16-motor V2.3 walking policy. Simulation selection failed: no qualifying rear-left steps, with speed and drift errors. This hardware port has not been tested. Start with a supported short trial.",
+  "verification": {
+    "numerical_parity": "not_run",
+    "hardware": "not_run"
+  },
+  "training_report": "simulation/docs/rl-ankle-v23-transfer.md"
+}

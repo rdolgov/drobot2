@@ -1,0 +1,235 @@
+{
+  "selected_endpoint": {
+    "optimizer_success": false,
+    "message": "Iteration limit reached",
+    "pose": [
+      0.3842850017254651,
+      -0.018293309486404178,
+      0.49353479831663566,
+      0.41334180677417076,
+      -0.378323594382358,
+      -0.9981086909217559,
+      -0.41334180638014695,
+      -0.4133418063801445,
+      0.41334180700515233,
+      0.41334180700514567,
+      -0.26664621230821817,
+      -0.9913303721877776,
+      0.9357749877494741,
+      -0.2905130853662275,
+      -0.4658566702636374,
+      0.03322808660115183,
+      -0.8466589985060692,
+      -0.0427691794772902,
+      0.35417928829494216,
+      0.5797786913097116,
+      -0.46743958312839473,
+      -0.0450413290414911
+    ],
+    "soles": [
+      [
+        0.5275142706680239,
+        0.06274200668765162,
+        0.1800008116115612
+      ],
+      [
+        0.39016104707938104,
+        0.2757697180096402,
+        0.18000000048164755
+      ],
+      [
+        0.3901610474815171,
+        -0.40470709107595554,
+        0.18000000015082054
+      ],
+      [
+        0.21838137620991113,
+        -0.13828574840041327,
+        8.678355705171725e-07
+      ]
+    ],
+    "height_error": 8.678355705171725e-07,
+    "flat_normal_xy": 5.066329378913326e-10,
+    "min_surface_margin": -7.346580011002857e-10,
+    "self_collisions": [],
+    "terrain_collisions": [],
+    "torque_ratio_without_RR": 1.0023672262540593,
+    "load": {
+      "equilibrium_found": true,
+      "com_m": [
+        0.3603859902722378,
+        -0.02001834619074429,
+        0.41120135360509197
+      ],
+      "all_sole_centers_m": [
+        [
+          0.527514270668024,
+          0.0627420066876516,
+          0.1800008116115611
+        ],
+        [
+          0.39016104707938093,
+          0.2757697180096402,
+          0.18000000048164747
+        ],
+        [
+          0.39016104748151703,
+          -0.4047070910759557,
+          0.1800000001508204
+        ],
+        [
+          0.2183813762099111,
+          -0.13828574840041336,
+          8.678355703992113e-07
+        ]
+      ],
+      "stance": [
+        true,
+        true,
+        true,
+        false
+      ],
+      "assumption": "all stance tread corners available; friction pyramid mu=.9",
+      "stance_corner_z_span_m": {
+        "front_left": 3.885780586188048e-16,
+        "rear_left": 3.0531133177191805e-16,
+        "front_right": 5.666464519826775e-11
+      },
+      "minimum_peak_torque_ratio_at_85pct_strength": 1.0023672262540593,
+      "minimum_peak_torque_nm": 0.7519846387898445,
+      "joint_torques_nm": {
+        "front_left_hip_abduction": 0.62992,
+        "rear_left_hip_abduction": 0.75198,
+        "front_right_hip_abduction": 0.75198,
+        "rear_right_hip_abduction": 0.11981,
+        "front_left_hip_flexion": 0.48667,
+        "rear_left_hip_flexion": 0.75198,
+        "front_right_hip_flexion": -0.75198,
+        "rear_right_hip_flexion": 0.05525,
+        "front_left_knee": 0.30677,
+        "rear_left_knee": 0.42426,
+        "front_right_knee": 0.75198,
+        "rear_right_knee": 0.01205,
+        "front_left_ankle_pitch": 0.13767,
+        "rear_left_ankle_pitch": 0.05891,
+        "front_right_ankle_pitch": 0.75197,
+        "rear_right_ankle_pitch": -0.0
+      },
+      "foot_normal_force_n": [
+        2.0,
+        17.280898823441326,
+        14.504936482063261,
+        0
+      ]
+    },
+    "evidence": "static endpoint arithmetic, not a path or simulation"
+  },
+  "initial_static_load": {
+    "equilibrium_found": true,
+    "com_m": [
+      0.3603859902722378,
+      -0.02001834619074429,
+      0.41120135360509197
+    ],
+    "all_sole_centers_m": [
+      [
+        0.527514270668024,
+        0.0627420066876516,
+        0.1800008116115611
+      ],
+      [
+        0.39016104707938093,
+        0.2757697180096402,
+        0.18000000048164747
+      ],
+      [
+        0.39016104748151703,
+        -0.4047070910759557,
+        0.1800000001508204
+      ],
+      [
+        0.2183813762099111,
+        -0.13828574840041336,
+        8.678355703992113e-07
+      ]
+    ],
+    "stance": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "assumption": "all stance tread corners available; friction pyramid mu=.9",
+    "stance_corner_z_span_m": {
+      "front_left": 3.885780586188048e-16,
+      "rear_left": 3.0531133177191805e-16,
+      "front_right": 5.666464519826775e-11,
+      "rear_right": 5.666317415276012e-11
+    },
+    "minimum_peak_torque_ratio_at_85pct_strength": 0.16080117780129527,
+    "minimum_peak_torque_nm": 0.12063444657682343,
+    "joint_torques_nm": {
+      "front_left_hip_abduction": -0.12063,
+      "rear_left_hip_abduction": -0.053,
+      "front_right_hip_abduction": 0.12063,
+      "rear_right_hip_abduction": 0.12063,
+      "front_left_hip_flexion": -0.10584,
+      "rear_left_hip_flexion": 0.12063,
+      "front_right_hip_flexion": 0.12063,
+      "rear_right_hip_flexion": 0.12063,
+      "front_left_knee": 0.12063,
+      "rear_left_knee": 0.04547,
+      "front_right_knee": 0.12063,
+      "rear_right_knee": 0.03114,
+      "front_left_ankle_pitch": -0.12063,
+      "rear_left_ankle_pitch": -0.12063,
+      "front_right_ankle_pitch": -0.07177,
+      "rear_right_ankle_pitch": -0.12063
+    },
+    "foot_normal_force_n": [
+      8.305324639155605,
+      8.184378471838158,
+      3.7030446729673376,
+      13.59308752154357
+    ]
+  },
+  "initial_action": [
+    -0.9613317520127906,
+    -0.9561392380181857,
+    0.9613317534523954,
+    0.9613317534523801,
+    -0.25929383749635443,
+    -0.947548745394818,
+    0.9019488057181455,
+    -0.27495456206677604,
+    -0.2954911751502173,
+    0.022229708840757808,
+    -0.5391356892434253,
+    -0.02670039595925947,
+    0.5760974036130746,
+    0.9472644862668356,
+    -0.7729902625642523,
+    -0.08071972396725255
+  ],
+  "full_physical_range_rad": [
+    0.4363323129985824,
+    0.4363323129985824,
+    0.4363323129985824,
+    0.4363323129985824,
+    1.0471975511965976,
+    1.0471975511965976,
+    1.0471975511965976,
+    1.0471975511965976,
+    1.5707963267948966,
+    1.5707963267948966,
+    1.5707963267948966,
+    1.5707963267948966,
+    0.6108652381980153,
+    0.6108652381980153,
+    0.6108652381980153,
+    0.6108652381980153
+  ],
+  "control": "velocity-action PPO; fresh zero-mean Beta(16,16) head",
+  "comparison": "same physical model, drive gains, rewards, action representation, and limits as seed3191; different sideways reset and goal",
+  "caution": "three-foot unloaded static ratio is about 1.0024 at weakest strength; no admissible connecting path has been established"
+}

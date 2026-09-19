@@ -1,0 +1,44 @@
+{
+  "rise_m": 0.18,
+  "stair_count": 4,
+  "tread_m": 0.25,
+  "phase_s": 36.0,
+  "dt_s": 0.016666666666666666,
+  "phases": [
+    {
+      "phase": 0,
+      "leg": 2,
+      "foot_goal": [
+        0.20500000000000002,
+        -0.198696689,
+        0.18
+      ]
+    }
+  ],
+  "order": [
+    2
+  ],
+  "evidence": "first foothold geometric/static calculation, not full-climb or dynamic success",
+  "time_scale": 2.0,
+  "starting_knee_branch": "rear-left reversed within existing limits",
+  "static_calculation_source": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v23-curriculum\\20260915\\realstairs-reverse-knee-reference\\calculation.json",
+  "plan_generator": "calculate_realstairs_reverse.py + finalize_realstairs_reference.py",
+  "maximum_joint_reference_rate_deg_s": [
+    3.216276168823242,
+    3.3124537467956543,
+    2.9284605979919434,
+    3.065311908721924,
+    14.992127418518066,
+    12.595243453979492,
+    13.752448081970215,
+    34.20182800292969,
+    29.51076889038086,
+    33.36109924316406,
+    16.218488693237305,
+    61.892372131347656,
+    15.529748916625977,
+    6.217350006103516,
+    28.86280632019043,
+    43.45680236816406
+  ]
+}

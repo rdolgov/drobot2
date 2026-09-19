@@ -106,6 +106,30 @@ continues on software bus 8, power-cycle the IMU/Pi and check the 3.3 V, ground,
 and SCL connections. The Pi's persistent 5 A supply warning must also be fixed
 before treating USB or I2C behavior as reliable.
 
+#### 2026-09-05 report-start failure follow-up
+
+After V43 deployment the accelerometer enable failed again. Read-only inspection
+confirmed software bus 8, the expected GPIO 2/3 overlay, and inactive alternate
+policy/onboard services. The installed driver uses a two-second deadline for
+the first feature report; feature `1` is the accelerometer. This identifies a
+missing sensor stream, but does not establish whether the initial timeout was
+caused by sensor state, wiring, supply, or packet communication.
+
+Source inspection found that threaded HTTP Start requests could overlap IMU
+initialization and that a failed source constructor did not explicitly close
+its I2C handle. The controller now rejects overlapping preparation and attempts
+to prepare during an active RL loop. Sensor setup retries a report-enable
+timeout once in the same session, closes the bus if setup fails, and reports
+the stream name, bus, address, and power-cycle recovery instructions. Arbitrary
+I/O/protocol errors are not retried; runtime faults are not suppressed.
+
+These changes were installed on disk with activation pending the next service
+start. The dashboard reported all 12 motors holding torque, so the service was
+left running. No automated tests, IMU probes, or walking checks were run for
+this change. Before power cycling: support the robot, disarm it, shut down the
+Pi cleanly, and remove all power feeding the IMU for ten seconds. A reboot can
+leave the sensor powered and preserve the fault. The next boot loads the fix.
+
 ## Safe commands available now
 
 Run inference with a synthetic level IMU:

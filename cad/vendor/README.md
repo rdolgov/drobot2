@@ -3,6 +3,18 @@
 These files are inputs to custom-part generators. Do not edit or transform them
 in place; apply placement transforms only in Python assembly code.
 
+2026-09-11 ankle-V2 concept: queried `ST3215` and the exact
+`waveshare_feetech_st3215_servo` record on api.step.parts. The returned SHA-256
+matches the existing ledger entry below. Reused the existing servo visual and
+documented collision envelope; no vendor files were added, altered or downloaded.
+
+2026-09-12 printable ankle V2.1: queried the exact ST3215 record again and
+reused the unchanged catalog STEP and motor-bay source. Its wheel-face and
+14 mm bolt-circle geometry informed the new removable cheeks. Catalog lookups
+also found ISO 4762 M3 x 6 screws, ISO 7380 M3 x 10 button-head screws and ISO
+4032 M3 nuts; selected metadata is retained under
+`reviews/ankle-v2-printable/selected-hardware.json`. These fasteners are listed
+in the BOM but omitted from the assembly rendering. No vendor CAD was changed.
 | File | Manufacturer / origin | Exact part or reference | Source | Retrieved | SHA-256 |
 | --- | --- | --- | --- | --- | --- |
 | `servos/waveshare_feetech_st3215_servo.step` | Waveshare Feetech | ST3215 Servo | [step.parts catalog](https://www.step.parts/parts/waveshare_feetech_st3215_servo) | 2026-07-25 | `29954eb73bd22b3f9536de2c1d8f96843b5c5b32288a8f4cb09709b8b892e39b` |

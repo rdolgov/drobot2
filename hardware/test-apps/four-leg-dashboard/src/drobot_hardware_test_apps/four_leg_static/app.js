@@ -28,6 +28,7 @@ const gaitPhase = document.querySelector("#gaitPhase");
 const gaitProgress = document.querySelector("#gaitProgress");
 const gaitDetail = document.querySelector("#gaitDetail");
 const rlPanel = document.querySelector("#rlPanel");
+const rlModelSelect = document.querySelector("#rlModelSelect");
 const rlSpeed = document.querySelector("#rlSpeed");
 const rlDuration = document.querySelector("#rlDuration");
 const rlSafetyAck = document.querySelector("#rlSafetyAck");
@@ -51,6 +52,7 @@ let latestState = null;
 let connected = false;
 let refreshing = false;
 let heartbeatInFlight = false;
+let rlStartPending = false;
 let reloadingAfterServerRestart = false;
 const legacyErrorStorageKey = "drobot-four-leg-permanent-errors-v1";
 const errorStorageKey = "drobot-four-leg-recent-errors-v2";
@@ -68,7 +70,7 @@ async function api(
     method,
     headers: {
       "X-Control-Token": token,
-      "X-Drobot-Client-Version": "9",
+      "X-Drobot-Client-Version": "11",
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -97,7 +99,7 @@ function normalizeErrorMessage(message) {
     original.includes("automatic reconnect failed");
   return transportFault
     ? "Servo USB adapter disconnected; waiting for automatic recovery. " +
-      "Controls remain unavailable until all 12 motors reconnect."
+      "Controls remain unavailable until all motors reconnect."
     : original;
 }
 
@@ -537,14 +539,14 @@ function createLegPanel(leg) {
     <header class="leg-header">
       <div class="leg-title">
         <span class="leg-number"></span>
-        <div><p>THREE-MOTOR BRANCH</p><h2></h2></div>
+        <div><p>${leg.motors.length}-MOTOR BRANCH</p><h2></h2></div>
       </div>
       <div class="leg-summary">
         <span><b class="leg-current">—</b> diagnostic</span>
         <span><b class="leg-armed">0</b> armed</span>
       </div>
       <div class="leg-actions">
-        <button class="arm-leg" type="button">ARM 3 MOTORS</button>
+        <button class="arm-leg" type="button">ARM ${leg.motors.length} MOTORS</button>
         <button class="zero-leg" type="button">ZERO ARMED</button>
         <button class="disarm-leg" type="button">DISARM LEG</button>
       </div>
@@ -640,13 +642,16 @@ function updateLeg(leg) {
 function updateSummary(state) {
   const { summary, settings, crawl, runtime, power } = state;
   const rl = state.rl_policy || {};
+  const motorCount = runtime?.motor_count ?? state.legs.reduce((total, leg) => total + leg.motors.length, 0);
+  centerAll.textContent = `CENTER ALL ${motorCount}`;
+  document.querySelector("#disarmAll").textContent = `DISARM ALL ${motorCount}`;
   const demoMode = runtime?.mode === "demo";
   modeBadge.textContent = demoMode
     ? "DEMO / NO MOTOR OUTPUT"
     : `HARDWARE / ${(runtime?.port || "SERIAL").toUpperCase()}`;
   modeBadge.className = `mode-badge ${demoMode ? "demo" : "hardware"}`;
   document.body.classList.toggle("demo-mode", demoMode);
-  document.querySelector("#onlineCount").textContent = `${summary.online_count} / 12`;
+  document.querySelector("#onlineCount").textContent = `${summary.online_count} / ${motorCount}`;
   document.querySelector("#healthLabel").textContent =
     summary.health === "nominal" ? "All telemetry nominal" : "Attention required";
   document.querySelector("#voltageRange").textContent =
@@ -659,7 +664,7 @@ function updateSummary(state) {
     `${summary.max_temperature_c} °C`;
   document.querySelector("#temperatureLimit").textContent =
     `Warning at ${settings.temperature_warning_c} °C`;
-  document.querySelector("#armedCount").textContent = `${summary.armed_count} / 12`;
+  document.querySelector("#armedCount").textContent = `${summary.armed_count} / ${motorCount}`;
   const browserHeartbeat = state.browser_heartbeat;
   document.querySelector("#watchdog").textContent =
     browserHeartbeat.recent
@@ -725,11 +730,37 @@ function updateSummary(state) {
   rlModel.textContent = rl.model_variant
     ? `${rl.model_variant} / ${rl.model || "unknown file"}`
     : rl.model || "Not configured";
+  const availableRlModels = Array.isArray(rl.available_models)
+    ? rl.available_models
+    : [];
+  const configuredModelVariants = availableRlModels
+    .map((model) => String(model.model_variant || ""))
+    .filter(Boolean);
+  const renderedModelVariants = Array.from(rlModelSelect.options).map(
+    (option) => option.value,
+  );
+  if (configuredModelVariants.join("\n") !== renderedModelVariants.join("\n")) {
+    rlModelSelect.replaceChildren(
+      ...availableRlModels.map((model) => {
+        const option = document.createElement("option");
+        option.value = String(model.model_variant || "");
+        option.textContent = `${String(model.model_variant || "unknown")} / ${String(model.model || "unknown file")}`;
+        option.disabled = !model.available;
+        return option;
+      }),
+    );
+  }
+  if (rl.model_variant && rlModelSelect.value !== rl.model_variant) {
+    rlModelSelect.value = rl.model_variant;
+  }
+  const policyNotice = document.querySelector("#rlExperimentalNotice");
+  policyNotice.hidden = !rl.experimental_notice;
+  policyNotice.textContent = rl.experimental_notice || "";
   const gravity = rl.imu?.projected_gravity;
   rlGravity.textContent = Array.isArray(gravity)
     ? gravity.map((value) => Number(value).toFixed(2)).join(" / ")
     : "Waiting";
-  rlTargets.textContent = `${Array.isArray(rl.targets) ? rl.targets.length : 0} / 12`;
+  rlTargets.textContent = `${Array.isArray(rl.targets) ? rl.targets.length : 0} / ${rl.action_size ?? motorCount}`;
   const recorder = rl.recording || {};
   const rlStartReady = Boolean(rl.start_ready);
   const rlStartupStatus = String(rl.startup_status || "prepare-required");
@@ -737,6 +768,11 @@ function updateSummary(state) {
   const maximumRlSpeed = Number(rl.max_forward_m_s ?? 0.1);
   const recommendedRlSpeed = Number(
     rl.recommended_forward_m_s ?? minimumRlSpeed,
+  );
+  const normalStopRamp = Number(rl.normal_stop_ramp_s || 0);
+  const normalStopHold = Number(rl.normal_stop_hold_s || 0);
+  const effectiveForwardSpeed = Number(
+    rl.effective_forward_m_s ?? rl.forward_m_s ?? 0,
   );
   rlSpeed.min = minimumRlSpeed.toFixed(3);
   rlSpeed.max = maximumRlSpeed.toFixed(3);
@@ -758,6 +794,17 @@ function updateSummary(state) {
   const temperatureVerification = Array.isArray(rl.temperature_verification)
     ? rl.temperature_verification[0]
     : null;
+  const normalCompletionText = normalStopRamp > 0
+    ? `completion ramps ${normalStopRamp.toFixed(2)} s + holds trained stance`
+    : "completion centers + holds";
+  const runElapsed = Number(rl.elapsed_s || 0);
+  const commandedRunDuration = Number(rl.duration_s || 5);
+  const activePhaseText = runElapsed < commandedRunDuration
+    ? `${runElapsed.toFixed(1)} / ${commandedRunDuration.toFixed(1)} s / ` +
+      `${effectiveForwardSpeed.toFixed(3)} m/s`
+    : effectiveForwardSpeed > 0.001
+      ? `STOP RAMP / ${effectiveForwardSpeed.toFixed(3)} m/s`
+      : `STOPPED HOLD / ${normalStopHold.toFixed(1)} s`;
   rlDetail.textContent = rl.error
     ? `FAULT: ${rl.error}`
     : recorder.error
@@ -769,29 +816,35 @@ function updateSummary(state) {
           `${Number(temperatureVerification.required_s).toFixed(1)} s / ` +
           `${temperatureVerification.high_sample_count} readings`
         : rl.active
-          ? `${Number(rl.elapsed_s || 0).toFixed(1)} / ` +
-            `${Number(rl.duration_s || 5).toFixed(1)} s / ` +
-            `${Number(rl.forward_m_s || 0).toFixed(3)} m/s / then center + hold`
+          ? `${activePhaseText} / ${normalCompletionText}`
           : `${Number(rl.control_hz || 60).toFixed(0)} Hz policy / ` +
             `${minimumRlSpeed.toFixed(3)}-${maximumRlSpeed.toFixed(3)} m/s / ` +
             `${String(rl.gait_clock_mode || "fixed").replaceAll("_", " ")} cadence ` +
             `(${Number(rl.gait_frequency_hz || 0).toFixed(2)} Hz) / ` +
-            `1-60 s / completion centers + holds`;
+            `1-60 s / ${normalCompletionText}`;
   startRl.disabled =
+    rlStartPending || rl.status === "initializing" ||
     !rl.available ||
     rl.active ||
     crawl.active ||
     !rlStartReady ||
     !rlSafetyAck.checked;
   prepareRl.disabled =
+    rlStartPending || rl.status === "initializing" ||
     !rl.available || rl.active || crawl.active || !rlSafetyAck.checked;
-  stopRl.disabled = !rl.active;
+  stopRl.disabled = !rl.active && !rlStartPending && rl.status !== "initializing";
   rlSpeed.disabled = rl.active;
   rlDuration.disabled = rl.active;
+  rlModelSelect.disabled = rlStartPending || rl.status === "initializing" || rl.active || crawl.active || state.any_armed;
   rlSafetyAck.disabled = rl.active || crawl.active;
+  startRl.textContent = rlStartPending || rl.status === "initializing"
+    ? "INITIALIZING IMU…"
+    : String(rl.model_variant || "").includes("running")
+    ? "START RL RUN"
+    : "START RL WALK";
   if (!rl.active && rlStartReady && rl.available) {
     rlDetail.textContent +=
-      ` / policy stance ready / ${Number(rl.target_step_limit_deg || 2).toFixed(0)}° step cap`;
+      ` / policy stance ready / ${Number(rl.target_step_limit_deg || 4).toFixed(0)}° step cap`;
   } else if (!rl.active && rl.available) {
     rlDetail.textContent += rlStartupStatus === "moving"
       ? " / moving slowly to policy stance"
@@ -852,19 +905,23 @@ function updateSummary(state) {
       "STOP to end";
 
   walkForward.disabled =
-    crawl.active ||
+    crawl.available === false || crawl.active ||
     rl.active ||
     (state.any_armed && !crawl.start_ready);
   walkDiagonalPair.disabled =
-    crawl.active ||
+    crawl.available === false || crawl.active ||
     rl.active ||
     state.any_armed;
   setCrawlStance.disabled =
-    crawl.active || rl.active;
+    crawl.available === false || crawl.active || rl.active;
+  if (crawl.available === false) gaitDetail.textContent = crawl.unavailable_reason;
   stopWalk.disabled = !state.any_armed;
   zeroAll.disabled = crawl.active || rl.active;
   centerAll.disabled = crawl.active || rl.active;
-  captureZeroAll.disabled = crawl.active || rl.active || state.any_armed;
+  captureZeroAll.disabled = runtime?.capture_zero_available === false || crawl.active || rl.active || state.any_armed;
+  captureZeroAll.title = runtime?.capture_zero_available === false
+    ? "Ankle zero changes require a fresh travel capture. Current calibration is preserved."
+    : "";
 }
 
 async function refresh() {
@@ -902,8 +959,11 @@ async function refresh() {
       walkForward,
       walkDiagonalPair,
       stopWalk,
+      rlModelSelect,
       rlSpeed,
+      rlDuration,
       rlSafetyAck,
+      prepareRl,
       startRl,
       stopRl,
       resetPower,
@@ -922,7 +982,7 @@ async function refresh() {
 }
 
 disarmAll.addEventListener("click", () => {
-  postAction("/api/disarm-all", {}, "All 12 motors disarmed");
+  postAction("/api/disarm-all", {}, "All motors disarmed");
 });
 
 settingsButton.addEventListener("click", () => {
@@ -951,21 +1011,21 @@ centerAll.addEventListener("click", () => {
   settingsDialog.close();
   postAction(
     "/api/center-all",
-    { safety_ack: true, confirmation: "CENTER ALL 12" },
-    "All 12 motors returning to calibrated zero; torque remains armed",
+    { safety_ack: true, confirmation: `CENTER ALL ${latestState.runtime.motor_count}` },
+    "All motors returning to calibrated zero; torque remains armed",
   );
 });
 
 captureZeroAll.addEventListener("click", () => {
   if (latestState?.any_armed) {
-    showNotice("Disarm all 12 motors before capturing zero", true);
+    showNotice("Disarm all motors before capturing zero", true);
     return;
   }
   settingsDialog.close();
   postAction(
     "/api/capture-zero-all",
     { safety_ack: true, confirmation: "CAPTURE ZERO ALL" },
-    "Current pose saved as calibrated zero for all 12 motors",
+    "Current pose saved as calibrated zero for all motors",
   );
 });
 
@@ -980,7 +1040,7 @@ setCrawlStance.addEventListener("click", () => {
 walkForward.addEventListener("click", () => {
   if (latestState?.any_armed && !latestState?.crawl?.start_ready) {
     showNotice(
-      "Wait for the gait stance to report COMPLETE / HOLDING, or disarm all 12 motors",
+      "Wait for the gait stance to report COMPLETE / HOLDING, or disarm all motors",
       true,
     );
     return;
@@ -994,7 +1054,7 @@ walkForward.addEventListener("click", () => {
 
 walkDiagonalPair.addEventListener("click", () => {
   if (latestState?.any_armed) {
-    showNotice("Disarm all 12 motors before starting the gait sequence", true);
+    showNotice("Disarm all motors before starting the gait sequence", true);
     return;
   }
   postAction(
@@ -1016,6 +1076,16 @@ rlSafetyAck.addEventListener("change", () => {
   if (latestState) updateSummary(latestState);
 });
 
+rlModelSelect.addEventListener("change", () => {
+  const modelVariant = rlModelSelect.value;
+  rlSafetyAck.checked = false;
+  postAction(
+    "/api/rl-select",
+    { model_variant: modelVariant },
+    `Selected ${modelVariant}; prepare the model stance before starting`,
+  );
+});
+
 prepareRl.addEventListener("click", () => {
   if (!rlSafetyAck.checked) {
     showNotice("Confirm support, foot clearance, and the physical cutoff", true);
@@ -1024,11 +1094,12 @@ prepareRl.addEventListener("click", () => {
   postAction(
     "/api/rl-prepare",
     { safety_ack: true, confirmation: "PREPARE RL STANCE" },
-    "All 12 joints moving slowly to the model-declared RL stance",
+    "All joints moving slowly to the model-declared RL stance",
   );
 });
 
 startRl.addEventListener("click", async () => {
+  if (rlStartPending) return;
   const forwardSpeed = Number(rlSpeed.value);
   const duration = Number(rlDuration.value);
   const minimumRlSpeed = Number(latestState?.rl_policy?.min_forward_m_s ?? 0);
@@ -1060,22 +1131,28 @@ startRl.addEventListener("click", async () => {
     );
     return;
   }
-  await postAction(
-    "/api/rl-start",
-    {
-      forward_m_s: forwardSpeed,
-      duration_s: duration,
-      safety_ack: true,
-      confirmation: "START SUPPORTED RL TEST",
-    },
-    `${duration}-second supported RL walk started at ${forwardSpeed.toFixed(3)} m/s`,
-  );
-  rlSafetyAck.checked = false;
+  rlStartPending = true;
   if (latestState) updateSummary(latestState);
+  try {
+    await postAction(
+      "/api/rl-start",
+      {
+        forward_m_s: forwardSpeed,
+        duration_s: duration,
+        safety_ack: true,
+        confirmation: "START SUPPORTED RL TEST",
+      },
+      `${duration}-second supported RL walk started at ${forwardSpeed.toFixed(3)} m/s`,
+    );
+  } finally {
+    rlStartPending = false;
+    rlSafetyAck.checked = false;
+    if (latestState) updateSummary(latestState);
+  }
 });
 
 stopRl.addEventListener("click", () => {
-  postAction("/api/rl-stop", {}, "RL walking stopped; all 12 motors disarmed");
+  postAction("/api/rl-stop", {}, "RL walking stopped; all motors disarmed");
 });
 
 resetPower.addEventListener("click", () => {

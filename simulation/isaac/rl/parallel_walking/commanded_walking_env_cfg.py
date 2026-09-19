@@ -266,18 +266,96 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     initial_forward_speed_max_m_s = 0.15
     forward_speed_min_m_s = 0.15
     forward_speed_max_m_s = 0.15
+    # Optional mixture component for profiles that need extra coverage near the
+    # low end without removing high-speed commands from the training batch.
+    # A fraction of environments sample [speed_min, low_band_max]; the rest
+    # retain the normal [speed_min, speed_max] curriculum distribution.
+    forward_speed_low_band_fraction = 0.0
+    forward_speed_low_band_max_m_s = 0.0
     command_curriculum_steps = 1
     command_curriculum_offset_steps = 0
+    # Actor inputs historically used raw SI command values.  Keep that contract
+    # by default, while allowing a separately versioned policy to magnify nearby
+    # low-speed commands without changing the 50-value observation shape.
+    command_observation_scale = (1.0, 1.0, 1.0)
     backward_speed_min_m_s = 0.06
     backward_speed_max_m_s = 0.16
     turn_forward_speed_max_m_s = 0.10
     turn_rate_min_rad_s = 0.35
     turn_rate_max_rad_s = 0.80
 
+    # Optional within-episode run -> decelerate -> hold command program.  Legacy
+    # profiles sample one command per episode and leave these values unused.
+    run_stop_run_duration_min_s = 2.5
+    run_stop_run_duration_max_s = 4.5
+    run_stop_ramp_duration_min_s = 0.35
+    run_stop_ramp_duration_max_s = 0.90
+    run_stop_abrupt_fraction = 0.25
+
     action_scale_abduction_rad = 0.12
     action_scale_hip_rad = 0.30
     action_scale_knee_rad = 0.40
     action_mode = "direct"
+    # Integrated target-velocity policies may retain a bounded fraction of their
+    # output while zero-command homing remains the dominant action.  Zero keeps
+    # the historical deterministic slew-to-neutral behavior for every legacy
+    # policy and profile.
+    integrated_stop_action_scale = 0.0
+    # A velocity-output policy may instead reinterpret its bounded output as a
+    # small position residual around calibrated neutral once the command is
+    # zero. Unlike adding policy velocity to a saturated homing command, this
+    # gives the actor a reachable equilibrium for compensating foot height,
+    # compliance, and payload-centre differences. The normal target-rate limiter
+    # still bounds every step toward that posture.
+    integrated_stop_target_residual_scale = 0.0
+    # An integrated-target actor emits joint velocity while its gait clock is
+    # parameterized by phase.  If cadence changes but the emitted velocity does
+    # not, joint excursion per cycle changes inversely with cadence.  Opt-in
+    # profiles can normalize the motion action around a reference frequency so
+    # one learned phase trajectory retains its stride as cadence changes.  The
+    # resulting action is still clamped to the ordinary packet target-rate limit.
+    integrated_action_scale_with_gait_frequency = False
+    integrated_action_reference_frequency_hz = 1.0
+    # Linear gain applied to (current/reference cadence - 1).  A value of one
+    # gives full phase-rate normalization; zero disables the numerical gain
+    # while retaining the versioned action mode for controlled diagnostics.
+    integrated_action_frequency_gain = 1.0
+    # The first four exported actions are hip-abduction balance axes.  ``None``
+    # uses the common gain; a profile may leave them unscaled while changing the
+    # eight sagittal propulsion joints.
+    integrated_action_abduction_frequency_gain = None
+    # Gait-residual policies can independently remove actor authority once the
+    # command reaches standstill.  A zero value makes the analytic parked pose
+    # (and its packet-rate-limited transition) a controller guarantee instead
+    # of relying on the learned residual to choose a safe stopped stance.
+    gait_residual_stop_action_scale = 1.0
+    # Simulation-only V44 ablation: attenuate sagittal residuals during the C2
+    # scheduled swing envelope, in LEG_NAMES order FL, RL, FR, RR. Unit scales
+    # retain the exact historical arithmetic path. This has no Pi/export parity.
+    gait_swing_residual_scale_by_leg = (1.0, 1.0, 1.0, 1.0)
+    # Populated only by the isolated exact-task ablation workflow, never JSON.
+    gait_swing_residual_ablation_task = None
+    # Isolated V44 evaluation-only rear lift witness; no onboard/export parity.
+    # Zero is the exact existing target-mapping path. Marker is loader-derived.
+    gait_rear_pitch_lift_m = 0.0
+    gait_rear_pitch_lift_ablation_task = None
+    # Separate experimental action projection; historical0/5mm behavior stays
+    # exact when false. It has no onboard/export implementation.
+    gait_rear_pitch_projection_enabled = False
+    gait_rear_pitch_projection_ablation_task = None
+    # Isolated unchanged-peak descent timing; .5 preserves the original envelope.
+    gait_rear_pitch_descent_fraction = 0.5
+    gait_front_stance_tracking_feedback_gain = 0.0
+    gait_front_stance_tracking_feedback_ablation_task = None
+    gait_rear_tracking_feedback_gain = 0.0
+    gait_rear_tracking_feedback_leg_mask = (1.0, 1.0)
+    gait_rear_tracking_feedback_mode = "independent"
+    gait_rear_tracking_feedback_ablation_task = None
+    # Legacy policies observe their previous raw network request.  A
+    # hardware-feasible policy may instead observe the previous rate-limited
+    # target expressed in normalized action coordinates, which tells the actor
+    # what the controller actually sent when a requested step was too large.
+    action_history_mode = "requested_action"
     residual_action_scale = 1.0
     # Optional per-action override in the exported/Isaac action order.  ``None``
     # preserves the legacy scalar contract for every existing task.
@@ -286,6 +364,35 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     # actuator itself.  Keeping this configurable lets training reproduce that
     # packet-level behavior exactly.
     target_velocity_limit_rad_s = SERVO_VELOCITY_LIMIT_RAD_S
+    # Optional per-action target-rate contract in exported/Isaac action order.
+    # ``None`` preserves the scalar limit for every existing checkpoint.  This
+    # lets balance joints react more deliberately than sagittal propulsion
+    # joints without slowing the complete gait.
+    target_velocity_limit_rad_s_by_action = None
+    # Opt-in V44 deployment envelope; legacy tasks keep the original behavior.
+    target_packet_step_limit_rad = 0.0
+    target_packet_hold_probability = 0.0
+    target_packet_max_hold_steps = 1
+    actuator_target_response_enabled = False
+    actuator_target_response_nominal_tau_s = 0.0
+    actuator_target_response_nominal_gain = 1.0
+    actuator_target_response_tau_s_range = (0.0, 0.0)
+    actuator_target_response_gain_range = (1.0, 1.0)
+    actuator_target_response_tau_s_range_by_action = None
+    actuator_target_response_gain_range_by_action = None
+    penalty_stance_sole_tilt = 0.0
+    penalty_swing_sole_tilt = 0.0
+    swing_sole_tilt_ablation_task = None
+    penalty_swing_corner_clearance = 0.0
+    penalty_contact_point_slip = 0.0
+    penalty_normalized_contact_slip = 0.0
+    normalized_contact_slip_ablation_task = None
+    sole_clearance_target_m = 0.012
+    sole_clearance_transition_fraction = 0.15
+    # Opt-in poor-swing-foot emphasis. Zero preserves historical mean-only
+    # scoring; one uses the worst scheduled-swing corner deficit at each tick.
+    swing_clearance_worst_leg_fraction = 0.0
+    sole_corner_soft_contact_height_m = 0.004
     reset_joint_position_noise_rad = 0.015
     reset_xy_jitter_m = 0.02
     # These are the validated walking termination limits.  V9's 0.28 m height
@@ -306,6 +413,10 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     # into command-scaled cadence so deployment cannot change the meaning of a
     # trained observation silently.
     gait_clock_mode = "fixed"
+    # Speed-scaled legacy profiles derive phase from elapsed time and the current
+    # frequency.  A run/stop policy opts into integration so changing frequency
+    # cannot teleport the clock to another point in the cycle.
+    integrate_gait_phase = False
     gait_standstill_deadband_m_s = 0.0
     gait_speed_min_m_s = 0.04
     gait_speed_max_m_s = 0.10
@@ -315,22 +426,78 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     gait_duty_factor = 0.65
     gait_phase_offsets = (0.0, 0.5, 0.5, 0.0)
     gait_reference_mode = "continuous"
+    # Optional JSON phase table containing canonical joint-position targets in
+    # the environment's exact joint order. This supports motion-prior residual
+    # policies without baking a large generated table into Python source.
+    gait_phase_reference_path = None
+    gait_phase_reference_low_path = None
+    gait_phase_reference_blend_speed_min_m_s = None
+    gait_phase_reference_blend_speed_max_m_s = None
+    gait_phase_reference_scale_about_neutral = 1.0
+    # Isolated V44 simulation ablation only; default retains floor lookup.
+    # Linear sampling does not yet have Raspberry Pi/runtime parity.
+    gait_phase_reference_linear_interpolation_enabled = False
+    # Loader-derived exact-task marker, not an arbitrary JSON override field.
+    gait_phase_reference_interpolation_ablation_task = None
+    # Opt-in planned body-left displacement metadata for new crawl ablations.
+    # Legacy/production references continue to score about the original line.
+    gait_phase_table_lateral_reference_enabled = False
+    # Experimental fore/aft weight transfer is not net locomotion. This flag
+    # corrects instantaneous speed penalties and the stop anchor only; positive
+    # progress uses actual rolling net speed after a complete window.
+    gait_phase_table_forward_reference_enabled = False
     gait_smooth_support_push = False
     gait_distributed_push_phase_fractions = None
     gait_contact_transition_fraction = 0.0
     gait_stance_fore_aft_m = 0.080
     gait_stance_down_m = 0.329341447
+    # Keep the rectangular sole parallel to the ground as a support foot moves
+    # fore/aft.  Legacy policies retain their original constant-height arc.
+    gait_flat_sole_support = False
+    # Optional FL, RL, FR, RR stance depths.  This lets a pitched stable pose be
+    # represented exactly while preserving the scalar legacy contract.
+    gait_stance_down_by_leg_m = None
     gait_weight_shift_forward_m = 0.0
     gait_rear_weight_shift_forward_m = None
     gait_weight_shift_lateral_m = 0.0
+    # Optional signed coordinated side-to-side body translation for a diagonal trot.
+    # Unlike independent abduction actions, this shifts all four feet together
+    # so the rear-biased COM remains over the active diagonal support line.
+    gait_diagonal_support_lateral_shift_m = 0.0
     gait_translate_lateral_weight_shift = False
     gait_forward_body_pitch_rad = 0.0
     gait_stance_center_offset_m = 0.0
     target_forward_pitch_rad = 0.0
     gait_stride_m = 0.080
     gait_lift_m = 0.025
+    # Optional FL, RL, FR, RR swing clearances.  The scalar remains the
+    # backwards-compatible default for every existing task.
+    gait_lift_by_leg_m = None
+    # Reserve part of swing for nearly vertical unloading and lowering.  A
+    # value of (0, 1) preserves the historical full-swing fore/aft curve.
+    gait_swing_translation_start_fraction = 0.0
+    gait_swing_translation_end_fraction = 1.0
     gait_start_ramp_s = 0.60
+    # When enabled, zero command means a real four-foot park: no frozen lifted
+    # shoe and no scheduled swing contact after the clock stops.
+    gait_park_at_standstill = False
+    # Opt-in for phase tables: a parked robot has four scheduled support feet.
+    gait_phase_table_park_contact_override = False
+    # Optional park-only geometry and posture.  Leaving these unset preserves
+    # the moving stance for every legacy task.  Run/stop tasks can use a taller,
+    # symmetric low-effort pose once the speed command reaches zero.
+    gait_standstill_fore_aft_m = None
+    gait_standstill_down_m = None
+    gait_standstill_center_offset_m = 0.0
+    target_standstill_pitch_rad = None
+    target_standstill_base_height_m = None
     gait_reference_sigma = 0.75
+    # By default, retain the historical target-space, all-joint mean gait
+    # reference score.  Hardware-matched profiles can blend in measured joint
+    # state and emphasize the least-following leg so a delayed actuator cannot
+    # earn full reference credit merely by receiving the right target packet.
+    gait_reference_actual_state_weight = 0.0
+    gait_reference_worst_leg_weight = 0.0
     # Optional crawl-topology constraints.  Legacy profiles retain their
     # original behavior; V26 enables these as a controlled V25 ablation.
     require_schedule_matched_support = False
@@ -348,17 +515,42 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     use_soft_scheduled_swing_release = False
     scheduled_swing_release_force_sigma_n = 2.0
     use_threshold_centered_release_shaping = False
+    # The historical sigmoid gives 0.5 quality exactly at the contact threshold.
+    # New profiles may normalize the release half so a still-contacting shoe earns
+    # no shaping credit. Pair/progress gates always use the strict normalized
+    # signal; this switch affects only the auxiliary discovery reward.
+    normalize_threshold_centered_release_quality = False
     scheduled_release_force_threshold_n = 1.0
     scheduled_release_shaping_width_n = 0.35
+    # Optional wider sigmoid used only for discovery shaping. ``None`` reuses
+    # the strict gate width and preserves all existing profiles.
+    scheduled_release_discovery_width_n = None
     scheduled_release_min_consecutive_steps = 5
     use_soft_scheduled_stance_quality = False
     scheduled_stance_quality_width_n = 1.0
     use_soft_schedule_matched_progress_gate = False
+    # Optional diagonal/trot contact contract.  When enabled, positive motion
+    # credit during a two-foot swing is gated by the less-unloaded member of the
+    # scheduled pair.  This prevents a policy from dragging one rear leg while
+    # the other three manufacture forward displacement.
+    gate_progress_by_scheduled_pair_release = False
+    scheduled_pair_progress_gate_floor = 1.0
+    # Isolated reward-credit ablation; never a production default.
+    decouple_sustained_progress_from_pair_release = False
+    sustained_progress_decoupling_ablation_task = None
 
     # Deliberately reproduce quadruped_walk_v1.yaml's successful reward instead
     # of continuing to tune a novel objective.  Net displacement remains a hard
     # evaluation metric, but adding it to the reward caused unsafe lunge exploits.
     reward_forward_velocity_tracking = 4.0
+    # Optional tracking of the same trailing velocity used by sustained-motion
+    # qualification.  This gives command-conditioned policies a low-noise reason
+    # to distinguish nearby speeds instead of merely exceeding a minimum floor.
+    reward_rolling_velocity_tracking = 0.0
+    rolling_velocity_tracking_sigma_m_s = 0.020
+    # Optional symmetric trailing-speed error cost.  Unlike a Gaussian reward,
+    # this keeps a useful gradient when the current gait is far below command.
+    penalty_rolling_velocity_error = 0.0
     # A two-second trailing speed window prevents a reset-dependent burst from
     # being mistaken for sustained walking.
     sustained_speed_window_s = 2.0
@@ -381,6 +573,8 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     penalty_missing_scheduled_stance = 0.0
     reward_scheduled_swing = 1.50
     reward_scheduled_release_shaping = 0.0
+    reward_scheduled_pair_release = 0.0
+    penalty_scheduled_pair_mismatch = 0.0
     reward_cycle_four_leg_release = 0.0
     reward_upright = 1.00
     # Keep survival far below the motion terms so standing cannot dominate, but
@@ -426,10 +620,31 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     # delayed cliff after the robot has already left the recoverable corridor.
     use_huber_path_costs = False
     penalty_body_height = 2.0
+    # Opt-in dimensionless posture costs for simulation ablations. These
+    # replace the raw metre-squared/projected-gravity costs only when enabled;
+    # existing tasks keep their exact legacy expressions and reward weights.
+    normalized_posture_cost_enabled = False
+    # Isolated V44 height-only hypothesis. During commanded translation, blend
+    # legacy height into the dimensionless height cost below; keep legacy tilt
+    # and exact legacy parked height. Never combine with normalized posture.
+    normalized_body_height_cost_enabled = False
+    posture_height_deadband_m = 0.003
+    posture_height_normalizer_m = 0.010
+    posture_angle_deadband_rad = math.radians(1.0)
+    posture_angle_normalizer_rad = math.radians(3.0)
+    penalty_normalized_body_height = 4.0
+    penalty_normalized_body_roll = 4.0
+    penalty_normalized_body_pitch = 4.0
     penalty_action_rate = 0.03
     penalty_action_acceleration = 0.12
     penalty_action_saturation = 0.50
     penalty_target_limiter_gap = 0.0
+    # Integrated target-velocity policies can otherwise spend unnecessary
+    # authority rocking the abduction joints while the sagittal joints provide
+    # the actual propulsion.  These opt-in terms act on the four abduction
+    # velocity requests and accumulated targets respectively.
+    penalty_abduction_action_magnitude = 0.0
+    penalty_abduction_target_magnitude = 0.0
     # Contact timing and the analytic gait reference provide the primary
     # diagonal-pair coordination.  This stays deliberately light: forcing the
     # normalized joint actions to match made the learned robot freeze because
@@ -487,6 +702,11 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     target_individual_velocity_scale_range = (1.0, 1.0)
     actuator_individual_stiffness_scale_range = (1.0, 1.0)
     actuator_individual_damping_scale_range = (1.0, 1.0)
+    # Explicit nominal drive hypotheses, independent of randomized-domain masks.
+    # Unit scales preserve legacy dynamics. These do not change effort/rate caps.
+    actuator_nominal_stiffness_scale = 1.0
+    actuator_nominal_damping_scale = 1.0
+    actuator_sync_drive_gain_telemetry = False
     physical_randomization_nominal_fraction = 1.0
     mirror_physical_randomization_pairs = False
     joint_target_bias_abduction_rad = 0.0
@@ -507,8 +727,56 @@ class DrobotCommandedWalkingForwardEnvCfg(DirectRLEnvCfg):
     penalty_joint_acceleration = 0.0
     penalty_body_linear_acceleration = 0.0
     penalty_body_angular_acceleration = 0.0
+    # Isolated V44 effort-observable experiment. Both paired arms collect one
+    # fresh native active-DOF projection after physics; only the treatment uses
+    # it in the four effort costs. This is NOT identified drive-only torque.
+    # Defaults retain the historical approximate-PD costs without a new getter.
+    native_effort_telemetry_enabled = False
+    native_effort_reward_enabled = False
+    native_effort_ablation_task = None
+    # Critic-only information ablation. Both 90-wide arms build the same causal
+    # context; the zero arm masks all 32 new inputs. Actor/runtime stays 50-wide.
+    # The isolated loader derives state_space and the exact task marker.
+    critic_context_mode = "legacy58"
+    critic_context_ablation_task = None
     effort_soft_limit_fraction = 0.85
     penalty_effort_soft_limit = 0.0
+    # Optional continuous effort price normalized to the same sustainable
+    # threshold.  The soft-limit hinge above is useful for overloads but gives
+    # no preference between two sub-threshold motions; the RMS term lets a
+    # hardware-focused continuation find a genuinely lower-current gait.
+    penalty_effort_rms = 0.0
+    # A servo cannot deliver stall torque and no-load speed simultaneously.
+    # This optional linear motor-envelope approximation prices operating points
+    # where normalized torque plus normalized speed exceeds the configured
+    # margin.  It is disabled for historical checkpoints.
+    actuator_torque_speed_no_load_rad_s = SERVO_VELOCITY_LIMIT_RAD_S
+    actuator_torque_speed_margin = 1.0
+    penalty_actuator_torque_speed_envelope = 0.0
+    # Small load sharing cost across the four three-joint legs.  This avoids a
+    # policy buying speed by repeatedly saturating one rear leg while the other
+    # three remain lightly loaded.
+    penalty_leg_operating_point_imbalance = 0.0
+
+    # Run/stop-only shaping.  All terms are zero for historical profiles.
+    stop_velocity_sigma_m_s = 0.035
+    stop_position_tolerance_m = 0.040
+    reward_stop_velocity = 0.0
+    reward_stop_all_feet_contact = 0.0
+    reward_stop_weakest_foot_contact = 0.0
+    stop_neutral_action_sigma = 0.20
+    reward_stop_neutral_action = 0.0
+    # The Gaussian neutral reward can have an extremely small gradient when a
+    # transferred policy initially parks far from action zero.  This optional
+    # quadratic term keeps a useful corrective signal across the full range.
+    penalty_stop_action_magnitude = 0.0
+    # Integrated target-velocity policies can stop their output before the
+    # accumulated target has returned to neutral. This optional term acts on
+    # the applied normalized target rather than the network output.
+    penalty_stop_target_magnitude = 0.0
+    penalty_stop_position = 0.0
+    penalty_stop_yaw_rate = 0.0
+    penalty_stop_joint_velocity = 0.0
 
 
 @configclass
@@ -935,6 +1203,7 @@ class DrobotCommandedWalkingRobustStraightLowStanceExternalRearPayloadEnvCfg(
     target_individual_velocity_scale_range = (0.88, 1.00)
     actuator_individual_stiffness_scale_range = (0.85, 1.15)
     actuator_individual_damping_scale_range = (0.85, 1.15)
+
     physical_randomization_nominal_fraction = 0.25
     mirror_physical_randomization_pairs = True
     # Match the measured Velcro-like tread near the V24 nominal while exposing
@@ -1142,6 +1411,7 @@ class DrobotCommandedWalkingForwardBiasedCycleGatedFourLegStraightCrawlExternalR
     four_leg_progress_gate_floor = 0.02
     use_soft_scheduled_swing_release = False
     use_threshold_centered_release_shaping = True
+    normalize_threshold_centered_release_quality = True
     scheduled_release_force_threshold_n = 1.0
     scheduled_release_shaping_width_n = 0.35
     scheduled_release_min_consecutive_steps = 5
@@ -1333,6 +1603,1215 @@ class DrobotCommandedWalkingSymmetryGatedRobustStraightCrawlExternalRearPayloadE
     target_velocity_scale_range = (0.88, 1.05)
     mirror_physical_randomization_pairs = False
     physical_randomization_nominal_fraction = 0.25
+
+
+@configclass
+class DrobotCommandedRunningFastStopExternalRearPayloadEnvCfg(
+    DrobotCommandedWalkingSymmetryGatedRobustStraightCrawlExternalRearPayloadEnvCfg
+):
+    """V31 fast diagonal trot with randomized graceful and abrupt stops."""
+
+    # This is a separate ten-second run/stop task, not a replacement for V30's
+    # statically stable crawl.  Every episode runs long enough to establish the
+    # gait, decelerates at an unpredictable time, then holds the stopped stance.
+    command_profile = "run_stop"
+    episode_length_s = 10.0
+    initial_training_horizon_s = 10.0
+    final_training_horizon_s = 10.0
+    episode_horizon_curriculum_steps = 1
+    initial_forward_speed_min_m_s = 0.050
+    initial_forward_speed_max_m_s = 0.090
+    # Retain the low command range after curriculum completion.  Raising the
+    # mature minimum to 0.10 m/s made a high-speed candidate forget rear-left
+    # release at the 0.08 m/s guarded-trial speed.
+    forward_speed_min_m_s = 0.050
+    forward_speed_max_m_s = 0.200
+    # Uniform full-range sampling underrepresented guarded-trial speeds and a
+    # late checkpoint narrowly missed rear-left release at 0.08 m/s. Preserve
+    # the full range while deliberately rehearsing the low-speed gait.
+    forward_speed_low_band_fraction = 0.50
+    forward_speed_low_band_max_m_s = 0.100
+    command_curriculum_steps = 48_000
+    run_stop_run_duration_min_s = 4.5
+    run_stop_run_duration_max_s = 6.5
+    run_stop_ramp_duration_min_s = 0.35
+    run_stop_ramp_duration_max_s = 0.90
+    # Abrupt zero commands prevent the policy from depending on a controller-side
+    # ramp.  The remaining episodes teach lower-jerk commanded deceleration.
+    run_stop_abrupt_fraction = 0.35
+
+    # A 60% duty-factor diagonal trot has two short four-foot overlap intervals
+    # per cycle but never requires a flight phase.  Speed comes primarily from
+    # cadence, within the measured 60 Hz control and STS3215 target-rate limits.
+    gait_reference_mode = "continuous"
+    gait_smooth_support_push = False
+    gait_distributed_push_phase_fractions = None
+    gait_clock_mode = "speed_scaled"
+    integrate_gait_phase = True
+    gait_park_at_standstill = True
+    gait_standstill_fore_aft_m = 0.080
+    gait_standstill_down_m = 0.329341447
+    gait_standstill_center_offset_m = 0.0
+    target_standstill_pitch_rad = 0.0
+    target_standstill_base_height_m = 0.3750
+    gait_standstill_deadband_m_s = 0.004
+    gait_speed_min_m_s = 0.060
+    gait_speed_max_m_s = 0.200
+    gait_frequency_min_hz = 0.90
+    gait_frequency_max_hz = 2.40
+    gait_stride_scale_min = 0.70
+    gait_duty_factor = 0.60
+    gait_phase_offsets = (0.0, 0.5, 0.5, 0.0)
+    randomize_gait_start_phase_quarters = True
+    gait_stance_fore_aft_m = LOW_SWEPT_STANCE_FORE_AFT_M
+    gait_stance_down_m = LOW_SWEPT_STANCE_DOWN_M
+    gait_stance_down_by_leg_m = (
+        FORWARD_BIASED_FRONT_DOWN_M,
+        FORWARD_BIASED_REAR_DOWN_M,
+        FORWARD_BIASED_FRONT_DOWN_M,
+        FORWARD_BIASED_REAR_DOWN_M,
+    )
+    gait_stance_center_offset_m = FORWARD_BIASED_STANCE_FORWARD_M
+    gait_stride_m = 0.065
+    gait_lift_m = 0.026
+    gait_start_ramp_s = 0.50
+
+    # Continue the proven V18 direct-action trot actor.  V30 residual transfer
+    # was rejected after a zero-residual diagnostic showed that the low-stance
+    # table alone mostly rocked in place.  The analytic gait remains a timing and
+    # pose prior while PPO owns the final targets, bounded by the same soft limits
+    # and 240 deg/s packet-level target slew limit used by the robust crawl.
+    action_mode = "direct"
+    residual_action_scale_by_action = (
+        0.25,
+        0.25,
+        0.25,
+        0.25,
+        0.18,
+        0.18,
+        0.18,
+        0.18,
+        0.25,
+        0.25,
+        0.25,
+        0.25,
+    )
+    target_velocity_limit_rad_s = math.radians(240.0)
+
+    # A trot intentionally carries two-foot support, so remove the sequential
+    # crawl's one-airborne-foot gates while retaining timing, impact, slip,
+    # posture, straight-path, smoothness, and effort objectives.
+    require_schedule_matched_support = False
+    gate_progress_by_schedule_matched_support = False
+    gate_progress_by_four_leg_release = False
+    gate_progress_by_cycle_four_leg_release = False
+    use_soft_scheduled_swing_release = True
+    use_threshold_centered_release_shaping = False
+    use_soft_scheduled_stance_quality = False
+    use_soft_schedule_matched_progress_gate = False
+    # The slow end of the command range otherwise permits a marginal rear-left
+    # drag. Reward completion of every four-foot cycle and put a signed shaping
+    # term on whichever foot has accumulated the least release activity.
+    reward_cycle_four_leg_release = 0.50
+    reward_least_active_swing = 2.0
+    reward_three_foot_support = 0.0
+    penalty_missing_scheduled_stance = 1.0
+    penalty_excess_airborne_feet = 0.0
+    reward_scheduled_stance = 1.5
+    reward_scheduled_swing = 2.5
+    gate_progress_by_scheduled_pair_release = True
+    scheduled_pair_progress_gate_floor = 0.10
+    reward_scheduled_pair_release = 8.0
+    penalty_scheduled_pair_mismatch = 5.0
+    reward_scheduled_release_shaping = 0.0
+    reward_qualified_touchdown = 0.05
+    penalty_diagonal_sync = 0.50
+    gait_reference_sigma = 0.65
+    reward_gait_reference = 4.0
+
+    # Preserve V30's world-frame line tracking, rear-pack attitude target, fall
+    # cost, Velcro contact domain, effort headroom, and asymmetric hardware
+    # domains.  Motion has higher priority than in the crawl, but speed tracking
+    # remains bounded so a forward lunge is not mistaken for controlled running.
+    sustained_speed_window_s = 0.75
+    active_translation_threshold_m_s = 0.020
+    scale_sustained_speed_with_command = True
+    minimum_sustained_speed_fraction = 0.55
+    minimum_sustained_speed_m_s = 0.055
+    velocity_tracking_sigma_m_s = 0.035
+    reward_forward_velocity_tracking = 12.0
+    reward_instant_progress = 14.0
+    reward_sustained_progress = 18.0
+    reward_straight_aligned_progress = 12.0
+    penalty_sustained_stall = 20.0
+    penalty_backward_motion = 26.0
+    penalty_overspeed = 4.0
+    straight_progress_lateral_ratio_sigma = 0.08
+    straight_progress_heading_sigma_rad = math.radians(5.0)
+    straight_progress_gate_floor = 0.15
+    lateral_corridor_half_width_m = 0.015
+    penalty_lateral_displacement = 55.0
+    penalty_lateral_corridor = 8.0
+    penalty_normalized_lateral_velocity = 8.0
+    penalty_yaw_rate = 16.0
+    heading_error_normalizer_rad = math.radians(4.0)
+    penalty_heading_error = 10.0
+
+    # Keep acceleration and impact shaping material without suppressing the
+    # cadence needed for a trot.  Candidate selection still gates absolute joint
+    # and body acceleration and sustained effort independently of total return.
+    penalty_action_rate = 0.10
+    penalty_action_acceleration = 0.50
+    penalty_joint_velocity = 0.030
+    penalty_joint_acceleration = 0.22
+    penalty_body_linear_acceleration = 0.35
+    penalty_body_angular_acceleration = 0.30
+    penalty_support_foot_slip = 0.55
+    penalty_touchdown_impact = 0.15
+    touchdown_force_soft_limit_n = 16.0
+    # Motion rewards are much stronger than the crawl's.  Scale the sustainable
+    # effort term accordingly so PPO cannot buy speed by holding several servos
+    # near the transient 90%-of-stall cap, especially after it has stopped.
+    penalty_effort_soft_limit = 6.00
+
+    # Once the command has reached zero, reward genuine stationary four-foot
+    # support and penalize motion past the predicted stop point.  The target is
+    # the integral of the sampled smooth command ramp; abrupt-stop episodes use
+    # the trigger position itself.
+    stop_velocity_sigma_m_s = 0.030
+    stop_position_tolerance_m = 0.050
+    reward_stop_velocity = 6.0
+    reward_stop_all_feet_contact = 2.0
+    # Direct action zero is the calibrated symmetric center stance.  A narrow
+    # stopped-only objective prevents the actor from finding a quiet but
+    # unnecessarily torque-heavy crouch after it has already decelerated.
+    stop_neutral_action_sigma = 0.45
+    reward_stop_neutral_action = 4.0
+    penalty_stop_position = 5.0
+    penalty_stop_yaw_rate = 6.0
+    penalty_stop_joint_velocity = 2.0
+
+
+@configclass
+class DrobotCommandedRunningHardwareMatchedStopExternalRearPayloadEnvCfg(
+    DrobotCommandedRunningFastStopExternalRearPayloadEnvCfg
+):
+    """V32 grounded run/stop policy matched to the first V31 hardware trace."""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # V31 inherited V28's approximately 35-degree, two-degree nose-down
+        # reset pose even though its exported direct-action contract and the
+        # physical guarded trial both used the calibrated 30-degree center
+        # stance.  For a direct-action actor, that makes every output map to a
+        # different absolute joint target in simulation and on hardware.  V32
+        # deliberately restores one shared neutral for reset, action zero,
+        # stopping, export, and the Raspberry Pi controller.
+        self.robot = self.robot.replace(
+            init_state=ArticulationCfg.InitialStateCfg(
+                pos=(0.0, 0.0, 0.3750),
+                joint_pos={
+                    ".*_hip_abduction": 0.0,
+                    "front_.*_hip_flexion": STABLE_NEUTRAL_FRONT_HIP_RAD,
+                    "rear_.*_hip_flexion": STABLE_NEUTRAL_REAR_HIP_RAD,
+                    "front_.*_knee": STABLE_NEUTRAL_FRONT_KNEE_RAD,
+                    "rear_.*_knee": STABLE_NEUTRAL_REAR_KNEE_RAD,
+                },
+                joint_vel={".*": 0.0},
+            )
+        )
+
+    target_base_height_m = 0.3750
+
+    # V31 requested 240 deg/s on nearly every sagittal joint. On the loaded
+    # robot the encoder trace reached only about 80-120 deg/s and lagged the
+    # policy by 0.20-0.47 seconds. Train only the command range we can qualify
+    # on hardware, and use a cadence that leaves time for the feet to complete
+    # their intended diagonal support transition.
+    initial_forward_speed_min_m_s = 0.040
+    initial_forward_speed_max_m_s = 0.070
+    forward_speed_min_m_s = 0.040
+    forward_speed_max_m_s = 0.120
+    forward_speed_low_band_fraction = 0.60
+    forward_speed_low_band_max_m_s = 0.080
+    command_curriculum_steps = 64_000
+    gait_speed_min_m_s = 0.040
+    gait_speed_max_m_s = 0.120
+    # One ideal no-slip gait cycle advances the body by approximately one
+    # scheduled stride.  The old 0.70..1.30 Hz range therefore requested only
+    # 0.034..0.085 m/s from the analytic reference for 0.040..0.120 m/s
+    # commands.  PPO had to outrun its own contact/pose prior, and the first
+    # faster continuation did so by dragging a rear shoe.  Match cadence to
+    # command at both endpoints; interpolation stays close in between while
+    # the actuator-rate randomization still teaches slower loaded hardware.
+    gait_frequency_min_hz = 0.040 / (0.065 * 0.75)
+    gait_frequency_max_hz = 0.120 / 0.065
+    gait_stride_scale_min = 0.75
+    gait_duty_factor = 0.68
+    gait_stride_m = 0.065
+    gait_lift_m = 0.022
+    gait_start_ramp_s = 0.80
+
+    # Two degrees per 60 Hz control interval is the deployment contract and is
+    # close to the fastest sustained motion actually seen in the V31 trace.
+    # Robust domains further reduce common and individual rate so the actor
+    # must produce targets that remain useful on the slowest loaded joints.
+    target_velocity_limit_rad_s = math.radians(120.0)
+    target_velocity_scale_range = (0.70, 1.05)
+    target_individual_velocity_scale_range = (0.78, 1.08)
+    actuator_effort_scale_range = (0.70, 1.00)
+    actuator_individual_effort_scale_range = (0.80, 1.05)
+    actuator_individual_stiffness_scale_range = (0.55, 1.10)
+    actuator_individual_damping_scale_range = (0.85, 1.30)
+    control_delay_step_range = (0, 1)
+
+    # V31's real heading correction sat at +/-0.20 rad/s for 41% of the trial.
+    # A slower bounded outer loop avoids turning a correctable line error into
+    # another alternating lateral command while the gait is already delayed.
+    heading_hold_kp_s = 0.75
+    heading_hold_max_correction_rad_s = 0.12
+    base_torque_randomization_range_nm = (0.050, 0.025, 0.065)
+
+    # Reject the exact failure mode observed on hardware: saturated actions
+    # whose requested target runs persistently ahead of the executable target.
+    # Speed remains rewarded, but not at the expense of feasible tracking,
+    # diagonal coordination, smoothness, or sustainable servo effort.
+    minimum_sustained_speed_fraction = 0.50
+    minimum_sustained_speed_m_s = 0.035
+    reward_forward_velocity_tracking = 12.0
+    reward_instant_progress = 10.0
+    reward_sustained_progress = 16.0
+    reward_straight_aligned_progress = 12.0
+    penalty_sustained_stall = 22.0
+    penalty_backward_motion = 30.0
+    penalty_overspeed = 6.0
+    reward_gait_reference = 6.0
+    gait_reference_sigma = 0.50
+    penalty_diagonal_sync = 1.50
+    penalty_action_rate = 0.40
+    penalty_action_acceleration = 2.00
+    penalty_action_saturation = 8.00
+    penalty_target_limiter_gap = 18.00
+    penalty_joint_velocity = 0.050
+    penalty_joint_acceleration = 0.65
+    penalty_body_linear_acceleration = 0.55
+    penalty_body_angular_acceleration = 0.50
+    penalty_support_foot_slip = 0.70
+    penalty_touchdown_impact = 0.22
+    penalty_effort_soft_limit = 24.0
+    penalty_effort_rms = 4.0
+
+    # The first clean V32 continuation moved and stopped well, but deterministic
+    # evaluation found 24% requested/processed disagreement, 30% packet-rate
+    # ceiling occupancy, and 7% saturated actions.  Preserve locomotion credit
+    # while making executable, unsaturated trajectories strictly preferable.
+    reward_scheduled_pair_release = 10.0
+    penalty_scheduled_pair_mismatch = 8.0
+    reward_least_active_swing = 4.0
+
+    # Stop around the same calibrated neutral used by reset/export instead of
+    # holding the transferred actor's asymmetric, high-torque terminal action.
+    reward_stop_neutral_action = 8.0
+    penalty_stop_action_magnitude = 10.0
+
+
+@configclass
+class DrobotCommandedRunningAppliedTargetHistoryStopExternalRearPayloadEnvCfg(
+    DrobotCommandedRunningHardwareMatchedStopExternalRearPayloadEnvCfg
+):
+    """V33 observes the last executable target instead of the raw request."""
+
+    # V32's deterministic 0.06 m/s trial showed that every knee continued to
+    # command ahead of the packet-rate limiter.  Keeping the 50-value shape but
+    # replacing the final history vector lets the actor condition its next
+    # decision on the target the servo bus actually received.
+    action_history_mode = "applied_target"
+
+
+@configclass
+class DrobotCommandedRunningIntegratedTargetVelocityStopExternalRearPayloadEnvCfg(
+    DrobotCommandedRunningAppliedTargetHistoryStopExternalRearPayloadEnvCfg
+):
+    """V34 emits bounded target velocity instead of unreachable positions."""
+
+    # V33 observed the executable target, but deterministic evaluation still
+    # found 21.0% requested/applied disagreement and 27.0% packet-rate ceiling
+    # occupancy.  Integrating a normalized velocity request makes a target jump
+    # larger than the elapsed-time slew budget impossible by construction.
+    action_mode = "integrated_target_velocity"
+    action_history_mode = "applied_target"
+    # Zero command always slews to the same calibrated center pose used by the
+    # dashboard stance control. A learned 20% posture residual was evaluated in
+    # two continuations: it stopped translation but repeatedly left one shoe
+    # unloaded in the fixed randomized domain. The physical robot is known to
+    # stand securely at calibrated center, so do not make its post-run support
+    # depend on an unqualified policy output. The ordinary 120 deg/s / 2-degree
+    # packet limiter still makes this a gradual transition rather than a jump.
+    integrated_stop_action_scale = 0.0
+    integrated_stop_target_residual_scale = 0.0
+
+    # V32 deliberately included a 0.70 common strength/rate floor while
+    # diagnosing the failed V31 controller trace.  V34's bounded, elapsed-time
+    # target integration removes that controller failure mode, so inheriting the
+    # same floor makes a fixed robust evaluation demand 0.08 m/s at an
+    # approximately 8.4 V supply equivalent.  That is below the 10.6 V operating
+    # floor modeled by V30 and belongs to battery/brownout safety, not locomotion.
+    # Restore the measured 3S operating envelope.  V32 also widened individual
+    # effort, rate, stiffness, and damping far beyond the earlier hardware prior
+    # to imitate the same blocked-controller trace.  The V31 log cannot identify
+    # those as servo-plant errors because packet catch-up bursts and synchronous
+    # feedback reads dominated the observation.  Return to the independently
+    # varied V25/V30 ranges while retaining per-servo mismatch, calibration bias,
+    # delay, COM, friction, and external-wrench domains.  A genuinely weak or
+    # stalled servo belongs to runtime health monitoring rather than a gait that
+    # must propel itself through a simulated half-stiff actuator.
+    actuator_effort_scale_range = (0.88, 1.05)
+    target_velocity_scale_range = (0.88, 1.05)
+    actuator_individual_effort_scale_range = (0.90, 1.05)
+    target_individual_velocity_scale_range = (0.88, 1.05)
+    actuator_individual_stiffness_scale_range = (0.85, 1.15)
+    actuator_individual_damping_scale_range = (0.85, 1.15)
+    # The selected actor already clears every nominal locomotion gate. Reserve
+    # only a small rehearsal subset for nominal physics and spend the remaining
+    # batch on the foot-friction, calibration, payload, and servo mismatches that
+    # still expose one weak rear leg in deterministic robust replay.
+    physical_randomization_nominal_fraction = 0.10
+
+    # This is the separate run policy, while V30 remains the low-speed crawl
+    # fallback. The earlier 60% low-band mix exposed the actor to >0.08 m/s in
+    # only about one fifth of mature episodes; fixed 0.10 m/s evaluation then
+    # reached just 0.053-0.057 m/s and dragged both rear shoes. Concentrate
+    # adaptation on the useful run envelope while retaining 20% rehearsal at
+    # 0.06..0.08 m/s.
+    initial_forward_speed_min_m_s = 0.060
+    initial_forward_speed_max_m_s = 0.085
+    forward_speed_min_m_s = 0.060
+    forward_speed_max_m_s = 0.120
+    forward_speed_low_band_fraction = 0.20
+    forward_speed_low_band_max_m_s = 0.080
+    # A deterministic speed sweep exposed cadence collapse above 0.08 m/s: the
+    # same actor produced 0.081 m/s at an 0.08 command, but slowed to 0.070 at
+    # 0.10 and 0.054 at 0.12 as rear-foot release disappeared. Replace the
+    # inherited 0.82..1.85 Hz clock with a longer, lower-frequency stride. At
+    # 0.10 m/s this grows scheduled swing time from about 0.20 to 0.26 seconds,
+    # while the 75 mm reference preserves nearly the same ideal ground speed.
+    # The extra clearance is also reached at a lower peak vertical foot speed.
+    gait_speed_min_m_s = 0.060
+    gait_speed_max_m_s = 0.120
+    gait_frequency_min_hz = 0.90
+    gait_frequency_max_hz = 1.40
+    gait_stride_scale_min = 0.85
+    gait_stride_m = 0.075
+    gait_lift_m = 0.034
+    # Start each swing by lifting before the shoe travels fore/aft, finish that
+    # travel before touchdown, and give both battery-loaded rear legs 6 mm more
+    # clearance.  This directly addresses the held-out failures where a rear
+    # shoe stayed above the strict 1 N release threshold while the actor swung
+    # the leg laterally.  The left/right values remain symmetric.
+    gait_lift_by_leg_m = (0.034, 0.040, 0.034, 0.040)
+    gait_swing_translation_start_fraction = 0.20
+    gait_swing_translation_end_fraction = 0.80
+
+    # In this mode action magnitude is target speed, action rate is target
+    # acceleration, and action acceleration is target jerk.  Keep enough range
+    # for propulsion while making a continuous full-rate command expensive.
+    penalty_action_magnitude = 1.50
+    penalty_action_rate = 0.80
+    penalty_action_acceleration = 2.00
+    penalty_action_saturation = 12.00
+    penalty_target_limiter_gap = 0.0
+
+    # The first mixed-domain V34 pass exposed a reward/evaluation mismatch.  At
+    # the 0.08 m/s guarded-trial command, the inherited sustained-speed threshold
+    # was min(0.035, 0.50 * 0.08) = 0.035 m/s, while candidate acceptance requires
+    # at least 65% of command, or 0.052 m/s.  The policy consequently learned a
+    # safe 0.046 m/s randomized-domain shuffle and stopped receiving the stall
+    # penalty. Use the same 65% floor during optimization throughout the complete
+    # 0.06..0.12 m/s command range. Stronger tracking/progress terms ask for
+    # useful ground speed without increasing the executable 120 deg/s target cap.
+    minimum_sustained_speed_fraction = 0.65
+    minimum_sustained_speed_m_s = 0.080
+    reward_forward_velocity_tracking = 16.0
+    # Fixed 0.08 and 0.10 m/s evaluations of the first release-qualified actor
+    # both converged near 0.087 m/s.  Instantaneous body speed oscillates strongly
+    # within a trot, so tighten command fidelity on the 0.75 s rolling value
+    # rather than suppressing the gait's natural within-cycle motion.
+    reward_rolling_velocity_tracking = 10.0
+    rolling_velocity_tracking_sigma_m_s = 0.012
+    reward_instant_progress = 12.0
+    reward_sustained_progress = 20.0
+    penalty_sustained_stall = 36.0
+    penalty_overspeed = 10.0
+
+    # The analytic diagonal gait anchors the integrated target so the actor
+    # cannot obtain progress by drifting permanently into a joint limit.
+    reward_gait_reference = 10.0
+    gait_reference_sigma = 0.40
+    # V34 bridge evaluation exposed a second sim-to-real reward loophole.  The
+    # original integrated-target reward compared the executable servo target to
+    # the analytic gait, so a physically slow rear leg could remain on the floor
+    # while the policy still collected nearly full reference credit.  Score the
+    # position actually reached as the dominant signal and blend the four-leg
+    # mean toward the worst leg.  Target-space credit remains as a small anchor
+    # so the actor does not compensate for lag with an unbounded phase lead.
+    gait_reference_actual_state_weight = 0.70
+    gait_reference_worst_leg_weight = 0.75
+
+    # The first V34 continuation improved 0.08 m/s tracking from 89% to 97%,
+    # but rear-left hard release fell from 90% to 48%.  The inherited 3 N
+    # Gaussian still assigns exp(-(2/3)^2) ~= 0.64 quality to a shoe carrying
+    # 2 N, so PPO could drag one member of a diagonal pair while retaining much
+    # of its swing and progress credit.  V34 already begins from a checkpoint
+    # that releases every shoe; use the real <1 N contact contract for the
+    # per-frame and least-active-foot rewards, while retaining a narrow smooth
+    # gradient only around that same threshold for pair-gated progress.
+    use_soft_scheduled_swing_release = False
+    use_threshold_centered_release_shaping = True
+    normalize_threshold_centered_release_quality = False
+    scheduled_release_force_threshold_n = 1.0
+    scheduled_release_shaping_width_n = 0.35
+    # The strict pair/progress gate remains exactly zero above 1 N. A separate
+    # wider reward signal supplies a gradient while a high-friction rear shoe is
+    # still carrying several newtons, so PPO can discover progressive unloading
+    # without receiving any false contact-release credit.
+    scheduled_release_discovery_width_n = 1.50
+    # Randomized evaluation still found the rear shoes partially loaded during
+    # their scheduled swing (37%/60% hard release).  Add a small continuous
+    # threshold-centred discovery term, then retain hard release as the dominant
+    # per-frame and least-active-leg objective.  This does not reward faster leg
+    # motion; it rewards transferring load before asking either rear shoe to lift.
+    reward_scheduled_swing = 6.0
+    reward_scheduled_release_shaping = 4.0
+    reward_least_active_swing = 12.0
+    reward_cycle_four_leg_release = 6.0
+    # Pair gating prevents one member of the active diagonal from being dragged,
+    # but fixed randomized evaluation showed that the actor could alternate which
+    # diagonal underperformed and still collect most of the episode's progress.
+    # Gate every positive motion term by the weakest cumulative hard-release rate
+    # across all four legs.  The small floor preserves a discovery gradient; full
+    # speed credit requires every leg to meet the same 70% acceptance contract.
+    gate_progress_by_four_leg_release = True
+    # Keep a margin above the 70% evaluator threshold so speed tracking cannot
+    # be bought by returning to a barely dragging rear shoe.
+    four_leg_release_target_rate = 0.85
+    four_leg_progress_gate_floor = 0.05
+
+    # Four-foot contact is sparse under randomized calibration and rigid shoe
+    # contact, so also reward the continuously measured weakest-foot load. A
+    # modest posture cost keeps the learned stop close to calibrated center but
+    # no longer overwhelms the few-degree residual needed to plant all shoes.
+    reward_stop_all_feet_contact = 6.0
+    reward_stop_weakest_foot_contact = 8.0
+    reward_stop_neutral_action = 4.0
+    penalty_stop_action_magnitude = 2.0
+    penalty_stop_target_magnitude = 6.0
+    penalty_stop_position = 3.0
+
+
+@configclass
+class DrobotCommandedRunningCommandScaledHighSpeedStopExternalRearPayloadEnvCfg(
+    DrobotCommandedRunningIntegratedTargetVelocityStopExternalRearPayloadEnvCfg
+):
+    """V35 speed-conditioned, hardware-feasible high-speed run/stop policy."""
+
+    # V34's deterministic actor converged to approximately 0.085 m/s for 0.08,
+    # 0.10, and 0.12 m/s commands. Raw SI command inputs differ by only a few
+    # hundredths, so V35 magnifies them while retaining the same 50 observations.
+    # The bootstrap checkpoint divides the matching first-layer columns by ten,
+    # which makes its initial deterministic output numerically identical.
+    command_observation_scale = (10.0, 10.0, 10.0)
+
+    # This is a separate high-speed policy, not the V30 crawl replacement. Keep
+    # some 0.08-0.10 m/s rehearsal but spend most rollouts on 0.10-0.14 m/s.
+    initial_forward_speed_min_m_s = 0.080
+    initial_forward_speed_max_m_s = 0.140
+    forward_speed_min_m_s = 0.080
+    forward_speed_max_m_s = 0.140
+    forward_speed_low_band_fraction = 0.20
+    forward_speed_low_band_max_m_s = 0.100
+
+    # A longer stride and longer swing window request more forward displacement
+    # without restoring V31's unreachable 2.4 Hz / 240 deg/s target schedule.
+    gait_speed_min_m_s = 0.080
+    gait_speed_max_m_s = 0.140
+    gait_frequency_min_hz = 1.00
+    gait_frequency_max_hz = 1.45
+    gait_stride_scale_min = 0.80
+    gait_stride_m = 0.090
+    gait_duty_factor = 0.64
+    gait_lift_m = 0.038
+    gait_lift_by_leg_m = (0.038, 0.044, 0.038, 0.044)
+    gait_swing_translation_start_fraction = 0.18
+    gait_swing_translation_end_fraction = 0.82
+
+    # A Gaussian supplies precision near command. The symmetric rolling error
+    # remains informative when the actor is far below command, while the strict
+    # four-leg release gates continue to prevent speed by dragging a shoe.
+    minimum_sustained_speed_fraction = 0.82
+    minimum_sustained_speed_m_s = 0.115
+    velocity_tracking_sigma_m_s = 0.030
+    reward_forward_velocity_tracking = 18.0
+    reward_rolling_velocity_tracking = 14.0
+    rolling_velocity_tracking_sigma_m_s = 0.014
+    penalty_rolling_velocity_error = 24.0
+    penalty_overspeed = 12.0
+    reward_gait_reference = 12.0
+
+
+@configclass
+class DrobotCommandedRunningFlatSoleHighSpeedStopExternalRearPayloadEnvCfg(
+    DrobotCommandedRunningCommandScaledHighSpeedStopExternalRearPayloadEnvCfg
+):
+    """V36 rectangular-shoe-aware, speed-conditioned run/stop policy."""
+
+    # Reference-only diagnosis of V35 showed that its constant-height contact
+    # arc moved the robot backward: the 100 mm rectangular shoes rolled onto an
+    # edge during stance.  Keep planted soles level and use the same 80 mm
+    # opposed stance that is already proven on hardware.
+    gait_flat_sole_support = True
+    gait_stance_fore_aft_m = 0.080
+    gait_stance_down_m = 0.329341447
+    gait_stance_down_by_leg_m = None
+    gait_stance_center_offset_m = stance_forward_bias_for_body_pitch_m(
+        FORWARD_BIASED_BODY_PITCH_RAD,
+        fore_aft_m=gait_stance_fore_aft_m,
+    )
+
+    # Keep the complete fore/aft envelope below the 60-degree hip soft limit.
+    # Cadence supplies speed, while the wide swing-translation window keeps peak
+    # target rate close to the executable 120 deg/s contract.
+    gait_stride_m = 0.070
+    gait_frequency_min_hz = 1.20
+    gait_frequency_max_hz = 1.65
+    gait_stride_scale_min = 0.80
+    gait_duty_factor = 0.62
+    gait_lift_m = 0.050
+    gait_lift_by_leg_m = (0.050, 0.060, 0.050, 0.060)
+    gait_swing_translation_start_fraction = 0.10
+    gait_swing_translation_end_fraction = 0.90
+
+    minimum_sustained_speed_fraction = 0.75
+    minimum_sustained_speed_m_s = 0.110
+    reward_gait_reference = 14.0
+
+
+@configclass
+class DrobotCommandedRunningFlatSoleResidualRunStopExternalRearPayloadEnvCfg(
+    DrobotCommandedRunningFlatSoleHighSpeedStopExternalRearPayloadEnvCfg
+):
+    """V37 bounded residual corrections around a forward flat-sole run."""
+
+    # V36's integrated-velocity actor reacts to larger commands, but the
+    # accumulated targets leave the analytic gait entirely: at 0.14 m/s rear
+    # release collapses and the robot slows while its legs move more violently.
+    # In V37 the command directly controls a physically forward feed-forward
+    # gait and PPO may make only small, bounded corrections around it.
+    action_mode = "gait_residual"
+    action_history_mode = "applied_target"
+    gait_residual_stop_action_scale = 0.0
+    residual_action_scale = 0.08
+    residual_action_scale_by_action = (
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.16,
+        0.16,
+        0.16,
+        0.16,
+        0.20,
+        0.20,
+        0.20,
+        0.20,
+    )
+
+    # Keep this separate run profile inside the actuator-feasible cadence that
+    # passed V36 evaluation.  The wider swing window avoids the catch-up bursts
+    # seen in the real V31 trace, while a 56% duty factor gives each loaded rear
+    # shoe enough time to unload.  Speed remains command-conditioned through
+    # both stride amplitude and cadence instead of asking the actor to invent a
+    # completely different pose trajectory for every requested velocity.
+    initial_forward_speed_min_m_s = 0.080
+    initial_forward_speed_max_m_s = 0.130
+    forward_speed_min_m_s = 0.080
+    forward_speed_max_m_s = 0.130
+    forward_speed_low_band_fraction = 0.25
+    forward_speed_low_band_max_m_s = 0.095
+    command_curriculum_steps = 1
+    gait_speed_min_m_s = 0.080
+    gait_speed_max_m_s = 0.130
+    gait_frequency_min_hz = 1.00
+    gait_frequency_max_hz = 1.35
+    gait_stride_scale_min = 0.80
+    gait_stance_fore_aft_m = 0.070
+    gait_stance_center_offset_m = stance_forward_bias_for_body_pitch_m(
+        FORWARD_BIASED_BODY_PITCH_RAD,
+        fore_aft_m=gait_stance_fore_aft_m,
+    )
+    gait_stride_m = 0.090
+    gait_duty_factor = 0.56
+    gait_lift_m = 0.050
+    gait_lift_by_leg_m = (0.050, 0.062, 0.050, 0.062)
+    gait_swing_translation_start_fraction = 0.08
+    gait_swing_translation_end_fraction = 0.92
+    gait_start_ramp_s = 1.00
+
+    # The reference supplies propulsion; the actor is rewarded for the smallest
+    # smooth correction that makes every shoe release, holds the heading, and
+    # closes the rolling-speed error.  Strong body/joint acceleration costs make
+    # a lateral flail strictly worse than a slightly slower coordinated gait.
+    minimum_sustained_speed_fraction = 0.80
+    minimum_sustained_speed_m_s = 0.105
+    reward_forward_velocity_tracking = 20.0
+    reward_rolling_velocity_tracking = 18.0
+    rolling_velocity_tracking_sigma_m_s = 0.014
+    penalty_rolling_velocity_error = 30.0
+    penalty_overspeed = 14.0
+    reward_gait_reference = 16.0
+    gait_reference_sigma = 0.45
+    penalty_diagonal_sync = 2.0
+    penalty_action_magnitude = 0.50
+    penalty_action_rate = 0.90
+    penalty_action_acceleration = 2.50
+    penalty_action_saturation = 10.0
+    penalty_target_limiter_gap = 8.0
+    penalty_joint_velocity = 0.060
+    penalty_joint_acceleration = 0.80
+    penalty_body_linear_acceleration = 0.70
+    penalty_body_angular_acceleration = 0.70
+    penalty_support_foot_slip = 0.90
+    penalty_touchdown_impact = 0.30
+
+
+@configclass
+class DrobotCommandedRunningStraightLowAbductionLongStopExternalRearPayloadEnvCfg(
+    DrobotCommandedRunningFlatSoleHighSpeedStopExternalRearPayloadEnvCfg
+):
+    """V38 long-horizon run with deliberately bounded lateral leg motion."""
+
+    # V36 practiced only 4.5..6.5 seconds of motion before its stop transition.
+    # Fifteen-second held-out evaluations then exposed a slow, repeatable side
+    # drift that the shorter optimization horizon did not price consistently.
+    # Keep several seconds after the ramp for the same graceful-stop objective,
+    # but make straight locomotion the majority of every episode.
+    episode_length_s = 14.0
+    initial_training_horizon_s = 14.0
+    final_training_horizon_s = 14.0
+    episode_horizon_curriculum_steps = 1
+    run_stop_run_duration_min_s = 8.0
+    run_stop_run_duration_max_s = 10.0
+    run_stop_ramp_duration_min_s = 0.45
+    run_stop_ramp_duration_max_s = 1.00
+    run_stop_abrupt_fraction = 0.20
+
+    # The flat rectangular-sole reference has zero abduction motion. V36's
+    # deterministic policy nevertheless requested 60..96 deg/s abduction peaks,
+    # matching the side-to-side leg swing visible on hardware. Cap only those
+    # four balance axes at 60 deg/s while preserving the qualified 120 deg/s
+    # sagittal hip/knee envelope used for forward propulsion.
+    target_velocity_limit_rad_s_by_action = (
+        math.radians(60.0),
+        math.radians(60.0),
+        math.radians(60.0),
+        math.radians(60.0),
+        math.radians(120.0),
+        math.radians(120.0),
+        math.radians(120.0),
+        math.radians(120.0),
+        math.radians(120.0),
+        math.radians(120.0),
+        math.radians(120.0),
+        math.radians(120.0),
+    )
+    penalty_abduction_action_magnitude = 8.0
+    penalty_abduction_target_magnitude = 4.0
+
+    # Make persistent drift expensive early in the longer run rather than only
+    # after it has crossed a broad corridor. The policy still sees IMU attitude,
+    # acceleration, and joint feedback, so it retains small asymmetric authority
+    # for the real robot's fixed assembly and load differences.
+    straight_progress_lateral_ratio_sigma = 0.055
+    straight_progress_gate_floor = 0.10
+    lateral_corridor_half_width_m = 0.010
+    penalty_lateral_displacement = 70.0
+    penalty_lateral_corridor = 12.0
+    penalty_normalized_lateral_velocity = 12.0
+    reward_straight_aligned_progress = 16.0
+
+
+@configclass
+class DrobotCommandedRunningReferenceDrivenStraightStopExternalRearPayloadEnvCfg(
+    DrobotCommandedRunningStraightLowAbductionLongStopExternalRearPayloadEnvCfg
+):
+    """V39 command-faithful flat-sole run with bounded learned corrections."""
+
+    # V38 remained upright and substantially reduced lateral drift, but its
+    # integrated velocity actor converged near 0.09--0.10 m/s for every command.
+    # At 0.14 m/s it moved *slower* and dragged a rear shoe.  Make the commanded
+    # gait the feed-forward target so speed controls stride/cadence directly;
+    # PPO is responsible only for the small corrections needed by IMU feedback,
+    # the rear pack, tread friction, calibration error, and actuator mismatch.
+    action_mode = "gait_residual"
+    action_history_mode = "applied_target"
+    gait_residual_stop_action_scale = 0.0
+
+    # Earlier V37 reference targets were silently clipped by the legacy direct-
+    # action normalization (about +/-17 deg hip and +/-23 deg knee around the
+    # 30-degree neutral).  These scales cover the complete sampled V39 analytic
+    # envelope, including the higher rear-foot clearance, without changing the
+    # 60/120 deg/s packet-rate limits below.
+    action_scale_hip_rad = 0.52
+    action_scale_knee_rad = 0.64
+    residual_action_scale = 1.0
+    residual_action_scale_by_action = (
+        0.45,
+        0.45,
+        0.45,
+        0.45,
+        0.35,
+        0.35,
+        0.35,
+        0.35,
+        0.35,
+        0.35,
+        0.35,
+        0.35,
+    )
+
+    # Keep the requested range physically consistent with a 75 mm step.  The
+    # endpoints request approximately 0.078 and 0.120 m/s from the analytic
+    # gait, unlike V38's 0.14 m/s command paired with only a 0.116 m/s reference.
+    initial_forward_speed_min_m_s = 0.080
+    initial_forward_speed_max_m_s = 0.120
+    forward_speed_min_m_s = 0.080
+    forward_speed_max_m_s = 0.120
+    forward_speed_low_band_fraction = 0.20
+    forward_speed_low_band_max_m_s = 0.090
+    command_curriculum_steps = 1
+    gait_speed_min_m_s = 0.080
+    gait_speed_max_m_s = 0.120
+    gait_frequency_min_hz = 1.10
+    gait_frequency_max_hz = 1.60
+    gait_stride_scale_min = 0.95
+    gait_stance_fore_aft_m = 0.080
+    gait_stance_center_offset_m = stance_forward_bias_for_body_pitch_m(
+        FORWARD_BIASED_BODY_PITCH_RAD,
+        fore_aft_m=gait_stance_fore_aft_m,
+    )
+    gait_stride_m = 0.075
+    # A 56% duty factor retains a two-diagonal support overlap while giving the
+    # loaded rear feet 275 ms of swing at the maximum 1.6 Hz cadence.
+    gait_duty_factor = 0.56
+    gait_lift_m = 0.030
+    gait_lift_by_leg_m = (0.030, 0.038, 0.030, 0.038)
+    gait_diagonal_support_lateral_shift_m = 0.012
+    gait_swing_translation_start_fraction = 0.05
+    gait_swing_translation_end_fraction = 0.95
+    gait_start_ramp_s = 1.00
+
+    # Preserve V38's smooth low-abduction contract.  The policy cannot inject
+    # more than about 3.1 degrees of lateral correction through the residual,
+    # and the actual sent target remains capped at 60 deg/s on those four axes.
+    penalty_abduction_action_magnitude = 12.0
+    penalty_abduction_target_magnitude = 4.0
+
+    # A reference-driven gait should track speed rather than finding another
+    # command-independent compromise.  Hard four-leg release gating inherited
+    # from V34 still prevents earning this progress by dragging one shoe.
+    minimum_sustained_speed_fraction = 0.82
+    minimum_sustained_speed_m_s = 0.110
+    reward_forward_velocity_tracking = 20.0
+    reward_rolling_velocity_tracking = 18.0
+    rolling_velocity_tracking_sigma_m_s = 0.012
+    penalty_rolling_velocity_error = 30.0
+    reward_instant_progress = 14.0
+    reward_sustained_progress = 24.0
+    penalty_sustained_stall = 48.0
+    penalty_overspeed = 14.0
+    reward_gait_reference = 16.0
+    gait_reference_sigma = 0.45
+    penalty_diagonal_sync = 2.0
+    penalty_action_magnitude = 1.0
+    penalty_action_rate = 1.0
+    penalty_action_acceleration = 2.5
+    penalty_joint_acceleration = 0.80
+    penalty_body_linear_acceleration = 0.70
+    penalty_body_angular_acceleration = 0.70
+
+
+@configclass
+class DrobotCommandedRunningSpeedFaithfulStraightStopExternalRearPayloadEnvCfg(
+    DrobotCommandedRunningStraightLowAbductionLongStopExternalRearPayloadEnvCfg
+):
+    """V40 focused 0.09--0.12 m/s continuation of the stable V38 actor."""
+
+    # V38 safely reached about 0.098 m/s, but its 0.14 m/s command exceeded the
+    # 70 mm reference's 0.116 m/s ideal ceiling.  The policy responded by moving
+    # more violently, losing rear release, and slowing down.  Train only the
+    # actuator-feasible useful band and align the reference endpoints with it.
+    initial_forward_speed_min_m_s = 0.090
+    initial_forward_speed_max_m_s = 0.120
+    forward_speed_min_m_s = 0.090
+    forward_speed_max_m_s = 0.120
+    forward_speed_low_band_fraction = 0.15
+    forward_speed_low_band_max_m_s = 0.100
+    command_curriculum_steps = 1
+    gait_speed_min_m_s = 0.090
+    gait_speed_max_m_s = 0.120
+    gait_frequency_min_hz = 1.30
+    gait_frequency_max_hz = 1.65
+    gait_stride_scale_min = 0.95
+
+    # A longer active interval makes persistent speed error and drift dominate
+    # the episode while still leaving a complete center-stance stop rehearsal.
+    episode_length_s = 16.0
+    initial_training_horizon_s = 16.0
+    final_training_horizon_s = 16.0
+    episode_horizon_curriculum_steps = 1
+    run_stop_run_duration_min_s = 10.0
+    run_stop_run_duration_max_s = 12.0
+    run_stop_ramp_duration_min_s = 0.55
+    run_stop_ramp_duration_max_s = 1.00
+    run_stop_abrupt_fraction = 0.15
+
+    # Make a command-independent 0.09--0.10 m/s compromise expensive.  These
+    # terms act on the 0.75 s rolling speed, not the within-stride oscillation,
+    # and all positive progress remains gated by the weakest leg's hard release.
+    minimum_sustained_speed_fraction = 0.88
+    minimum_sustained_speed_m_s = 0.110
+    velocity_tracking_sigma_m_s = 0.024
+    reward_forward_velocity_tracking = 26.0
+    reward_rolling_velocity_tracking = 26.0
+    rolling_velocity_tracking_sigma_m_s = 0.010
+    penalty_rolling_velocity_error = 48.0
+    reward_instant_progress = 18.0
+    reward_sustained_progress = 30.0
+    penalty_sustained_stall = 60.0
+    penalty_overspeed = 18.0
+
+    # Preserve clean diagonal support while asking for the final 10--20% speed.
+    # In particular, reject the high-command rear drag observed in V38 rather
+    # than allowing speed reward to buy a faster lateral shuffle.
+    reward_scheduled_swing = 8.0
+    reward_scheduled_release_shaping = 6.0
+    reward_scheduled_pair_release = 14.0
+    penalty_scheduled_pair_mismatch = 12.0
+    reward_least_active_swing = 20.0
+    reward_cycle_four_leg_release = 10.0
+    four_leg_release_target_rate = 0.92
+    four_leg_progress_gate_floor = 0.02
+
+    # V38's smoother controller trajectory is a hard requirement, not a reward
+    # to trade away for speed.  Keep the low-abduction caps and strengthen the
+    # measured joint/body acceleration prices modestly.
+    penalty_action_rate = 0.90
+    penalty_action_acceleration = 2.30
+    penalty_joint_acceleration = 0.78
+    penalty_body_linear_acceleration = 0.68
+    penalty_body_angular_acceleration = 0.68
+    penalty_support_foot_slip = 0.90
+    penalty_touchdown_impact = 0.30
+
+
+@configclass
+class DrobotCommandedRunningPhaseNormalizedSpeedStopExternalRearPayloadEnvCfg(
+    DrobotCommandedRunningSpeedFaithfulStraightStopExternalRearPayloadEnvCfg
+):
+    """V41 keeps integrated joint excursion consistent across gait cadences."""
+
+    # V40 checkpoint 3600 is safe and straight, but a fixed-command sweep found
+    # essentially one 0.10 m/s attractor: 0.09, 0.10, 0.11, and 0.12 m/s
+    # commands produced 0.100, 0.102, 0.101, and 0.098 m/s.  The integrated
+    # actor emits target velocity as a function of phase.  Advancing phase more
+    # quickly therefore reduced angle travelled per cycle unless the actor also
+    # learned an exact frequency-dependent gain.  Scale its motion output by
+    # current/reference cadence before the unchanged hard target-rate clamp.
+    integrated_action_scale_with_gait_frequency = True
+    integrated_action_reference_frequency_hz = 1.30 + (1.0 / 3.0) * (1.65 - 1.30)
+
+
+@configclass
+class DrobotCommandedRunningLearnedCycleResidualStopExternalRearPayloadEnvCfg(
+    DrobotCommandedRunningSpeedFaithfulStraightStopExternalRearPayloadEnvCfg
+):
+    """V42 time-warps V40's stable learned cycle with small RL corrections."""
+
+    gait_reference_mode = "phase_table"
+    gait_phase_reference_path = str(
+        PROJECT_ROOT
+        / "simulation"
+        / "isaac"
+        / "rl"
+        / "parallel_walking"
+        / "references"
+        / "v40_model3600_0p10_phase_reference.json"
+    )
+    # The source cycle was extracted at 0.10 m/s.  Scaling it by 1.10 and using
+    # a 0.90 stride factor at that command reproduces the original excursion;
+    # the full table then adds modest stride at the top of the new speed band.
+    gait_phase_reference_scale_about_neutral = 1.10
+    action_mode = "gait_residual"
+    action_history_mode = "applied_target"
+    gait_residual_stop_action_scale = 0.0
+    residual_action_scale = 1.0
+    residual_action_scale_by_action = (
+        0.08,
+        0.08,
+        0.08,
+        0.08,
+        0.18,
+        0.18,
+        0.18,
+        0.18,
+        0.18,
+        0.18,
+        0.18,
+        0.18,
+    )
+
+    initial_forward_speed_min_m_s = 0.090
+    initial_forward_speed_max_m_s = 0.120
+    forward_speed_min_m_s = 0.080
+    forward_speed_max_m_s = 0.140
+    forward_speed_low_band_fraction = 0.20
+    forward_speed_low_band_max_m_s = 0.100
+    command_curriculum_steps = 32_000
+    gait_speed_min_m_s = 0.080
+    gait_speed_max_m_s = 0.140
+    gait_frequency_min_hz = 1.20
+    gait_frequency_max_hz = 1.85
+    gait_stride_scale_min = 0.85
+    gait_start_ramp_s = 1.00
+
+    # The reference remains bounded by the same deliberate lateral rate but can
+    # use 180 deg/s on sagittal axes. That is below the STS3215's approximate
+    # 270 deg/s no-load speed while leaving margin for the loaded rear joints.
+    target_velocity_limit_rad_s = math.radians(180.0)
+    target_velocity_limit_rad_s_by_action = (
+        math.radians(60.0),
+        math.radians(60.0),
+        math.radians(60.0),
+        math.radians(60.0),
+        math.radians(180.0),
+        math.radians(180.0),
+        math.radians(180.0),
+        math.radians(180.0),
+        math.radians(180.0),
+        math.radians(180.0),
+        math.radians(180.0),
+        math.radians(180.0),
+    )
+
+    # Keep residuals subordinate to the stable cycle and strongly reject the
+    # lateral flail from the V31 hardware trace.
+    reward_gait_reference = 20.0
+    gait_reference_sigma = 0.35
+    penalty_action_magnitude = 2.0
+    penalty_abduction_action_magnitude = 18.0
+    penalty_abduction_target_magnitude = 5.0
+    penalty_action_rate = 1.20
+    penalty_action_acceleration = 2.80
+    penalty_joint_acceleration = 0.90
+    penalty_body_linear_acceleration = 0.75
+    penalty_body_angular_acceleration = 0.75
+
+
+@configclass
+class DrobotCommandedRunningFootWarpTrotResidualStopExternalRearPayloadEnvCfg(
+    DrobotCommandedRunningLearnedCycleResidualStopExternalRearPayloadEnvCfg
+):
+    """V43 low-duty foot-space trot with IMU-driven residual corrections."""
+
+    # V40's learned 0.10 m/s cycle is phase-remapped in Cartesian sagittal foot
+    # space.  The body is 22 mm lower, stance travel is 20% longer, and swing
+    # has 30 mm of additional smooth clearance.  A 46% stance interval produced
+    # 0.126 m/s nominally and 0.110 m/s across the first five held-out hardware
+    # randomizations without a fall, unlike joint-angle scaling in V41/V42.
+    gait_phase_reference_path = str(
+        PROJECT_ROOT
+        / "simulation"
+        / "isaac"
+        / "rl"
+        / "parallel_walking"
+        / "references"
+        / "v43_v40_low_foot_warp_duty0p46_scale1p20_lift0p030.json"
+    )
+    gait_phase_reference_scale_about_neutral = 1.0
+    gait_phase_reference_low_path = str(
+        PROJECT_ROOT
+        / "simulation"
+        / "isaac"
+        / "rl"
+        / "parallel_walking"
+        / "references"
+        / "v43_v40_low_foot_warp_duty0p46_scale1p00_lift0p030.json"
+    )
+    gait_phase_reference_blend_speed_min_m_s = 0.10
+    gait_phase_reference_blend_speed_max_m_s = 0.14
+    gait_duty_factor = 0.46
+    gait_stride_scale_min = 1.0
+    gait_speed_min_m_s = 0.10
+    gait_speed_max_m_s = 0.14
+    gait_frequency_min_hz = 1.15
+    gait_frequency_max_hz = 1.60
+    gait_start_ramp_s = 1.20
+
+    initial_forward_speed_min_m_s = 0.10
+    initial_forward_speed_max_m_s = 0.14
+    forward_speed_min_m_s = 0.10
+    forward_speed_max_m_s = 0.14
+    forward_speed_low_band_fraction = 0.25
+    forward_speed_low_band_max_m_s = 0.115
+    command_curriculum_steps = 1
+
+    # The generated trajectory supplies essentially all of the motion.  PPO
+    # may make only a few degrees of correction from IMU/joint feedback, with
+    # especially little authority on lateral abduction axes.
+    residual_action_scale_by_action = (
+        0.04,
+        0.04,
+        0.04,
+        0.04,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+    )
+    reward_gait_reference = 24.0
+    gait_reference_sigma = 0.30
+    penalty_action_magnitude = 3.0
+    penalty_abduction_action_magnitude = 22.0
+    penalty_abduction_target_magnitude = 6.0
+
+    # Reward real command tracking, but retain hard four-leg release gating so
+    # a dragging shoe cannot earn forward-progress credit.  The narrow line
+    # corridor directly targets the left drift seen in the hardware videos.
+    minimum_sustained_speed_fraction = 0.85
+    minimum_sustained_speed_m_s = 0.115
+    reward_forward_velocity_tracking = 30.0
+    reward_rolling_velocity_tracking = 30.0
+    rolling_velocity_tracking_sigma_m_s = 0.012
+    penalty_rolling_velocity_error = 52.0
+    reward_instant_progress = 20.0
+    reward_sustained_progress = 34.0
+    penalty_sustained_stall = 64.0
+    reward_straight_aligned_progress = 18.0
+    lateral_corridor_half_width_m = 0.008
+    penalty_lateral_displacement = 80.0
+    penalty_lateral_corridor = 14.0
+
+    # Keep the target packet envelope inherited from V42 and explicitly price
+    # the coupled torque-speed region rather than treating torque and rate as
+    # independent capacities.  Load sharing is deliberately modest because the
+    # real rear payload makes perfectly equal leg effort physically incorrect.
+    actuator_torque_speed_margin = 0.92
+    penalty_actuator_torque_speed_envelope = 6.0
+    penalty_leg_operating_point_imbalance = 1.5
+    penalty_action_rate = 1.35
+    penalty_action_acceleration = 3.00
+    penalty_joint_acceleration = 1.00
+    penalty_body_linear_acceleration = 0.90
+    penalty_body_angular_acceleration = 0.90
+
+
+@configclass
+class DrobotCommandedRunningFlatContactHardwareMatchedStopExternalRearPayloadEnvCfg(
+    DrobotCommandedRunningFootWarpTrotResidualStopExternalRearPayloadEnvCfg
+):
+    """V44 corrective flat-contact candidate; not hardware qualified.
+
+    This deliberately slow stage fixes geometry/target feasibility before any
+    claim of running. The rigid feet have no independent ankle; support depth
+    and body pose must adapt together. Preserve V43 as an immutable baseline.
+    """
+
+    gait_phase_reference_path = str(Path(__file__).with_name("references") / "v44_flat_contact_high.json")
+    gait_phase_reference_low_path = str(Path(__file__).with_name("references") / "v44_flat_contact_low.json")
+    gait_phase_reference_scale_about_neutral = 1.0
+    gait_phase_reference_blend_speed_min_m_s = 0.03
+    gait_phase_reference_blend_speed_max_m_s = 0.05
+    gait_duty_factor = 0.55
+    gait_period_s = 1.0 / 0.45
+    gait_speed_min_m_s = 0.03
+    gait_speed_max_m_s = 0.05
+    gait_frequency_min_hz = 0.35
+    gait_frequency_max_hz = 0.45
+    gait_stride_scale_min = 1.0
+    gait_phase_table_park_contact_override = True
+    # PhysX writers do not update the implicit actuator's approximate PD torque
+    # model. Keep its gains consistent during V44 gain hypotheses/randomization.
+    actuator_sync_drive_gain_telemetry = True
+    gait_start_ramp_s = 1.50
+    gait_contact_transition_fraction = 0.0
+    gait_stance_fore_aft_m = 0.080
+    gait_stance_down_m = 0.329341447
+    gait_stance_down_by_leg_m = None
+    gait_stance_center_offset_m = 0.0
+    gait_forward_body_pitch_rad = 0.0
+    target_forward_pitch_rad = 0.0
+    target_base_height_m = 0.375
+    gait_diagonal_support_lateral_shift_m = 0.0
+
+    initial_forward_speed_min_m_s = 0.03
+    initial_forward_speed_max_m_s = 0.05
+    forward_speed_min_m_s = 0.03
+    forward_speed_max_m_s = 0.05
+    forward_speed_low_band_fraction = 0.25
+    forward_speed_low_band_max_m_s = 0.035
+    command_curriculum_steps = 1
+    action_scale_abduction_rad = 0.12
+    action_scale_hip_rad = 0.30
+    action_scale_knee_rad = 0.40
+    residual_action_scale = 0.06
+    residual_action_scale_by_action = (0.06,) * 4 + (0.20,) * 8
+    target_velocity_limit_rad_s = math.radians(90.0)
+    target_velocity_limit_rad_s_by_action = (math.radians(60.0),) * 4 + (math.radians(90.0),) * 8
+    target_packet_step_limit_rad = math.radians(2.0)
+    target_packet_hold_probability = 0.12
+    target_packet_max_hold_steps = 1
+    control_delay_step_range = (0, 0)
+    # Hypotheses, not an identified servo model. Avoid adding the measured
+    # ~0.3s total cyclic lag on top of existing actuator/contact physics.
+    actuator_target_response_enabled = True
+    actuator_target_response_nominal_tau_s = 0.030
+    actuator_target_response_nominal_gain = 0.97
+    actuator_target_response_tau_s_range = (0.010, 0.060)
+    actuator_target_response_gain_range = (0.90, 1.0)
+    actuator_target_response_tau_s_range_by_action = (
+        (0.010, 0.030), (0.010, 0.030), (0.010, 0.030), (0.010, 0.030),
+        (0.020, 0.070), (0.010, 0.040), (0.020, 0.070), (0.010, 0.040),
+        (0.020, 0.070), (0.020, 0.060), (0.020, 0.070), (0.020, 0.060),
+    )
+    penalty_stance_sole_tilt = 12.0
+    penalty_swing_corner_clearance = 6.0
+    penalty_contact_point_slip = 4.0
+    sole_clearance_target_m = 0.010
+    sole_clearance_transition_fraction = 0.50
+    sole_corner_soft_contact_height_m = 0.004
+
+    # Reduce pressure to imitate a fixed table or chase the old0.115m/s
+    # threshold. Preserve positive progress, four-leg participation, line
+    # tracking, acceleration costs, and the existing neutral stop contract.
+    reward_gait_reference = 6.0
+    gait_reference_sigma = 0.45
+    penalty_action_magnitude = 1.5
+    penalty_abduction_action_magnitude = 14.0
+    minimum_sustained_speed_m_s = 0.020
+    # Cover a complete slow gait cycle instead of scoring each swing as a stall.
+    sustained_speed_window_s = 3.0
+    minimum_sustained_speed_fraction = 0.65
+    velocity_tracking_sigma_m_s = 0.015
+    reward_forward_velocity_tracking = 18.0
+    reward_rolling_velocity_tracking = 18.0
+    penalty_rolling_velocity_error = 30.0
+    reward_instant_progress = 10.0
+    reward_sustained_progress = 18.0
+    penalty_sustained_stall = 32.0
+    penalty_overspeed = 18.0
 
 
 @configclass

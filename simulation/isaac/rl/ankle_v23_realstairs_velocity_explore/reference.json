@@ -1,0 +1,45 @@
+{
+  "rise_m": 0.18,
+  "tread_m": 0.25,
+  "stair_count": 4,
+  "phase_s": 12.0,
+  "dt_s": 0.016666666666666666,
+  "order": [
+    3
+  ],
+  "phases": [
+    {
+      "phase": 0,
+      "leg": 3,
+      "foot_goal": [
+        0.22999999999999998,
+        -0.26,
+        0.18
+      ],
+      "mode": "unscripted_goal_exploration"
+    }
+  ],
+  "evidence": "initial pose arithmetic only; goal position is a shaping hint, not a solved trajectory",
+  "goal_feet": [
+    [
+      0.33200780963864146,
+      0.09644669761538156,
+      0.18
+    ],
+    [
+      0.23226216371375796,
+      0.1714722521190402,
+      0.18
+    ],
+    [
+      0.3296813804044105,
+      -0.3637547366989225,
+      0.18
+    ],
+    [
+      0.22999999999999998,
+      -0.26,
+      0.18
+    ]
+  ]
+}

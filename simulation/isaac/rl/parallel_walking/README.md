@@ -18,6 +18,22 @@ The actor is a two-layer 256x256 MLP using deployable IMU and joint state. Durin
 only, the critic also sees simulator base velocity, base height, and foot contacts. Those
 privileged values are never required by the deployed actor.
 
+## V44 flat-contact corrective candidate (trained/evaluated; unqualified)
+
+The September 5 front-foot investigation led to a separate
+`flat-contact-hardware-matched-run-stop-external-rear-payload` profile.
+It uses new near-flat support references, whole-shoe corner-clearance rewards,
+matched 2-degree packet limits, and uncertain loaded actuator response.
+The initial corrective band is 0.03–0.05 m/s at 0.35–0.45 Hz, not a qualified
+running policy. Fresh Isaac Lab pilots were trained and evaluated on September 5.
+The final 200-update common-floor pilot improved foot release and straightness,
+but still failed speed, clearance, slip and effort acceptance. See the
+[training record and videos](../../../docs/rl-v44-training-20260905.md).
+No training job is currently active. V43 remains unchanged; nothing was deployed.
+
+See [V44 instructions and acceptance criteria](../../../docs/rl-flat-contact-hardware-matched-v44.md)
+before generating, training, evaluating, exporting, or deploying this candidate.
+
 ## V21 low-speed external rear-payload profile
 
 `low-speed-external-rear-payload` is the retraining profile created from the
@@ -285,6 +301,115 @@ The diagnostic video is under the same run at
 `videos/play/rl-video-step-0.mp4`. See
 [`../../../docs/rl-symmetry-gated-robust-straight-v30.md`](../../../docs/rl-symmetry-gated-robust-straight-v30.md)
 for research, exact ranges, ablations, evaluation results, and next steps.
+
+## V31 fast run and graceful stop
+
+`fast-run-stop-external-rear-payload` is a separate direct-action research
+policy. It continues the motion-capable V18 diagonal actor, trains over a
+speed-conditioned `0.9-2.4 Hz` grounded diagonal gait, and introduces a
+within-episode run-to-zero schedule. Sixty-five percent of episodes decelerate
+over `0.35-0.90 s`; thirty-five percent receive an abrupt stop. At zero speed,
+the integrated gait clock parks in a level, symmetric 80 mm four-foot stance.
+
+The command curriculum starts at `0.05-0.09 m/s` and expands to
+`0.05-0.20 m/s` over 48,000 policy steps. The mature range deliberately keeps
+the low-speed samples so rear-leg release is not forgotten while training the
+top end. Half of the final samples deliberately come from `0.05-0.10 m/s` and
+half retain the complete range. The selected simulation candidate is
+`model_1650.pt`; it passes the documented nominal and randomized behavior gates
+but remains blocked by the conservative sustained-effort gate. A first real
+trial confirmed that block was meaningful: V31 saturated the sagittal
+target-rate limit, trailed physical joints by up to roughly half a gait cycle,
+and oscillated its legs without useful propulsion. V30 remains untouched as
+the stable crawl/fallback policy.
+Train and evaluate V31 with:
+
+```powershell
+& .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
+  -CommandSet fast-run-stop-external-rear-payload `
+  -Iterations 500 -NumEnvs 4096 -Seed 3121 -V25Phase nominal
+
+& .\simulation\isaac\rl\parallel_walking\evaluate_run_stop.ps1 `
+  -Checkpoint <candidate.pt> -Speed 0.12 `
+  -RunSeconds 4 -RampSeconds 0.60 -HoldSeconds 3 -Episodes 5
+```
+
+Use `-RampSeconds 0` for the mandatory abrupt-stop evaluation. Do not export or
+deploy a V31 candidate solely because training completes. See
+[`../../../docs/rl-fast-run-stop-v31.md`](../../../docs/rl-fast-run-stop-v31.md)
+for the rejected residual branch, V18 baseline, reward design, exact acceptance
+criteria, preview command, and deployment boundary.
+
+## V32 hardware-matched run and graceful stop
+
+`hardware-matched-run-stop-external-rear-payload` is the corrective V31
+continuation derived from the 2026-09-02 real-robot trace. It retains the
+grounded diagonal run/stop objective, but reduces the trained target limit from
+`240` to `120 deg/s`, narrows the qualification range to `0.04-0.12 m/s`, and
+uses a slower `0.70-1.30 Hz` clock with `68%` duty factor. Robust domains cover
+the observed actuator rate/strength spread, broader response gains, payload,
+traction, assembly bias, and body torques.
+
+V32 adds strong costs for target-limiter backlog, action saturation,
+acceleration, diagonal mismatch, slip, impact, and above-rated effort. Its
+evaluator rejects more than 5% saturated run actions, 10% target-limited joint
+samples, or 15% target-velocity-ceiling occupancy, even if the simulated robot
+otherwise moves quickly. Train the nominal phase from V31 with:
+
+```powershell
+& .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
+  -CommandSet hardware-matched-run-stop-external-rear-payload `
+  -Checkpoint .\simulation\isaac\models\parallel-running-v31-fast-stop\model_1650.pt `
+  -Iterations 500 -NumEnvs 4096 -Seed 3201 -V25Phase nominal
+```
+
+See [`../../../docs/rl-hardware-matched-run-stop-v32.md`](../../../docs/rl-hardware-matched-run-stop-v32.md)
+and the real-trial analysis under
+`debug/walk-trials/20260902T040348286640Z-9f4db9ba/` before selecting or
+deploying any V32 checkpoint.
+
+## V33/V34 executable-target correction
+
+V33 changed the last observation vector from the previous raw action to the
+previous controller-applied target, but its deterministic candidate still
+spent `21.0%` of run joint samples behind the target limiter and `27.0%` at the
+packet slew ceiling. It is rejected.
+
+V34 changes the action itself: each network output is a fraction of the
+elapsed-time `120 deg/s` target-velocity budget and is integrated from the last
+applied target. An unreachable absolute target jump is therefore
+unrepresentable. It retains applied-target history and the V32 mass, external
+rear battery, Velcro-like feet, straightness, four-leg, smoothness, stop, and
+hardware randomization contracts.
+
+```powershell
+& .\simulation\isaac\rl\parallel_walking\train_walking_headless.ps1 `
+  -CommandSet integrated-target-velocity-run-stop-external-rear-payload `
+  -Iterations 1200 -NumEnvs 4096 -Seed 3401 -V25Phase nominal
+```
+
+The workflow uses a training-only bootstrap whose V33 hidden layers are kept
+but whose action/value heads and optimizer state are reset. Do not export the
+bootstrap or any training checkpoint before fixed-speed nominal and robust
+run-stop gates pass. See
+[`../../../docs/rl-integrated-target-velocity-run-stop-v34.md`](../../../docs/rl-integrated-target-velocity-run-stop-v34.md).
+
+## V43 foot-warp trot with residual stabilization
+
+`foot-warp-trot-residual-run-stop-external-rear-payload` is the guarded
+replacement for the rejected V31 hardware run. It blends two exact 256-sample
+foot-space-warped phase tables over `0.10-0.14 m/s`, gives PPO only small
+IMU/joint-feedback residual authority, and aligns a `0.90 s` smooth stop to a
+tested gait phase before returning to centered four-foot hold. V30 remains the
+stable crawl fallback.
+
+The selected checkpoint is V43 `model_399.pt`; a later randomized
+continuation regressed low-speed straightness and is rejected. Exact tables,
+reward design, evaluation matrices, ONNX export contract, known risks, review
+video, and guarded hardware procedure are documented in
+[`../../../docs/rl-foot-warp-trot-run-stop-v43.md`](../../../docs/rl-foot-warp-trot-run-stop-v43.md).
+Use `export_v43_policy.ps1` to reproduce the deployable ONNX package from the
+preserved selected checkpoint with the exact tested controller contract.
 
 ## V25 robust straight low-stance residual crawl
 

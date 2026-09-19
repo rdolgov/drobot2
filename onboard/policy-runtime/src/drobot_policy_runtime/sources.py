@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import os
+import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
 import numpy as np
 
 from .contract import DEFAULT_JOINT_POSITION_RAD
+
+_LOGGER = logging.getLogger(__name__)
+_BNO085_OWNER_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -35,6 +41,165 @@ class ImuSource(Protocol):
 
 class JointStateSource(Protocol):
     def read(self) -> JointStateSample: ...
+
+
+class BackgroundImuSource:
+    """Own an IMU on one worker and provide bounded, fresh cached reads.
+
+    The factory, every device read, and device close run on the same thread.
+    A blocked driver cannot be safely killed; callers can stop waiting, while
+    the worker retains device ownership until its call returns and it closes.
+    """
+
+    def __init__(
+        self,
+        factory: Callable[[], ImuSource],
+        *,
+        poll_hz: float = 100.0,
+        stale_after_s: float = 0.12,
+        startup_timeout_s: float = 30.0,
+        close_timeout_s: float = 0.5,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        for name, value in (
+            ("poll_hz", poll_hz),
+            ("stale_after_s", stale_after_s),
+            ("startup_timeout_s", startup_timeout_s),
+            ("close_timeout_s", close_timeout_s),
+        ):
+            if not math.isfinite(value) or value <= 0.0:
+                raise ValueError(f"{name} must be finite and positive")
+        self._factory = factory
+        self._period_s = 1.0 / poll_hz
+        self._stale_after_s = stale_after_s
+        self._startup_timeout_s = startup_timeout_s
+        self._close_timeout_s = close_timeout_s
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._ready = threading.Event()
+        self._done = threading.Event()
+        self._sample: ImuSample | None = None
+        self._error: Exception | None = None
+        self._thread: threading.Thread | None = None
+
+    @staticmethod
+    def _copy_sample(sample: ImuSample) -> ImuSample:
+        vectors = [
+            np.array(vector, dtype=np.float32, copy=True)
+            for vector in (
+                sample.angular_velocity_body_rad_s,
+                sample.projected_gravity_body,
+                sample.linear_acceleration_body_m_s2,
+            )
+        ]
+        if any(vector.shape != (3,) or not np.all(np.isfinite(vector)) for vector in vectors):
+            raise RuntimeError("IMU sample must contain three complete finite vectors")
+        heading = float(sample.heading_yaw_rad)
+        timestamp = float(sample.monotonic_time_s)
+        if not math.isfinite(heading) or not math.isfinite(timestamp):
+            raise RuntimeError("IMU heading and acquisition timestamp must be finite")
+        return ImuSample(vectors[0], vectors[1], vectors[2], heading, timestamp)
+
+    def start(self, *, cancel_event: threading.Event | None = None) -> ImuSample:
+        if cancel_event is not None and cancel_event.is_set():
+            self.close()
+            raise RuntimeError("IMU initialization was cancelled")
+        with self._lock:
+            if self._stop.is_set():
+                raise RuntimeError("IMU acquisition session is closed")
+            if self._thread is None:
+                self._thread = threading.Thread(
+                    target=self._poll,
+                    name="drobot-imu-acquisition",
+                    daemon=True,
+                )
+                self._thread.start()
+        deadline = time.monotonic() + self._startup_timeout_s
+        while True:
+            if cancel_event is not None and cancel_event.is_set():
+                self.close()
+                raise RuntimeError("IMU initialization was cancelled")
+            if self._ready.is_set():
+                return self.read()
+            if self._stop.is_set():
+                raise RuntimeError("IMU initialization was cancelled")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.0:
+                self.close()
+                raise RuntimeError(
+                    "IMU initialization timed out; device cleanup may still be pending"
+                )
+            self._ready.wait(min(0.05, remaining))
+
+    def _poll(self) -> None:
+        source: ImuSource | None = None
+        try:
+            source = self._factory()
+            deadline = self._clock()
+            while not self._stop.is_set():
+                sample = self._copy_sample(source.read())
+                now = self._clock()
+                age = now - sample.monotonic_time_s
+                if age < -0.01:
+                    raise RuntimeError("IMU acquisition timestamp is in the future")
+                if age > self._stale_after_s:
+                    raise RuntimeError(f"IMU sample is stale ({age * 1000.0:.0f} ms)")
+                with self._lock:
+                    if self._sample is not None and sample.monotonic_time_s < self._sample.monotonic_time_s:
+                        raise RuntimeError("IMU acquisition timestamp moved backwards")
+                    self._sample = sample
+                self._ready.set()
+                # Maintain cadence without spinning or replaying missed reads.
+                deadline += self._period_s
+                if deadline <= now:
+                    skipped = math.floor((now - deadline) / self._period_s) + 1
+                    deadline += skipped * self._period_s
+                self._stop.wait(max(0.0, deadline - self._clock()))
+        except Exception as exc:
+            with self._lock:
+                self._error = exc
+            self._ready.set()
+        finally:
+            if source is not None:
+                close = getattr(source, "close", None)
+                if callable(close):
+                    try:
+                        close()
+                    except Exception as exc:
+                        with self._lock:
+                            if self._error is None:
+                                self._error = exc
+                        _LOGGER.warning("IMU worker cleanup failed", exc_info=True)
+            self._done.set()
+            self._ready.set()
+
+    def read(self) -> ImuSample:
+        with self._lock:
+            sample, error = self._sample, self._error
+        if error is not None:
+            raise RuntimeError(f"IMU acquisition failed: {error}") from error
+        if self._stop.is_set():
+            raise RuntimeError("IMU acquisition session is closed")
+        if sample is None:
+            raise RuntimeError("IMU has not produced a complete sample")
+        age = self._clock() - sample.monotonic_time_s
+        if age < -0.01 or age > self._stale_after_s:
+            raise RuntimeError(f"IMU sample is stale or invalid ({age * 1000.0:.0f} ms)")
+        return self._copy_sample(sample)
+
+    def close(self) -> None:
+        self._stop.set()
+        self._ready.set()
+        thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=self._close_timeout_s)
+            if thread.is_alive():
+                _LOGGER.warning("IMU owner is still finishing a device call; cleanup remains pending")
+
+    @property
+    def cleanup_pending(self) -> bool:
+        return self._thread is not None and not self._done.is_set()
 
 
 class LevelImuSource:
@@ -166,7 +331,7 @@ class Bno085ImuSource:
             import board
             import busio
 
-            self._i2c = busio.I2C(board.SCL, board.SDA)
+            open_bus = lambda: busio.I2C(board.SCL, board.SDA)
         else:
             try:
                 from adafruit_extended_bus import ExtendedI2C
@@ -174,13 +339,99 @@ class Bno085ImuSource:
                 raise RuntimeError(
                     "Software I2C support is missing; reinstall the package with [bno085]"
                 ) from exc
-            self._i2c = ExtendedI2C(i2c_bus)
+            open_bus = lambda: ExtendedI2C(i2c_bus)
 
-        self._imu = BNO08X_I2C(self._i2c, address=address)
-        self._imu.enable_feature(BNO_REPORT_ACCELEROMETER)
-        self._imu.enable_feature(BNO_REPORT_GYROSCOPE)
-        self._imu.enable_feature(BNO_REPORT_GAME_ROTATION_VECTOR)
-        time.sleep(1.0)
+        self._i2c = None
+        self._imu = None
+        self._owns_sensor = _BNO085_OWNER_LOCK.acquire(blocking=False)
+        if not self._owns_sensor:
+            raise RuntimeError("BNO085 is already in use; wait for the previous RL session to close")
+        try:
+            for session_attempt in range(2):
+                stage = "opening bus"
+                try:
+                    self._i2c = open_bus()
+                    stage = "reset and product identification"
+                    # A fresh driver instance resets the sensor and its packet
+                    # sequence/cache state. Reusing the failed instance did not.
+                    self._imu = BNO08X_I2C(self._i2c, address=address)
+                    time.sleep(0.25)
+                    for feature_id, feature_name in (
+                        (BNO_REPORT_ACCELEROMETER, "accelerometer"),
+                        (BNO_REPORT_GYROSCOPE, "gyroscope"),
+                        (BNO_REPORT_GAME_ROTATION_VECTOR, "orientation"),
+                    ):
+                        stage = f"enabling {feature_name}"
+                        for attempt in range(2):
+                            try:
+                                self._imu.enable_feature(feature_id)
+                                break
+                            except RuntimeError as exc:
+                                if exc.args != ("Was not able to enable feature", feature_id) or attempt:
+                                    raise
+                                time.sleep(0.25)
+                    # Require complete, finite samples before exposing this
+                    # source to the controller. This happens only at startup.
+                    stage = "waiting for complete samples"
+                    deadline = time.monotonic() + 1.5
+                    consecutive = 0
+                    while consecutive < 3:
+                        try:
+                            self.read()
+                            consecutive += 1
+                        except (RuntimeError, OSError, KeyError):
+                            consecutive = 0
+                            if time.monotonic() >= deadline:
+                                raise
+                        if time.monotonic() >= deadline and consecutive < 3:
+                            raise RuntimeError("IMU warmup did not produce three complete samples")
+                        if consecutive < 3:
+                            time.sleep(0.06)
+                    return
+                except (RuntimeError, OSError, KeyError) as exc:
+                    _LOGGER.warning(
+                        "BNO085 startup session %s/2 failed while %s: %s",
+                        session_attempt + 1, stage, exc,
+                    )
+                    self._close_bus(reset_sensor=False)
+                    if session_attempt == 1:
+                        bus_label = "default I2C" if i2c_bus is None else f"I2C bus {i2c_bus}"
+                        raise RuntimeError(
+                            f"BNO085 failed while {stage} on {bus_label} at "
+                            f"0x{address:02X} after two fresh initialization attempts. "
+                            "RL has not started. Support and disarm the robot, "
+                            "then remove power from the IMU/Pi for 10 seconds. "
+                            f"Sensor error: {exc}"
+                        ) from exc
+                    time.sleep(0.75)
+        except Exception:
+            self.close(reset_sensor=False)
+            raise
+
+    def _close_bus(self, *, reset_sensor: bool) -> None:
+        imu, self._imu = self._imu, None
+        i2c, self._i2c = self._i2c, None
+        try:
+            if imu is not None and reset_sensor:
+                # The driver exposes no public disable-report API. Its public
+                # reset stops streaming, preventing an unread idle backlog.
+                imu.soft_reset()
+        except Exception:
+            _LOGGER.warning("BNO085 reset during cleanup failed", exc_info=True)
+        finally:
+            if i2c is not None:
+                try:
+                    i2c.deinit()
+                except Exception:
+                    _LOGGER.warning("Could not close BNO085 I2C handle", exc_info=True)
+
+    def close(self, *, reset_sensor: bool = True) -> None:
+        try:
+            self._close_bus(reset_sensor=reset_sensor)
+        finally:
+            if self._owns_sensor:
+                self._owns_sensor = False
+                _BNO085_OWNER_LOCK.release()
 
     def _to_body(self, sensor_vector: np.ndarray) -> np.ndarray:
         return np.asarray(
@@ -189,6 +440,8 @@ class Bno085ImuSource:
         )
 
     def read(self) -> ImuSample:
+        if self._imu is None:
+            raise RuntimeError("BNO085 source is closed")
         acceleration = self._imu.acceleration
         gyro = self._imu.gyro
         quaternion = self._imu.game_quaternion

@@ -1,0 +1,418 @@
+"""Residual RL around reach-constrained, known-stair crawl references."""
+import json
+from pathlib import Path
+import math
+import torch
+from ankle_v2.env import rotate
+from ankle_v23_experiments.env import StrategyEnv
+from .plan import make_plan
+from . import free_order_reward as progress_reward
+from . import cartesian_control, waypoint_guidance
+
+
+class RealStairsProspectiveLoadEnv(StrategyEnv):
+    def __init__(self, cfg, render_mode=None, **kwargs):
+        super().__init__(cfg, render_mode, **kwargs)
+        plan = make_plan(cfg.phase_count, self.step_dt, cfg.phase_s,
+                         cfg.start_x_m, cfg.stair_rise_m, cfg.stair_tread_m, cfg.stair_start_m)
+        self.plan_feet = torch.tensor(plan["feet"], device=self.device)
+        self.plan_base = torch.tensor(plan["base"], device=self.device)
+        self.plan_stance = torch.tensor(plan["stance"], dtype=torch.bool, device=self.device)
+        self.plan_joints = torch.tensor(plan["joints"], device=self.device)
+        before = torch.cat((self.plan_joints[:1], self.plan_joints[:-1]), 0)
+        after = torch.cat((self.plan_joints[1:], self.plan_joints[-1:]), 0)
+        self.plan_velocity = (after-before)/(2*self.step_dt)
+        self.plan_pitch = torch.tensor(plan["pitch"], device=self.device)
+        self.plan_rpy = torch.tensor(plan["rpy"], device=self.device)
+        self.plan_quat = torch.tensor(plan["quat"], device=self.device)
+        compensation = json.loads(Path(__file__).with_name("feedforward.json").read_text())
+        self.feedforward = torch.tensor([row["torques_nm"] for row in compensation["rows"]], device=self.device)
+        self.feedforward_dt = compensation["dt_s"]
+        self.reset_step = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        self.ground_eligible = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
+        self.plan_origin = self.start_position.clone()
+        self.air_required = torch.ones((self.num_envs, 4), dtype=torch.bool, device=self.device)
+        self.curriculum_top = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.goal_feet = torch.tensor(plan["goal_feet"], device=self.device)
+        self.goal_legs = plan["moved_legs"]
+        self.phase_order = plan["order"]
+        self.goal_hold = torch.zeros(self.num_envs, device=self.device)
+        self.goal_done = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.ever_full = torch.zeros_like(self.goal_done)
+        self.task_rows = []
+        self.task_totals = {"episodes": 0, "plan_success": 0, "full_climb": 0, "fall": 0,
+                            "ground_episodes": 0, "ground_plan_success": 0, "curriculum_episodes": 0, "curriculum_plan_success": 0}
+        self.task_sums = {key: torch.zeros(self.num_envs, device=self.device) for key in
+            ("goal_distance", "tracking_error", "root_tracking", "normal_FL", "normal_RL", "normal_FR", "normal_RR", "root_z", "torque_saturated")}
+        self.task_min_distance = torch.full((self.num_envs,), 10., device=self.device)
+        self.max_phase = torch.zeros(self.num_envs, device=self.device)
+        self.task_file = self.metrics_file.with_suffix(".foothold.json")
+        self.trace_file = self.metrics_file.with_suffix(".trace.jsonl")
+        self.event_file = self.metrics_file.with_suffix(".plan_events.jsonl")
+        self.trajectory = torch.zeros((self.num_envs, int(cfg.episode_length_s)+3, 46), device=self.device)
+        self.trajectory_count = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        self.trajectory_exports = 0
+        self.full_event_count = 0
+        self.plant_event_count = 0
+        self.ground_goal_event_count = 0
+        self.range_peak = torch.zeros(self.num_envs, device=self.device)
+        self.failure_exports = {}
+        self.curriculum_goal_event_count = 0
+        self.reward_potential = torch.full((self.num_envs,),float('nan'),device=self.device)
+        init = json.loads(Path(__file__).with_name('initialization.json').read_text())
+        self.initial_actions = torch.tensor(init['initial_actions'],device=self.device)
+        self.reset_variant = torch.zeros(self.num_envs,dtype=torch.long,device=self.device)
+        self.credited_levels = torch.zeros((self.num_envs,4),dtype=torch.long,device=self.device)
+        self.selected_leg = torch.full((self.num_envs,),2,dtype=torch.long,device=self.device)
+        self.next_level = torch.ones(self.num_envs,dtype=torch.long,device=self.device)
+        self.over_edge = torch.zeros(self.num_envs,dtype=torch.bool,device=self.device)
+        self.landing_timer = torch.zeros(self.num_envs,device=self.device)
+        for key in ('lift_milestone_count','lift_milestone_bonus','candidate_readiness','selected_load','support_quality','support_margin_m','selected_clearance','credited_level_sum','waypoint_distance_m','shaping'):
+            self.task_sums[key] = torch.zeros(self.num_envs,device=self.device)
+        self.direct_limits = self.robot.data.joint_pos_limits.torch[:,self.ids,1]*.995
+        self.over_edges = torch.zeros((self.num_envs,4),dtype=torch.bool,device=self.device)
+        self.landing_timers = torch.zeros((self.num_envs,4),device=self.device)
+        self.lift_highwater = torch.zeros((self.num_envs,4,4),dtype=torch.long,device=self.device)
+        cartesian_control.initialize(self)
+        waypoint_guidance.initialize(self)
+        contract = {
+            'prospective_load':'add bounded potential for actual lightly loaded next-tread toe/corner before flat credit; 2 N saturation, other-three support, contained horizontal next-tread geometry, <=100 mm heel; no success-gate relaxation',
+            'residual_handoff':'guided variants keep xyz .025 m/s and pitch .35 rad/s residual mapping after completion; same two-second nominal fade, same rewards, grounded resets, original motor/IK limits',
+            'rear_landing':'exact archived pair rear-stage event4 actor; add force-independent next-tread corner alignment weighted by other-three support and retained credited-level offset; no clearance-latch prerequisite; controller/reference/physical limits/success gates unchanged',
+            'pair_transfer':'exact actor from frozen clearance10 front-pair checkpoint; aggregate raised loads and bearing supports plus observable two-second handoff; unchanged physical limits and success gates; fresh critic/optimizer',
+            'guidance_handoff':'after measured front-pair or rear-stage completion, blend the existing bounded command formulas and nominal IK damping centre over 2 seconds; phase observation changes continuously from 2 to 3 with the blend; physical limits and rewards unchanged',
+            'clearance_reference':'second-front crossing revised from 5 to 10 mm whole-foot clearance; new final plant; same exact-IK rewards and grounded reset distribution; discrete references only',
+            'terrain_target':{'rise_m':.18,'tread_m':.25,'riser_count':4},
+            'reset':'25 percent front-reference all-four-floor, 25 percent original oblique floor, 50 percent three-on-first with RR on floor; no hover resets',
+            'ground_start_fraction':.5,'floor_start_full_climb_eligible':True,
+            'stage_goal':'all four traction patches planted on tread 1 or higher for one second, speed below 0.08 m/s',
+            'control':'while guided, nominal target velocity 1.5*(reference_servo_target-current_servo_target), capped at 0.35 rad/s, is mapped through the current Jacobian; RL adds xyz residuals up to 0.025 m/s and angular residuals up to 0.35 rad/s; total Cartesian bounds and physical guards unchanged; free floor-start variant retains absolute-pitch control; guided variants preserve residual rate semantics after completion',
+            'reward':'retained free-order potential, supported lift milestones, actual landing/stage/full bonuses; plus gamma-matched state-driven waypoint potential for variants 0 and 2',
+            'shaping_gamma':cfg.shaping_gamma,'support_weight':cfg.support_weight,'continues_after_first_tread':True,
+            'reference':'compact first and second front transfers with per-waypoint swing leg and an actual first-plant gate; rear/free variants retained',
+            'guided_waypoint_counts':self.guide_counts.cpu().tolist(),
+            'combined_experiment':'batched 81-pattern box IK for affected legs, same reference-centered quadratic objective and all physical guards as foot-tracking trial; higher environment count is a compute allocation, not an equal-budget reward ablation',
+            'known_path_limitation':'discrete static targets; first-front interpolation limitations retained and second-front connecting motion unproven; rear unloading unresolved; actual constrained physics and unchanged stage/full success criteria decide outcomes',
+            'actor_observations':cfg.observation_space,'critic_observations':cfg.state_space,
+            'privileged_actor':cfg.privileged_actor,'D405':'simulated depth proxy; added root/contact forces are privileged',
+            'physics_resolution':'240 Hz physics, 20 Hz control, self collision enabled',
+            'physical_motor_joint_rate_limits':'unchanged','motion_range_success_guard_rad':.02,
+            'evidence':'training only; floor and curriculum starts are counted separately; only floor starts qualify for full climb'}
+        self.metrics_file.with_suffix(".plan_contract.json").write_text(json.dumps(contract, indent=2)+"\n")
+        print("CRAWLPLAN_CONTRACT="+json.dumps(contract), flush=True)
+        physical = {'user_joint_names':self.robot.joint_names,
+            'backend_joint_names':self.robot.backend_joint_names,
+            'backend_joint_limits':self.robot.root_view.get_dof_limits().numpy()[0].tolist(),
+            'user_joint_limits':self.robot.data.joint_pos_limits.torch[0].cpu().tolist(),
+            'body_names':self.robot.body_names,
+            'body_mass':self.robot.data.body_mass.torch[0].cpu().tolist(),
+            'candidate_damping':self.cfg.servo_damping, 'physics_dt':self.physics_dt, 'control_dt':self.step_dt, 'solver_request':[24,1]}
+        self.metrics_file.with_suffix('.physical_metadata.json').write_text(json.dumps(physical,indent=2)+'\n')
+
+    def _pre_physics_step(self, actions):
+        cartesian_control.step(self, actions)
+
+    def _set_commands(self):
+        self.commands[:] = 0.
+
+    def _plan_index(self):
+        return self.reset_variant
+
+    def _get_dones(self):
+        _, _ = super()._get_dones()
+        self._update_range_peak()
+        reached_top = self.success.clone()
+        self.curriculum_top = reached_top & ~self.ground_eligible & (self.range_peak <= .02)
+        self.success &= self.ground_eligible & (self.range_peak <= .02)
+        truncated = self.episode_length_buf+self.reset_step >= self.max_episode_length-1
+        return self.fallen | reached_top, truncated
+
+    def _update_range_peak(self):
+        if hasattr(self, 'range_peak'):
+            q = self.robot.data.joint_pos.torch[:, self.ids]
+            excess = torch.maximum(q-self.limits[:, :, 1]/.95, self.limits[:, :, 0]/.95-q).clamp(min=0).amax(1)
+            self.range_peak = torch.maximum(self.range_peak, excess)
+
+    def _apply_action(self):
+        self._update_range_peak()
+        super()._apply_action()
+
+    def _reference(self):
+        self.ref = self.initial_actions[self.reset_variant]*self.direct_limits
+        guided = self.reset_variant != 1
+        self.ref[guided] = self.guide_servo_targets[self.reset_variant[guided], self.guide_index[guided]]
+        self.expected_stance[:] = True
+        return self.ref
+
+    def _get_observations(self):
+        obs = super()._get_observations()
+        desired_joints = self.plan_joints[self._plan_index()].clone()
+        guided = self.reset_variant != 1
+        guide_joints, guide_feet, guide_base, _ = waypoint_guidance.targets(self)
+        desired_joints[guided] = guide_joints[guided]
+        reference_error = desired_joints-self.robot.data.joint_pos.torch[:, self.ids]
+        obs["policy"] = torch.cat((obs["policy"], reference_error), 1)
+        obs["critic"] = torch.cat((obs["critic"], reference_error), 1)
+        index = self._plan_index()
+        start = self.plan_origin-self.scene.env_origins
+        target = self.plan_feet[index].clone()
+        target[:, :, :2] += start[:, None, :2]
+        base_target = self.plan_base[index].clone()
+        base_target[:, :2] += start[:, :2]
+        target[guided] = guide_feet[guided]
+        base_target[guided] = guide_base[guided]
+        phase_feature = index.float()/len(self.plan_feet)
+        phase_feature[guided] = 1. + self.guide_index[guided].float()/(self.guide_counts[self.reset_variant[guided]]-1) + self.guide_handoff[guided]
+        local, _, _, contact, _, _ = self._geometry()
+        root = self.robot.data.root_pos_w.torch-self.scene.env_origins
+        privileged = torch.cat((self.robot.data.root_lin_vel_b.torch,
+            base_target-root, (target-local.mean(2)).flatten(1), contact.float(),
+            phase_feature[:, None]), 1)
+        obs["critic"] = torch.cat((obs["critic"], privileged), 1)
+        if self.cfg.privileged_actor:
+            obs["policy"] = torch.cat((obs["policy"], privileged), 1)
+        normal_force = (self.contacts.data.net_forces_w.torch[:,self.foot_sensors,2]/20.).clamp(0.,2.)
+        obs["critic"] = torch.cat((obs["critic"],normal_force),1)
+        if self.cfg.privileged_actor:
+            obs["policy"] = torch.cat((obs["policy"],normal_force),1)
+        goal = self.goal_feet[3].repeat(self.num_envs, 1)
+        goal[:, :2] += start[:, :2]
+        motor_state = (self.targets-self.robot.data.joint_pos.torch[:,self.ids])/self.direct_limits
+        progress = progress_reward.features(self)
+        goal_delta = progress['delta'].mean(1)
+        extra = torch.cat((motor_state,goal_delta,progress['obs']),1)
+        obs["critic"] = torch.cat((obs["critic"],extra),1)
+        obs["policy"] = torch.cat((obs["policy"],extra),1)
+        return obs
+
+    def _get_rewards(self):
+        local, gap, surface, contact, planted, levels = self._geometry()
+        sole = local.mean(2)
+        slip = ((sole-self.previous_sole)[..., :2]/self.step_dt).norm(dim=2)*self.history_valid[:, None]
+        old_placed = self.placed.clone()
+        super()._get_rewards()
+        index = self._plan_index()
+        start = self.plan_origin-self.scene.env_origins
+        target = self.plan_feet[index].clone()
+        target[:, :, :2] += start[:, None, :2]
+        base_target = self.plan_base[index].clone()
+        base_target[:, :2] += start[:, :2]
+        goal = self.goal_feet[None].repeat(self.num_envs, 1, 1)
+        goal[:, :, :2] += start[:, None, :2]
+        errors = sole-target
+        pos = self.robot.data.root_pos_w.torch-self.scene.env_origins
+        goal_distance = (sole[:, self.goal_legs]-goal[:, self.goal_legs]).norm(dim=2).amax(1)
+        roll = self.plan_rpy[index, 0]
+        pitch = self.plan_rpy[index, 1]
+        expected_gravity3 = torch.stack((pitch.sin(), -roll.sin()*pitch.cos(), -roll.cos()*pitch.cos()), 1)
+        upright = (self.robot.data.projected_gravity_b.torch-expected_gravity3).square().sum(1)<.04
+        self.lift_seen |= ((~contact) & (contact.sum(1)[:, None]>=3) & (self.air_time>.08) & (gap.amin(2)>.012) & upright[:, None])
+        good_feet = planted & (levels >= 1) & (slip < .015)
+        speed = self.robot.data.root_lin_vel_b.torch.norm(dim=1)
+        valid = good_feet.all(1) & (speed < .08) & (~self.fallen) & (self.range_peak <= .02)
+        self.goal_hold = torch.where(valid, self.goal_hold+self.step_dt, 0.)
+        new_goal = (self.goal_hold >= self.cfg.goal_hold_s) & ~self.goal_done
+        self.goal_done |= new_goal
+        self.curriculum_goal_event_count += int((new_goal & ~self.ground_eligible).sum())
+        self.ground_goal_event_count += int((new_goal & self.ground_eligible).sum())
+        new_full = self.success & ~self.ever_full
+        self.ever_full |= self.success
+        self.full_event_count += int(new_full.sum())
+        # Save existing training trajectories only. No replay rollout is run.
+        sample = (self.episode_length_buf % 20 == 1) | new_full | new_goal
+        sample_ids = sample.nonzero().flatten()
+        if len(sample_ids):
+            values = torch.cat((
+                (self.episode_length_buf*self.step_dt)[:, None],
+                ((self.episode_length_buf+self.reset_step)*self.step_dt)[:, None],
+                pos, self.robot.data.root_quat_w.torch, sole.flatten(1), levels,
+                self.robot.data.joint_pos.torch[:, self.ids], contact.float(),
+                self.ground_eligible.float()[:, None]), 1)
+            slots = self.trajectory_count[sample_ids].clamp(max=self.trajectory.shape[1]-1)
+            self.trajectory[sample_ids, slots] = values[sample_ids]
+            self.trajectory_count[sample_ids] = (slots+1).clamp(max=self.trajectory.shape[1])
+        export = new_full | (new_goal & (self.trajectory_exports < 8))
+        if export.any():
+            for env_id in export.nonzero().flatten().cpu().tolist()[:4]:
+                folder = self.metrics_file.parent/"training_trajectories"
+                folder.mkdir(exist_ok=True)
+                label = "full-climb" if bool(new_full[env_id]) else ("ground-stage" if bool(self.ground_eligible[env_id]) else "curriculum-stage")
+                data = {"kind": label, "step": self.common_step_counter, "environment":env_id,
+                    "evidence":"existing_training_episode_not_evaluation", "ground_eligible":bool(self.ground_eligible[env_id]),
+                    "reset_phase":float(self.reset_step[env_id]*self.step_dt/self.cfg.phase_s),
+                    "privileged_actor":self.cfg.privileged_actor,
+                    "peak_joint_range_overshoot_rad":float(self.range_peak[env_id]),
+                    "columns":"age, plan_age, root_xyz(3), root_xyzw(4), sole_xyz_FL_RL_FR_RR(12), levels(4), joints(16), contact(4), ground_eligible",
+                    "samples":self.trajectory[env_id,:int(self.trajectory_count[env_id])].cpu().tolist()}
+                (folder/f"{label}-step{self.common_step_counter}-env{env_id}.json").write_text(json.dumps(data)+"\n")
+                self.trajectory_exports += 1
+        if self.fallen.any():
+            for env_id in self.fallen.nonzero().flatten().cpu().tolist():
+                phase = int(index[env_id]*self.step_dt/self.cfg.phase_s)
+                if self.failure_exports.get(phase, 0) >= 3:
+                    continue
+                self.failure_exports[phase] = self.failure_exports.get(phase, 0)+1
+                folder = self.metrics_file.parent/'training_failures'
+                folder.mkdir(exist_ok=True)
+                record = {'step':self.common_step_counter, 'env':env_id, 'phase':phase,
+                    'age':float(self.episode_length_buf[env_id]*self.step_dt),
+                    'reset_phase':float(self.reset_step[env_id]*self.step_dt/self.cfg.phase_s),
+                    'ground_eligible':bool(self.ground_eligible[env_id]),
+                    'root':pos[env_id].cpu().tolist(), 'root_target':base_target[env_id].cpu().tolist(),
+                    'com':((self.robot.data.body_com_pos_w.torch[env_id]*self.robot.data.body_mass.torch[env_id,:,None]).sum(0)/self.robot.data.body_mass.torch[env_id].sum()-self.scene.env_origins[env_id]).cpu().tolist(),
+                    'quaternion_xyzw':self.robot.data.root_quat_w.torch[env_id].cpu().tolist(),
+                    'gravity':self.robot.data.projected_gravity_b.torch[env_id].cpu().tolist(),
+                    'base_contact':self.contacts.data.net_forces_w.torch[env_id,self.base_sensor].cpu().tolist(),
+                    'joint_range_peak':float(self.range_peak[env_id]),
+                    'joint_angles':self.robot.data.joint_pos.torch[env_id,self.ids].cpu().tolist(),
+                    'joint_targets':self.targets[env_id].cpu().tolist(),
+                    'sole':sole[env_id].cpu().tolist(), 'foot_targets':target[env_id].cpu().tolist(),
+                    'recent_samples':self.trajectory[env_id,:int(self.trajectory_count[env_id])][-6:].cpu().tolist()}
+                (folder/f'phase{phase}-sample{self.failure_exports[phase]}.json').write_text(json.dumps(record,indent=2)+'\n')
+        root_error = (pos-base_target).norm(dim=1)
+        torque = self.robot.data.applied_torque.torch[:,self.ids]
+        velocity = self.robot.data.joint_vel.torch[:,self.ids]
+        power = (torque*velocity).clamp(min=0).sum(1)
+        reward = progress_reward.reward(self, slip, power, new_goal, new_full)
+        self.task_min_distance = torch.minimum(self.task_min_distance, goal_distance)
+        self.max_phase = torch.maximum(self.max_phase, ((self.episode_length_buf+self.reset_step)*self.step_dt/self.cfg.phase_s).floor())
+        forces = self.contacts.data.net_forces_w.torch[:, self.foot_sensors, 2]
+        for key, value in [("goal_distance", goal_distance), ("tracking_error", errors.norm(dim=2).mean(1)),
+                           ("root_tracking", root_error), ("root_z", pos[:, 2]),
+                           ("torque_saturated", (torque.abs()>.80).float().mean(1)),
+                           *[("normal_"+name, forces[:, i]) for i, name in enumerate(("FL", "RL", "FR", "RR"))]]:
+            self.task_sums[key] += value
+        if (new_goal | new_full).any():
+            ids = (new_goal | new_full).nonzero().flatten()
+            with self.event_file.open("a") as stream:
+                stream.write(json.dumps({"step": self.common_step_counter, "environments": ids.cpu().tolist(),
+                    "full_climb": new_full[ids].cpu().tolist(), "plan_success": new_goal[ids].cpu().tolist(),
+                    "ground_eligible": self.ground_eligible[ids].cpu().tolist(), "reset_phase": (self.reset_step[ids]*self.step_dt/self.cfg.phase_s).cpu().tolist(),
+                    "root": pos[ids].cpu().tolist(), "sole": sole[ids].cpu().tolist(), "levels": levels[ids].cpu().tolist(),
+                    "hold_s": self.goal_hold[ids].cpu().tolist(), "top_hold_s": self.hold[ids].cpu().tolist()})+"\n")
+        if self.common_step_counter % 20 == 0:
+            with self.trace_file.open("a") as stream:
+                stream.write(json.dumps({"step": self.common_step_counter,
+                    "age": (self.episode_length_buf[:4]*self.step_dt).cpu().tolist(),
+                    "plan_age": ((self.episode_length_buf[:4]+self.reset_step[:4])*self.step_dt).cpu().tolist(),
+                    "ground_eligible": self.ground_eligible[:4].cpu().tolist(),
+                    "root": pos[:4].cpu().tolist(), "root_target": base_target[:4].cpu().tolist(),
+                    "sole": sole[:4].cpu().tolist(), "target": target[:4].cpu().tolist(),
+                    "forces": forces[:4].cpu().tolist(), "planted": planted[:4].cpu().tolist(),
+                    "joints": self.robot.data.joint_pos.torch[:4, self.ids].cpu().tolist(),
+                    "actions": self.actions[:4].cpu().tolist(),
+                    "filtered_actions": self.filtered[:4].cpu().tolist(),
+                    "sole_pitch_request_degrees": [None if bool(self.reset_variant[i] != 1) else self.requested_pitch_degrees[i].cpu().tolist() for i in range(min(4,self.num_envs))],
+                    "reference_assistance_active": self.reference_assistance_active[:4].cpu().tolist(),
+                    "reference_assistance_weight": self.reference_assistance_weight[:4].cpu().tolist(),
+                    "nominal_joint_velocity_rad_s": self.nominal_joint_velocity[:4].cpu().tolist(),
+                    "cartesian_velocity_request_xyz_m_s_pitch_rad_s": self.cartesian_velocity_request[:4].cpu().tolist(),
+                    "torques": torque[:4].cpu().tolist(), "placed": self.placed[:4].cpu().tolist(), "goal_hold":self.goal_hold[:4].cpu().tolist(),
+                    "goal_distance":goal_distance[:4].cpu().tolist(), "upright":upright[:4].cpu().tolist(),
+                    "lift_seen":self.lift_seen[:4].cpu().tolist(), "range_peak":self.range_peak[:4].cpu().tolist(),
+                    "slip":slip[:4].cpu().tolist(), "corner_gaps":gap[:4].cpu().tolist()})+"\n")
+        return reward
+
+    def _publish_task(self):
+        if not self.task_rows:
+            return
+        recent = {key: sum(row[key] for row in self.task_rows)/len(self.task_rows) for key in self.task_rows[0]}
+        record = {"step": self.common_step_counter, "phase_count": self.cfg.phase_count, "totals": self.task_totals,
+                  "recent_episodes": len(self.task_rows), "recent": recent,
+                  "evidence": "stochastic_training_only", "planning": "known_stair_teacher"}
+        record["privileged_actor"] = self.cfg.privileged_actor
+        ground = [row for row in self.task_rows if row["ground_eligible"]]
+        record["recent_ground_episodes"] = len(ground)
+        record["recent_ground"] = {key: sum(row[key] for row in ground)/len(ground) for key in ground[0]} if ground else {}
+        temporary = self.task_file.with_suffix(".tmp")
+        temporary.write_text(json.dumps(record, indent=2)+"\n")
+        temporary.replace(self.task_file)
+        self.extras.setdefault("log", {}).update({"Crawlplan/"+key: value for key, value in recent.items()})
+
+    def _reset_idx(self, env_ids):
+        if env_ids is None:
+            env_ids = torch.arange(self.num_envs, device=self.device)
+        if hasattr(self, "goal_done"):
+            ids = env_ids[self.episode_length_buf[env_ids] > 0]
+            if len(ids):
+                age = self.episode_length_buf[ids].float().clamp(min=1)
+                values = {"plan_success": self.goal_done[ids].float(), "full_climb": self.ever_full[ids].float(),
+                    "peak_joint_range_overshoot_rad":self.range_peak[ids],
+                    "ground_eligible": self.ground_eligible[ids].float(), "reset_phase": self.reset_step[ids]*self.step_dt/self.cfg.phase_s,
+                    "fall": self.fallen[ids].float(), "episode_s": age*self.step_dt, "max_phase": self.max_phase[ids],
+                    "min_goal_distance_m": self.task_min_distance[ids],
+                    **{key: value[ids]/age for key, value in self.task_sums.items()}}
+                numbers = {key: value.cpu().tolist() for key, value in values.items()}
+                rows = [{key: value[i] for key, value in numbers.items()} for i in range(len(ids))]
+                self.task_rows = (self.task_rows+rows)[-512:]
+                self.task_totals["episodes"] += len(ids)
+                for key in ("plan_success", "full_climb", "fall"):
+                    self.task_totals[key] += int(sum(numbers[key]))
+                for row in rows:
+                    prefix = "ground" if row["ground_eligible"] else "curriculum"
+                    self.task_totals[prefix+"_episodes"] += 1
+                    self.task_totals[prefix+"_plan_success"] += int(row["plan_success"])
+                with self.metrics_file.with_suffix(".plan_episodes.jsonl").open("a") as stream:
+                    for row in rows:
+                        stream.write(json.dumps({"step": self.common_step_counter, **row})+"\n")
+                self._publish_task()
+        super()._reset_idx(env_ids)
+        if not hasattr(self, "goal_done"):
+            return
+        self.goal_done[env_ids] = False
+        self.range_peak[env_ids] = 0.
+        self.reward_potential[env_ids] = float("nan")
+        self.over_edge[env_ids] = False
+        self.landing_timer[env_ids] = 0.
+        self.trajectory_count[env_ids] = 0
+        self.ever_full[env_ids] = False
+        self.goal_hold[env_ids] = 0.
+        self.task_min_distance[env_ids] = 10.
+        self.max_phase[env_ids] = 0.
+        for value in self.task_sums.values():
+            value[env_ids] = 0.
+        pose = self.robot.data.default_root_pose.torch[env_ids].clone()
+        pose[:, :3] += self.scene.env_origins[env_ids]
+        pose[:, :2] += (2*torch.rand((len(env_ids), 2), device=self.device)-1)*self.cfg.start_jitter_m
+        self.plan_origin[env_ids] = pose[:, :3]
+        reset_step = torch.zeros(len(env_ids),dtype=torch.long,device=self.device)
+        phase = reset_step.clone()
+        self.reset_step[env_ids] = reset_step
+        variant = torch.multinomial(torch.tensor([.25,.25,.5],device=self.device),len(env_ids),replacement=True)
+        self.reset_variant[env_ids] = variant
+        self.ground_eligible[env_ids] = variant < 2
+        self.credited_levels[env_ids] = torch.tensor([[0,0,0,0],[0,0,0,0],[1,1,1,0]],device=self.device)[variant]
+        self.curriculum_top[env_ids] = False
+        self.air_required[env_ids] = False
+        for p in range(self.cfg.phase_count):
+            selected = env_ids[phase == p]
+            remaining_legs = sorted(set(self.phase_order[i] for i in range(p, self.cfg.phase_count)))
+            for leg in remaining_legs:
+                self.air_required[selected, leg] = True
+        self.phase_offset[env_ids] = reset_step*self.step_dt*self.cfg.frequency_hz
+        pose[:, :3] = self.scene.env_origins[env_ids]+self.plan_base[variant]
+        pose[:, :2] += (self.plan_origin-self.scene.env_origins)[env_ids, :2]
+        pose[:, 2] += .002
+        pitch = self.plan_pitch[variant]
+        pose[:, 3:7] = self.plan_quat[variant]
+        joints = self.robot.data.default_joint_pos.torch[env_ids].clone()
+        joints[:, self.ids] = self.plan_joints[variant]
+        self.robot.write_joint_position_to_sim_index(position=joints, env_ids=env_ids)
+        self.robot.write_joint_velocity_to_sim_index(velocity=torch.zeros_like(joints), env_ids=env_ids)
+        self.targets[env_ids] = self.initial_actions[variant]*self.direct_limits[env_ids]
+        self.filtered[env_ids] = 0.
+        self.actions[env_ids] = 0.
+        self.last_actions[env_ids] = 0.
+        self.robot.write_root_pose_to_sim_index(root_pose=pose, env_ids=env_ids)
+        self.previous_position[env_ids] = pose[:, :3]
+        self.start_position[env_ids] = pose[:, :3]
+        initial_soles = self.plan_feet[self.reset_variant].clone()
+        self.over_edges[env_ids] = False
+        self.landing_timers[env_ids] = 0.
+        self.lift_highwater[env_ids] = 0
+        waypoint_guidance.reset(self, env_ids)
+
+    def close(self):
+        if hasattr(self, "task_rows"):
+            self._publish_task()
+        super().close()

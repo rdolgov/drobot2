@@ -1,0 +1,111 @@
+{
+  "schema": "drobot.ankle-v23-transfer-workflow.v1",
+  "status": "completed",
+  "model": "V2.3_R3_solid_sole_retained_leg",
+  "objective": "rear_unloading_and_weight_transfer",
+  "seeds": [
+    2311,
+    2312
+  ],
+  "iterations_per_seed": 3000,
+  "environments_per_seed": 256,
+  "steps_per_iteration": 64,
+  "planned_transitions": 98304000,
+  "created_unix": 1789340846.5634212,
+  "completed_recordings": [
+    {
+      "seed": 2311,
+      "selected": {
+        "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-08_transfer-2311\\model_2999.pt",
+        "accepted_selection_gate": false,
+        "mean_score": 5.0066613066215435,
+        "archive": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ankle-v23-transfer\\seed2311-model_2999.pt",
+        "sha256": "d0b1e4e31fe39919dcedefd2e816dc48b34aeadfd366ccbaf9b9d4c32f7d069d"
+      },
+      "report": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v23-transfer\\walk-seed2311\\report.json",
+      "video": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v23-transfer\\walk-seed2311\\model_2999-0.02mps-learned.mp4"
+    },
+    {
+      "seed": 2312,
+      "selected": {
+        "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-19_transfer-2312\\model_2999.pt",
+        "accepted_selection_gate": false,
+        "mean_score": 4.275438692921492,
+        "archive": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ankle-v23-transfer\\seed2312-model_2999.pt",
+        "sha256": "d734e87f64fe1099474ec590b11f68f61759e8ccf83b1a321ecd886d121dcd09"
+      },
+      "report": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v23-transfer\\walk-seed2312\\report.json",
+      "video": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v23-transfer\\walk-seed2312\\model_2999-0.02mps-learned.mp4"
+    }
+  ],
+  "updated_unix": 1789351907.0731218,
+  "training_jobs": [
+    {
+      "seed": 2311,
+      "status": "completed",
+      "checkpoint": [
+        "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-08_transfer-2311\\model_2999.pt"
+      ]
+    },
+    {
+      "seed": 2312,
+      "status": "completed",
+      "checkpoint": [
+        "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-19_transfer-2312\\model_2999.pt"
+      ]
+    }
+  ],
+  "candidate_checkpoints": [
+    "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-08_transfer-2311\\model_1500.pt",
+    "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-08_transfer-2311\\model_2250.pt",
+    "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-08_transfer-2311\\model_2999.pt",
+    "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-19_transfer-2312\\model_1500.pt",
+    "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-19_transfer-2312\\model_2250.pt",
+    "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-19_transfer-2312\\model_2999.pt"
+  ],
+  "ranking": [
+    {
+      "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-08_transfer-2311\\model_2999.pt",
+      "accepted_selection_gate": false,
+      "mean_score": 5.0066613066215435,
+      "archive": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ankle-v23-transfer\\seed2311-model_2999.pt",
+      "sha256": "d0b1e4e31fe39919dcedefd2e816dc48b34aeadfd366ccbaf9b9d4c32f7d069d"
+    },
+    {
+      "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-08_transfer-2311\\model_2250.pt",
+      "accepted_selection_gate": false,
+      "mean_score": 4.921402564538192
+    },
+    {
+      "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-19_transfer-2312\\model_2999.pt",
+      "accepted_selection_gate": false,
+      "mean_score": 4.275438692921492,
+      "archive": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ankle-v23-transfer\\seed2312-model_2999.pt",
+      "sha256": "d734e87f64fe1099474ec590b11f68f61759e8ccf83b1a321ecd886d121dcd09"
+    },
+    {
+      "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-19_transfer-2312\\model_1500.pt",
+      "accepted_selection_gate": false,
+      "mean_score": 4.082277584744485
+    },
+    {
+      "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-19_transfer-2312\\model_2250.pt",
+      "accepted_selection_gate": false,
+      "mean_score": 3.8909173962842054
+    },
+    {
+      "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-08_transfer-2311\\model_1500.pt",
+      "accepted_selection_gate": false,
+      "mean_score": 2.170739099044992
+    }
+  ],
+  "best": {
+    "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v23_transfer\\2026-09-13_16-07-08_transfer-2311\\model_2999.pt",
+    "accepted_selection_gate": false,
+    "mean_score": 5.0066613066215435,
+    "archive": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\models\\ankle-v23-transfer\\seed2311-model_2999.pt",
+    "sha256": "d0b1e4e31fe39919dcedefd2e816dc48b34aeadfd366ccbaf9b9d4c32f7d069d"
+  },
+  "finished_unix": 1789351907.0731218,
+  "result_is_hardware_qualified": false
+}

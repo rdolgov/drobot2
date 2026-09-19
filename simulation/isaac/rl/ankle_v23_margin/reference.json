@@ -1,0 +1,506 @@
+{
+  "phase_s": 12.0,
+  "dt_s": 0.016666666666666666,
+  "phases": [
+    {
+      "phase": 0,
+      "leg": 0,
+      "base_start_x": 0.0,
+      "base_pre_x": 0.004999999999999977,
+      "foot_start": [
+        0.08305,
+        0.198696689,
+        0.0
+      ],
+      "foot_goal": [
+        0.20500000000000002,
+        0.198696689,
+        0.02
+      ],
+      "sampled_max_torque_ratio_85pct": 0.5574580366648627,
+      "sampled_min_foot_center_margin_m": 0.00495680655817468
+    },
+    {
+      "phase": 1,
+      "leg": 2,
+      "base_start_x": 0.004999999999999977,
+      "base_pre_x": 0.06499999999999992,
+      "foot_start": [
+        0.08695,
+        -0.198696689,
+        0.0
+      ],
+      "foot_goal": [
+        0.20500000000000002,
+        -0.198696689,
+        0.02
+      ],
+      "sampled_max_torque_ratio_85pct": 0.3916219484840382,
+      "sampled_min_foot_center_margin_m": 0.009743629543190961
+    },
+    {
+      "phase": 2,
+      "leg": 3,
+      "base_start_x": 0.06499999999999992,
+      "base_pre_x": 0.09499999999999995,
+      "foot_start": [
+        -0.08305,
+        -0.198696689,
+        0.0
+      ],
+      "foot_goal": [
+        -0.0050000000000000044,
+        -0.198696689,
+        0.0
+      ],
+      "sampled_max_torque_ratio_85pct": 0.8001269376012876,
+      "sampled_min_foot_center_margin_m": 0.007954727390029517
+    },
+    {
+      "phase": 3,
+      "leg": 1,
+      "base_start_x": 0.09499999999999995,
+      "base_pre_x": 0.1349999999999999,
+      "foot_start": [
+        -0.08695,
+        0.198696689,
+        0.0
+      ],
+      "foot_goal": [
+        -0.0050000000000000044,
+        0.198696689,
+        0.0
+      ],
+      "sampled_max_torque_ratio_85pct": 0.7719667069916714,
+      "sampled_min_foot_center_margin_m": 0.003203440117103773
+    },
+    {
+      "phase": 4,
+      "leg": 3,
+      "base_start_x": 0.1349999999999999,
+      "base_pre_x": 0.13499999999999995,
+      "foot_start": [
+        -0.0050000000000000044,
+        -0.198696689,
+        0.0
+      ],
+      "foot_goal": [
+        0.07,
+        -0.198696689,
+        0.0
+      ],
+      "sampled_max_torque_ratio_85pct": 0.6675272939893772,
+      "sampled_min_foot_center_margin_m": 0.006232284440565963
+    },
+    {
+      "phase": 5,
+      "leg": 1,
+      "base_start_x": 0.13499999999999995,
+      "base_pre_x": 0.18000000000000005,
+      "foot_start": [
+        -0.0050000000000000044,
+        0.198696689,
+        0.0
+      ],
+      "foot_goal": [
+        0.07,
+        0.198696689,
+        0.0
+      ],
+      "sampled_max_torque_ratio_85pct": 0.6734225286498333,
+      "sampled_min_foot_center_margin_m": 0.006219222499056931
+    },
+    {
+      "phase": 6,
+      "leg": 0,
+      "base_start_x": 0.18000000000000005,
+      "base_pre_x": 0.14000000000000007,
+      "foot_start": [
+        0.20500000000000002,
+        0.198696689,
+        0.02
+      ],
+      "foot_goal": [
+        0.325,
+        0.198696689,
+        0.02
+      ],
+      "sampled_max_torque_ratio_85pct": 0.48893553361729053,
+      "sampled_min_foot_center_margin_m": 0.00823488239622669
+    },
+    {
+      "phase": 7,
+      "leg": 2,
+      "base_start_x": 0.14000000000000007,
+      "base_pre_x": 0.19500000000000017,
+      "foot_start": [
+        0.20500000000000002,
+        -0.198696689,
+        0.02
+      ],
+      "foot_goal": [
+        0.325,
+        -0.198696689,
+        0.02
+      ],
+      "sampled_max_torque_ratio_85pct": 0.34899463875092757,
+      "sampled_min_foot_center_margin_m": 0.015438642895672872
+    },
+    {
+      "phase": 8,
+      "leg": 3,
+      "base_start_x": 0.19500000000000017,
+      "base_pre_x": 0.22500000000000026,
+      "foot_start": [
+        0.07,
+        -0.198696689,
+        0.0
+      ],
+      "foot_goal": [
+        0.20500000000000002,
+        -0.198696689,
+        0.02
+      ],
+      "sampled_max_torque_ratio_85pct": 0.7269442363700878,
+      "sampled_min_foot_center_margin_m": 0.0015092439156359494
+    },
+    {
+      "phase": 9,
+      "leg": 1,
+      "base_start_x": 0.22500000000000026,
+      "base_pre_x": 0.27000000000000035,
+      "foot_start": [
+        0.07,
+        0.198696689,
+        0.0
+      ],
+      "foot_goal": [
+        0.20500000000000002,
+        0.198696689,
+        0.02
+      ],
+      "sampled_max_torque_ratio_85pct": 0.8342750378990437,
+      "sampled_min_foot_center_margin_m": -0.023539144557043812
+    },
+    {
+      "phase": 10,
+      "leg": 0,
+      "base_start_x": 0.27000000000000035,
+      "base_pre_x": 0.2650000000000004,
+      "foot_start": [
+        0.325,
+        0.198696689,
+        0.02
+      ],
+      "foot_goal": [
+        0.455,
+        0.198696689,
+        0.04
+      ],
+      "sampled_max_torque_ratio_85pct": 0.5357730509913378,
+      "sampled_min_foot_center_margin_m": 0.008000616307187014
+    },
+    {
+      "phase": 11,
+      "leg": 2,
+      "base_start_x": 0.2650000000000004,
+      "base_pre_x": 0.3150000000000005,
+      "foot_start": [
+        0.325,
+        -0.198696689,
+        0.02
+      ],
+      "foot_goal": [
+        0.455,
+        -0.198696689,
+        0.04
+      ],
+      "sampled_max_torque_ratio_85pct": 0.3905183999059762,
+      "sampled_min_foot_center_margin_m": 0.023160510800184053
+    },
+    {
+      "phase": 12,
+      "leg": 3,
+      "base_start_x": 0.3150000000000005,
+      "base_pre_x": 0.3650000000000006,
+      "foot_start": [
+        0.20500000000000002,
+        -0.198696689,
+        0.02
+      ],
+      "foot_goal": [
+        0.325,
+        -0.198696689,
+        0.02
+      ],
+      "sampled_max_torque_ratio_85pct": 0.711725637471087,
+      "sampled_min_foot_center_margin_m": 0.0068879632206985675
+    },
+    {
+      "phase": 13,
+      "leg": 1,
+      "base_start_x": 0.3650000000000006,
+      "base_pre_x": 0.4100000000000007,
+      "foot_start": [
+        0.20500000000000002,
+        0.198696689,
+        0.02
+      ],
+      "foot_goal": [
+        0.325,
+        0.198696689,
+        0.02
+      ],
+      "sampled_max_torque_ratio_85pct": 0.7560445154752481,
+      "sampled_min_foot_center_margin_m": -0.011151362272320497
+    },
+    {
+      "phase": 14,
+      "leg": 0,
+      "base_start_x": 0.4100000000000007,
+      "base_pre_x": 0.39500000000000074,
+      "foot_start": [
+        0.455,
+        0.198696689,
+        0.04
+      ],
+      "foot_goal": [
+        0.575,
+        0.198696689,
+        0.04
+      ],
+      "sampled_max_torque_ratio_85pct": 0.4774757309943494,
+      "sampled_min_foot_center_margin_m": 0.00653087589508955
+    },
+    {
+      "phase": 15,
+      "leg": 2,
+      "base_start_x": 0.39500000000000074,
+      "base_pre_x": 0.45000000000000084,
+      "foot_start": [
+        0.455,
+        -0.198696689,
+        0.04
+      ],
+      "foot_goal": [
+        0.575,
+        -0.198696689,
+        0.04
+      ],
+      "sampled_max_torque_ratio_85pct": 0.3453845273694988,
+      "sampled_min_foot_center_margin_m": 0.013942989977428155
+    },
+    {
+      "phase": 16,
+      "leg": 3,
+      "base_start_x": 0.45000000000000084,
+      "base_pre_x": 0.4800000000000009,
+      "foot_start": [
+        0.325,
+        -0.198696689,
+        0.02
+      ],
+      "foot_goal": [
+        0.455,
+        -0.198696689,
+        0.04
+      ],
+      "sampled_max_torque_ratio_85pct": 0.719437808859236,
+      "sampled_min_foot_center_margin_m": 0.0030581792683060383
+    },
+    {
+      "phase": 17,
+      "leg": 1,
+      "base_start_x": 0.4800000000000009,
+      "base_pre_x": 0.525000000000001,
+      "foot_start": [
+        0.325,
+        0.198696689,
+        0.02
+      ],
+      "foot_goal": [
+        0.455,
+        0.198696689,
+        0.04
+      ],
+      "sampled_max_torque_ratio_85pct": 0.800131843368529,
+      "sampled_min_foot_center_margin_m": -0.019793546209774804
+    },
+    {
+      "phase": 18,
+      "leg": 0,
+      "base_start_x": 0.525000000000001,
+      "base_pre_x": 0.515000000000001,
+      "foot_start": [
+        0.575,
+        0.198696689,
+        0.04
+      ],
+      "foot_goal": [
+        0.7050000000000001,
+        0.198696689,
+        0.06
+      ],
+      "sampled_max_torque_ratio_85pct": 0.5357730509913363,
+      "sampled_min_foot_center_margin_m": 0.008000616307186514
+    },
+    {
+      "phase": 19,
+      "leg": 2,
+      "base_start_x": 0.515000000000001,
+      "base_pre_x": 0.5650000000000011,
+      "foot_start": [
+        0.575,
+        -0.198696689,
+        0.04
+      ],
+      "foot_goal": [
+        0.7050000000000001,
+        -0.198696689,
+        0.06
+      ],
+      "sampled_max_torque_ratio_85pct": 0.39051839990597487,
+      "sampled_min_foot_center_margin_m": 0.023160510800183665
+    },
+    {
+      "phase": 20,
+      "leg": 3,
+      "base_start_x": 0.5650000000000011,
+      "base_pre_x": 0.6150000000000011,
+      "foot_start": [
+        0.455,
+        -0.198696689,
+        0.04
+      ],
+      "foot_goal": [
+        0.575,
+        -0.198696689,
+        0.04
+      ],
+      "sampled_max_torque_ratio_85pct": 0.7117256374710834,
+      "sampled_min_foot_center_margin_m": 0.006887963220699067
+    },
+    {
+      "phase": 21,
+      "leg": 1,
+      "base_start_x": 0.6150000000000011,
+      "base_pre_x": 0.6600000000000011,
+      "foot_start": [
+        0.455,
+        0.198696689,
+        0.04
+      ],
+      "foot_goal": [
+        0.575,
+        0.198696689,
+        0.04
+      ],
+      "sampled_max_torque_ratio_85pct": 0.7560445154752446,
+      "sampled_min_foot_center_margin_m": -0.011151362272320164
+    },
+    {
+      "phase": 22,
+      "leg": 0,
+      "base_start_x": 0.6600000000000011,
+      "base_pre_x": 0.6450000000000012,
+      "foot_start": [
+        0.7050000000000001,
+        0.198696689,
+        0.06
+      ],
+      "foot_goal": [
+        0.825,
+        0.198696689,
+        0.06
+      ],
+      "sampled_max_torque_ratio_85pct": 0.4774757309943485,
+      "sampled_min_foot_center_margin_m": 0.006530875895089272
+    },
+    {
+      "phase": 23,
+      "leg": 2,
+      "base_start_x": 0.6450000000000012,
+      "base_pre_x": 0.7000000000000014,
+      "foot_start": [
+        0.7050000000000001,
+        -0.198696689,
+        0.06
+      ],
+      "foot_goal": [
+        0.825,
+        -0.198696689,
+        0.06
+      ],
+      "sampled_max_torque_ratio_85pct": 0.3453845273695007,
+      "sampled_min_foot_center_margin_m": 0.0139429899774276
+    },
+    {
+      "phase": 24,
+      "leg": 3,
+      "base_start_x": 0.7000000000000014,
+      "base_pre_x": 0.7300000000000015,
+      "foot_start": [
+        0.575,
+        -0.198696689,
+        0.04
+      ],
+      "foot_goal": [
+        0.7050000000000001,
+        -0.198696689,
+        0.06
+      ],
+      "sampled_max_torque_ratio_85pct": 0.7194378088592341,
+      "sampled_min_foot_center_margin_m": 0.003058179268306649
+    },
+    {
+      "phase": 25,
+      "leg": 1,
+      "base_start_x": 0.7300000000000015,
+      "base_pre_x": 0.7750000000000016,
+      "foot_start": [
+        0.575,
+        0.198696689,
+        0.04
+      ],
+      "foot_goal": [
+        0.7050000000000001,
+        0.198696689,
+        0.06
+      ],
+      "sampled_max_torque_ratio_85pct": 0.8001318433685255,
+      "sampled_min_foot_center_margin_m": -0.01979354620977447
+    }
+  ],
+  "order": [
+    0,
+    2,
+    3,
+    1,
+    3,
+    1,
+    0,
+    2,
+    3,
+    1,
+    0,
+    2,
+    3,
+    1,
+    0,
+    2,
+    3,
+    1,
+    0,
+    2,
+    3,
+    1,
+    0,
+    2,
+    3,
+    1
+  ],
+  "plan_generator": "simulation\\reviews\\ankle-v23-curriculum\\20260915\\calculate_margin.py",
+  "collision_geometry": "nonadjacent URDF OBB SAT sampled every 0.2s, penetration tolerance 0.1mm",
+  "evidence": "geometry/static calculation only, not dynamic feasibility",
+  "urdf_sha256": "3a440a7ef15e86492ac2613d13c73b1366393209a84cfc4a1b829b6646e2b559"
+}

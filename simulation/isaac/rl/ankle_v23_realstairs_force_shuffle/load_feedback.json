@@ -1,0 +1,13 @@
+{
+  "phase": 3,
+  "mode": "privileged bounded joint-position feedback",
+  "minimum_force_n": 1.2,
+  "maximum_static_torque_ratio": 0.9613611993855025,
+  "proportional_m_per_n": 0.00015,
+  "integral_m_per_n_s": 0.00025,
+  "integral_bound_m": 0.01,
+  "foot_correction_bound_m": 0.012,
+  "joint_correction_bound_rad": 0.12,
+  "physical_effort_joint_rate_limits": "unchanged",
+  "evidence": "controller candidate, not verified dynamic behavior"
+}

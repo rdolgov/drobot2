@@ -13,7 +13,7 @@
         <div class="brand">
           <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
           <div>
-            <p class="eyebrow">12-SERVO COMMISSIONING</p>
+            <p class="eyebrow">SERVO CONTROL Â· CALIBRATED ANKLES</p>
             <h1>Drobot Four-Leg Control</h1>
           </div>
         </div>
@@ -27,10 +27,10 @@
             SETTINGS
           </button>
           <button class="center-button" id="centerAll" type="button">
-            CENTER ALL 12
+            CENTER ALL
           </button>
           <button class="stop-button" id="disarmAll" type="button">
-            DISARM ALL 12
+            DISARM ALL
           </button>
         </div>
       </header>
@@ -106,39 +106,47 @@
         <section class="rl-panel" id="rlPanel" aria-labelledby="rlTitle">
           <div class="rl-copy">
             <p class="eyebrow">REAL IMU + LIVE JOINT FEEDBACK</p>
-            <h2 id="rlTitle">RL walking policy</h2>
+            <h2 id="rlTitle">RL locomotion policy</h2>
             <p>
-              Runs the selected ONNX policy at the requested speed and
-              duration. Press PREPARE RL STANCE first; it moves all twelve
+              Runs the selected policy at the requested speed and
+              duration. Press PREPARE RL STANCE first; it moves all configured
               joints together into the neutral pose used during training and
               waits for a settled hold before enabling inference. RL preserves
-              torque through startup and returns all 12 joints to calibrated
-              center when complete. A target-step clamp or
-              transient deadline miss returns to center and holds; hardware
+              torque through startup. Running policies ramp their speed command
+              to zero and hold the trained stopped stance on normal completion;
+              legacy walking policies return to calibrated center. Target-step overruns
+              are clamped and logged. Ankle-policy timing and hardware
               faults and the explicit stop button still disarm. The 8080 process remains the only servo-bus
               owner and applies position, rate, tilt, telemetry, and
               model-output guards. Temperatures from 55–64 C are rechecked for
               five seconds before stopping; 65 C or higher stops immediately.
             </p>
+            <p id="rlExperimentalNotice" class="calibration-help" hidden></p>
             <div class="rl-metrics">
               <span>Status <b id="rlStatus">CHECKING</b></span>
               <span>Model <b id="rlModel">Loading configured model</b></span>
               <span>IMU gravity <b id="rlGravity">Waiting</b></span>
-              <span>Targets <b id="rlTargets">0 / 12</b></span>
+              <span>Targets <b id="rlTargets">0 / --</b></span>
               <span>Recorder <b id="rlRecording">AUTO / READY</b></span>
             </div>
           </div>
           <div class="rl-controls">
             <div class="rl-parameter-grid">
+              <label class="rl-model-label" for="rlModelSelect">
+                <span>Policy</span>
+                <select id="rlModelSelect" aria-label="RL policy model">
+                  <option>Loading configured policy</option>
+                </select>
+              </label>
               <label for="rlSpeed">
                 <span>Forward speed</span>
                 <span class="rl-number-input">
-                  <input id="rlSpeed" type="number" inputmode="decimal" min="0.04" max="0.10" step="0.001" value="0.040">
+                  <input id="rlSpeed" type="number" inputmode="decimal" min="0.10" max="0.14" step="0.001" value="0.120">
                   <small>m/s</small>
                 </span>
               </label>
               <label for="rlDuration">
-                <span>Walk time</span>
+                <span>Run time</span>
                 <span class="rl-number-input">
                   <input id="rlDuration" type="number" inputmode="decimal" min="1" max="60" step="1" value="5">
                   <small>seconds</small>
@@ -154,13 +162,13 @@
                 PREPARE RL STANCE
               </button>
               <button class="rl-start-button" id="startRl" type="button">
-                START RL WALK
+                START RL POLICY
               </button>
               <button class="gait-stop-button" id="stopRl" type="button">
                 STOP RL + DISARM
               </button>
             </div>
-            <small id="rlDetail">60 Hz policy / normal completion centers and holds</small>
+            <small id="rlDetail">60 Hz policy / model-declared normal stop</small>
           </div>
         </section>
 
@@ -178,7 +186,7 @@
           <article class="metric">
             <span>Servo voltage</span>
             <strong id="voltageRange">—</strong>
-            <small id="voltageSpread">Across all 12 IDs</small>
+            <small id="voltageSpread">Across all configured IDs</small>
           </article>
           <article class="metric">
             <span>Diagnostic current</span>
@@ -192,7 +200,7 @@
           </article>
           <article class="metric armed-metric">
             <span>Torque armed</span>
-            <strong id="armedCount">0 / 12</strong>
+            <strong id="armedCount">0 / --</strong>
             <small id="watchdog">Watchdog —</small>
           </article>
         </section>

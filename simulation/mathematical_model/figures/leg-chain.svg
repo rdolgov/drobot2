@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 350" role="img" aria-labelledby="title desc">
+<title id="title">Drobot2 leg coordinate chain</title><desc id="desc">Body to abduction joint, offset hip-flexion pivot, knee, fork and sole. Diagram is schematic.</desc>
+<rect width="1000" height="350" rx="14" fill="#f6f4ed"/>
+<g font-family="sans-serif" fill="#193b31"><text x="32" y="35" font-size="20" font-weight="bold">One leg · coordinate chain</text>
+<rect x="35" y="80" width="155" height="74" rx="10" fill="#dce8dc"/><text x="58" y="112" font-size="16">Body B</text><text x="58" y="138" font-size="14">X forward · Z up</text>
+<path d="M190 118H270L380 225L560 122L760 239L805 275" stroke="#167158" stroke-width="8" stroke-linejoin="round" fill="none"/>
+<path d="M190 118H270L380 225" stroke="#b18040" stroke-width="6" fill="none"/>
+<g fill="#193b31"><circle cx="270" cy="118" r="9"/><circle cx="380" cy="225" r="9"/><circle cx="560" cy="122" r="9"/><circle cx="760" cy="239" r="8"/></g>
+<path d="M781 291L830 260" stroke="#b18040" stroke-width="10" stroke-linecap="round"/>
+<text x="241" y="89" font-size="17">H · α</text><text x="341" y="264" font-size="17">P · β</text><text x="532" y="91" font-size="17">D · κ</text><text x="733" y="209" font-size="15">fork / ankle</text>
+<text x="282" y="206" font-size="15">offset (a, −b, c)</text><text x="432" y="159" font-size="16">L₁ = 159.897 mm</text><text x="633" y="155" font-size="16">L = 159.897 mm</text><text x="839" y="277" font-size="15">e = 31 mm</text><text x="807" y="317" font-size="17">C · sole center</text>
+<text x="35" y="317" font-size="14" fill="#5c7165">Tᴮ꜀ = Tᴮₕ Tᴴₚ Tᴾᴅ Tᴰ꜀ · transforms map child coordinates into parent coordinates</text></g></svg>

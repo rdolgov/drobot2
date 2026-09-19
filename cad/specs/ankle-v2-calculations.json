@@ -1,0 +1,212 @@
+{
+  "dryScale": 0.46683445139437,
+  "dryMass": 3.189003,
+  "knownMass": 1.691263534,
+  "sourceMass": 4.526138989000001,
+  "baselineMassKg": 3.18,
+  "activeMassKg": 3.5,
+  "explanation": "Subtract the 0.45 kg centered battery and 0.15 kg electronics from base, and each 55 g servo from its moving link using the parallel-axis theorem. Scale remaining estimated dry material uniformly to close a 3.18 kg baseline with four 70.237 g shoes. Preserve servo, electronics, sensor, camera and 523.179545 g rear-payload masses. Add four 55 g motors, four 15 g fixed cradles and four 10 g rotating yokes after baseline calibration.",
+  "assumptions": {
+    "electronicsCenterM": [
+      0,
+      0,
+      0.056
+    ],
+    "electronicsSizeM": [
+      0.12,
+      0.08,
+      0.02
+    ],
+    "rearPayloadCenterM": [
+      -0.1315,
+      0,
+      0.05
+    ],
+    "rearPayloadSizeM": [
+      0.043,
+      0.144,
+      0.068
+    ],
+    "shoeEnvelopeM": [
+      0.031,
+      0.1,
+      0.06
+    ],
+    "shoeComM": [
+      0.02,
+      0,
+      0
+    ],
+    "ankleServoCenterM": [
+      0.147396689,
+      0,
+      -0.001825
+    ],
+    "cradleMassKg": 0.015,
+    "cradleCenterM": [
+      0.14189668900000002,
+      0,
+      0
+    ],
+    "cradleEnvelopeM": [
+      0.04,
+      0.035,
+      0.05
+    ],
+    "yokeMassKg": 0.01,
+    "yokeCenterM": [
+      0.012,
+      0,
+      0
+    ],
+    "yokeEnvelopeM": [
+      0.024,
+      0.03,
+      0.05
+    ]
+  },
+  "baselineBase": {
+    "m": 0.8264986733701581,
+    "c": [
+      0,
+      0,
+      0.05312145579556759
+    ],
+    "I": [
+      [
+        0.005989184657537064,
+        0.000005150491135343805,
+        0
+      ],
+      [
+        0.000005150491135343805,
+        0.004398405322080959,
+        0
+      ],
+      [
+        0,
+        0,
+        0.009171926257454032
+      ]
+    ]
+  },
+  "baselineDistal": {
+    "m": 0.12975746854294024,
+    "c": [
+      0.059336545239287206,
+      -0.000016680653825044662,
+      -0.0011279791697980245
+    ],
+    "I": [
+      [
+        0.00003988036892203713,
+        2.9350051604079723e-7,
+        -0.000004499861982449173
+      ],
+      [
+        2.9350051604079723e-7,
+        0.0003529943566147307,
+        1.7059798395614196e-8
+      ],
+      [
+        -0.000004499861982449173,
+        1.7059798395614196e-8,
+        0.0003265560510269813
+      ]
+    ]
+  },
+  "v2Distal": {
+    "m": 0.19975746854294024,
+    "c": [
+      0.08978201547682457,
+      -0.00001083533661978519,
+      -0.0012351914721482344
+    ],
+    "I": [
+      [
+        0.00005393053991931026,
+        2.2760314028154955e-7,
+        -0.0000031729014586719908
+      ],
+      [
+        2.2760314028154955e-7,
+        0.000717669879109997,
+        1.7291852928484416e-8
+      ],
+      [
+        -0.0000031729014586719908,
+        1.7291852928484416e-8,
+        0.0006858470244407102
+      ]
+    ]
+  },
+  "baselineFoot": {
+    "m": 0.070237,
+    "c": [
+      0.02,
+      0,
+      0
+    ],
+    "I": [
+      [
+        0.00007960193333333333,
+        0,
+        0
+      ],
+      [
+        0,
+        0.000026695913083333333,
+        0
+      ],
+      [
+        0,
+        0,
+        0.00006415564641666667
+      ]
+    ]
+  },
+  "v2Foot": {
+    "m": 0.08023699999999999,
+    "c": [
+      0.019002953749517056,
+      0,
+      0
+    ],
+    "I": [
+      [
+        0.00008243526666666667,
+        0,
+        0
+      ],
+      [
+        0,
+        0.000029819482716628036,
+        0
+      ],
+      [
+        0,
+        0,
+        0.00006594588271662803
+      ]
+    ]
+  },
+  "arithmetic": {
+    "extraMassKg": 0.32,
+    "extraMassPercent": 10.062893081761006,
+    "motorOnlyMassKg": 0.22,
+    "ankleTorqueTwoStanceFeetAtToeNm": 0.8580818749999999,
+    "ankleTorqueTwoStanceFeetAtToeDoubleLoadNm": 1.7161637499999998,
+    "servoOnlyKneePointMassInertiaKgM2": 0.0014061823134239497,
+    "ankleAssemblyKneePointMassInertiaKgM2": 0.002045356092253018,
+    "rateFor25DegSinusoidAt1p375HzDegS": 215.98449493429825,
+    "maxSinusoidAmplitudeAt100DegS1p375HzDeg": 11.574904952137844
+  },
+  "frame_calculations": {
+    "method": "R_body_foot(0) = Rz(side*pi/2) Rx(pi/2) Rz(-pi/2) Rx(-pi/2); multiply the local joint axis by this rotation",
+    "left_foot_axes_in_body_rows": [[0, -1, 0], [0, 0, 1], [-1, 0, 0]],
+    "right_foot_axes_in_body_rows": [[0, 1, 0], [0, 0, -1], [-1, 0, 0]],
+    "positive_ankle_axis_in_body_at_zero": [0, -1, 0],
+    "positive_motion": "Toe-up at neutral on both sides"
+  },
+  "status": "Authoring calculations only; no validation or simulation run."
+}

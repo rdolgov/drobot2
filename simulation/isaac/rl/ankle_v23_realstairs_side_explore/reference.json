@@ -1,0 +1,45 @@
+{
+  "rise_m": 0.18,
+  "tread_m": 0.25,
+  "stair_count": 4,
+  "phase_s": 12.0,
+  "dt_s": 0.016666666666666666,
+  "order": [
+    3
+  ],
+  "phases": [
+    {
+      "phase": 0,
+      "leg": 3,
+      "foot_goal": [
+        0.22499999999999998,
+        -0.2,
+        0.18
+      ],
+      "mode": "unscripted_goal_exploration"
+    }
+  ],
+  "evidence": "all-four-contact reset endpoint arithmetic only; RR goal is a shaping hint, not a solved path",
+  "goal_feet": [
+    [
+      0.3275142706680239,
+      0.06274200668765162,
+      0.18
+    ],
+    [
+      0.19016104707938103,
+      0.2757697180096402,
+      0.18
+    ],
+    [
+      0.19016104748151708,
+      -0.40470709107595554,
+      0.18
+    ],
+    [
+      0.22499999999999998,
+      -0.2,
+      0.18
+    ]
+  ]
+}

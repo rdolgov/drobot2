@@ -3,7 +3,7 @@ part_id: st3215_hip_body_mount
 units:
   length: mm
 
-status: first_pass_for_position_review
+status: reinforced_root_pending_physical_review
 printable: true
 
 coordinate_system:
@@ -15,7 +15,7 @@ coordinate_system:
 source_components:
   motor_fork: drobot_cad/parts/st3215_servo_output_fork.py
   fork_configuration: full_fork_with_negative_x_half_oval_extension
-  geometry_policy: reuse the complete motor fork unchanged
+  geometry_policy: preserve the complete motor fork and add a solid tapered root collar
 
 mounting_plate:
   plane: YZ
@@ -30,6 +30,24 @@ mounting_plate:
   oversize_checks:
     fork_attachment_width_y_mm: 24.0
     fork_attachment_height_z_mm: 63.4
+
+root_reinforcement:
+  construction: solid_ruled_loft_between_rounded_rectangle_sections
+  plate_embed_x_mm: 2.0
+  start_x_mm: -28.0
+  footprint_at_fork_side_plate_face:
+    x_mm: -26.0
+    width_y_mm: 50.0
+    height_z_mm: 64.0
+    corner_radius_mm: 8.0
+  tip:
+    x_mm: -2.0
+    width_y_mm: 20.0
+    height_z_mm: 48.0
+    corner_radius_mm: 6.0
+  exposed_taper_length_x_mm: 24.0
+  intent: spread plate loads across a broad footprint and fuse deeply into the solid fork root
+  clearance_policy: all new material ends behind X=0; retain bolt positions and flat body face
 
 body_bolt_pattern:
   quantity: 4
@@ -64,4 +82,6 @@ acceptance_tests:
   - plate has four 4.5 mm through-holes on a symmetric 60 x 60 mm pattern
   - body-side mounting face is flat at X=-32 mm
   - fork-to-plate overlap is positive and continuous
-
+  - solid root collar embeds 2 mm into the plate and terminates inside the negative-X fork root
+  - collar preserves access to the four body bolts
+  - no reinforcement extends into the open fork at X>=0

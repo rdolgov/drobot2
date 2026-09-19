@@ -3,6 +3,11 @@ http_port = 8766
 ramp_rate_deg_s = 270.0
 heartbeat_timeout_s = 20.0
 
+[ankles]
+calibration = "servos/calibration-ankles.json"
+travel_observations = "servos/ankle-travel-observations.json"
+limit_margin_deg = 5.0
+
 [monitoring]
 voltage_warning_low_v = 11.0
 voltage_warning_high_v = 12.6

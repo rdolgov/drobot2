@@ -298,3 +298,300 @@ class DrobotCommandedWalkingSymmetryGatedRobustStraightCrawlExternalRearPayloadP
             use_mirror_loss=False,
             data_augmentation_func=compute_left_right_symmetric_states,
         )
+
+
+@configclass
+class DrobotCommandedRunningFastStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedWalkingSymmetryGatedRobustStraightCrawlExternalRearPayloadPPORunnerCfg
+):
+    """V31 topology adaptation for a fast diagonal run and stable stop."""
+
+    max_iterations = 2000
+    experiment_name = "drobot_commanded_run_v31_fast_stop_external_rear_payload"
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # V31 changes the gait topology and adds within-episode command changes.
+        # Restore exploration and a moderate learning rate for the nominal phase;
+        # robust continuation can consolidate with smaller CLI overrides.
+        self.algorithm.learning_rate = 2.0e-4
+        self.algorithm.entropy_coef = 0.002
+        self.algorithm.desired_kl = 0.010
+        self.algorithm.symmetry_cfg = RslRlSymmetryCfg(
+            use_data_augmentation=True,
+            use_mirror_loss=False,
+            data_augmentation_func=compute_left_right_symmetric_states,
+        )
+
+
+@configclass
+class DrobotCommandedRunningHardwareMatchedStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedRunningFastStopExternalRearPayloadPPORunnerCfg
+):
+    """V32 conservative continuation under measured actuator constraints."""
+
+    max_iterations = 1800
+    experiment_name = (
+        "drobot_commanded_run_v32_hardware_matched_stop_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # Preserve useful V31 contact timing while allowing the actor to adapt
+        # to half the target slew, broader actuator response, and a slower gait.
+        self.algorithm.learning_rate = 8.0e-5
+        self.algorithm.entropy_coef = 0.001
+        self.algorithm.desired_kl = 0.006
+
+
+@configclass
+class DrobotCommandedRunningAppliedTargetHistoryStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedRunningHardwareMatchedStopExternalRearPayloadPPORunnerCfg
+):
+    """V33 continuation with controller-applied action history."""
+
+    max_iterations = 1800
+    experiment_name = (
+        "drobot_commanded_run_v33_applied_target_history_stop_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # Only the final 12 observation semantics change.  Use a small learning
+        # rate so useful V32 gait timing survives while the actor relearns its
+        # feedback response around the executable target history.
+        self.algorithm.learning_rate = 6.0e-5
+        self.algorithm.entropy_coef = 0.001
+        self.algorithm.desired_kl = 0.005
+
+
+@configclass
+class DrobotCommandedRunningIntegratedTargetVelocityStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedRunningAppliedTargetHistoryStopExternalRearPayloadPPORunnerCfg
+):
+    """V34 bounded target-velocity policy with a reset output head."""
+
+    max_iterations = 1800
+    experiment_name = (
+        "drobot_commanded_run_v34_integrated_target_velocity_stop_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # The reusable hidden layers already encode the V33 observation and
+        # gait features.  Early V34 checkpoints were useful, but RSL-RL's
+        # adaptive scheduler raised 1.5e-4 as high as 1.71e-3 and a continuation
+        # rapidly forgot rear-foot release.  Use a conservative fixed rate;
+        # prepare_ppo_continuation.py also removes any oversized rate and stale
+        # Adam moments restored from an older checkpoint.
+        self.algorithm.learning_rate = 3.0e-5
+        self.algorithm.schedule = "fixed"
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.desired_kl = 0.005
+        # A controlled 0.25-coefficient mirror-loss continuation reduced fixed
+        # randomized speed from 0.051 to 0.030-0.043 m/s and damaged the stopped
+        # four-foot stance.  The real robot's fixed motor/load asymmetry is hidden
+        # state at gait startup, so hard output equivariance is too restrictive.
+        # Retain mirrored samples for broad coverage, but let joint/IMU feedback
+        # drive asymmetric compensation.  The smaller rate and zero entropy bonus
+        # consolidate the deterministic mean around the corrected pair gate.
+        self.algorithm.symmetry_cfg = RslRlSymmetryCfg(
+            use_data_augmentation=True,
+            use_mirror_loss=False,
+            data_augmentation_func=compute_left_right_symmetric_states,
+        )
+
+
+@configclass
+class DrobotCommandedRunningCommandScaledHighSpeedStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedRunningIntegratedTargetVelocityStopExternalRearPayloadPPORunnerCfg
+):
+    """V35 command-scaled high-speed continuation of the qualified V34 gait."""
+
+    max_iterations = 1200
+    experiment_name = (
+        "drobot_commanded_run_v35_command_scaled_high_speed_stop_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.learning_rate = 1.5e-5
+        self.algorithm.schedule = "fixed"
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.desired_kl = 0.004
+
+
+@configclass
+class DrobotCommandedRunningFlatSoleHighSpeedStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedRunningCommandScaledHighSpeedStopExternalRearPayloadPPORunnerCfg
+):
+    """V36 flat-sole reference continuation for the rectangular shoes."""
+
+    max_iterations = 1400
+    experiment_name = (
+        "drobot_commanded_run_v36_flat_sole_high_speed_stop_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.learning_rate = 1.0e-5
+        self.algorithm.schedule = "fixed"
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.desired_kl = 0.003
+
+
+@configclass
+class DrobotCommandedRunningFlatSoleResidualRunStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedRunningFlatSoleHighSpeedStopExternalRearPayloadPPORunnerCfg
+):
+    """V37 low-authority residual adaptation around the corrected run gait."""
+
+    max_iterations = 1400
+    experiment_name = (
+        "drobot_commanded_run_v37_flat_sole_residual_stop_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.learning_rate = 3.0e-5
+        self.algorithm.schedule = "fixed"
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.desired_kl = 0.004
+
+
+@configclass
+class DrobotCommandedRunningStraightLowAbductionLongStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedRunningFlatSoleHighSpeedStopExternalRearPayloadPPORunnerCfg
+):
+    """V38 low-abduction continuation with longer straight-path exposure."""
+
+    max_iterations = 1400
+    experiment_name = (
+        "drobot_commanded_run_v38_straight_low_abduction_long_stop_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # The inherited actor already has a useful forward gait. Use a small,
+        # fixed continuation step so the new abduction rate contract and longer
+        # path cost reshape that gait without erasing rear-foot release.
+        self.algorithm.learning_rate = 1.0e-5
+        self.algorithm.schedule = "fixed"
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.desired_kl = 0.003
+
+
+@configclass
+class DrobotCommandedRunningReferenceDrivenStraightStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedRunningFlatSoleResidualRunStopExternalRearPayloadPPORunnerCfg
+):
+    """V39 reference-driven run with a reset residual action head."""
+
+    max_iterations = 1200
+    experiment_name = (
+        "drobot_commanded_run_v39_reference_driven_straight_stop_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # V39 starts with a zero residual head, so the deterministic policy is
+        # exactly the analytic flat-sole gait.  Retain V38's useful observation
+        # features but adapt cautiously around that already executable baseline.
+        self.algorithm.learning_rate = 3.0e-5
+        self.algorithm.schedule = "fixed"
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.desired_kl = 0.004
+
+
+@configclass
+class DrobotCommandedRunningSpeedFaithfulStraightStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedRunningStraightLowAbductionLongStopExternalRearPayloadPPORunnerCfg
+):
+    """V40 small-step speed-fidelity continuation of V38."""
+
+    max_iterations = 1200
+    experiment_name = (
+        "drobot_commanded_run_v40_speed_faithful_straight_stop_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.learning_rate = 1.0e-5
+        self.algorithm.schedule = "fixed"
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.desired_kl = 0.003
+
+
+@configclass
+class DrobotCommandedRunningPhaseNormalizedSpeedStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedRunningSpeedFaithfulStraightStopExternalRearPayloadPPORunnerCfg
+):
+    """V41 frequency-normalized continuation of the selected V40 actor."""
+
+    max_iterations = 1200
+    experiment_name = (
+        "drobot_commanded_run_v41_phase_normalized_speed_stop_external_rear_payload"
+    )
+
+
+@configclass
+class DrobotCommandedRunningLearnedCycleResidualStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedRunningReferenceDrivenStraightStopExternalRearPayloadPPORunnerCfg
+):
+    """V42 residual adaptation around the distilled stable V40 phase cycle."""
+
+    max_iterations = 1600
+    experiment_name = (
+        "drobot_commanded_run_v42_learned_cycle_residual_stop_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.learning_rate = 2.0e-5
+        self.algorithm.schedule = "fixed"
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.desired_kl = 0.003
+
+
+@configclass
+class DrobotCommandedRunningFootWarpTrotResidualStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedRunningLearnedCycleResidualStopExternalRearPayloadPPORunnerCfg
+):
+    """V43 cautious residual adaptation around the qualified foot-space trot."""
+
+    max_iterations = 1600
+    experiment_name = (
+        "drobot_commanded_run_v43_foot_warp_trot_residual_stop_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.algorithm.learning_rate = 1.5e-5
+        self.algorithm.schedule = "fixed"
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.desired_kl = 0.0025
+
+
+@configclass
+class DrobotCommandedRunningFlatContactHardwareMatchedStopExternalRearPayloadPPORunnerCfg(
+    DrobotCommandedRunningFootWarpTrotResidualStopExternalRearPayloadPPORunnerCfg
+):
+    """V44 separately trained flat-contact gait under measured hardware limits."""
+
+    max_iterations = 1600
+    experiment_name = (
+        "drobot_commanded_run_v44_flat_contact_hardware_matched_stop_external_rear_payload"
+    )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # No implicit V43 bootstrap: the reference and output contract changed.
+        self.algorithm.learning_rate = 3.0e-5
+        self.algorithm.schedule = "fixed"
+        self.algorithm.entropy_coef = 0.0
+        self.algorithm.desired_kl = 0.004
+        self.algorithm.symmetry_cfg = RslRlSymmetryCfg(
+            use_data_augmentation=False,
+            use_mirror_loss=False,
+            data_augmentation_func=compute_left_right_symmetric_states,
+        )
