@@ -61,14 +61,34 @@
       <main>
         <section class="gait-panel" aria-labelledby="gaitTitle">
           <div class="gait-copy">
-            <p class="eyebrow">SUPPORTED COMMISSIONING / FEET CLEAR</p>
-            <h2 id="gaitTitle">Flat-sole gait tests</h2>
+            <p class="eyebrow">MANUAL IK WALK / OPERATOR CONTROL</p>
+            <h2 id="gaitTitle">Inverse-kinematics gait tests</h2>
             <p>
               Distributed crawl moves one leg at a time on three supports.
               Diagonal-pair mode lifts front-left with rear-right, then
               front-right with rear-left, using the opposite diagonal as its
-              two-shoe support. Both are separate shoe-aware routines and use
-              the same flat planted-foot geometry.
+              two-foot support. With ankles installed, all 16 motors use
+              foot-space IK. The larger diagonal sequence uses IMU and joint
+              feedback to level ankle pitch, and stops after two cycles.
+              V6 gives the planted ankles a short lead as lift begins:
+              the first 6 mm of forward push accompanies about 4 mm of lift.
+              Further lift waits until both planted ankle encoders show at
+              least 0.5 degrees of movement in the push direction. It then
+              completes the 20 mm forward push together with the full lift.
+              The raised feet travel forward with the body during lift,
+              then complete their 100 mm stride during swing.
+              The reference cycle is 4 seconds, twice the previous pace;
+              encoder settling and command limits can add time. Both lifting
+              legs and pushing ankles share one coordinated command step.
+              The remaining advance follows landing. Planted ankles follow
+              the planned push with IMU tilt compensation, selected before
+              lift starts; swing ankles use
+              measured leg angles for pitch leveling.
+              Lift, swing and plant phases wait for encoder settling.
+              First confirm directions with the body supported, then use a
+              clear test area with the power cutoff ready for a floor trial.
+              Pitch-only ankles cannot correct sole roll; encoder tracking
+              does not confirm foot contact or balance.
             </p>
             <div class="corner-map" aria-label="Configured body corner map">
               <span><b>1</b> FRONT LEFT</span>
@@ -92,13 +112,14 @@
               <button class="walk-button" id="walkForward" type="button">
                 TEST DISTRIBUTED CRAWL
               </button>
-              <button class="walk-button" id="walkDiagonalPair" type="button">
+              <button class="walk-button" id="walkDiagonalPair" type="button" aria-describedby="diagonalStartStatus" disabled>
                 TEST DIAGONAL PAIRS
               </button>
               <button class="gait-stop-button" id="stopWalk" type="button">
                 STOP + STABLE HOLD
               </button>
             </div>
+            <small id="diagonalStartStatus" role="status">Waiting for dashboard state before diagonal start.</small>
             <small id="gaitDetail">Continuous / 60 mm stride / 25 mm lift / 6 s cycle / STOP returns to four-foot hold</small>
           </div>
         </section>

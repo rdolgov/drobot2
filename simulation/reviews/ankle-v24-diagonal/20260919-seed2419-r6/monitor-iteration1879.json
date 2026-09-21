@@ -1,0 +1,71 @@
+{
+  "observed_unix": 1789883107.6986716,
+  "status": "running",
+  "last_iteration": 1879,
+  "source_contract_changes": [],
+  "scope": "Unweighted last 100 rounded iteration summaries; training only",
+  "iteration_range": [
+    1780,
+    1879
+  ],
+  "means": {
+    "train_paired_landings": 0.0,
+    "train_min_steps_per_leg": 0.0,
+    "train_gate_timeout_fraction": 0.889898,
+    "train_front_left_lift_clear": 0.290604,
+    "train_rear_left_lift_clear": 0.0,
+    "train_front_right_lift_clear": 0.20959,
+    "train_rear_right_lift_clear": 0.0,
+    "train_stance_slip_m_s": 0.000584,
+    "train_angular_rms_rad_s": 0.09643,
+    "train_fall_fraction": 0.0
+  },
+  "gate_totals": {
+    "schema": "drobot.ankle-v24-diagonal.gate-diagnostics.v2",
+    "step": 120322,
+    "evidence": "training_only",
+    "blocker_counting": "each blocker observed at least once during a timed-out wait; reasons can overlap",
+    "episode_scope": "completed episodes only; current unfinished episodes excluded",
+    "completed_episodes": 49912,
+    "completed_moving_episodes": 45039,
+    "timeouts_by_stage": {
+      "transfer": 0,
+      "lift": 20300,
+      "advance": 11641,
+      "lower": 0,
+      "settle": 13098,
+      "push": 0
+    },
+    "timeouts_by_pair": {
+      "front_left_rear_right": 22427,
+      "front_right_rear_left": 22612
+    },
+    "timeout_blockers": {
+      "tracking": 42132,
+      "delivery": 44921,
+      "forward": 33807,
+      "height": 21195,
+      "speed": 45037,
+      "tilt": 0,
+      "angular": 251
+    },
+    "stage_entries": {
+      "transfer": 45055,
+      "lift": 45055,
+      "advance": 24755,
+      "lower": 13114,
+      "settle": 13114,
+      "push": 16
+    },
+    "qualified_touchdowns_by_leg": {
+      "front_left": 591,
+      "rear_left": 0,
+      "front_right": 7227,
+      "rear_right": 0
+    }
+  },
+  "error_files": [],
+  "launcher_stderr_bytes": 0,
+  "new_diagnostics": "../r6-model1500-broad290-comparison.md",
+  "decision": "Full-curriculum checkpoint and 10 mm taller broad-stance candidate both failed all four trials with no full pairs; candidate not adopted. Continue unchanged R6."
+}

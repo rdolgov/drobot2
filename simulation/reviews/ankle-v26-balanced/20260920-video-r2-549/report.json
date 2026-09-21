@@ -1,0 +1,43 @@
+{
+  "status": "completed",
+  "checkpoint": "simulation\\reviews\\ankle-v26-balanced\\20260920-train-r2\\checkpoints\\model_549.pt",
+  "reference_only": false,
+  "first_episodes_only": true,
+  "all_trials_qualified": false,
+  "hardware_qualified": false,
+  "trials": [
+    {
+      "environment": 0,
+      "start_pair": 0,
+      "motor_strength": 1.0,
+      "outcome": {
+        "failed": false,
+        "duration_s": 32.0
+      },
+      "forward_m": 0.2016163468360901,
+      "lateral_m": 0.12024255841970444,
+      "tilt_rms_deg": 1.3248057019632071,
+      "tilt_max_deg": 5.109487360054942,
+      "full_steps_by_leg_FL_RL_FR_RR": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "qualified_touchdowns_by_leg": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "peak_swing_clearance_m_by_leg": [
+        0.020643815398216248,
+        0.008045073598623276,
+        0.026165489107370377,
+        0.03442257270216942
+      ],
+      "qualified": false
+    }
+  ],
+  "video": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v26-balanced\\20260920-video-r2-549\\walk.mp4"
+}

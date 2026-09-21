@@ -1,0 +1,10 @@
+{
+  "status": "completed",
+  "pid": 5760,
+  "mode": "evaluate",
+  "started_unix": 1789973665.3071208,
+  "started_simulation_unix": 1789973674.5432768,
+  "start_iteration": 2549,
+  "finished_unix": 1789973757.6807203,
+  "report": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v27-overnight\\20260920-continue\\video-pair-1\\report.json"
+}

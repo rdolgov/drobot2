@@ -1,0 +1,77 @@
+{
+  "observed_unix": 1789884206.2320988,
+  "status": "running",
+  "last_iteration": 2331,
+  "source_contract_changes": [],
+  "scope": "Unweighted last 100 rounded iteration summaries; training only",
+  "iteration_range": [
+    2232,
+    2331
+  ],
+  "means": {
+    "train_paired_landings": 0.0,
+    "train_min_steps_per_leg": 0.0,
+    "train_gate_timeout_fraction": 0.889672,
+    "train_gate_timeout_lift": 0.257378,
+    "train_gate_timeout_advance": 0.334946,
+    "train_gate_timeout_settle": 0.297347,
+    "train_front_left_lift_clear": 0.282817,
+    "train_rear_left_lift_clear": 0.0,
+    "train_front_right_lift_clear": 0.255376,
+    "train_rear_right_lift_clear": 0.0,
+    "train_stance_slip_m_s": 0.000563,
+    "train_angular_rms_rad_s": 0.089052,
+    "train_fall_fraction": 0.0
+  },
+  "gate_totals": {
+    "schema": "drobot.ankle-v24-diagonal.gate-diagnostics.v2",
+    "step": 149179,
+    "evidence": "training_only",
+    "blocker_counting": "each blocker observed at least once during a timed-out wait; reasons can overlap",
+    "episode_scope": "completed episodes only; current unfinished episodes excluded",
+    "completed_episodes": 61347,
+    "completed_moving_episodes": 55293,
+    "timeouts_by_stage": {
+      "transfer": 0,
+      "lift": 23219,
+      "advance": 15421,
+      "lower": 0,
+      "settle": 16653,
+      "push": 0
+    },
+    "timeouts_by_pair": {
+      "front_left_rear_right": 27599,
+      "front_right_rear_left": 27694
+    },
+    "timeout_blockers": {
+      "tracking": 51134,
+      "delivery": 55159,
+      "forward": 41656,
+      "height": 24887,
+      "speed": 55290,
+      "tilt": 0,
+      "angular": 278
+    },
+    "stage_entries": {
+      "transfer": 55317,
+      "lift": 55317,
+      "advance": 32098,
+      "lower": 16677,
+      "settle": 16677,
+      "push": 24
+    },
+    "qualified_touchdowns_by_leg": {
+      "front_left": 1405,
+      "rear_left": 0,
+      "front_right": 8052,
+      "rear_right": 0
+    }
+  },
+  "error_files": [],
+  "launcher_stderr_bytes": 0,
+  "new_diagnostics": [
+    "../r6-model1500-rear-first/diagnosis.md",
+    "normalizer-audit.json"
+  ],
+  "decision": "Rear-first lift rejected after four failed trials without rear clearance; no actor-loading or frozen-normalizer fault identified. Continue unchanged R6; do not launch an unsupported repeat training run."
+}

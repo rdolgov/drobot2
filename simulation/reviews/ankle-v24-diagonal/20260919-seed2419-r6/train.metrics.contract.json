@@ -1,0 +1,144 @@
+{
+  "schema": "drobot.ankle-v24-diagonal.training.v4",
+  "pairs": [
+    [
+      "front_left",
+      "rear_right"
+    ],
+    [
+      "front_right",
+      "rear_left"
+    ]
+  ],
+  "stages": [
+    "transfer",
+    "lift",
+    "advance",
+    "lower",
+    "settle",
+    "all_foot_push"
+  ],
+  "stage_fractions": [
+    0.1,
+    0.18,
+    0.24,
+    0.18,
+    0.1,
+    0.2
+  ],
+  "actor_inputs": 82,
+  "critic_inputs": 101,
+  "warm_start_compatibility": "same dimensions; new clock/reference semantics",
+  "scheduler_gate": "delivered/requested target tracking, planar encoder foot-path proxy, joint speed and IMU",
+  "gated_stages": [
+    "lift",
+    "advance",
+    "settle"
+  ],
+  "floor_contact_gate": false,
+  "timeout": "terminate failed episode; never force next pair",
+  "final_stride_m": [
+    0.08,
+    0.1
+  ],
+  "lift_m": 0.022,
+  "target_accel_deg_s2": [
+    160.0,
+    240.0,
+    260.0,
+    200.0
+  ],
+  "stance_forward_down_m": [
+    0.08,
+    0.28
+  ],
+  "body_forward_shift_m": 0.014,
+  "maximum_leg_reach_m": 0.317,
+  "startup": "half-stride placement from reset stance; excluded from full paired-step counts",
+  "swing_residual_projection": {
+    "forward_window_m": 0.008,
+    "extra_lift_m": 0.01,
+    "maximum_lift_cancellation_m": 0.002,
+    "stages": [
+      "lift",
+      "advance",
+      "lower"
+    ],
+    "coordinates": "planar ankle pivot; does not certify ground clearance"
+  },
+  "lift_shaping": "monotonic supported per-foot clearance and bounded per-foot progress bonuses",
+  "velocity_reward_stage": "all-foot push only",
+  "gate_thresholds": {
+    "tracking_deg": 5.0,
+    "delivery_deg": 2.0,
+    "forward_m": 0.015,
+    "height_m": 0.008,
+    "settle_height_m": 0.01
+  },
+  "calibration": {
+    "calibration_sha256": "d86102f8fa47563a7d25b18e01a73637599688d3ad87d66c1fd2bb2b90ad54f3",
+    "travel_sha256": "5081320a979f1bd5e5c2bbdb98d63c3b19b14eaa98aff3cc893fcd388da5c4f8",
+    "ankles": [
+      {
+        "name": "front_left_ankle_pitch",
+        "id": 13,
+        "center_tick": 2048,
+        "direction": 1,
+        "observed_inward_limits_deg": [
+          -111.103515625,
+          109.2578125
+        ],
+        "effective_limits_rad": [
+          -0.5803219676017761,
+          0.5803219676017761
+        ]
+      },
+      {
+        "name": "rear_left_ankle_pitch",
+        "id": 15,
+        "center_tick": 3631,
+        "direction": -1,
+        "observed_inward_limits_deg": [
+          -116.904296875,
+          103.6328125
+        ],
+        "effective_limits_rad": [
+          -0.5803219676017761,
+          0.5803219676017761
+        ]
+      },
+      {
+        "name": "front_right_ankle_pitch",
+        "id": 14,
+        "center_tick": 2971,
+        "direction": 1,
+        "observed_inward_limits_deg": [
+          -109.697265625,
+          111.19140625
+        ],
+        "effective_limits_rad": [
+          -0.5803219676017761,
+          0.5803219676017761
+        ]
+      },
+      {
+        "name": "rear_right_ankle_pitch",
+        "id": 16,
+        "center_tick": 3423,
+        "direction": 1,
+        "observed_inward_limits_deg": [
+          -104.775390625,
+          116.552734375
+        ],
+        "effective_limits_rad": [
+          -0.5803219676017761,
+          0.5803219676017761
+        ]
+      }
+    ]
+  },
+  "limits": "intersection of unchanged USD soft limits and captured ankle bounds minus 5 deg",
+  "evaluation_mode": false,
+  "hardware_qualified": false,
+  "runtime_compatible_with_deployed_v23": false
+}

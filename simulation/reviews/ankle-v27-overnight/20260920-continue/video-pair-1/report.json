@@ -1,0 +1,43 @@
+{
+  "status": "completed",
+  "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v27-overnight\\20260920-continue\\train\\checkpoints\\model_2549.pt",
+  "reference_only": false,
+  "first_episodes_only": true,
+  "all_trials_qualified": false,
+  "hardware_qualified": false,
+  "trials": [
+    {
+      "environment": 0,
+      "start_pair": 1,
+      "motor_strength": 1.0,
+      "outcome": {
+        "failed": false,
+        "duration_s": 32.0
+      },
+      "forward_m": 0.488987535238266,
+      "lateral_m": -0.05719997361302376,
+      "tilt_rms_deg": 2.579050385942663,
+      "tilt_max_deg": 7.2160316788686485,
+      "full_steps_by_leg_FL_RL_FR_RR": [
+        5.0,
+        5.0,
+        5.0,
+        5.0
+      ],
+      "qualified_touchdowns_by_leg": [
+        5.0,
+        5.0,
+        6.0,
+        5.0
+      ],
+      "peak_swing_clearance_m_by_leg": [
+        0.04315689951181412,
+        0.05073069781064987,
+        0.04037940502166748,
+        0.04049942269921303
+      ],
+      "qualified": false
+    }
+  ],
+  "video": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v27-overnight\\20260920-continue\\video-pair-1\\walk.mp4"
+}

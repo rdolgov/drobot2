@@ -1,0 +1,23 @@
+{
+  "output": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v26-balanced\\continued-diagonal-comparison.mp4",
+  "sha256": "1a0de378d607ea777ca1b43fe812dddd92d4b2f6aa32b4a938cf8477b3fb0def",
+  "playback_speed": 1,
+  "source_time_s": [
+    2.5,
+    20.5
+  ],
+  "sources": [
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v25-ik\\20260920-pair-final-video\\walk.mp4",
+      "sha256": "b74a18b9ca8acd64c3b163be0277cd7e601f71b62bf7d3161cabc99686a1aafb",
+      "title": "Previous pair-focused model - SIMULATION"
+    },
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v26-balanced\\20260920-video-r2-549\\walk.mp4",
+      "sha256": "25f57a7f92b61bfc1abd52ba531a95cfeee436b89e378c70cabbca14d24cbae4",
+      "title": "Continued training - candidate B - SIMULATION"
+    }
+  ],
+  "changes": "trim, concatenate and annotate titles; no alteration to robot frames or motion",
+  "qualification": "Simulation evidence; see independent four-trial reports for results."
+}

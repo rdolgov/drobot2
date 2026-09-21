@@ -1,0 +1,27 @@
+{
+  "package": "ik-diagonal-bigstride-v2-20260920",
+  "host": "pi5-dog.local",
+  "ip_used_for_installation": "192.168.1.58",
+  "repository": "/home/rd/drobot2",
+  "archive": "ik-diagonal-bigstride-v2-pi-baseline.zip",
+  "archive_sha256": "732509dbf79e78c8d97faf8806859e0baf8931c4174032291b0e070d9a13b2d5",
+  "backup": "/home/rd/drobot2/debug/deployment-backups/ik-diagonal-20260920T162757391037Z",
+  "installed": true,
+  "service_restarted": true,
+  "service_state_after_installation": {
+    "ActiveState": "active",
+    "SubState": "running",
+    "ExecMainStatus": 0
+  },
+  "calibration_files_replaced": false,
+  "model_weights_replaced": false,
+  "tests_run": false,
+  "build_run": false,
+  "simulation_run": false,
+  "ui_validation_run": false,
+  "hardware_motion_check_run": false,
+  "walk_commanded": false,
+  "client_version": 14,
+  "url": "http://pi5-dog.local:8080/",
+  "fallback_url": "http://192.168.1.58:8080/"
+}

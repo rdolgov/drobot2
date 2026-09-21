@@ -1,0 +1,225 @@
+{
+  "checkpoint_sha256": "2c3e3f8d4f07fb1328bf17df2e6b28621e500a8105a26b5f8c34e594259b326b",
+  "curriculum": 0.166666666666667,
+  "scope": "Four deterministic first episodes; sampled geometry at approximately 10 Hz. No completed gait or hardware qualification.",
+  "trials": [
+    {
+      "trial": 0,
+      "pair": 0,
+      "motor_fraction": 1.0,
+      "result": "gate_timeout",
+      "time_s": 8.033333333333333,
+      "timeout_stage": "settle",
+      "stages_seen": [
+        "transfer",
+        "lift",
+        "advance",
+        "lower",
+        "settle"
+      ],
+      "paired_landings": 0,
+      "qualified_touchdowns": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "physical_fall": false,
+      "final_gate_blocked": {
+        "tracking": true,
+        "delivery": false,
+        "forward": true,
+        "height": false,
+        "speed": false,
+        "tilt": false,
+        "angular": false
+      },
+      "selected_legs": [
+        {
+          "leg": "front_left",
+          "peak_clearance_mm": 25.204505771398544,
+          "minimum_normal_force_n": 0.0,
+          "end_lift_reference_down_mm": 258.0000162124634,
+          "end_lift_requested_down_mm": 257.9746994680689,
+          "end_lift_measured_down_mm": 258.5114538669586,
+          "end_lift_actual_sole_mm": 24.4186669588089,
+          "end_lift_root_drop_from_pre_lift_mm": 8.20198655128479
+        },
+        {
+          "leg": "rear_right",
+          "peak_clearance_mm": -0.5562528967857361,
+          "minimum_normal_force_n": 1.1652425527572632,
+          "end_lift_reference_down_mm": 258.0000162124634,
+          "end_lift_requested_down_mm": 257.9973699316015,
+          "end_lift_measured_down_mm": 262.07783818244934,
+          "end_lift_actual_sole_mm": -0.9780004620552063,
+          "end_lift_root_drop_from_pre_lift_mm": 8.20198655128479
+        }
+      ],
+      "maximum_root_drop_during_lift_advance_mm": 11.314630508422852
+    },
+    {
+      "trial": 1,
+      "pair": 1,
+      "motor_fraction": 1.0,
+      "result": "gate_timeout",
+      "time_s": 7.583333333333333,
+      "timeout_stage": "settle",
+      "stages_seen": [
+        "transfer",
+        "lift",
+        "advance",
+        "lower",
+        "settle"
+      ],
+      "paired_landings": 0,
+      "qualified_touchdowns": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "physical_fall": false,
+      "final_gate_blocked": {
+        "tracking": true,
+        "delivery": true,
+        "forward": true,
+        "height": false,
+        "speed": true,
+        "tilt": false,
+        "angular": false
+      },
+      "selected_legs": [
+        {
+          "leg": "front_right",
+          "peak_clearance_mm": 31.24845027923584,
+          "minimum_normal_force_n": 0.0,
+          "end_lift_reference_down_mm": 258.0000162124634,
+          "end_lift_requested_down_mm": 258.52514303233033,
+          "end_lift_measured_down_mm": 261.3774836063385,
+          "end_lift_actual_sole_mm": 31.24845027923584,
+          "end_lift_root_drop_from_pre_lift_mm": 2.112776041030884
+        },
+        {
+          "leg": "rear_left",
+          "peak_clearance_mm": 3.8034915924072266,
+          "minimum_normal_force_n": 0.0,
+          "end_lift_reference_down_mm": 258.0000162124634,
+          "end_lift_requested_down_mm": 258.2542607781596,
+          "end_lift_measured_down_mm": 259.7859799861908,
+          "end_lift_actual_sole_mm": -0.7913634181022644,
+          "end_lift_root_drop_from_pre_lift_mm": 2.112776041030884
+        }
+      ],
+      "maximum_root_drop_during_lift_advance_mm": 9.25549864768982
+    },
+    {
+      "trial": 2,
+      "pair": 0,
+      "motor_fraction": 0.85,
+      "result": "gate_timeout",
+      "time_s": 6.25,
+      "timeout_stage": "advance",
+      "stages_seen": [
+        "transfer",
+        "lift",
+        "advance"
+      ],
+      "paired_landings": 0,
+      "qualified_touchdowns": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "physical_fall": false,
+      "final_gate_blocked": {
+        "tracking": false,
+        "delivery": false,
+        "forward": false,
+        "height": false,
+        "speed": false,
+        "tilt": false,
+        "angular": false
+      },
+      "selected_legs": [
+        {
+          "leg": "front_left",
+          "peak_clearance_mm": 26.290331035852432,
+          "minimum_normal_force_n": 0.0,
+          "end_lift_reference_down_mm": 258.0000162124634,
+          "end_lift_requested_down_mm": 258.0740820712754,
+          "end_lift_measured_down_mm": 258.8586211204529,
+          "end_lift_actual_sole_mm": 25.51763504743576,
+          "end_lift_root_drop_from_pre_lift_mm": 6.214529275894165
+        },
+        {
+          "leg": "rear_right",
+          "peak_clearance_mm": -0.8117370307445526,
+          "minimum_normal_force_n": 1.6725808382034302,
+          "end_lift_reference_down_mm": 258.0000162124634,
+          "end_lift_requested_down_mm": 257.96049762000024,
+          "end_lift_measured_down_mm": 263.185977935791,
+          "end_lift_actual_sole_mm": -1.35141983628273,
+          "end_lift_root_drop_from_pre_lift_mm": 6.214529275894165
+        }
+      ],
+      "maximum_root_drop_during_lift_advance_mm": 22.62607216835022
+    },
+    {
+      "trial": 3,
+      "pair": 1,
+      "motor_fraction": 0.85,
+      "result": "gate_timeout",
+      "time_s": 7.05,
+      "timeout_stage": "settle",
+      "stages_seen": [
+        "transfer",
+        "lift",
+        "advance",
+        "lower",
+        "settle"
+      ],
+      "paired_landings": 0,
+      "qualified_touchdowns": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "physical_fall": false,
+      "final_gate_blocked": {
+        "tracking": true,
+        "delivery": false,
+        "forward": true,
+        "height": false,
+        "speed": false,
+        "tilt": false,
+        "angular": false
+      },
+      "selected_legs": [
+        {
+          "leg": "front_right",
+          "peak_clearance_mm": 32.21191465854645,
+          "minimum_normal_force_n": 0.0,
+          "end_lift_reference_down_mm": 258.0000162124634,
+          "end_lift_requested_down_mm": 260.000023614621,
+          "end_lift_measured_down_mm": 262.15440034866333,
+          "end_lift_actual_sole_mm": 23.846827447414398,
+          "end_lift_root_drop_from_pre_lift_mm": 0.05072355270385742
+        },
+        {
+          "leg": "rear_left",
+          "peak_clearance_mm": 0.7816553115844727,
+          "minimum_normal_force_n": 0.0,
+          "end_lift_reference_down_mm": 258.0000162124634,
+          "end_lift_requested_down_mm": 260.0000174384462,
+          "end_lift_measured_down_mm": 262.04800605773926,
+          "end_lift_actual_sole_mm": -0.16017258167266846,
+          "end_lift_root_drop_from_pre_lift_mm": 0.05072355270385742
+        }
+      ],
+      "maximum_root_drop_during_lift_advance_mm": 5.055278539657593
+    }
+  ]
+}

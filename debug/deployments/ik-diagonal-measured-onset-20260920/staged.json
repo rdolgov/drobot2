@@ -1,0 +1,22 @@
+{
+  "package": "ik-diagonal-measured-onset-v6-20260920",
+  "recorded_at_utc": "2026-09-21T01:03:56.546360+00:00",
+  "host": "pi5-dog.local",
+  "ip_used": "192.168.1.58",
+  "remote_archive": "/home/rd/ik-diagonal-measured-onset-v6.zip",
+  "archive_sha256": "2082bf93a5e51e7185cdbc6bc108d8bad07c2cf3135aeb0802ed3554f3a44290",
+  "uploaded": true,
+  "file_hashes_match": true,
+  "installed": false,
+  "service_restarted": false,
+  "pending": "Operator current supported/disarmed readiness for restart; latest V5 walk ended holding torque",
+  "tests_run": false,
+  "simulation_run": false,
+  "build_run": false,
+  "ui_validation_run": false,
+  "hardware_motion_check_run": false,
+  "walk_commanded": false,
+  "existing_recordings_downloaded": [
+    "20260921T005426064068Z-925c59f3"
+  ]
+}

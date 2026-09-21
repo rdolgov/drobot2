@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "kind": "ankle_neutral_centers",
+  "captured_at_utc": "2026-09-19T03:58:27.538808+00:00",
+  "reference_pose": "User-positioned sole perpendicular to the knee-to-ankle pivot line; mapping and pose confirmed by user.",
+  "encoder_ticks_per_revolution": 4096,
+  "baudrate": 1000000,
+  "direction_status": "measured_from_manual_deflections",
+  "runtime_integration": "Consumed by four-leg dashboard via the optional ankles manifest table; original three-motor leg profiles stay unchanged.",
+  "motors": [
+    {
+      "name": "front_left_ankle_pitch",
+      "id": 13,
+      "center_tick": 2048,
+      "direction": 1
+    },
+    {
+      "name": "front_right_ankle_pitch",
+      "id": 14,
+      "center_tick": 2982,
+      "direction": 1
+    },
+    {
+      "name": "rear_left_ankle_pitch",
+      "id": 15,
+      "center_tick": 3631,
+      "direction": -1
+    },
+    {
+      "name": "rear_right_ankle_pitch",
+      "id": 16,
+      "center_tick": 3423,
+      "direction": 1
+    }
+  ],
+  "updated_at_utc": "2026-09-19T18:52:34.268845+00:00",
+  "persistent_midpoint_updates": [
+    {
+      "id": 13,
+      "before_tick": 4085,
+      "after_tick": 2048,
+      "reason": "Captured neutral was within 11 ticks of encoder wrap."
+    }
+  ],
+  "direction_convention": "Positive ankle pitch raises the sole edge facing the robot front. Positive ankle axes in quadruped_robot_v23_solid_sole.urdf point along body -Y at nominal abduction, matching this convention.",
+  "direction_samples": [
+    {
+      "id": 13,
+      "reference_center_tick": 2048,
+      "position_tick": 2308,
+      "delta_tick": 260,
+      "delta_encoder_deg": 22.8515625,
+      "user_estimated_deflection_deg": 5.0,
+      "physical_motion": "forward_edge_up",
+      "measured_at_utc": "2026-09-19T04:02:59.663045+00:00"
+    },
+    {
+      "id": 14,
+      "reference_center_tick": 2982,
+      "position_tick": 2784,
+      "delta_tick": -198,
+      "delta_encoder_deg": -17.40234375,
+      "physical_motion": "forward_edge_up",
+      "measured_at_utc": "2026-09-19T04:07:33.657956+00:00"
+    },
+    {
+      "id": 15,
+      "reference_center_tick": 3631,
+      "position_tick": 3410,
+      "delta_tick": -221,
+      "delta_encoder_deg": -19.423828125,
+      "physical_motion": "forward_edge_up",
+      "measured_at_utc": "2026-09-19T04:09:42.793765+00:00"
+    },
+    {
+      "id": 16,
+      "reference_center_tick": 3423,
+      "position_tick": 3767,
+      "delta_tick": 344,
+      "delta_encoder_deg": 30.234375,
+      "physical_motion": "forward_edge_up",
+      "measured_at_utc": "2026-09-19T04:10:55.414892+00:00"
+    }
+  ],
+  "direction_overrides": [
+    {
+      "id": 14,
+      "previous_direction": -1,
+      "direction": 1,
+      "updated_at_utc": "2026-09-19T18:52:34.268845+00:00",
+      "reason": "User-requested direction reversal; neutral center unchanged.",
+      "motion_verified": false
+    }
+  ]
+}

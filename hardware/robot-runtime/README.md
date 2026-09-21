@@ -18,13 +18,31 @@ their own canonical copies.
 | Leg | Corner | Servo IDs | Directions | Center ticks |
 | ---: | --- | --- | --- | --- |
 | 1 | Front left | `1, 2, 3` | `-1, +1, +1` | `2131, 2183, 1005` |
-| 2 | Front right | `4, 5, 6` | `+1, +1, +1` | `2022, 2162, 2052` |
+| 2 | Front right | `4, 5, 6` | `+1, -1, +1` | `2081, 2101, 2054` |
 | 3 | Rear left | `7, 8, 9` | `-1, -1, -1` | `2020, 2052, 2046` |
 | 4 | Rear right | `10, 11, 12` | `+1, +1, +1` | `1998, 2049, 2048` |
 
-The centers were last captured from the assembled whole-robot neutral pose on
-2026-08-09. They are specific to this robot and must be revalidated after horn,
+The original local centers were captured from the assembled whole-robot neutral
+pose on 2026-08-09; the front-right updates are recorded below.
+They are specific to this robot and must be revalidated after horn,
 servo, wiring, or linkage changes.
+
+On 2026-09-19, motor 6 (front-right knee) was reattached in the opposite
+orientation. At the user's request its direction was changed from -1 to +1
+in the shared profile and on the Pi. This direction change did not recapture
+the neutral center; no motion verification was run after the change.
+
+Later on 2026-09-19, the user manually aligned the supported, torque-off
+front-right leg. Separate five-sample captures set hip ID 5 to 2101 ticks
+(previous Pi center 2162), knee ID 6 to 2054 (previous 2051), and ankle ID 14
+to 2971 (previous 2982). Hip zero uses the knee pivot directly below the hip
+pivot with the body level; knee zero uses collinear hip/knee/ankle pivots;
+ankle zero uses the sole perpendicular to the knee-to-ankle pivot line.
+The Pi's existing abduction ID 4 center 2081 was retained and synchronized
+to the local leg-2 record. Directions remain unchanged. Previous records were
+backed up before the dashboard restart. Capture records are in
+`debug/hardware-calibration/front-right-alignment-20260919/` at the repository
+root. No powered movement verification was run after saving these centers.
 
 All existing three-motor leg profiles use 1,000,000 baud, a 90% torque limit, speed register 3400,
 acceleration register 254, and a 15-degree maximum command step. The dashboard
@@ -48,7 +66,7 @@ line between its knee and ankle pivots while the robot was supported.
 | Corner | Servo ID | Neutral tick | Direction |
 | --- | ---: | ---: | --- |
 | Front left | 13 | 2048 | +1 |
-| Front right | 14 | 2982 | -1 |
+| Front right | 14 | 2971 | +1 |
 | Rear left | 15 | 3631 | -1 |
 | Rear right | 16 | 3423 | +1 |
 
@@ -64,12 +82,25 @@ sole edge facing the robot front, consistent with the URDF's positive ankle
 axes at nominal abduction. The front-left direction was measured from a
 user-applied forward-edge-up movement: ID 13 increased from 2048 to 2308.
 The same physical movement at the front-right ankle decreased ID 14 from
-2982 to 2784, giving direction -1. At the rear-left ankle, ID 15 decreased
+2982 to 2784, originally giving direction -1. At the rear-left ankle, ID 15 decreased
 from 3631 to 3410, also giving direction -1. At the rear-right ankle, ID 16
 increased from 3423 to 3767, giving direction +1. All four direction samples
 are recorded in the JSON with timestamps and encoder deltas. Manual travel
 extrema are recorded below. The dashboard applies a five-degree inward margin
 from these observations. Existing leg 1-4 profiles and calibrations remain unchanged.
+
+On 2026-09-19, the user requested reversing servo 14 from -1 to +1 locally
+and on the Pi. Its neutral center remained 2982 during that reversal. Existing travel angles were
+negated, with minimum/maximum values and their corresponding raw ticks swapped,
+preserving the recorded encoder range and five-degree inward margin. The JSON
+retains the original direction sample and records this override separately.
+No new travel capture or motion verification was run.
+
+The subsequent alignment capture changed ID 14's center to 2971. Existing
+travel angles were translated by +0.966796875 degrees to express the same
+recorded raw encoder endpoints relative to the new zero; the five-degree
+inward margin is retained. This coordinate update is recorded separately
+in the JSON and is not a new physical travel measurement.
 
 The capture used torque-off commands and encoder reads, plus the existing
 midpoint-setting routine for ID 13. Direction capture reads user-positioned
@@ -88,12 +119,12 @@ commands for all four ankles at completion.
 | Corner | Servo ID | Observed minimum | Observed maximum |
 | --- | ---: | ---: | ---: |
 | Front left | 13 | -116.10 degrees | +114.26 degrees |
-| Front right | 14 | -115.22 degrees | +115.66 degrees |
+| Front right | 14 | -114.70 degrees | +116.19 degrees |
 | Rear left | 15 | -121.90 degrees | +108.63 degrees |
 | Rear right | 16 | -109.78 degrees | +121.55 degrees |
 
-Angles are relative to the saved neutral centers with the measured direction
-signs. IDs 14-16 crossed the encoder wrap point during the manual movement;
+Angles are relative to the saved neutral centers with the configured direction
+signs, including the servo 14 reversal above. IDs 14-16 crossed the encoder wrap point during the manual movement;
 continuous angle tracking accounts for this. The JSON retains both raw tick
 extrema and the raw ticks corresponding to angular extrema. Raw tick minimum
 and maximum alone do not describe a continuous interval across encoder wrap.
@@ -142,13 +173,25 @@ The dashboard exposes an ankle row (motor 4) per leg: FL ID 13, FR ID 14,
 RL ID 15, RR ID 16. Arm, target, zero, telemetry and disarm include these
 motors. Positive ankle angle means toe up. Whole-robot zero recapture is
 disabled because changing an ankle center would invalidate its travel data.
-Legacy three-motor crawl controls are disabled while ankles are configured.
+With ankles configured, the crawl and diagonal-pair controls select the new
+16-motor IK implementation. The original three-motor geometry is used only
+for 12-motor configurations. See the [ankle IK gait contract](../test-apps/four-leg-dashboard/specs/ankle-ik-gait-v1.md).
 
-Software ankle limits, in degrees: FL -111.10 to +109.26; FR -110.22 to
-+110.66; RL -116.90 to +103.63; RR -104.78 to +116.55. These are observed
+Software ankle limits, in degrees: FL -111.10 to +109.26; FR -109.70 to
++111.19; RL -116.90 to +103.63; RR -104.78 to +116.55. These are observed
 travel minus five degrees at each end, not a full-pose collision envelope.
 
 The default RL model is [V2.3 transfer seed 2311](../../onboard/models/ankle-v23-transfer-seed2311/README.md).
+
+On 2026-09-19, the ankle runtime's target budget was changed to account for
+time since the last completed motor write as well as the policy interval.
+New ankle targets now wake the dashboard motor worker directly, while actual
+bus packets retain their joint-speed and two-degree limits. Trial logs include
+worker wake reason, lock wait, output interval, and zero-output cycles to make
+motor timing visible separately from policy timing. The supported alignment
+records above remain the active calibration. Tests and hardware motion
+verification were not run for the timing correction.
+
 It is experimental, with 82 observations and 16 actions. Its simulation
 selection failed multiple criteria, including rear-left stepping. The new
 NumPy hardware port has not been tested. No inference, builds, simulations,
@@ -162,6 +205,18 @@ The runtime caps trials at 15 seconds and retains position, IMU, feedback,
 temperature and output deadline guards. Ankle policy timing faults disarm.
 
 ## Setup and guarded commands
+
+The [diagonal IK V6 sequence](../test-apps/four-leg-dashboard/specs/ankle-ik-diagonal-v6-measured-onset.md)
+uses a 100 mm stride, 35 mm lift and two 4-second reference cycles. The
+planted-ankle push starts with the opposite pair's lift, with shared command
+progress and the full 20 mm early advance during lift. The initial 6 mm push
+leads the lift, which holds at 3.815 mm until both support ankle encoders
+register at least 0.5 degrees of forward movement. Support ankle feedforward
+is selected before lift.
+Settling can add time. Its source bundle is in
+`debug/deployments/ik-diagonal-measured-onset-20260920/`; see that deployment record
+for installation status. No tests, simulation or hardware check has been
+run for V6; older IK videos show V1.
 
 Install both hardware applications first:
 

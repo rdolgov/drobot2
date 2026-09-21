@@ -1,0 +1,13 @@
+{
+  "scope": "Offline arithmetic on recorded requested targets; not physical tracking or gait validation.",
+  "sampled_swing_legs": 294,
+  "down_error_min_max_m": [
+    -1.4370659262574748e-07,
+    0.0020000201673134876
+  ],
+  "forward_error_min_max_m": [
+    -0.008000016378024097,
+    0.008000007039171905
+  ],
+  "max_requested_joint_limit_excess_rad": 0
+}

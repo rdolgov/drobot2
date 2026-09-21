@@ -1,0 +1,16 @@
+{
+  "schema": "drobot.ankle-v26.review-selection.v1",
+  "checkpoint": "simulation\\reviews\\ankle-v26-balanced\\20260920-train-r2\\checkpoints\\model_549.pt",
+  "checkpoint_sha256": "e130f5a1a463a293e6a0696fb94354828ceaa1b34bed74ce12797d18807bbe8c",
+  "preferred_previous_checkpoint": "simulation\\reviews\\ankle-v25-ik\\20260920-train-r2\\checkpoints\\model_299.pt",
+  "previous_sha256": "8c0b253c853b4654038833d91e04677a85c97c08a38054cf115ee3db2ab2b4b7",
+  "evaluation": "20260920-eval-r2-549",
+  "video_run": "20260920-video-r2-549",
+  "summary": "The final candidate improves forward body travel in 3 of 4 trials and completes one physical diagonal-pair step in one reduced-strength trial. Body tilt remains 1.12\u20131.36 degrees RMS with no falls. It still fails all four complete-walking trials, with inconsistent rear-left lift, reduced simultaneous clearance and excessive sideways drift in two conditions.",
+  "decision": "Keep as an experimental continuation checkpoint, not a replacement for the previous gait. Preserve the previous checkpoint and show both in the review video. Further work must address unloading and lifting the weaker diagonal before more forward-travel reward.",
+  "hardware_qualified": false,
+  "deployed": false,
+  "all_evaluation_trials_qualified": false,
+  "training_r1": "Stopped early after update 508 due to paired-clearance regression; checkpoint 500 retained.",
+  "training_r2": "Completed 250 additional updates, iterations 300\u2013549, with fresh optimizer and V25 actor/critic initialization."
+}

@@ -1,0 +1,27 @@
+{
+  "package": "ik-diagonal-sync-2x-v4-20260920",
+  "installed_at_utc": "2026-09-21T00:40:01.177589Z",
+  "host": "pi5-dog.local",
+  "ip_used": "192.168.1.58",
+  "remote_archive": "/home/rd/ik-diagonal-sync-2x-v4.zip",
+  "archive_sha256": "65bb831e5ddc9aa79d6dd4f30f208c684ade90087d777c4c6bfb9376e55ac69c",
+  "backup": "/home/rd/drobot2/debug/deployment-backups/ik-diagonal-20260921T004001177589Z",
+  "installed": true,
+  "service_restarted": true,
+  "service": "drobot-manual-web",
+  "service_state": {
+    "ActiveState": "active",
+    "SubState": "running",
+    "ExecMainStatus": 0
+  },
+  "client_version": 16,
+  "operator_confirmed_readiness": true,
+  "tests_run": false,
+  "simulation_run": false,
+  "build_run": false,
+  "ui_validation_run": false,
+  "hardware_motion_check_run": false,
+  "walk_commanded": false,
+  "calibration_replaced": false,
+  "model_weights_replaced": false
+}

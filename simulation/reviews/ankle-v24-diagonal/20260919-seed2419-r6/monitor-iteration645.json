@@ -1,0 +1,210 @@
+{
+  "observed_unix": 1789880084.5444124,
+  "status": "running",
+  "last_iteration": 645,
+  "source_contract_changes": [],
+  "sample": "Unweighted means of last 100 complete rounded iteration reports; cumulative counts include completed episodes only; gate events are sampled failures, not all trajectories.",
+  "iteration_range": [
+    546,
+    645
+  ],
+  "means": {
+    "train_paired_landings": 0.0,
+    "train_min_steps_per_leg": 0.0,
+    "train_gate_timeout_fraction": 0.906924,
+    "train_gate_timeout_moving_episodes": 0.922814,
+    "train_gate_timeout_lift": 0.137367,
+    "train_gate_timeout_advance": 0.234821,
+    "train_gate_timeout_settle": 0.534738,
+    "train_front_left_lift_clear": 0.299156,
+    "train_rear_left_lift_clear": 0.0,
+    "train_front_right_lift_clear": 0.275637,
+    "train_rear_right_lift_clear": 0.0,
+    "train_front_left_qualified_touchdowns": 0.102217,
+    "train_rear_left_qualified_touchdowns": 0.0,
+    "train_front_right_qualified_touchdowns": 0.188345,
+    "train_rear_right_qualified_touchdowns": 0.0,
+    "train_supported_swing_clear": 0.35304,
+    "train_stance_slip_m_s": 0.000744,
+    "train_angular_rms_rad_s": 0.09907,
+    "train_forward_speed_m_s": 0.001666,
+    "train_fall_fraction": 0.0
+  },
+  "cumulative_gate_totals": {
+    "schema": "drobot.ankle-v24-diagonal.gate-diagnostics.v2",
+    "step": 41363,
+    "evidence": "training_only",
+    "blocker_counting": "each blocker observed at least once during a timed-out wait; reasons can overlap",
+    "episode_scope": "completed episodes only; current unfinished episodes excluded",
+    "completed_episodes": 17178,
+    "completed_moving_episodes": 15579,
+    "timeouts_by_stage": {
+      "transfer": 0,
+      "lift": 6776,
+      "advance": 4275,
+      "lower": 0,
+      "settle": 4528,
+      "push": 0
+    },
+    "timeouts_by_pair": {
+      "front_left_rear_right": 7779,
+      "front_right_rear_left": 7800
+    },
+    "timeout_blockers": {
+      "tracking": 14092,
+      "delivery": 15565,
+      "forward": 11524,
+      "height": 7078,
+      "speed": 15578,
+      "tilt": 0,
+      "angular": 130
+    },
+    "stage_entries": {
+      "transfer": 15585,
+      "lift": 15585,
+      "advance": 8809,
+      "lower": 4534,
+      "settle": 4534,
+      "push": 6
+    },
+    "qualified_touchdowns_by_leg": {
+      "front_left": 318,
+      "rear_left": 0,
+      "front_right": 1126,
+      "rear_right": 0
+    }
+  },
+  "sampled_lift_advance_requests": [
+    {
+      "step": 31099,
+      "leg": 1,
+      "unconstrained_cancellation_mm": 11.487723926519756,
+      "projected_cancellation_mm": 2.000001225982817,
+      "actual_clearance_mm": -0.04330277442932129,
+      "normal_force_n": 1.6032568216323853
+    },
+    {
+      "step": 31099,
+      "leg": 2,
+      "unconstrained_cancellation_mm": 11.688466254899,
+      "projected_cancellation_mm": 2.000007402157611,
+      "actual_clearance_mm": 33.258769661188126,
+      "normal_force_n": 0.0
+    },
+    {
+      "step": 33025,
+      "leg": 0,
+      "unconstrained_cancellation_mm": -0.2676067442942687,
+      "projected_cancellation_mm": -0.26758844765106815,
+      "actual_clearance_mm": -0.21739304065704346,
+      "normal_force_n": 1.0984684228897095
+    },
+    {
+      "step": 33025,
+      "leg": 3,
+      "unconstrained_cancellation_mm": -3.4394918202827474,
+      "projected_cancellation_mm": -3.4394813056447537,
+      "actual_clearance_mm": -0.49164891242980957,
+      "normal_force_n": 1.3462774753570557
+    },
+    {
+      "step": 34948,
+      "leg": 0,
+      "unconstrained_cancellation_mm": 1.6358567366719368,
+      "projected_cancellation_mm": 1.6358511646779594,
+      "actual_clearance_mm": 35.66822409629822,
+      "normal_force_n": 0.0
+    },
+    {
+      "step": 34948,
+      "leg": 3,
+      "unconstrained_cancellation_mm": -19.128057507915937,
+      "projected_cancellation_mm": -10.000003733527912,
+      "actual_clearance_mm": -1.2931972742080688,
+      "normal_force_n": 3.6685848236083984
+    },
+    {
+      "step": 37511,
+      "leg": 0,
+      "unconstrained_cancellation_mm": -0.43211408287774367,
+      "projected_cancellation_mm": -0.43212772051187676,
+      "actual_clearance_mm": 14.668196439743042,
+      "normal_force_n": 0.0
+    },
+    {
+      "step": 37511,
+      "leg": 3,
+      "unconstrained_cancellation_mm": 1.6534646556474741,
+      "projected_cancellation_mm": 1.6534646556474741,
+      "actual_clearance_mm": -0.24489685893058777,
+      "normal_force_n": 0.740455687046051
+    },
+    {
+      "step": 37511,
+      "leg": 1,
+      "unconstrained_cancellation_mm": 1.207046091830699,
+      "projected_cancellation_mm": 1.2070563252248312,
+      "actual_clearance_mm": -0.02642720937728882,
+      "normal_force_n": 0.2033935934305191
+    },
+    {
+      "step": 37511,
+      "leg": 2,
+      "unconstrained_cancellation_mm": -3.8063057907674613,
+      "projected_cancellation_mm": -3.8063299822548857,
+      "actual_clearance_mm": 24.824000895023346,
+      "normal_force_n": 0.0
+    },
+    {
+      "step": 38152,
+      "leg": 0,
+      "unconstrained_cancellation_mm": 1.3663656577121985,
+      "projected_cancellation_mm": 1.366350951250761,
+      "actual_clearance_mm": 0.01882016658782959,
+      "normal_force_n": 0.21228671073913574
+    },
+    {
+      "step": 38152,
+      "leg": 3,
+      "unconstrained_cancellation_mm": -0.614921737816132,
+      "projected_cancellation_mm": -0.6149113129078065,
+      "actual_clearance_mm": -0.5551911890506744,
+      "normal_force_n": 5.307999134063721
+    },
+    {
+      "step": 38795,
+      "leg": 0,
+      "unconstrained_cancellation_mm": 3.3053904718007843,
+      "projected_cancellation_mm": 2.0000028873810027,
+      "actual_clearance_mm": -0.6978064775466919,
+      "normal_force_n": 5.153069496154785
+    },
+    {
+      "step": 38795,
+      "leg": 3,
+      "unconstrained_cancellation_mm": 3.6910473305808433,
+      "projected_cancellation_mm": 2.0000051926789553,
+      "actual_clearance_mm": -0.9812898933887482,
+      "normal_force_n": 4.675059795379639
+    },
+    {
+      "step": 41363,
+      "leg": 0,
+      "unconstrained_cancellation_mm": 1.1451807552310678,
+      "projected_cancellation_mm": 1.1451807552310678,
+      "actual_clearance_mm": 0.9464621543884277,
+      "normal_force_n": 0.0
+    },
+    {
+      "step": 41363,
+      "leg": 3,
+      "unconstrained_cancellation_mm": -2.473418302649022,
+      "projected_cancellation_mm": -2.4734077600181426,
+      "actual_clearance_mm": -0.40686503052711487,
+      "normal_force_n": 3.07094144821167
+    }
+  ],
+  "errors_present": [],
+  "launcher_stderr_bytes": 0,
+  "decision": "Continue existing early run unchanged; compare a later checkpoint with preserved r6-model250-mean before choosing further corrections. No new simulation or training job launched in this monitor check."
+}

@@ -1,0 +1,75 @@
+{
+  "observed_unix": 1789885389.4999797,
+  "status": "running",
+  "last_iteration": 2816,
+  "source_contract_changes": [],
+  "scope": "Unweighted last 100 rounded iteration summaries; training only",
+  "iteration_range": [
+    2717,
+    2816
+  ],
+  "means": {
+    "train_paired_landings": 0.0,
+    "train_min_steps_per_leg": 0.0,
+    "train_gate_timeout_fraction": 0.905537,
+    "train_front_left_lift_clear": 0.000413,
+    "train_rear_left_lift_clear": 0.0,
+    "train_front_right_lift_clear": 0.002571,
+    "train_rear_right_lift_clear": 0.0,
+    "train_stance_slip_m_s": 0.00049,
+    "train_angular_rms_rad_s": 0.072666,
+    "train_fall_fraction": 0.0
+  },
+  "gate_totals": {
+    "schema": "drobot.ankle-v24-diagonal.gate-diagnostics.v2",
+    "step": 179976,
+    "evidence": "training_only",
+    "blocker_counting": "each blocker observed at least once during a timed-out wait; reasons can overlap",
+    "episode_scope": "completed episodes only; current unfinished episodes excluded",
+    "completed_episodes": 75009,
+    "completed_moving_episodes": 67667,
+    "timeouts_by_stage": {
+      "transfer": 0,
+      "lift": 30588,
+      "advance": 18948,
+      "lower": 0,
+      "settle": 18131,
+      "push": 0
+    },
+    "timeouts_by_pair": {
+      "front_left_rear_right": 33641,
+      "front_right_rear_left": 34026
+    },
+    "timeout_blockers": {
+      "tracking": 62975,
+      "delivery": 67533,
+      "forward": 52857,
+      "height": 31493,
+      "speed": 67664,
+      "tilt": 0,
+      "angular": 296
+    },
+    "stage_entries": {
+      "transfer": 67693,
+      "lift": 67693,
+      "advance": 37105,
+      "lower": 18157,
+      "settle": 18157,
+      "push": 26
+    },
+    "qualified_touchdowns_by_leg": {
+      "front_left": 1598,
+      "rear_left": 0,
+      "front_right": 8203,
+      "rear_right": 0
+    }
+  },
+  "error_files": [],
+  "launcher_stderr_bytes": 0,
+  "new_diagnostics": [
+    "../r6-model1500-support-preload/diagnosis.md",
+    "../model-assumptions-review.md"
+  ],
+  "pending_information": "Existing current total robot weight with battery and all 16 servos; async question sent, no answer assumed. Do not ask again while pending.",
+  "decision": "Support preload rejected after four timeouts and no rear steps. Continue unchanged R6 to completion; do not modify mass/limits based on an older 12-servo weight or infer physical impossibility from failed controllers."
+}

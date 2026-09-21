@@ -1,0 +1,15 @@
+{
+  "status": "stopped_early",
+  "pid": 8756,
+  "mode": "train",
+  "started_unix": 1789962061.5881655,
+  "started_simulation_unix": 1789962070.9088156,
+  "start_iteration": 300,
+  "last_iteration": 508,
+  "updated_unix": 1789962598.4187858,
+  "finished_unix": 1789962619.8367279,
+  "checkpoint": "simulation\\reviews\\ankle-v26-balanced\\20260920-train-r1\\checkpoints\\model_500.pt",
+  "checkpoint_sha256": "2cfcd24eb94ea774998e02d4351c240452456f58414d821fc84fee446a4873e2",
+  "training_returned": false,
+  "reason": "Checkpoint 400 lost paired clearance. Restart from V25 baseline with penalty for discarded swing corrections and stronger soft symmetry."
+}

@@ -1,0 +1,14 @@
+[
+  "C:/isaacsim/python.bat",
+  "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\rl\\ankle_v26_feasible\\run.py",
+  "evaluate",
+  "--output",
+  "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v27-overnight\\20260920-continue\\video-pair-1",
+  "--checkpoint",
+  "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v27-overnight\\20260920-continue\\train\\checkpoints\\model_2549.pt",
+  "--seed",
+  "2522",
+  "--record",
+  "--pair",
+  "1"
+]

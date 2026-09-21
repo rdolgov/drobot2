@@ -1,0 +1,193 @@
+{
+  "training_status": "completed",
+  "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v24_diagonal\\2026-09-19_23-47-33_diagonal-optimizer-pilot-2421-r7\\model_249.pt",
+  "checkpoint_sha256": "789bd0153075ab286e3bc753712cc840af4b41af6b0795a7a4ff69eaf0b08663",
+  "iteration_reports": 250,
+  "max_logged_paired_landings": 0.0,
+  "last_100_iteration_means": {
+    "train_angular_accel_rms_rad_s2": 1.550631,
+    "train_angular_rms_rad_s": 0.096941,
+    "train_command_m_s": 0.013564,
+    "train_entries_advance": 0.509951,
+    "train_entries_lift": 0.900785,
+    "train_entries_lower": 0.271325,
+    "train_entries_push": 0.0,
+    "train_entries_settle": 0.271325,
+    "train_entries_transfer": 0.900785,
+    "train_episode_seconds": 10.364989,
+    "train_failed_pairs": 0.0,
+    "train_fall_fraction": 0.0,
+    "train_flight_fraction": 0.007689,
+    "train_forward_speed_m_s": 0.009411,
+    "train_front_left_lift_clear": 0.165631,
+    "train_front_left_qualified_touchdowns": 0.0,
+    "train_front_left_steps": 0.0,
+    "train_front_left_stride_m": 0.0,
+    "train_front_right_lift_clear": 0.291313,
+    "train_front_right_qualified_touchdowns": 0.254375,
+    "train_front_right_steps": 0.0,
+    "train_front_right_stride_m": 0.0,
+    "train_gate_timeout_advance": 0.238627,
+    "train_gate_timeout_fraction": 0.900785,
+    "train_gate_timeout_lift": 0.390828,
+    "train_gate_timeout_lower": 0.0,
+    "train_gate_timeout_moving_episodes": 0.919687,
+    "train_gate_timeout_push": 0.0,
+    "train_gate_timeout_settle": 0.271325,
+    "train_gate_timeout_transfer": 0.0,
+    "train_gate_wait_s": 1.996963,
+    "train_lift_stage_clear": 0.228479,
+    "train_min_leg_touchdowns": 1.0,
+    "train_min_steps_per_leg": 0.0,
+    "train_output_hold_fraction": 0.074373,
+    "train_paired_landings": 0.0,
+    "train_planted_stance_fraction": 0.822172,
+    "train_positive_work_proxy_j": 3.243423,
+    "train_rear_left_lift_clear": 0.0,
+    "train_rear_left_qualified_touchdowns": 0.000156,
+    "train_rear_left_steps": 0.0,
+    "train_rear_left_stride_m": 0.0,
+    "train_rear_right_lift_clear": 0.0,
+    "train_rear_right_qualified_touchdowns": 0.0,
+    "train_rear_right_steps": 0.0,
+    "train_rear_right_stride_m": 0.0,
+    "train_reference_clipped": 0.000741,
+    "train_stance_slip_m_s": 0.000675,
+    "train_support_margin_m": 0.035591,
+    "train_supported_fraction": 0.791102,
+    "train_supported_swing_clear": 0.184621,
+    "train_swing_projection_fraction": 0.075794,
+    "train_target_accel_limited": 0.727822,
+    "train_target_accel_rms_rad_s2": 3.255178,
+    "train_target_rate_limited": 0.177935,
+    "train_timeout_blocker_angular": 0.001926,
+    "train_timeout_blocker_delivery": 0.863044,
+    "train_timeout_blocker_forward": 0.736847,
+    "train_timeout_blocker_height": 0.39588,
+    "train_timeout_blocker_speed": 0.900785,
+    "train_timeout_blocker_tilt": 0.0,
+    "train_timeout_blocker_tracking": 0.823844,
+    "train_wait_advance_s": 0.595612,
+    "train_wait_lift_s": 0.989844,
+    "train_wait_lower_s": 0.0,
+    "train_wait_push_s": 0.0,
+    "train_wait_settle_s": 0.411522,
+    "train_wait_transfer_s": 0.0
+  },
+  "statistical_scope": "Unweighted means of rounded logged iteration summaries; training evidence only. Cumulative counts cover completed episodes only.",
+  "completed_episode_totals": {
+    "schema": "drobot.ankle-v24-diagonal.gate-diagnostics.v2",
+    "step": 16000,
+    "evidence": "training_only",
+    "blocker_counting": "each blocker observed at least once during a timed-out wait; reasons can overlap",
+    "episode_scope": "completed episodes only; current unfinished episodes excluded",
+    "completed_episodes": 6542,
+    "completed_moving_episodes": 5950,
+    "timeouts_by_stage": {
+      "transfer": 0,
+      "lift": 2701,
+      "advance": 1621,
+      "lower": 0,
+      "settle": 1628,
+      "push": 0
+    },
+    "timeouts_by_pair": {
+      "front_left_rear_right": 2969,
+      "front_right_rear_left": 2981
+    },
+    "timeout_blockers": {
+      "tracking": 5500,
+      "delivery": 5721,
+      "forward": 4557,
+      "height": 2691,
+      "speed": 5950,
+      "tilt": 0,
+      "angular": 16
+    },
+    "stage_entries": {
+      "transfer": 5950,
+      "lift": 5950,
+      "advance": 3249,
+      "lower": 1628,
+      "settle": 1628,
+      "push": 0
+    },
+    "qualified_touchdowns_by_leg": {
+      "front_left": 41,
+      "rear_left": 1,
+      "front_right": 1320,
+      "rear_right": 0
+    }
+  },
+  "source_hashes_still_match": true,
+  "asset_hash_still_matches": true,
+  "hardware_qualified": false,
+  "independent_diagnostic": {
+    "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v24-diagonal\\r7-model249-mean",
+    "status": "completed",
+    "scope": "saved checkpoint; deterministic mean",
+    "checkpoint_sha256": "789bd0153075ab286e3bc753712cc840af4b41af6b0795a7a4ff69eaf0b08663",
+    "matches_training_final_checkpoint": true,
+    "actor_max_absolute_sampled_action": 0.9842768907546997,
+    "trace_samples": 412,
+    "trials": [
+      {
+        "trial": 0,
+        "result": "gate_timeout",
+        "last_time_s": 11.083333333333334,
+        "last_stage": 2,
+        "paired_landings": 0,
+        "qualified_touchdowns_by_leg_FL_RL_FR_RR": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "physical_fall": false
+      },
+      {
+        "trial": 1,
+        "result": "gate_timeout",
+        "last_time_s": 7.866666666666666,
+        "last_stage": 4,
+        "paired_landings": 0,
+        "qualified_touchdowns_by_leg_FL_RL_FR_RR": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "physical_fall": false
+      },
+      {
+        "trial": 2,
+        "result": "gate_timeout",
+        "last_time_s": 11.75,
+        "last_stage": 2,
+        "paired_landings": 0,
+        "qualified_touchdowns_by_leg_FL_RL_FR_RR": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "physical_fall": false
+      },
+      {
+        "trial": 3,
+        "result": "gate_timeout",
+        "last_time_s": 8.066666666666666,
+        "last_stage": 4,
+        "paired_landings": 0,
+        "qualified_touchdowns_by_leg_FL_RL_FR_RR": [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "physical_fall": false
+      }
+    ]
+  },
+  "gait_result": "failed: all independent trials timed out with zero full paired landings"
+}

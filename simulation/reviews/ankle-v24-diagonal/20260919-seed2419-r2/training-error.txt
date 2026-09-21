@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "C:\Users\roman\Documents\dev\drobot2\simulation\isaac\rl\ankle_v24_diagonal\_train_worker.py", line 61, in <module>
+    runner.learn(num_learning_iterations=args.iterations, init_at_random_ep_len=False)
+  File "C:\isaacsim\kit\python\Lib\site-packages\rsl_rl\runners\on_policy_runner.py", line 90, in learn
+    check_nan(obs, rewards, dones)
+  File "C:\isaacsim\kit\python\Lib\site-packages\rsl_rl\utils\utils.py", line 284, in check_nan
+    raise ValueError(
+ValueError: The rewards returned by the environment contain NaN values. This usually indicates a bug in the environment's reward computation.

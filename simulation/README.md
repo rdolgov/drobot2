@@ -4,6 +4,11 @@ This top-level area owns Isaac Sim integration, validation runners,
 reinforcement-learning tasks, trained policies, simulator exports, evaluation
 media, and their tests and documentation.
 
+The [September 21 diagonal walking result](docs/rl-ankle-v27-overnight.md)
+links the selected checkpoint 2549, actor export, fallback, frozen sources,
+evaluation reports and videos. It remains a simulation candidate requiring
+matching controller integration before a physical trial.
+
 ## Layout
 
 ```text

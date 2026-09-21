@@ -1,0 +1,19 @@
+{
+  "method": "Independent two-link geometry calculation over the conservative x=30..130 mm, down=253..288 mm rectangle; no gait/controller execution or simulator. Rear branch mirrors front.",
+  "front_hip_deg": [
+    31.062325839188052,
+    54.389521529012335
+  ],
+  "front_knee_deg": [
+    -74.3718705197234,
+    -17.711794932452648
+  ],
+  "front_ankle_deg": [
+    -15.437990136358742,
+    30.423545584922415
+  ],
+  "maximum_reach_m": 0.3159810120877519,
+  "retained_reach_cap_m": 0.317,
+  "retained_ankle_target_cap_deg": 33.25,
+  "note": "Nominal geometry only. Bounded IMU/encoder leveling can hit the ankle cap and reports that condition."
+}

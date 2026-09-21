@@ -1,0 +1,1106 @@
+{
+  "status": "completed",
+  "scope": "independent flat-ground IK trial; no RL",
+  "config": {
+    "period_s": 16.0,
+    "stride_m": 0.06,
+    "lift_m": 0.025,
+    "down_m": 0.305,
+    "fore_aft_m": 0.06,
+    "forward_transfer_m": 0.01,
+    "lateral_transfer_m": 0.03
+  },
+  "trial_definitions": [
+    [
+      "distributed",
+      0,
+      1.0
+    ],
+    [
+      "distributed",
+      0,
+      0.85
+    ],
+    [
+      "diagonal_pair",
+      0,
+      1.0
+    ],
+    [
+      "diagonal_pair",
+      0,
+      0.85
+    ],
+    [
+      "diagonal_pair",
+      1,
+      1.0
+    ],
+    [
+      "diagonal_pair",
+      1,
+      0.85
+    ]
+  ],
+  "seconds": 40.0,
+  "stop_command_s": 28.0,
+  "mass_kg": 3.39514659,
+  "mass_method": "uniform mass/inertia sensitivity scaling; same COM distribution",
+  "source_hashes": {
+    "simulation/isaac/diagnostics/ankle_ik_walk.py": "b7f858354fff75b1293270d135499339e53582bda1510af71c40162ea61f7919",
+    "hardware/robot-runtime/four-leg.toml": "652bff972be0399f4124757a6b0ca51a55c1bfd1627338b6547e4961b7b8e1de",
+    "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/ankle_ik_gait.py": "7bfc91ea17a96e14a4b6b452708555785d8a4e7bcc2ee44ca22f352d8c2dc784",
+    "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/four_leg_control.py": "51a516e75f25a541af62a9e72a5d8687327c8e85c4cbaa681f6e1c6b9406504e",
+    "simulation/isaac/rl/ankle_v24_diagonal/diagnose_reference.py": "308638aff4884917d33a984a2cbeebd27a39194f8552f722dfa3c810a27dbd32",
+    "simulation/isaac/rl/ankle_v24_diagonal/env.py": "fe6f8f188c071709a249110bd544704064191d421d52550cc6b60ba33b20d2a6",
+    "simulation/isaac/rl/ankle_v24_diagonal/env_cfg.py": "94139c8304dcab3b9635d2e151d5318b2f0e1d0fd498a5c5a2c79b71605201f6",
+    "simulation/isaac/rl/ankle_v24_diagonal/ppo_cfg.py": "bd8d5486f0bf39b2bed843ddd0bc8d54132c7e0b69e1b8b84ebe6340e2af415a",
+    "simulation/isaac/rl/ankle_v24_diagonal/progress_io.py": "8350d771f8fbd82c6f60d7b0edcf7b461b2a43077d07760bd8da1704e083a3ec",
+    "simulation/isaac/rl/ankle_v24_diagonal/train.py": "21e2bc8610411ab6954009c848d95eeee0820e90cc1a9165d4a57badf23bf59f",
+    "simulation/isaac/rl/ankle_v24_diagonal/_train_worker.py": "b9fb727b4cee155121cdf710eeb82fefad54f311de0dd3627bbde57e97546e9c",
+    "simulation/isaac/rl/ankle_v24_diagonal/__init__.py": "cfc7f91cd5f24f67c41638c48ed0fdc07fcdc22b11096538a6084f443d9c559f",
+    "simulation/isaac/diagnostics/walk_video.py": "f6c84c7b7b28ec40c62c4e00a1303f020d3047a20b7a7e64a8c4e6aaf53a135a"
+  },
+  "qualification": "air >=0.1s, clearance >=8mm, forward advance >=65% stride, sideways <35mm; per-leg counts; no automatic hardware qualification",
+  "hardware_qualified": false,
+  "outcomes": [
+    {
+      "trial": 0,
+      "mode": "distributed",
+      "result": "failed",
+      "failure": "IK lift tracking timeout (7.4 deg); stop motion",
+      "qualified_steps_FL_RL_FR_RR": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "stopped_at_s": null,
+      "mean_stopped_speed_m_s": null,
+      "forward_displacement_m": -0.008292675018310547,
+      "last_sample": {
+        "step": 358,
+        "time_s": 5.966666666666667,
+        "trial": 0,
+        "trajectory_time_s": 1.44,
+        "mode": "distributed",
+        "phase": "swing",
+        "phase_progress": 0.0,
+        "placement_index": 0,
+        "swing_corner": "rear_right",
+        "swing_pair": null,
+        "expected_support_corners": [
+          "front_left",
+          "front_right",
+          "rear_left"
+        ],
+        "ankle_pivot_forward_m": {
+          "front_left": 0.065,
+          "front_right": 0.034999999999999996,
+          "rear_left": -0.06999999999999999,
+          "rear_right": -0.09999999999999999
+        },
+        "ankle_pivot_down_m": 0.2978283576639298,
+        "requested_lift_m": 0.025,
+        "body_forward_transfer_m": 0.01,
+        "body_lateral_transfer_m": 0.03,
+        "sole_roll_target_deg": {
+          "front_left": -3.9383901995896156,
+          "front_right": -3.9207824158027322,
+          "rear_left": -3.9383901995896156,
+          "rear_right": -4.1568796673053985
+        },
+        "sole_pitch_target_deg": {
+          "front_left": 0.0,
+          "front_right": 0.0,
+          "rear_left": 0.0,
+          "rear_right": 0.0
+        },
+        "encoder_gate_is_not_contact_detection": true,
+        "gate": "lift",
+        "gate_wait_s": 2.0166666666666644,
+        "root_position": [
+          5.992480278015137,
+          -2.981954574584961,
+          0.38181012868881226
+        ],
+        "tilt_deg": 4.511840676543731,
+        "sole_clearance_m_FL_RL_FR_RR": [
+          0.005312003195285797,
+          -0.001735694706439972,
+          -0.0027037300169467926,
+          -0.0011436715722084045
+        ],
+        "sole_high_m": [
+          0.0136270672082901,
+          0.001068565994501114,
+          0.001307409256696701,
+          0.003623325377702713
+        ],
+        "sole_world": [
+          [
+            6.139832496643066,
+            -2.8024585247039795,
+            0.009469536133110523
+          ],
+          [
+            5.87804651260376,
+            -2.8013110160827637,
+            -0.000333564355969429
+          ],
+          [
+            6.107101917266846,
+            -3.198702573776245,
+            -0.0006981585174798965
+          ],
+          [
+            5.852429389953613,
+            -3.1987128257751465,
+            0.0012398259714245796
+          ]
+        ],
+        "normal_force_n": [
+          0.0,
+          15.277286529541016,
+          15.230989456176758,
+          2.8016438484191895
+        ],
+        "joint_position": [
+          -0.0707249864935875,
+          -0.06717849522829056,
+          0.06831451505422592,
+          0.06849940866231918,
+          0.5239647626876831,
+          -0.6297279596328735,
+          0.45405855774879456,
+          -0.7503639459609985,
+          -0.6330510377883911,
+          0.7388076186180115,
+          -0.7331385016441345,
+          0.7561718225479126,
+          0.10076523572206497,
+          -0.1740814447402954,
+          0.22627516090869904,
+          -0.05067000910639763
+        ],
+        "joint_target": [
+          -0.06873787939548492,
+          -0.06873787939548492,
+          0.06843056529760361,
+          0.07255123555660248,
+          0.5318829417228699,
+          -0.5365577936172485,
+          0.4428730309009552,
+          -0.7555496692657471,
+          -0.6326982378959656,
+          0.610021710395813,
+          -0.6540856957435608,
+          0.8158712983131409,
+          0.10081526637077332,
+          -0.07346393167972565,
+          0.2112126499414444,
+          -0.060321636497974396
+        ],
+        "joint_effort_nm": [
+          -0.017197594046592712,
+          -0.04151274636387825,
+          0.17177507281303406,
+          0.16466984152793884,
+          0.6731150150299072,
+          0.8825985193252563,
+          0.6543483734130859,
+          -0.011034220457077026,
+          0.10955660045146942,
+          -0.8825985193252563,
+          0.8825985193252563,
+          0.8825985193252563,
+          -0.1936139166355133,
+          0.8825985193252563,
+          -0.8825985193252563,
+          0.17541277408599854
+        ],
+        "qualified_steps_FL_RL_FR_RR": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "failure": "IK lift tracking timeout (7.4 deg); stop motion",
+        "stopped": false
+      }
+    },
+    {
+      "trial": 1,
+      "mode": "distributed",
+      "result": "failed",
+      "failure": "IK lift tracking timeout (7.8 deg); stop motion",
+      "qualified_steps_FL_RL_FR_RR": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "stopped_at_s": null,
+      "mean_stopped_speed_m_s": null,
+      "forward_displacement_m": -0.007494449615478516,
+      "last_sample": {
+        "step": 358,
+        "time_s": 5.966666666666667,
+        "trial": 1,
+        "trajectory_time_s": 1.44,
+        "mode": "distributed",
+        "phase": "swing",
+        "phase_progress": 0.0,
+        "placement_index": 0,
+        "swing_corner": "rear_right",
+        "swing_pair": null,
+        "expected_support_corners": [
+          "front_left",
+          "front_right",
+          "rear_left"
+        ],
+        "ankle_pivot_forward_m": {
+          "front_left": 0.065,
+          "front_right": 0.034999999999999996,
+          "rear_left": -0.06999999999999999,
+          "rear_right": -0.09999999999999999
+        },
+        "ankle_pivot_down_m": 0.2978283576639298,
+        "requested_lift_m": 0.025,
+        "body_forward_transfer_m": 0.01,
+        "body_lateral_transfer_m": 0.03,
+        "sole_roll_target_deg": {
+          "front_left": -3.9383901995896156,
+          "front_right": -3.9207824158027322,
+          "rear_left": -3.9383901995896156,
+          "rear_right": -4.1568796673053985
+        },
+        "sole_pitch_target_deg": {
+          "front_left": 0.0,
+          "front_right": 0.0,
+          "rear_left": 0.0,
+          "rear_right": 0.0
+        },
+        "encoder_gate_is_not_contact_detection": true,
+        "gate": "lift",
+        "gate_wait_s": 2.0166666666666644,
+        "root_position": [
+          5.993277072906494,
+          3.0185182094573975,
+          0.38170918822288513
+        ],
+        "tilt_deg": 4.747909265204093,
+        "sole_clearance_m_FL_RL_FR_RR": [
+          0.0054891593754291534,
+          -0.0015487559139728546,
+          -0.002509795129299164,
+          -0.0011454559862613678
+        ],
+        "sole_high_m": [
+          0.014281287789344788,
+          0.0010053962469100952,
+          0.0013484843075275421,
+          0.0033717751502990723
+        ],
+        "sole_world": [
+          [
+            6.142343521118164,
+            3.1976518630981445,
+            0.009885222651064396
+          ],
+          [
+            5.877980709075928,
+            3.198688507080078,
+            -0.0002716798335313797
+          ],
+          [
+            6.107072830200195,
+            2.8012900352478027,
+            -0.0005806563422083855
+          ],
+          [
+            5.852779388427734,
+            2.8012466430664062,
+            0.0011131605133414268
+          ]
+        ],
+        "normal_force_n": [
+          0.0,
+          15.348515510559082,
+          14.438299179077148,
+          2.8020753860473633
+        ],
+        "joint_position": [
+          -0.07069403678178787,
+          -0.06748880445957184,
+          0.06848417222499847,
+          0.06887850910425186,
+          0.5237722396850586,
+          -0.6418551802635193,
+          0.4445306956768036,
+          -0.7555739879608154,
+          -0.6331200003623962,
+          0.7464436888694763,
+          -0.7301790118217468,
+          0.7534830570220947,
+          0.10076257586479187,
+          -0.1778055727481842,
+          0.22574476897716522,
+          -0.05102234706282616
+        ],
+        "joint_target": [
+          -0.06873787939548492,
+          -0.06873787939548492,
+          0.06843056529760361,
+          0.07255123555660248,
+          0.5318829417228699,
+          -0.5365577936172485,
+          0.4428730309009552,
+          -0.7555496692657471,
+          -0.6326982378959656,
+          0.610021710395813,
+          -0.6540856957435608,
+          0.8158712983131409,
+          0.10081526637077332,
+          -0.07346393167972565,
+          0.2112126499414444,
+          -0.060321636497974396
+        ],
+        "joint_effort_nm": [
+          -0.003311559557914734,
+          -0.06982822716236115,
+          0.14883767068386078,
+          0.18736550211906433,
+          0.46961861848831177,
+          0.7502087354660034,
+          0.5561813712120056,
+          0.022088345140218735,
+          0.2179262787103653,
+          -0.7502087354660034,
+          0.7502087354660034,
+          0.7502087354660034,
+          -0.0863768607378006,
+          0.7502087354660034,
+          0.30176490545272827,
+          0.17918312549591064
+        ],
+        "qualified_steps_FL_RL_FR_RR": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "failure": "IK lift tracking timeout (7.8 deg); stop motion",
+        "stopped": false
+      }
+    },
+    {
+      "trial": 2,
+      "mode": "diagonal_pair",
+      "result": "failed",
+      "failure": "IK lift tracking timeout (9.2 deg); stop motion",
+      "qualified_steps_FL_RL_FR_RR": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "stopped_at_s": null,
+      "mean_stopped_speed_m_s": null,
+      "forward_displacement_m": -0.007950434810481966,
+      "last_sample": {
+        "step": 444,
+        "time_s": 7.3999999999999995,
+        "trial": 2,
+        "trajectory_time_s": 2.88,
+        "mode": "diagonal_pair",
+        "phase": "swing",
+        "phase_progress": 0.0,
+        "placement_index": 0,
+        "swing_corner": null,
+        "swing_pair": [
+          "front_left",
+          "rear_right"
+        ],
+        "expected_support_corners": [
+          "front_right",
+          "rear_left"
+        ],
+        "ankle_pivot_forward_m": {
+          "front_left": 0.019999999999999997,
+          "front_right": 0.049999999999999996,
+          "rear_left": -0.06999999999999999,
+          "rear_right": -0.09999999999999999
+        },
+        "ankle_pivot_down_m": 0.30081389595562236,
+        "requested_lift_m": 0.025,
+        "body_forward_transfer_m": 0.01,
+        "body_lateral_transfer_m": 0.0,
+        "sole_roll_target_deg": {
+          "front_left": 0.0,
+          "front_right": 0.0,
+          "rear_left": 0.0,
+          "rear_right": 0.0
+        },
+        "sole_pitch_target_deg": {
+          "front_left": 0.0,
+          "front_right": 0.0,
+          "rear_left": 0.0,
+          "rear_right": 0.0
+        },
+        "encoder_gate_is_not_contact_detection": true,
+        "gate": "lift",
+        "gate_wait_s": 2.0166666666666644,
+        "root_position": [
+          -0.0068227369338274,
+          -3.0071709156036377,
+          0.3824644684791565
+        ],
+        "tilt_deg": 4.20018729896147,
+        "sole_clearance_m_FL_RL_FR_RR": [
+          0.025499865412712097,
+          -0.0019000731408596039,
+          -0.002036258578300476,
+          -0.0005780905485153198
+        ],
+        "sole_high_m": [
+          0.03341522067785263,
+          0.00011523067951202393,
+          8.451193571090698e-05,
+          0.003834463655948639
+        ],
+        "sole_world": [
+          [
+            0.09576482325792313,
+            -2.799515962600708,
+            0.029457541182637215
+          ],
+          [
+            -0.12187445163726807,
+            -2.8012938499450684,
+            -0.0008924221619963646
+          ],
+          [
+            0.12203457951545715,
+            -3.198690891265869,
+            -0.0009758751839399338
+          ],
+          [
+            -0.1477895826101303,
+            -3.1986782550811768,
+            0.001628185622394085
+          ]
+        ],
+        "normal_force_n": [
+          0.0,
+          17.898576736450195,
+          14.271356582641602,
+          1.3074395656585693
+        ],
+        "joint_position": [
+          -0.0038448013365268707,
+          -0.009397712536156178,
+          0.009469032287597656,
+          0.009077434428036213,
+          0.5981748104095459,
+          -0.5956290364265442,
+          0.4986514449119568,
+          -0.7567309737205505,
+          -1.0494476556777954,
+          0.6849902272224426,
+          -0.7063712477684021,
+          0.7766583561897278,
+          0.45372334122657776,
+          -0.16649171710014343,
+          0.15168140828609467,
+          -0.05179816111922264
+        ],
+        "joint_target": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.5985502004623413,
+          -0.49098271131515503,
+          0.4706764221191406,
+          -0.7570899724960327,
+          -1.0523284673690796,
+          0.5246991515159607,
+          -0.6119331121444702,
+          0.8185340166091919,
+          0.4537782669067383,
+          -0.033716458827257156,
+          0.141256645321846,
+          -0.061444059014320374
+        ],
+        "joint_effort_nm": [
+          0.029996439814567566,
+          0.2232406586408615,
+          -0.17443707585334778,
+          -0.2491072565317154,
+          0.35527995228767395,
+          0.8825985193252563,
+          -0.11031174659729004,
+          0.20936280488967896,
+          0.09012612700462341,
+          -0.8825985193252563,
+          0.8825985193252563,
+          0.8825985193252563,
+          -0.1034092828631401,
+          0.8825985193252563,
+          0.8825985193252563,
+          0.1965983808040619
+        ],
+        "qualified_steps_FL_RL_FR_RR": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "failure": "IK lift tracking timeout (9.2 deg); stop motion",
+        "stopped": false
+      }
+    },
+    {
+      "trial": 3,
+      "mode": "diagonal_pair",
+      "result": "failed",
+      "failure": "IK lift tracking timeout (9.6 deg); stop motion",
+      "qualified_steps_FL_RL_FR_RR": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "stopped_at_s": null,
+      "mean_stopped_speed_m_s": null,
+      "forward_displacement_m": -0.00727048865519464,
+      "last_sample": {
+        "step": 444,
+        "time_s": 7.3999999999999995,
+        "trial": 3,
+        "trajectory_time_s": 2.88,
+        "mode": "diagonal_pair",
+        "phase": "swing",
+        "phase_progress": 0.0,
+        "placement_index": 0,
+        "swing_corner": null,
+        "swing_pair": [
+          "front_left",
+          "rear_right"
+        ],
+        "expected_support_corners": [
+          "front_right",
+          "rear_left"
+        ],
+        "ankle_pivot_forward_m": {
+          "front_left": 0.019999999999999997,
+          "front_right": 0.049999999999999996,
+          "rear_left": -0.06999999999999999,
+          "rear_right": -0.09999999999999999
+        },
+        "ankle_pivot_down_m": 0.30081389595562236,
+        "requested_lift_m": 0.025,
+        "body_forward_transfer_m": 0.01,
+        "body_lateral_transfer_m": 0.0,
+        "sole_roll_target_deg": {
+          "front_left": 0.0,
+          "front_right": 0.0,
+          "rear_left": 0.0,
+          "rear_right": 0.0
+        },
+        "sole_pitch_target_deg": {
+          "front_left": 0.0,
+          "front_right": 0.0,
+          "rear_left": 0.0,
+          "rear_right": 0.0
+        },
+        "encoder_gate_is_not_contact_detection": true,
+        "gate": "lift",
+        "gate_wait_s": 2.0166666666666644,
+        "root_position": [
+          -0.006107301451265812,
+          2.992734432220459,
+          0.3824268579483032
+        ],
+        "tilt_deg": 4.45929525601187,
+        "sole_clearance_m_FL_RL_FR_RR": [
+          0.025613319128751755,
+          -0.0016986504197120667,
+          -0.0019616931676864624,
+          -0.000667765736579895
+        ],
+        "sole_high_m": [
+          0.03394847735762596,
+          8.449330925941467e-05,
+          7.475912570953369e-05,
+          0.003312107175588608
+        ],
+        "sole_world": [
+          [
+            0.09834185242652893,
+            3.2000529766082764,
+            0.029780900105834007
+          ],
+          [
+            -0.1218722015619278,
+            3.198711395263672,
+            -0.0008070794865489006
+          ],
+          [
+            0.12200058996677399,
+            2.8013017177581787,
+            -0.0009434670209884644
+          ],
+          [
+            -0.1476823091506958,
+            2.801319122314453,
+            0.001322171650826931
+          ]
+        ],
+        "normal_force_n": [
+          0.0,
+          18.202157974243164,
+          14.079753875732422,
+          1.494667887687683
+        ],
+        "joint_position": [
+          -0.0038105323910713196,
+          -0.008470931090414524,
+          0.008412487804889679,
+          0.00819654855877161,
+          0.5979549884796143,
+          -0.6082383990287781,
+          0.48823678493499756,
+          -0.7613600492477417,
+          -1.0495225191116333,
+          0.6915208101272583,
+          -0.702289342880249,
+          0.7716887593269348,
+          0.4537195563316345,
+          -0.16316445171833038,
+          0.15175150334835052,
+          -0.05207102745771408
+        ],
+        "joint_target": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.5985502004623413,
+          -0.49098271131515503,
+          0.4706764221191406,
+          -0.7570899724960327,
+          -1.0523284673690796,
+          0.5246991515159607,
+          -0.6119331121444702,
+          0.8185340166091919,
+          0.4537782669067383,
+          -0.033716458827257156,
+          0.141256645321846,
+          -0.061444059014320374
+        ],
+        "joint_effort_nm": [
+          0.02317854017019272,
+          0.20545047521591187,
+          -0.1370166540145874,
+          -0.23260942101478577,
+          0.39488592743873596,
+          0.7502087354660034,
+          0.09734880924224854,
+          0.2898384928703308,
+          0.05550418794155121,
+          -0.7502087354660034,
+          0.7502087354660034,
+          0.7502087354660034,
+          -0.056688930839300156,
+          0.7502087354660034,
+          0.7502087354660034,
+          0.44664543867111206
+        ],
+        "qualified_steps_FL_RL_FR_RR": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "failure": "IK lift tracking timeout (9.6 deg); stop motion",
+        "stopped": false
+      }
+    },
+    {
+      "trial": 4,
+      "mode": "diagonal_pair",
+      "result": "failed",
+      "failure": "IK lift tracking timeout (8.6 deg); stop motion",
+      "qualified_steps_FL_RL_FR_RR": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "stopped_at_s": null,
+      "mean_stopped_speed_m_s": null,
+      "forward_displacement_m": 0.004212379455566406,
+      "last_sample": {
+        "step": 444,
+        "time_s": 7.3999999999999995,
+        "trial": 4,
+        "trajectory_time_s": 10.879999999999999,
+        "mode": "diagonal_pair",
+        "phase": "lift",
+        "phase_progress": 0.9999999999999993,
+        "placement_index": 1,
+        "swing_corner": null,
+        "swing_pair": [
+          "front_right",
+          "rear_left"
+        ],
+        "expected_support_corners": [
+          "front_left",
+          "rear_right"
+        ],
+        "ankle_pivot_forward_m": {
+          "front_left": 0.049999999999999996,
+          "front_right": 0.019999999999999997,
+          "rear_left": -0.09999999999999999,
+          "rear_right": -0.06999999999999999
+        },
+        "ankle_pivot_down_m": 0.30081389595562236,
+        "requested_lift_m": 0.024999999999999994,
+        "body_forward_transfer_m": 0.01,
+        "body_lateral_transfer_m": 0.0,
+        "sole_roll_target_deg": {
+          "front_left": 0.0,
+          "front_right": 0.0,
+          "rear_left": 0.0,
+          "rear_right": 0.0
+        },
+        "sole_pitch_target_deg": {
+          "front_left": 0.0,
+          "front_right": 0.0,
+          "rear_left": 0.0,
+          "rear_right": 0.0
+        },
+        "encoder_gate_is_not_contact_detection": true,
+        "gate": "lift",
+        "gate_wait_s": 2.0166666666666644,
+        "root_position": [
+          -5.992367267608643,
+          -2.9883015155792236,
+          0.3829440474510193
+        ],
+        "tilt_deg": 4.0379903003908355,
+        "sole_clearance_m_FL_RL_FR_RR": [
+          -0.0015291273593902588,
+          -8.443370461463928e-05,
+          0.02533944696187973,
+          -0.002642635256052017
+        ],
+        "sole_high_m": [
+          0.0006442330777645111,
+          0.0035337433218955994,
+          0.03237902373075485,
+          0.0005335472524166107
+        ],
+        "sole_world": [
+          [
+            -5.881931304931641,
+            -2.8013086318969727,
+            -0.0004424462094902992
+          ],
+          [
+            -6.134430885314941,
+            -2.8044519424438477,
+            0.00172465480864048
+          ],
+          [
+            -5.8921613693237305,
+            -3.1989102363586426,
+            0.02885923534631729
+          ],
+          [
+            -6.118158340454102,
+            -3.198692798614502,
+            -0.0010545430704951286
+          ]
+        ],
+        "normal_force_n": [
+          14.51109504699707,
+          0.5830268263816833,
+          0.0,
+          18.040363311767578
+        ],
+        "joint_position": [
+          -0.001768392277881503,
+          -0.009710756130516529,
+          0.003979912493377924,
+          0.0014837057096883655,
+          0.4833541214466095,
+          -0.7498427033424377,
+          0.5765025019645691,
+          -0.5967768430709839,
+          -0.7620201110839844,
+          0.7935937643051147,
+          -1.0426666736602783,
+          0.5931110978126526,
+          0.2199181467294693,
+          -0.09168752282857895,
+          0.4579693078994751,
+          -0.044245630502700806
+        ],
+        "joint_target": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.4706764221191406,
+          -0.7570899724960327,
+          0.5985502004623413,
+          -0.49098271131515503,
+          -0.6119331121444702,
+          0.8185340166091919,
+          -1.0523284673690796,
+          0.5246991515159607,
+          0.141256645321846,
+          -0.061444059014320374,
+          0.4537782669067383,
+          -0.033716458827257156
+        ],
+        "joint_effort_nm": [
+          0.15311655402183533,
+          0.37520384788513184,
+          -0.19292119145393372,
+          -0.0734233558177948,
+          0.053467392921447754,
+          -0.06774190068244934,
+          0.6148219108581543,
+          0.8825985193252563,
+          0.8825985193252563,
+          0.8400079011917114,
+          0.14144179224967957,
+          -0.8825985193252563,
+          -0.8825985193252563,
+          0.8825985193252563,
+          -0.11322829872369766,
+          -0.8825985193252563
+        ],
+        "qualified_steps_FL_RL_FR_RR": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "failure": "IK lift tracking timeout (8.6 deg); stop motion",
+        "stopped": false
+      }
+    },
+    {
+      "trial": 5,
+      "mode": "diagonal_pair",
+      "result": "failed",
+      "failure": "IK lift tracking timeout (22.4 deg); stop motion",
+      "qualified_steps_FL_RL_FR_RR": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "stopped_at_s": null,
+      "mean_stopped_speed_m_s": null,
+      "forward_displacement_m": 0.05460691452026367,
+      "last_sample": {
+        "step": 444,
+        "time_s": 7.3999999999999995,
+        "trial": 5,
+        "trajectory_time_s": 10.879999999999999,
+        "mode": "diagonal_pair",
+        "phase": "lift",
+        "phase_progress": 0.9999999999999993,
+        "placement_index": 1,
+        "swing_corner": null,
+        "swing_pair": [
+          "front_right",
+          "rear_left"
+        ],
+        "expected_support_corners": [
+          "front_left",
+          "rear_right"
+        ],
+        "ankle_pivot_forward_m": {
+          "front_left": 0.049999999999999996,
+          "front_right": 0.019999999999999997,
+          "rear_left": -0.09999999999999999,
+          "rear_right": -0.06999999999999999
+        },
+        "ankle_pivot_down_m": 0.30081389595562236,
+        "requested_lift_m": 0.024999999999999994,
+        "body_forward_transfer_m": 0.01,
+        "body_lateral_transfer_m": 0.0,
+        "sole_roll_target_deg": {
+          "front_left": 0.0,
+          "front_right": 0.0,
+          "rear_left": 0.0,
+          "rear_right": 0.0
+        },
+        "sole_pitch_target_deg": {
+          "front_left": 0.0,
+          "front_right": 0.0,
+          "rear_left": 0.0,
+          "rear_right": 0.0
+        },
+        "encoder_gate_is_not_contact_detection": true,
+        "gate": "lift",
+        "gate_wait_s": 2.0166666666666644,
+        "root_position": [
+          -5.941946506500244,
+          2.9992682933807373,
+          0.36429235339164734
+        ],
+        "tilt_deg": 1.854020632950483,
+        "sole_clearance_m_FL_RL_FR_RR": [
+          -0.0010140985250473022,
+          -0.00044277310371398926,
+          -0.0006384588778018951,
+          -0.003952406346797943
+        ],
+        "sole_high_m": [
+          -0.0006217509508132935,
+          1.691281795501709e-06,
+          -2.199411392211914e-05,
+          0.0010223910212516785
+        ],
+        "sole_world": [
+          [
+            -5.881931304931641,
+            3.1986920833587646,
+            -0.0008179247379302979
+          ],
+          [
+            -6.10609245300293,
+            3.1966867446899414,
+            -0.00022054091095924377
+          ],
+          [
+            -5.857770919799805,
+            2.8028314113616943,
+            -0.00033022742718458176
+          ],
+          [
+            -6.119451522827148,
+            2.8012773990631104,
+            -0.0014650076627731323
+          ]
+        ],
+        "normal_force_n": [
+          14.215776443481445,
+          3.635582208633423,
+          4.4019341468811035,
+          11.874323844909668
+        ],
+        "joint_position": [
+          -0.010460207238793373,
+          -0.015307420864701271,
+          0.006799074821174145,
+          0.01054087933152914,
+          0.4753971993923187,
+          -0.7850048542022705,
+          0.5770554542541504,
+          -0.8154985904693604,
+          -1.003473162651062,
+          0.7953996062278748,
+          -1.0619237422943115,
+          0.7518399357795715,
+          0.49665871262550354,
+          -0.043538011610507965,
+          0.45812609791755676,
+          -0.01657780446112156
+        ],
+        "joint_target": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.4706764221191406,
+          -0.7570899724960327,
+          0.5985502004623413,
+          -0.49098271131515503,
+          -0.6119331121444702,
+          0.8185340166091919,
+          -1.0523284673690796,
+          0.5246991515159607,
+          0.141256645321846,
+          -0.061444059014320374,
+          0.4537782669067383,
+          -0.033716458827257156
+        ],
+        "joint_effort_nm": [
+          0.18249981105327606,
+          0.3498157560825348,
+          -0.04222559928894043,
+          -0.15196213126182556,
+          -0.7502087354660034,
+          0.7502087354660034,
+          0.2888012230396271,
+          0.7502087354660034,
+          0.7502087354660034,
+          -0.33701205253601074,
+          0.7502087354660034,
+          -0.7502087354660034,
+          -0.7502087354660034,
+          -0.4524184763431549,
+          0.19588693976402283,
+          0.7502087354660034
+        ],
+        "qualified_steps_FL_RL_FR_RR": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "failure": "IK lift tracking timeout (22.4 deg); stop motion",
+        "stopped": false
+      }
+    }
+  ],
+  "actual_mass_kg": [
+    3.395146369934082,
+    3.395146369934082,
+    3.395146369934082,
+    3.395146369934082,
+    3.395146369934082,
+    3.395146369934082
+  ],
+  "videos": [
+    {
+      "trial": 0,
+      "title": "CRAWL / rear-right lift",
+      "video": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-ik-walk\\20260920-current-video\\trial-0-crawl.mp4",
+      "frames": 479,
+      "fps": 30,
+      "duration_s": 15.966666666666667,
+      "replay": "last up to 4 seconds at half speed, then 3-second final freeze",
+      "camera": "right-side oblique; rendered actual simulated state"
+    },
+    {
+      "trial": 2,
+      "title": "DIAGONAL / FL + RR",
+      "video": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-ik-walk\\20260920-current-video\\trial-2-diagonal.mp4",
+      "frames": 552,
+      "fps": 30,
+      "duration_s": 18.4,
+      "replay": "last up to 4 seconds at half speed, then 3-second final freeze",
+      "camera": "right-side oblique; rendered actual simulated state"
+    },
+    {
+      "trial": 4,
+      "title": "DIAGONAL / FR + RL",
+      "video": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-ik-walk\\20260920-current-video\\trial-4-diagonal.mp4",
+      "frames": 552,
+      "fps": 30,
+      "duration_s": 18.4,
+      "replay": "last up to 4 seconds at half speed, then 3-second final freeze",
+      "camera": "right-side oblique; rendered actual simulated state"
+    }
+  ]
+}

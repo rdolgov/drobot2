@@ -35,6 +35,30 @@ stance_down_m = 0.329341447
 stance_fore_aft_m = 0.080
 abduction_deg = 0.0
 
+[ankle_ik]
+period_s = 16.0
+stride_m = 0.060
+lift_m = 0.025
+down_m = 0.305
+fore_aft_m = 0.060
+forward_transfer_m = 0.010
+lateral_transfer_m = 0.030
+
+[ankle_ik_diagonal]
+period_s = 4.0
+stride_m = 0.100
+lift_m = 0.035
+down_m = 0.288
+fore_aft_m = 0.080
+forward_transfer_m = 0.0
+lateral_transfer_m = 0.0
+max_cycles = 2
+support_push_m = 0.020
+support_lift_fraction = 1.0
+support_onset_fraction = 0.30
+ramp_rate_deg_s = 200.0
+max_command_step_deg = 4.0
+
 [[legs]]
 number = 1
 label = "Leg 1 / Front left"

@@ -1,0 +1,44 @@
+{
+  "schema": "drobot.ankle-v24-diagonal.gate-diagnostics.v2",
+  "step": 192000,
+  "evidence": "training_only",
+  "blocker_counting": "each blocker observed at least once during a timed-out wait; reasons can overlap",
+  "episode_scope": "completed episodes only; current unfinished episodes excluded",
+  "completed_episodes": 80529,
+  "completed_moving_episodes": 72656,
+  "timeouts_by_stage": {
+    "transfer": 0,
+    "lift": 35007,
+    "advance": 19510,
+    "lower": 0,
+    "settle": 18139,
+    "push": 0
+  },
+  "timeouts_by_pair": {
+    "front_left_rear_right": 36109,
+    "front_right_rear_left": 36547
+  },
+  "timeout_blockers": {
+    "tracking": 67963,
+    "delivery": 72522,
+    "forward": 57833,
+    "height": 34593,
+    "speed": 72653,
+    "tilt": 0,
+    "angular": 296
+  },
+  "stage_entries": {
+    "transfer": 72683,
+    "lift": 72683,
+    "advance": 37676,
+    "lower": 18166,
+    "settle": 18166,
+    "push": 27
+  },
+  "qualified_touchdowns_by_leg": {
+    "front_left": 1598,
+    "rear_left": 0,
+    "front_right": 8203,
+    "rear_right": 0
+  }
+}

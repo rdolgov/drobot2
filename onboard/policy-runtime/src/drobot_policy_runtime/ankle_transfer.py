@@ -155,8 +155,17 @@ class AnkleTransferLoop:
             base = target.copy() if applied is None else np.asarray(applied.joint_target_rad, dtype=np.float32)
             if base.shape != (16,) or not np.all(np.isfinite(base)):
                 raise RuntimeError("Invalid completed ankle motor target")
-            if applied is not None and now - applied.monotonic_time_s > .12:
+            # A bus write can finish after this policy iteration began, while
+            # sensors are being read. Compare against the snapshot-read time.
+            applied_age = 0. if applied is None else time.monotonic() - applied.monotonic_time_s
+            if not math.isfinite(applied_age) or applied_age < 0.:
+                raise RuntimeError("Invalid completed ankle motor target timestamp")
+            if applied_age > .12:
                 raise RuntimeError("Completed ankle motor target is stale")
+            # Reused bus history must not restrict every new request to the
+            # same single 60 Hz slice. The bus owner independently limits each
+            # actual packet by its elapsed time, joint rate and two-degree cap.
+            target_elapsed = max(elapsed, applied_age)
             observation = np.concatenate((
                 [speed * 10., 0., 0., math.sin(phase), math.cos(phase)],
                 imu.angular_velocity_body_rad_s, gravity,
@@ -166,7 +175,8 @@ class AnkleTransferLoop:
             inference_start = time.monotonic()
             action = self.policy.infer(observation)
             inference_end = time.monotonic()
-            # Training uses a fixed 1/60 s filter and target-rate step.
+            # Preserve the trained 1/60 s action filter. Hardware target-rate
+            # budgeting separately accounts for the completed bus history.
             filtered += dt / (.10 + dt) * (np.clip(action, -1, 1) - filtered)
             leg_phase = (age * cadence + PHASE_BIAS) % 1.
             selected = int(np.argmax(leg_phase))
@@ -190,7 +200,7 @@ class AnkleTransferLoop:
                                         hip, knee, pitch - q[4:8] - q[8:12]))
             expected = (stance | (speed < .005)).astype(np.float32)
             requested = np.clip(reference + filtered * RESIDUAL, LOWER, UPPER)
-            step_limit = np.minimum(RATES * min(dt, elapsed), math.radians(2))
+            step_limit = np.minimum(RATES * target_elapsed, math.radians(2))
             target = base + np.clip(requested - base, -step_limit, step_limit)
             if stop_event.is_set():
                 return
@@ -203,7 +213,7 @@ class AnkleTransferLoop:
                     command=PolicyCommand(forward_m_s=speed), phase_sin=math.sin(phase),
                     phase_cos=math.cos(phase), imu=imu, joints=joints, observation=observation,
                     action=action, requested_target_rad=requested, rate_limited_target_rad=target.copy(),
-                    target_elapsed_s=elapsed, observation_duration_s=inference_start - now,
+                    target_elapsed_s=target_elapsed, observation_duration_s=inference_start - now,
                     inference_duration_s=inference_end - inference_start,
                     motor_sink_duration_s=sink_end - sink_start, gait_frequency_hz=cadence,
                     heading_hold_enabled=False, heading_reference_yaw_rad=0.,
@@ -215,7 +225,9 @@ class AnkleTransferLoop:
             sequence += 1
             last_step = now
             deadline += dt
-            if deadline < sink_end:
-                misses += 1
-                deadline = sink_end
+            completed = time.monotonic()
+            if deadline <= completed:
+                skipped = math.floor((completed - deadline) / dt) + 1
+                misses += skipped
+                deadline += skipped * dt
             stop_event.wait(max(0., deadline - time.monotonic()))

@@ -1,0 +1,26 @@
+{
+  "detected_unix": 1789878478.094468,
+  "reason": "Supervisor status.json atomic replacement failed with WinError 5; worker then failed writing to the closed stdout pipe.",
+  "processes_confirmed_exited": true,
+  "original_status": "status.pre-recovery.json",
+  "last_logged_iteration": 120,
+  "last_gate_summary_step": 7872,
+  "saved_checkpoints": [
+    "model_0.pt"
+  ],
+  "resume_from_partial_run": false,
+  "restart_directory": "20260919-seed2419-r6",
+  "correction": "Bounded Windows sharing retries, nonfatal progress snapshots, direct worker file logging, independent monitor and terminal error guards.",
+  "verification": {
+    "passed": 4,
+    "script": ".codex-tmp/verify_diagonal_supervisor.py",
+    "script_sha256": "8ed3edfcac8b4694d2fd0023ea75769edb852ac76ea5c7411e56ad16426d39c0",
+    "scope": "Transient/persistent replacement failure, unrelated I/O failure, child output and tail parsing under persistent status failure."
+  },
+  "evidence_sha256": {
+    "launcher.stderr.log": "d926e7c3ee97a7e9fcd6e9ccf2adefb449a466b173bc8df5161138bfd37f35b9",
+    "training-error.txt": "66a65cf0334608a20429898d00ac88224d9ccf300f0f36a8597a5491df96a787",
+    "train.log": "75af1124718b08a1c68125c4260cdc4151a32c9d29c5e80ff15a973a3e684456",
+    "status.pre-recovery.json": "362464400f4cf40adfef7918ddddcf52894b8f1a3ca6ab565a1480a4430c99b3"
+  }
+}

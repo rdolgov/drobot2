@@ -1,0 +1,67 @@
+{
+  "training_status": "completed",
+  "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v24_diagonal\\2026-09-19_19-05-04_diagonal-2419-r4\\model_2999.pt",
+  "checkpoint_sha256": "c0c23e1e2994543e07bf6de495ce03dd4dd935b69dc20703a9d1ffa14e4947d1",
+  "iteration_reports": 3000,
+  "max_logged_paired_landings": 0.0,
+  "last_100_iteration_means": {
+    "train_paired_landings": 0.0,
+    "train_min_steps_per_leg": 0.0,
+    "train_gate_timeout_fraction": 0.915064,
+    "train_gate_timeout_moving_episodes": 0.93219,
+    "train_fall_fraction": 0.0,
+    "train_forward_speed_m_s": 0.011154,
+    "train_stance_slip_m_s": 0.000415,
+    "train_angular_rms_rad_s": 0.073355,
+    "train_lift_stage_clear": 0.021362,
+    "train_supported_swing_clear": 0.0015609999999999999
+  },
+  "statistical_scope": "Unweighted means of rounded logged iteration summaries, not held-out evaluation; cumulative counts below cover completed episodes only.",
+  "completed_episode_totals": {
+    "schema": "drobot.ankle-v24-diagonal.gate-diagnostics.v2",
+    "step": 192000,
+    "evidence": "training_only",
+    "blocker_counting": "each blocker observed at least once during a timed-out wait; reasons can overlap",
+    "episode_scope": "completed episodes only; current unfinished episodes excluded",
+    "completed_episodes": 89505,
+    "completed_moving_episodes": 80747,
+    "timeouts_by_stage": {
+      "transfer": 0,
+      "lift": 79245,
+      "advance": 1451,
+      "lower": 0,
+      "settle": 51,
+      "push": 0
+    },
+    "timeouts_by_pair": {
+      "front_left_rear_right": 40406,
+      "front_right_rear_left": 40341
+    },
+    "timeout_blockers": {
+      "tracking": 80481,
+      "delivery": 78465,
+      "forward": 52259,
+      "height": 79585,
+      "speed": 80346,
+      "tilt": 0,
+      "angular": 85
+    },
+    "stage_entries": {
+      "transfer": 80747,
+      "lift": 80747,
+      "advance": 1502,
+      "lower": 51,
+      "settle": 51,
+      "push": 0
+    },
+    "qualified_touchdowns_by_leg": {
+      "front_left": 4,
+      "rear_left": 0,
+      "front_right": 2,
+      "rear_right": 0
+    }
+  },
+  "gait_result": "failed: no full paired steps and no qualifying rear touchdowns",
+  "hardware_qualified": false,
+  "independent_diagnostics": "See sibling checkpoint750, checkpoint1250 and checkpoint1750 diagnostic directories and comparison notes."
+}

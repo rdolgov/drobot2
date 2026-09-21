@@ -1,0 +1,18 @@
+{
+  "created_at_utc": "2026-09-19T20:05:27.814240+00:00",
+  "purpose": "Ankle target elapsed-time budgeting, prompt worker wakeup, and delivery timing records",
+  "tests_run": false,
+  "hardware_motion_check_run": false,
+  "files": [
+    {
+      "path": "onboard/policy-runtime/src/drobot_policy_runtime/ankle_transfer.py",
+      "new_sha256": "396a66d6fa4db85889092d79d80d084ebd44b5c28da3da0cb498046a8e02ae3d",
+      "expected_previous_sha256": "531cd1a4851528a1ffe7202a14750f8ca9a0e867ab18f15266a204e679bda521"
+    },
+    {
+      "path": "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/four_leg_control.py",
+      "new_sha256": "25abe6e3ba3ab3b7d507093f003cdbadd728be09346be22ad26b2eafff900562",
+      "expected_previous_sha256": "f8e79cce09302077caf967f92d4145f71c901555c7842a55b18cf9acf885f3a5"
+    }
+  ]
+}

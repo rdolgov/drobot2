@@ -1,0 +1,16 @@
+[
+  "C:/isaacsim/python.bat",
+  "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\rl\\ankle_v24_diagonal\\_train_worker.py",
+  "--output",
+  "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v24-diagonal\\20260919-seed2419-r2",
+  "--warm-start",
+  "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v24-diagonal\\20260919-seed2419-r2\\initial-actor.pt",
+  "--num-envs",
+  "256",
+  "--iterations",
+  "3000",
+  "--seed",
+  "2419",
+  "--run-name",
+  "diagonal-2419-r2"
+]

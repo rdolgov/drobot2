@@ -1,0 +1,209 @@
+{
+  "scope": "Bounded deterministic diagnostic comparison; four first episodes each. Clearance maxima are from periodic/stage-change samples, not every physics tick. No candidate qualifies for hardware.",
+  "results": [
+    {
+      "directory": "r4-model1250-baseline",
+      "checkpoint_sha256": "7581cebc4e4cf9d0ccb3b0cd0891328eca285de6346f24bbda490bb6199df3ae",
+      "intervention": "unchanged controller",
+      "trials": [
+        {
+          "trial": 0,
+          "result": "gate_timeout",
+          "terminal_stage": "lift",
+          "end_s": 4.85,
+          "paired_landings": 0,
+          "best_simultaneous_selected_clearance_mm_sampled": -0.04,
+          "max_individual_clearance_mm_sampled": [
+            14.51,
+            -0.04
+          ]
+        },
+        {
+          "trial": 1,
+          "result": "gate_timeout",
+          "terminal_stage": "lift",
+          "end_s": 4.85,
+          "paired_landings": 0,
+          "best_simultaneous_selected_clearance_mm_sampled": 0.0,
+          "max_individual_clearance_mm_sampled": [
+            0.0,
+            15.6
+          ]
+        },
+        {
+          "trial": 2,
+          "result": "gate_timeout",
+          "terminal_stage": "lift",
+          "end_s": 4.85,
+          "paired_landings": 0,
+          "best_simultaneous_selected_clearance_mm_sampled": -0.47,
+          "max_individual_clearance_mm_sampled": [
+            18.03,
+            -0.47
+          ]
+        },
+        {
+          "trial": 3,
+          "result": "gate_timeout",
+          "terminal_stage": "lift",
+          "end_s": 4.85,
+          "paired_landings": 0,
+          "best_simultaneous_selected_clearance_mm_sampled": 0.01,
+          "max_individual_clearance_mm_sampled": [
+            0.01,
+            15.77
+          ]
+        }
+      ]
+    },
+    {
+      "directory": "r4-model1250-projected",
+      "checkpoint_sha256": "7581cebc4e4cf9d0ccb3b0cd0891328eca285de6346f24bbda490bb6199df3ae",
+      "intervention": {
+        "mode": "diagnostic swing projection",
+        "forward_window_m": [
+          -0.008,
+          0.008
+        ],
+        "down_window_m": [
+          -0.01,
+          0.002
+        ],
+        "stages": [
+          "lift",
+          "advance",
+          "lower"
+        ],
+        "physical_limits_changed": false,
+        "qualification_thresholds_changed": false,
+        "requires_retraining_if_adopted": true
+      },
+      "trials": [
+        {
+          "trial": 0,
+          "result": "gate_timeout",
+          "terminal_stage": "settle",
+          "end_s": 8.316666666666666,
+          "paired_landings": 0,
+          "best_simultaneous_selected_clearance_mm_sampled": -0.17,
+          "max_individual_clearance_mm_sampled": [
+            23.3,
+            -0.17
+          ]
+        },
+        {
+          "trial": 1,
+          "result": "gate_timeout",
+          "terminal_stage": "advance",
+          "end_s": 6.1,
+          "paired_landings": 0,
+          "best_simultaneous_selected_clearance_mm_sampled": 0.01,
+          "max_individual_clearance_mm_sampled": [
+            0.01,
+            24.23
+          ]
+        },
+        {
+          "trial": 2,
+          "result": "gate_timeout",
+          "terminal_stage": "advance",
+          "end_s": 6.5,
+          "paired_landings": 0,
+          "best_simultaneous_selected_clearance_mm_sampled": 0.04,
+          "max_individual_clearance_mm_sampled": [
+            16.1,
+            0.04
+          ]
+        },
+        {
+          "trial": 3,
+          "result": "gate_timeout",
+          "terminal_stage": "advance",
+          "end_s": 5.983333333333333,
+          "paired_landings": 0,
+          "best_simultaneous_selected_clearance_mm_sampled": 0.0,
+          "max_individual_clearance_mm_sampled": [
+            0.0,
+            18.07
+          ]
+        }
+      ]
+    },
+    {
+      "directory": "r4-model1250-compression",
+      "checkpoint_sha256": "7581cebc4e4cf9d0ccb3b0cd0891328eca285de6346f24bbda490bb6199df3ae",
+      "intervention": {
+        "mode": "diagnostic swing projection",
+        "forward_window_m": [
+          -0.008,
+          0.008
+        ],
+        "down_window_m": [
+          -0.01,
+          0.002
+        ],
+        "stages": [
+          "lift",
+          "advance",
+          "lower"
+        ],
+        "physical_limits_changed": false,
+        "qualification_thresholds_changed": false,
+        "requires_retraining_if_adopted": true,
+        "support_compression_compensation": true,
+        "compression_cap_m": 0.025,
+        "compression_filter_s": 0.15
+      },
+      "trials": [
+        {
+          "trial": 0,
+          "result": "gate_timeout",
+          "terminal_stage": "settle",
+          "end_s": 7.866666666666666,
+          "paired_landings": 0,
+          "best_simultaneous_selected_clearance_mm_sampled": -0.1,
+          "max_individual_clearance_mm_sampled": [
+            39.41,
+            -0.1
+          ]
+        },
+        {
+          "trial": 1,
+          "result": "gate_timeout",
+          "terminal_stage": "advance",
+          "end_s": 6.066666666666666,
+          "paired_landings": 0,
+          "best_simultaneous_selected_clearance_mm_sampled": 0.02,
+          "max_individual_clearance_mm_sampled": [
+            0.06,
+            25.15
+          ]
+        },
+        {
+          "trial": 2,
+          "result": "gate_timeout",
+          "terminal_stage": "advance",
+          "end_s": 6.316666666666666,
+          "paired_landings": 0,
+          "best_simultaneous_selected_clearance_mm_sampled": 1.0,
+          "max_individual_clearance_mm_sampled": [
+            32.86,
+            3.08
+          ]
+        },
+        {
+          "trial": 3,
+          "result": "gate_timeout",
+          "terminal_stage": "lift",
+          "end_s": 4.85,
+          "paired_landings": 0,
+          "best_simultaneous_selected_clearance_mm_sampled": 0.02,
+          "max_individual_clearance_mm_sampled": [
+            0.02,
+            24.57
+          ]
+        }
+      ]
+    }
+  ]
+}

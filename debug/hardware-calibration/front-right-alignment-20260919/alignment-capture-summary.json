@@ -1,0 +1,50 @@
+[
+  {
+    "servo_id": 5,
+    "candidate_center_tick": 2101,
+    "sample_span_deg": 0.087890625,
+    "captured_at_utc": "2026-09-19T19:36:30.632771+00:00",
+    "raw_samples": [
+      2101,
+      2100,
+      2101,
+      2101,
+      2101
+    ],
+    "user_confirmed_pose": "Hip aligned: servo 6 pivot directly below servo 5 pivot with body level",
+    "source_file": "debug/hardware-calibration/front-right-alignment-20260919/hip-aligned-20260919T193631Z.json",
+    "source_sha256": "6896f00173a2028cdfa340a8e42295fd1a62f918b8724fcc29af55f8d91bd91b"
+  },
+  {
+    "servo_id": 6,
+    "candidate_center_tick": 2054,
+    "sample_span_deg": 0,
+    "captured_at_utc": "2026-09-19T19:50:21.859886+00:00",
+    "raw_samples": [
+      2054,
+      2054,
+      2054,
+      2054,
+      2054
+    ],
+    "user_confirmed_pose": "Knee aligned: hip, knee, and ankle pivot centers form a straight line viewed from the robot right side",
+    "source_file": "debug/hardware-calibration/front-right-alignment-20260919/knee-aligned-20260919T195022Z.json",
+    "source_sha256": "b09756c5fd57e482207d6b7f59821dc08f020984fd1afde75ce32768079e2ac5"
+  },
+  {
+    "servo_id": 14,
+    "candidate_center_tick": 2971,
+    "sample_span_deg": 0,
+    "captured_at_utc": "2026-09-19T19:51:32.855856+00:00",
+    "raw_samples": [
+      2971,
+      2971,
+      2971,
+      2971,
+      2971
+    ],
+    "user_confirmed_pose": "Ankle aligned: sole perpendicular to knee-to-ankle pivot line in side view",
+    "source_file": "debug/hardware-calibration/front-right-alignment-20260919/ankle-aligned-20260919T195133Z.json",
+    "source_sha256": "26e4bd0cff1b2d662c5c3c5dcafaf2eb5ce58c5390a667f09fc1fa46330f4c95"
+  }
+]

@@ -1,0 +1,9 @@
+{
+  "schema": "drobot.ankle-v26-feasible.v1",
+  "initialization": "checkpoint C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v26-balanced\\20260920-train-r2\\checkpoints\\model_549.pt; optimizer resumed",
+  "projection_cost": "1.5 times squared normalized hip/knee correction discarded during swing, integrated over time",
+  "mirror_loss_coefficient": 0.25,
+  "physics_controller_observations_limits": "unchanged from ankle_v25_pair",
+  "qualification": "unchanged; reward shaping does not count as success",
+  "hardware_qualified": false
+}

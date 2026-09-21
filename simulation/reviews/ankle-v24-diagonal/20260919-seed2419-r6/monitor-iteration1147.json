@@ -1,0 +1,76 @@
+{
+  "observed_unix": 1789881309.6510699,
+  "status": "running",
+  "last_iteration": 1147,
+  "source_contract_changes": [],
+  "summary_scope": "Unweighted last 100 rounded iteration reports; training evidence only",
+  "iteration_range": [
+    1048,
+    1147
+  ],
+  "means": {
+    "train_paired_landings": 0.0,
+    "train_gate_timeout_fraction": 0.906872,
+    "train_gate_timeout_lift": 0.377292,
+    "train_gate_timeout_advance": 0.217479,
+    "train_gate_timeout_settle": 0.312111,
+    "train_front_left_lift_clear": 0.125002,
+    "train_rear_left_lift_clear": 0.0,
+    "train_front_right_lift_clear": 0.288169,
+    "train_rear_right_lift_clear": 0.0,
+    "train_stance_slip_m_s": 0.000568,
+    "train_angular_rms_rad_s": 0.089777,
+    "train_fall_fraction": 0.0
+  },
+  "gate_totals": {
+    "schema": "drobot.ankle-v24-diagonal.gate-diagnostics.v2",
+    "step": 73446,
+    "evidence": "training_only",
+    "blocker_counting": "each blocker observed at least once during a timed-out wait; reasons can overlap",
+    "episode_scope": "completed episodes only; current unfinished episodes excluded",
+    "completed_episodes": 30206,
+    "completed_moving_episodes": 27302,
+    "timeouts_by_stage": {
+      "transfer": 0,
+      "lift": 11323,
+      "advance": 6850,
+      "lower": 0,
+      "settle": 9129,
+      "push": 0
+    },
+    "timeouts_by_pair": {
+      "front_left_rear_right": 13648,
+      "front_right_rear_left": 13654
+    },
+    "timeout_blockers": {
+      "tracking": 25194,
+      "delivery": 27281,
+      "forward": 19388,
+      "height": 11780,
+      "speed": 27301,
+      "tilt": 0,
+      "angular": 135
+    },
+    "stage_entries": {
+      "transfer": 27314,
+      "lift": 27314,
+      "advance": 15991,
+      "lower": 9141,
+      "settle": 9141,
+      "push": 12
+    },
+    "qualified_touchdowns_by_leg": {
+      "front_left": 417,
+      "rear_left": 0,
+      "front_right": 4538,
+      "rear_right": 0
+    }
+  },
+  "diagnostics": [
+    "../r6-model750-mean/diagnosis.md",
+    "../r6-model750-support-plane-comparison.md"
+  ],
+  "decision": "Prototype rejected after four lift timeouts and greater tilt; continue unchanged R6. No additional training job or hardware operation.",
+  "error_files": [],
+  "launcher_stderr_bytes": 0
+}

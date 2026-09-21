@@ -1,0 +1,114 @@
+{
+  "schema": "drobot.ankle-assets.v23-r3-stride",
+  "nominal_mass_kg": 3.444019908818,
+  "variants": {
+    "active": {
+      "source": "C:\\Users\\roman\\Documents\\dev\\drobot2\\cad\\exports\\urdf\\quadruped_robot_v23_solid_sole.urdf",
+      "source_sha256": "3a440a7ef15e86492ac2613d13c73b1366393209a84cfc4a1b829b6646e2b559",
+      "usd": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\exports\\isaac\\ankle_v23_stride\\active\\robot.usdc",
+      "usd_sha256": "bbba8589a3f41dc5809371fdef529e7195e5cbb73322a04cdce29def7d1b61c4",
+      "bodies": [
+        "base_link",
+        "imu_link",
+        "camera_link",
+        "front_left_hip_link",
+        "front_left_proximal_link",
+        "front_left_distal_link",
+        "front_left_foot_link",
+        "rear_left_hip_link",
+        "rear_left_proximal_link",
+        "rear_left_distal_link",
+        "rear_left_foot_link",
+        "front_right_hip_link",
+        "front_right_proximal_link",
+        "front_right_distal_link",
+        "front_right_foot_link",
+        "rear_right_hip_link",
+        "rear_right_proximal_link",
+        "rear_right_distal_link",
+        "rear_right_foot_link",
+        "ankle_study_rear_payload_link"
+      ],
+      "adjacent_filtered_pairs": [
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/imu_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/camera_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_left_hip_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_left_hip_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_left_hip_link/front_left_proximal_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_left_hip_link/front_left_proximal_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_left_hip_link/front_left_proximal_link/front_left_distal_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_left_hip_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_left_hip_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_left_hip_link/rear_left_proximal_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_left_hip_link/rear_left_proximal_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_left_hip_link/rear_left_proximal_link/rear_left_distal_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_right_hip_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_right_hip_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_right_hip_link/front_right_proximal_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_right_hip_link/front_right_proximal_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_right_hip_link/front_right_proximal_link/front_right_distal_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_right_hip_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_right_hip_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_right_hip_link/rear_right_proximal_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_right_hip_link/rear_right_proximal_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_right_hip_link/rear_right_proximal_link/rear_right_distal_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/ankle_study_rear_payload_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_left_hip_link/front_left_proximal_link/front_left_distal_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_left_hip_link/front_left_proximal_link/front_left_distal_link/front_left_foot_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_left_hip_link/rear_left_proximal_link/rear_left_distal_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_left_hip_link/rear_left_proximal_link/rear_left_distal_link/rear_left_foot_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_right_hip_link/front_right_proximal_link/front_right_distal_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/front_right_hip_link/front_right_proximal_link/front_right_distal_link/front_right_foot_link"
+        ],
+        [
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_right_hip_link/rear_right_proximal_link/rear_right_distal_link",
+          "/drobot_ankle_v23_r3_solid_sole/Geometry/base_link/rear_right_hip_link/rear_right_proximal_link/rear_right_distal_link/rear_right_foot_link"
+        ]
+      ],
+      "expected_actuated_joints": 16,
+      "nominal_mass_kg": 3.444019908818
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "status": "completed",
+  "pid": 8712,
+  "mode": "train",
+  "started_unix": 1789968641.2776957,
+  "started_simulation_unix": 1789968650.5252323,
+  "start_iteration": 550,
+  "last_iteration": 2549,
+  "updated_unix": 1789973205.4070802,
+  "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v27-overnight\\20260920-continue\\train\\checkpoints\\model_2549.pt",
+  "checkpoint_sha256": "867c3a4a839a806fcda8ba2a86df3a3103c016e9c9e108d43e020d1100908b92",
+  "training_returned": true,
+  "finished_unix": 1789973205.4200783
+}

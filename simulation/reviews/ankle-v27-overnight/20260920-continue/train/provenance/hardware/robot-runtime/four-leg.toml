@@ -1,0 +1,88 @@
+[server]
+http_port = 8766
+ramp_rate_deg_s = 270.0
+heartbeat_timeout_s = 20.0
+
+[ankles]
+calibration = "servos/calibration-ankles.json"
+travel_observations = "servos/ankle-travel-observations.json"
+limit_margin_deg = 5.0
+
+[monitoring]
+voltage_warning_low_v = 11.0
+voltage_warning_high_v = 12.6
+voltage_spread_warning_v = 0.3
+voltage_sag_warning_v = 0.6
+temperature_warning_c = 55
+temperature_stop_confirmation_s = 5.0
+temperature_critical_c = 65
+leg_current_warning_ma = 2500.0
+motor_stall_current_warning_ma = 1200.0
+stall_tracking_error_deg = 8.0
+stall_speed_raw_max = 20
+battery_series_cells = 3
+
+[crawl]
+period_s = 6.0
+stance_settle_s = 2.0
+ramp_rate_deg_s = 120.0
+stride_m = 0.060
+lift_m = 0.025
+support_extension_m = 0.0
+weight_shift_forward_m = 0.006
+weight_shift_lateral_m = 0.0
+stance_down_m = 0.329341447
+stance_fore_aft_m = 0.080
+abduction_deg = 0.0
+
+[ankle_ik]
+period_s = 16.0
+stride_m = 0.060
+lift_m = 0.025
+down_m = 0.305
+fore_aft_m = 0.060
+forward_transfer_m = 0.010
+lateral_transfer_m = 0.030
+
+[ankle_ik_diagonal]
+period_s = 4.0
+stride_m = 0.100
+lift_m = 0.035
+down_m = 0.288
+fore_aft_m = 0.080
+forward_transfer_m = 0.0
+lateral_transfer_m = 0.0
+max_cycles = 2
+support_push_m = 0.020
+support_lift_fraction = 1.0
+support_onset_fraction = 0.30
+ramp_rate_deg_s = 200.0
+max_command_step_deg = 4.0
+
+[[legs]]
+number = 1
+label = "Leg 1 / Front left"
+corner = "front_left"
+profile = "servos/leg-1.toml"
+calibration = "servos/calibration-leg-1.json"
+
+[[legs]]
+number = 2
+label = "Leg 2 / Front right"
+corner = "front_right"
+profile = "servos/leg-2.toml"
+calibration = "servos/calibration-leg-2.json"
+
+[[legs]]
+number = 3
+label = "Leg 3 / Rear left"
+corner = "rear_left"
+profile = "servos/leg-3.toml"
+calibration = "servos/calibration-leg-3.json"
+
+[[legs]]
+number = 4
+label = "Leg 4 / Rear right"
+corner = "rear_right"
+profile = "servos/leg-4.toml"
+calibration = "servos/calibration-leg-4.json"

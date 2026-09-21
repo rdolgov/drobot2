@@ -1,0 +1,8 @@
+{
+  "status": "failed",
+  "pid": 6868,
+  "mode": "evaluate",
+  "started_unix": 1789957312.7618191,
+  "error": "Traceback (most recent call last):\n  File \"C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\rl\\ankle_v25_ik\\run.py\", line 86, in <module>\n    env = RslRlVecEnvWrapper(gym.make(\"Drobot-Ankle-V25-IK\", cfg=cfg,\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\roman\\Documents\\dev\\IsaacLab\\source\\isaaclab_rl\\isaaclab_rl\\rsl_rl\\vecenv_wrapper.py\", line 95, in __init__\n    self.env.reset()\n  File \"C:\\isaacsim\\kit\\python\\Lib\\site-packages\\gymnasium\\wrappers\\common.py\", line 400, in reset\n    return super().reset(seed=seed, options=options)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\isaacsim\\kit\\python\\Lib\\site-packages\\gymnasium\\core.py\", line 333, in reset\n    return self.env.reset(seed=seed, options=options)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\roman\\Documents\\dev\\IsaacLab\\source\\isaaclab\\isaaclab\\envs\\direct_rl_env.py\", line 371, in reset\n    self._reset_idx(indices)\n  File \"C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\rl\\ankle_v25_ik\\env.py\", line 208, in _reset_idx\n    self.pair[env_ids] = env_ids % 2 if self.num_envs > 1 else self.cfg.evaluation_pair\n    ~~~~~~~~~^^^^^^^^^\nRuntimeError: Index put requires the source and destination dtypes match, got Long for the destination and Int for the source.\n",
+  "finished_unix": 1789957332.077222
+}

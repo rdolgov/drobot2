@@ -1,0 +1,15 @@
+{
+  "status": "stopped_early",
+  "pid": 11988,
+  "mode": "train",
+  "started_unix": 1789957667.6721606,
+  "started_simulation_unix": 1789957675.1413343,
+  "last_iteration": 313,
+  "updated_unix": 1789958465.5876508,
+  "last_saved_iteration": 300,
+  "checkpoint": "simulation\\reviews\\ankle-v25-ik\\20260920-train-r1\\checkpoints\\model_300.pt",
+  "checkpoint_sha256": "df655633d7f85453dca49ad4309e420480fa7c718018ac0a31543c9f1caa93db",
+  "finished_unix": 1789958477.5290594,
+  "reason": "First independent evaluation and continued training diagnostics show rear-foot shuffling; preserve checkpoint 300 and direct remaining compute to separately versioned paired-clearance candidate.",
+  "training_returned": false
+}

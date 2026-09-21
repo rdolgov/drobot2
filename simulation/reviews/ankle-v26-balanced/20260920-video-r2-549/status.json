@@ -1,0 +1,10 @@
+{
+  "status": "completed",
+  "pid": 11896,
+  "mode": "evaluate",
+  "started_unix": 1789963386.1440694,
+  "started_simulation_unix": 1789963395.6869235,
+  "start_iteration": 549,
+  "finished_unix": 1789963503.3490143,
+  "report": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v26-balanced\\20260920-video-r2-549\\report.json"
+}

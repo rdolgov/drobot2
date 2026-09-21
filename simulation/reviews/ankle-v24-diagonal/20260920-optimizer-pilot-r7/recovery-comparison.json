@@ -1,0 +1,264 @@
+{
+  "optimizer_iterations": 250,
+  "learning_rates": [
+    0.0001
+  ],
+  "uniform_action_fraction_range": [
+    0.018890380859375,
+    0.64013671875
+  ],
+  "last_50_mean_uniform_action_fraction": 0.1155035400390625,
+  "last_50_mean_absolute_action_mean": 0.1919948050379753,
+  "collapse_stop_triggered": false,
+  "comparison_scope": "Saved approximately 10 Hz traces, selected swing feet after startup. Torque cap comparison uses instantaneous trace speed rather than preceding physics substep; implicit drive effort is approximate telemetry, not measured hardware torque.",
+  "conditions": {
+    "r6-model1500-mean": [
+      {
+        "trial": 0,
+        "motor_strength_fraction": 1.0,
+        "result": "gate_timeout",
+        "paired_landings": 0,
+        "peak_selected_clearance_m_FL_RL_FR_RR": [
+          0.03712127357721329,
+          null,
+          null,
+          0.0004161261022090912
+        ],
+        "supporting_knees": [
+          {
+            "leg_FL_RL_FR_RR": 1,
+            "samples": 29,
+            "near_cap_fraction": 1,
+            "mean_tracking_error_deg": 9.544127035153117
+          },
+          {
+            "leg_FL_RL_FR_RR": 2,
+            "samples": 29,
+            "near_cap_fraction": 0.896551724137931,
+            "mean_tracking_error_deg": 4.025233734897263
+          }
+        ]
+      },
+      {
+        "trial": 1,
+        "motor_strength_fraction": 1.0,
+        "result": "gate_timeout",
+        "paired_landings": 0,
+        "peak_selected_clearance_m_FL_RL_FR_RR": [
+          null,
+          -0.00011559203267097473,
+          0.031858257949352264,
+          null
+        ],
+        "supporting_knees": [
+          {
+            "leg_FL_RL_FR_RR": 0,
+            "samples": 30,
+            "near_cap_fraction": 1,
+            "mean_tracking_error_deg": 7.016466870189758
+          },
+          {
+            "leg_FL_RL_FR_RR": 3,
+            "samples": 30,
+            "near_cap_fraction": 0.7666666666666667,
+            "mean_tracking_error_deg": 3.875166792906569
+          }
+        ]
+      },
+      {
+        "trial": 2,
+        "motor_strength_fraction": 0.85,
+        "result": "gate_timeout",
+        "paired_landings": 0,
+        "peak_selected_clearance_m_FL_RL_FR_RR": [
+          0.03526008129119873,
+          -0.00015373528003692627,
+          0.013336393982172012,
+          -4.8667192459106445e-05
+        ],
+        "supporting_knees": [
+          {
+            "leg_FL_RL_FR_RR": 0,
+            "samples": 22,
+            "near_cap_fraction": 1,
+            "mean_tracking_error_deg": 10.137485983980255
+          },
+          {
+            "leg_FL_RL_FR_RR": 1,
+            "samples": 28,
+            "near_cap_fraction": 1,
+            "mean_tracking_error_deg": 8.824212891455836
+          },
+          {
+            "leg_FL_RL_FR_RR": 2,
+            "samples": 28,
+            "near_cap_fraction": 0.8928571428571429,
+            "mean_tracking_error_deg": 7.84955087331054
+          },
+          {
+            "leg_FL_RL_FR_RR": 3,
+            "samples": 22,
+            "near_cap_fraction": 1,
+            "mean_tracking_error_deg": 10.26239275796372
+          }
+        ]
+      },
+      {
+        "trial": 3,
+        "motor_strength_fraction": 0.85,
+        "result": "gate_timeout",
+        "paired_landings": 0,
+        "peak_selected_clearance_m_FL_RL_FR_RR": [
+          null,
+          -6.923824548721313e-05,
+          0.0324493870139122,
+          null
+        ],
+        "supporting_knees": [
+          {
+            "leg_FL_RL_FR_RR": 0,
+            "samples": 23,
+            "near_cap_fraction": 1,
+            "mean_tracking_error_deg": 8.577862636030778
+          },
+          {
+            "leg_FL_RL_FR_RR": 3,
+            "samples": 23,
+            "near_cap_fraction": 0.9130434782608695,
+            "mean_tracking_error_deg": 2.3374374345631455
+          }
+        ]
+      }
+    ],
+    "r7-model249-mean": [
+      {
+        "trial": 0,
+        "motor_strength_fraction": 1.0,
+        "result": "gate_timeout",
+        "paired_landings": 0,
+        "peak_selected_clearance_m_FL_RL_FR_RR": [
+          0.03891275078058243,
+          6.0535967350006104e-05,
+          0.040861230343580246,
+          -0.00012441352009773254
+        ],
+        "supporting_knees": [
+          {
+            "leg_FL_RL_FR_RR": 0,
+            "samples": 35,
+            "near_cap_fraction": 1,
+            "mean_tracking_error_deg": 8.732561071123776
+          },
+          {
+            "leg_FL_RL_FR_RR": 1,
+            "samples": 28,
+            "near_cap_fraction": 1,
+            "mean_tracking_error_deg": 9.14979422684434
+          },
+          {
+            "leg_FL_RL_FR_RR": 2,
+            "samples": 28,
+            "near_cap_fraction": 0.8214285714285714,
+            "mean_tracking_error_deg": 3.5844058269562105
+          },
+          {
+            "leg_FL_RL_FR_RR": 3,
+            "samples": 35,
+            "near_cap_fraction": 0.9142857142857143,
+            "mean_tracking_error_deg": 4.040537934528373
+          }
+        ]
+      },
+      {
+        "trial": 1,
+        "motor_strength_fraction": 1.0,
+        "result": "gate_timeout",
+        "paired_landings": 0,
+        "peak_selected_clearance_m_FL_RL_FR_RR": [
+          null,
+          9.927898645401001e-06,
+          0.036019131541252136,
+          null
+        ],
+        "supporting_knees": [
+          {
+            "leg_FL_RL_FR_RR": 0,
+            "samples": 28,
+            "near_cap_fraction": 1,
+            "mean_tracking_error_deg": 8.883490273747421
+          },
+          {
+            "leg_FL_RL_FR_RR": 3,
+            "samples": 28,
+            "near_cap_fraction": 0.9642857142857143,
+            "mean_tracking_error_deg": 4.788828578591565
+          }
+        ]
+      },
+      {
+        "trial": 2,
+        "motor_strength_fraction": 0.85,
+        "result": "gate_timeout",
+        "paired_landings": 0,
+        "peak_selected_clearance_m_FL_RL_FR_RR": [
+          0.03745981678366661,
+          -0.00015482306480407715,
+          0.01467573270201683,
+          -0.00010776519775390625
+        ],
+        "supporting_knees": [
+          {
+            "leg_FL_RL_FR_RR": 0,
+            "samples": 37,
+            "near_cap_fraction": 0.8108108108108109,
+            "mean_tracking_error_deg": 4.02908401056121
+          },
+          {
+            "leg_FL_RL_FR_RR": 1,
+            "samples": 26,
+            "near_cap_fraction": 1,
+            "mean_tracking_error_deg": 9.272259603101821
+          },
+          {
+            "leg_FL_RL_FR_RR": 2,
+            "samples": 26,
+            "near_cap_fraction": 0.7692307692307693,
+            "mean_tracking_error_deg": 3.9278653889040385
+          },
+          {
+            "leg_FL_RL_FR_RR": 3,
+            "samples": 37,
+            "near_cap_fraction": 1,
+            "mean_tracking_error_deg": 19.53362542547113
+          }
+        ]
+      },
+      {
+        "trial": 3,
+        "motor_strength_fraction": 0.85,
+        "result": "gate_timeout",
+        "paired_landings": 0,
+        "peak_selected_clearance_m_FL_RL_FR_RR": [
+          null,
+          1.3042241334915161e-05,
+          0.03726481646299362,
+          null
+        ],
+        "supporting_knees": [
+          {
+            "leg_FL_RL_FR_RR": 0,
+            "samples": 30,
+            "near_cap_fraction": 1,
+            "mean_tracking_error_deg": 9.083879640751507
+          },
+          {
+            "leg_FL_RL_FR_RR": 3,
+            "samples": 30,
+            "near_cap_fraction": 0.8666666666666667,
+            "mean_tracking_error_deg": 4.239399266247463
+          }
+        ]
+      }
+    ]
+  }
+}

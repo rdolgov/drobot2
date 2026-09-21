@@ -24,6 +24,23 @@ from simulation. Body pitch is derived from projected gravity X. No heading
 correction is added. Runtime joint envelopes use 95% of the URDF limits
 (ankles ±33.25°), independently constrained by calibrated hardware bounds.
 
+The September 19 hardware timing correction budgets each producer request
+using the larger of the policy interval and the age of the completed bus
+target. Repeated observations of one completed target therefore retain the
+elapsed movement allowance. The trained action filter remains fixed at 60 Hz;
+the per-packet two-degree cap and actual elapsed-time joint-speed guards remain
+in force. Fresh ankle targets wake the motor worker immediately, with a
+periodic fallback for unfinished bounded movement. The pending slot holds only
+the latest target; it never queues a backlog for replay. Expired policy
+deadlines are skipped rather than followed by an immediate catch-up step.
+
+Trial events now include `motor_worker_cycle` with wake reason, bus-lock wait,
+cycle duration, skipped periodic slots, and output count (including zero-output
+cycles). `motor_output` also records output interval and bus-lock wait.
+This separates motor delivery timing from the policy's missed-deadline count.
+Regression cases were added for these timing boundaries but were not run;
+no inference, simulation, or hardware motion check was performed for this change.
+
 Default trial: 5 seconds, 0.018 m/s; allowed speeds 0.015–0.021 m/s, maximum
 15 seconds. PREPARE RL STANCE first moves all 16 motors slowly to the training
 pose. It does not start inference. Explicit Stop disarms; normal completion

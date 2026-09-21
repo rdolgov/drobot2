@@ -1,0 +1,135 @@
+{
+  "checkpoint_sha256": "cdbda737fa0705d6bab15dd526d1e416ea7f8820723b0f91b40ec24763b61e70",
+  "curriculum": 0.5,
+  "interpretation": "Four diagnostic trials, not a gait qualification. Requested FK uses the same planar proxy as the controller; it is not world sole height.",
+  "trials": [
+    {
+      "trial": 0,
+      "result": "gate_timeout",
+      "stage": 1,
+      "gate_blocked": {
+        "tracking": true,
+        "delivery": false,
+        "forward": false,
+        "height": true,
+        "speed": true,
+        "tilt": false,
+        "angular": false
+      },
+      "selected_legs": [
+        {
+          "leg_index": 0,
+          "reference_down_mm": 258.0,
+          "requested_down_mm": 277.34,
+          "measured_down_mm": 275.54,
+          "lift_cancelled_in_request_mm": 19.34,
+          "sole_clearance_mm": -0.87
+        },
+        {
+          "leg_index": 3,
+          "reference_down_mm": 258.0,
+          "requested_down_mm": 278.45,
+          "measured_down_mm": 279.57,
+          "lift_cancelled_in_request_mm": 20.45,
+          "sole_clearance_mm": -1.32
+        }
+      ]
+    },
+    {
+      "trial": 1,
+      "result": "gate_timeout",
+      "stage": 1,
+      "gate_blocked": {
+        "tracking": false,
+        "delivery": false,
+        "forward": false,
+        "height": false,
+        "speed": true,
+        "tilt": false,
+        "angular": false
+      },
+      "selected_legs": [
+        {
+          "leg_index": 1,
+          "reference_down_mm": 258.0,
+          "requested_down_mm": 259.55,
+          "measured_down_mm": 265.1,
+          "lift_cancelled_in_request_mm": 1.55,
+          "sole_clearance_mm": 0.0
+        },
+        {
+          "leg_index": 2,
+          "reference_down_mm": 258.0,
+          "requested_down_mm": 258.39,
+          "measured_down_mm": 262.01,
+          "lift_cancelled_in_request_mm": 0.39,
+          "sole_clearance_mm": 4.77
+        }
+      ]
+    },
+    {
+      "trial": 2,
+      "result": "gate_timeout",
+      "stage": 1,
+      "gate_blocked": {
+        "tracking": true,
+        "delivery": false,
+        "forward": false,
+        "height": true,
+        "speed": true,
+        "tilt": false,
+        "angular": false
+      },
+      "selected_legs": [
+        {
+          "leg_index": 0,
+          "reference_down_mm": 258.0,
+          "requested_down_mm": 277.56,
+          "measured_down_mm": 274.37,
+          "lift_cancelled_in_request_mm": 19.56,
+          "sole_clearance_mm": -0.91
+        },
+        {
+          "leg_index": 3,
+          "reference_down_mm": 258.0,
+          "requested_down_mm": 278.42,
+          "measured_down_mm": 278.04,
+          "lift_cancelled_in_request_mm": 20.42,
+          "sole_clearance_mm": -2.0
+        }
+      ]
+    },
+    {
+      "trial": 3,
+      "result": "gate_timeout",
+      "stage": 1,
+      "gate_blocked": {
+        "tracking": false,
+        "delivery": false,
+        "forward": false,
+        "height": true,
+        "speed": false,
+        "tilt": false,
+        "angular": false
+      },
+      "selected_legs": [
+        {
+          "leg_index": 1,
+          "reference_down_mm": 258.0,
+          "requested_down_mm": 278.6,
+          "measured_down_mm": 279.76,
+          "lift_cancelled_in_request_mm": 20.6,
+          "sole_clearance_mm": -0.16
+        },
+        {
+          "leg_index": 2,
+          "reference_down_mm": 258.0,
+          "requested_down_mm": 273.41,
+          "measured_down_mm": 275.86,
+          "lift_cancelled_in_request_mm": 15.41,
+          "sole_clearance_mm": 10.42
+        }
+      ]
+    }
+  ]
+}

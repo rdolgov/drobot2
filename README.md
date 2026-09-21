@@ -6,6 +6,10 @@ Monorepo for the Drobot2 robot. Engineering areas are separated at the
 repository root so CAD, simulation, hardware control, and electrical design
 can evolve without sharing one package boundary.
 
+The [September 21 diagonal walking model](simulation/docs/rl-ankle-v27-overnight.md)
+includes checkpoint 2549, its actor export, the approved fallback, simulation
+videos and the hardware handoff. A matching Pi controller is still required.
+
 ## Physical robot reference
 
 - Measured total assembled robot mass: approximately **3.18 kg** (converted

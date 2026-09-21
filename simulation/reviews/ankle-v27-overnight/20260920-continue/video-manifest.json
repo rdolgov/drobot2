@@ -1,0 +1,23 @@
+{
+  "output": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v27-overnight\\20260920-continue\\comparison.mp4",
+  "sha256": "58c5be550edc86465c06013c2e22221a9d2bb0756a674379ce3ae5ba8eb0e704",
+  "selected": "model_2549",
+  "playback_speed": 1,
+  "source_time_s": [
+    2.5,
+    20.5
+  ],
+  "sources": [
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v26-balanced\\20260920-video-r2-549\\walk.mp4",
+      "title": "User-approved starting model",
+      "sha256": "25f57a7f92b61bfc1abd52ba531a95cfeee436b89e378c70cabbca14d24cbae4"
+    },
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v27-overnight\\20260920-continue\\video-pair-0\\walk.mp4",
+      "title": "Selected after overnight training",
+      "sha256": "221837efdf619bdfbac2032e959de252323aa14546ce9c467c3e050e658860ed"
+    }
+  ],
+  "changes": "trim, titles and concatenation only; no altered robot frames or motion"
+}

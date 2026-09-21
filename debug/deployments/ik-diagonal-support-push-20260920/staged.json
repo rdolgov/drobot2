@@ -1,0 +1,19 @@
+{
+  "package": "ik-diagonal-support-push-v3-20260920",
+  "recorded_at_utc": "2026-09-21T00:18:01.526530+00:00",
+  "host": "pi5-dog.local",
+  "ip_used": "192.168.1.58",
+  "remote_archive": "/home/rd/ik-diagonal-support-push-v3.zip",
+  "archive_sha256": "16f29740933498da733156c6b538fa225dd53b71643364b7a4c0124037a472f8",
+  "uploaded": true,
+  "file_hashes_match": true,
+  "installed": false,
+  "service_restarted": false,
+  "pending": "Current supported and disarmed status from operator before controller restart",
+  "tests_run": false,
+  "simulation_run": false,
+  "build_run": false,
+  "ui_validation_run": false,
+  "hardware_motion_check_run": false,
+  "walk_commanded": false
+}

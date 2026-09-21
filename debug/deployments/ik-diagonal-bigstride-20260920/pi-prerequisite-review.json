@@ -1,0 +1,80 @@
+{
+  "reviewed_at_utc": "2026-09-20T16:27:29.309322+00:00",
+  "changes": [
+    {
+      "path": "hardware/robot-runtime/servos/calibration-leg-1.json",
+      "pi_sha256": "5ceac26b8cf1a4ddbda8d93ec9eedcb32a1c3ac22c241445e8319031a2811283",
+      "local_captured_at_utc": "2026-08-09T00:04:22.017245+00:00",
+      "pi_captured_at_utc": "2026-08-29T20:06:50.168455+00:00",
+      "center_ticks": [
+        {
+          "id": 1,
+          "local": 2131,
+          "pi": 2128
+        },
+        {
+          "id": 2,
+          "local": 2183,
+          "pi": 2181
+        },
+        {
+          "id": 3,
+          "local": 1005,
+          "pi": 1003
+        }
+      ],
+      "decision": "Preserve Pi file in place; accept its reviewed hash as a read-only prerequisite."
+    },
+    {
+      "path": "hardware/robot-runtime/servos/calibration-leg-3.json",
+      "pi_sha256": "29900c89c1539c78da339d4000e62e3c97f7d6678a7b032392c5e92a0945dce1",
+      "local_captured_at_utc": "2026-08-09T00:04:22.017245+00:00",
+      "pi_captured_at_utc": "2026-08-29T20:06:50.168497+00:00",
+      "center_ticks": [
+        {
+          "id": 7,
+          "local": 2020,
+          "pi": 2016
+        },
+        {
+          "id": 8,
+          "local": 2052,
+          "pi": 2048
+        },
+        {
+          "id": 9,
+          "local": 2046,
+          "pi": 2044
+        }
+      ],
+      "decision": "Preserve Pi file in place; accept its reviewed hash as a read-only prerequisite."
+    },
+    {
+      "path": "hardware/robot-runtime/servos/calibration-leg-4.json",
+      "pi_sha256": "c2081012cfa771ab323ffcb94d1d03a040a4f84a2d1a1a0b536490f07690ee5e",
+      "local_captured_at_utc": "2026-08-09T00:04:22.017245+00:00",
+      "pi_captured_at_utc": "2026-08-29T20:06:50.168506+00:00",
+      "center_ticks": [
+        {
+          "id": 10,
+          "local": 1998,
+          "pi": 2000
+        },
+        {
+          "id": 11,
+          "local": 2049,
+          "pi": 2046
+        },
+        {
+          "id": 12,
+          "local": 2048,
+          "pi": 2052
+        }
+      ],
+      "decision": "Preserve Pi file in place; accept its reviewed hash as a read-only prerequisite."
+    }
+  ],
+  "other_prerequisites_matched": 10,
+  "runtime_payload_unchanged": true,
+  "calibration_files_replaced": false
+}

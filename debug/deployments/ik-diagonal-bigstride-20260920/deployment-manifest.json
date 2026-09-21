@@ -1,0 +1,147 @@
+{
+  "package": "ik-diagonal-bigstride-v2-20260920",
+  "created_at_utc": "2026-09-20T16:17:04.633474+00:00",
+  "purpose": "100 mm diagonal steps, 35 mm lift, 8 s cycle, two cycles, bounded IMU/encoder ankle leveling",
+  "files": [
+    {
+      "path": "hardware/robot-runtime/four-leg.toml",
+      "new_sha256": "534880ccb10b689059c9a97a7e75c7c2cb100a7f9e88823f00cf29f9fa89a27a",
+      "expected_previous_sha256": [
+        "632cb3375ffa1817784ed4e7fc5b48c404ecf19e17d3daf0789549f7200abc71",
+        "e12d14f07b9ef0ee50e9e594aea1082c0ecbd8b692355f1877ea9a64f2cadb2e"
+      ]
+    },
+    {
+      "path": "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/ankle_ik_gait.py",
+      "new_sha256": "677b90c1197bb4be11801b343cdf2459ccbc0ed8ba861d217cf262d3bb34ff0d",
+      "expected_previous_sha256": [
+        null
+      ]
+    },
+    {
+      "path": "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/four_leg_control.py",
+      "new_sha256": "b97e99ff01b41ae7889e436335f65c911b6b8a1598b6c922922b323df36f73ae",
+      "expected_previous_sha256": [
+        "25abe6e3ba3ab3b7d507093f003cdbadd728be09346be22ad26b2eafff900562"
+      ]
+    },
+    {
+      "path": "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/four_leg_static/app.js",
+      "new_sha256": "747396d5e49d40ddefcfcecb74928dea63f61b3431c42e3b71eb813ae4f3a786",
+      "expected_previous_sha256": [
+        "203ec5b2da1d28dc0b49da49d1f4c89119bfa0708a3f88556dad1779aa93b52a",
+        "6805661ea2e8f2fe3e13442400bac5d134b10886109af3b94756072e09081559"
+      ]
+    },
+    {
+      "path": "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/four_leg_static/index.html",
+      "new_sha256": "c18eaf65bccf140a7fd7c8db030ff625b260f2149b792efeabd63f1116684711",
+      "expected_previous_sha256": [
+        "236795d8850d2dacaf913cd5cf060bf01e82371ed2d788d5aef0734095fd64c7",
+        "9c5f59e788739b32e5c03504025db435f76fe889f54bf077332e2bf5e1ba366a"
+      ]
+    }
+  ],
+  "read_only_prerequisites": [
+    {
+      "path": "hardware/robot-runtime/servos/leg-1.toml",
+      "sha256": [
+        "14f9f395ee75471469dba05ca32c0d0ba19edf7380728babab8e56b24b6b8364",
+        "9a2211a20c02835cb57c39aead4b4a0a92023bf5eb72d8b2edb8a9f39aff19c0"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/leg-2.toml",
+      "sha256": [
+        "7f2b85b5561e39433fb02ef078999d057b5330e2dee820af52cf0e06433ef858",
+        "bcb249f01a56d26f6b513c20cef725c5a8186e5f581bf4459b1d68432d4267b8"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/leg-3.toml",
+      "sha256": [
+        "7ce5a8500db665f3eb2b46cc033e93c66d0f580ecf64c36dc30b9bbeb76997f6",
+        "d9829a88e9dea6df0e1fd2ad855eb920ca07103114c3bcc462e49989f59ce031"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/leg-4.toml",
+      "sha256": [
+        "a0b9c0f13e6de0f374135f126fa5c3341f9a38871c31a3ab84f5116d448e8ea3",
+        "e0399c7a22f0b55f12367fc270ea81ff0fb2e796a67f0a63bfd6d20dfa32aa67"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/calibration-leg-1.json",
+      "sha256": [
+        "5ceac26b8cf1a4ddbda8d93ec9eedcb32a1c3ac22c241445e8319031a2811283"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/calibration-leg-2.json",
+      "sha256": [
+        "04ac79971e2b025229db7d08e349487d1a52c93cac8c0e40ad255e937535447d",
+        "437943e6a7d4a005fefae022c2a130ded9bc563541950170dd1cfbcdf205c85d"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/calibration-leg-3.json",
+      "sha256": [
+        "29900c89c1539c78da339d4000e62e3c97f7d6678a7b032392c5e92a0945dce1"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/calibration-leg-4.json",
+      "sha256": [
+        "c2081012cfa771ab323ffcb94d1d03a040a4f84a2d1a1a0b536490f07690ee5e"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/calibration-ankles.json",
+      "sha256": [
+        "7a4a95e89e91144d799b4940d38a4154cc89a70e26126448ed30c48a8b5c0824",
+        "d86102f8fa47563a7d25b18e01a73637599688d3ad87d66c1fd2bb2b90ad54f3"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/ankle-travel-observations.json",
+      "sha256": [
+        "5081320a979f1bd5e5c2bbdb98d63c3b19b14eaa98aff3cc893fcd388da5c4f8",
+        "7848663d22174b668cf8a875baeb85c9ab3ea7d934cd83dcab9cee500a278142"
+      ]
+    },
+    {
+      "path": "onboard/policy-runtime/src/drobot_policy_runtime/sources.py",
+      "sha256": [
+        "3a268cc3a3ecd476debc73c53f706d1f6e4d334026317d605cee79ed1ca9cb7a",
+        "bdcf1f8a80188a5d52cc87125a923d0fff5d2d33bf53af0333210db1e89843fb"
+      ]
+    },
+    {
+      "path": "onboard/policy-runtime/src/drobot_policy_runtime/recording.py",
+      "sha256": [
+        "415f2123954f4260b41cae7ba44863adaa1e5bd878cdc3458e42aa132ff642a5",
+        "4851d128d66558532020ebff56f57a6e5b68a08cc95fc319f30e8b70dd2f1ad8"
+      ]
+    },
+    {
+      "path": "onboard/policy-runtime/src/drobot_policy_runtime/ankle_transfer.py",
+      "sha256": [
+        "396a66d6fa4db85889092d79d80d084ebd44b5c28da3da0cb498046a8e02ae3d",
+        "3bcca3374ef0eb5ad64e6b3479e755efe4e5c3807c6aab026488ffb82148abb1"
+      ]
+    }
+  ],
+  "baseline_note": "Replacement source hashes matched the first installer pass. All 13 read-only prerequisites downloaded and compared on 2026-09-20; leg 1, 3, 4 contain newer 2026-08-29 calibration (2-4 tick center differences), retained on Pi. Their exact reviewed hashes are required. All other prerequisites match the prepared baseline. No calibration is replaced.",
+  "verification": {
+    "tests_run": false,
+    "simulation_run": false,
+    "build_run": false,
+    "hardware_checks_run": false,
+    "pi_contacted": true,
+    "review": "read-only source review and independent two-link geometry arithmetic; read-only comparison of Pi prerequisite source bytes"
+  },
+  "calibration_files_replaced": false,
+  "learned_weights_included": false,
+  "prerequisites_reviewed_at_utc": "2026-09-20T16:27:29.309322+00:00"
+}

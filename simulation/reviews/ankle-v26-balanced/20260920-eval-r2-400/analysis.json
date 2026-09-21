@@ -1,0 +1,289 @@
+{
+  "run": "simulation\\reviews\\ankle-v26-balanced\\20260920-eval-r2-400",
+  "checkpoint": "simulation\\reviews\\ankle-v26-balanced\\20260920-train-r2\\checkpoints\\model_400.pt",
+  "trials": [
+    {
+      "environment": 0,
+      "start_pair": 0,
+      "motor_strength": 1.0,
+      "outcome": {
+        "failed": false,
+        "duration_s": 32.0
+      },
+      "forward_m": 0.1913909912109375,
+      "lateral_m": -0.020171165466308594,
+      "tilt_rms_deg": 1.7911923556554272,
+      "tilt_max_deg": 5.965873980550889,
+      "full_steps_by_leg_FL_RL_FR_RR": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "qualified_touchdowns_by_leg": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "peak_swing_clearance_m_by_leg": [
+        0.00997908040881157,
+        0.0039021559059619904,
+        0.01939096301794052,
+        0.052005670964717865
+      ],
+      "qualified": false,
+      "advance_samples_both_clear_fraction": 0.0425531914893617,
+      "support_ankle_lift_progress_mean": 0.5778706379053069,
+      "selected_landing_rejections_nonexclusive": {
+        "all_individual_flight_criteria_met": 1,
+        "short_forward_travel": 27,
+        "short_air_time": 4,
+        "insufficient_clearance": 16
+      },
+      "landing_evidence_by_leg": [
+        {
+          "leg": "FL",
+          "selected_touchdowns_in_lower_or_later": 12,
+          "substantial_flights": 1,
+          "best_airborne_landing_forward_mm": 69.12660598754883,
+          "mean_airborne_landing_forward_mm": 69.12660598754883
+        },
+        {
+          "leg": "RL",
+          "selected_touchdowns_in_lower_or_later": 5,
+          "substantial_flights": 0,
+          "best_airborne_landing_forward_mm": null,
+          "mean_airborne_landing_forward_mm": null
+        },
+        {
+          "leg": "FR",
+          "selected_touchdowns_in_lower_or_later": 5,
+          "substantial_flights": 5,
+          "best_airborne_landing_forward_mm": 32.486915588378906,
+          "mean_airborne_landing_forward_mm": 30.92350959777832
+        },
+        {
+          "leg": "RR",
+          "selected_touchdowns_in_lower_or_later": 6,
+          "substantial_flights": 6,
+          "best_airborne_landing_forward_mm": 50.711631774902344,
+          "mean_airborne_landing_forward_mm": 44.56138610839844
+        }
+      ]
+    },
+    {
+      "environment": 1,
+      "start_pair": 1,
+      "motor_strength": 1.0,
+      "outcome": {
+        "failed": false,
+        "duration_s": 32.0
+      },
+      "forward_m": 0.28460049629211426,
+      "lateral_m": 0.02851271629333496,
+      "tilt_rms_deg": 1.3298662934088212,
+      "tilt_max_deg": 3.368810234982607,
+      "full_steps_by_leg_FL_RL_FR_RR": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "qualified_touchdowns_by_leg": [
+        0.0,
+        0.0,
+        1.0,
+        3.0
+      ],
+      "peak_swing_clearance_m_by_leg": [
+        0.006352651864290237,
+        0.003298770636320114,
+        0.032500315457582474,
+        0.00998939573764801
+      ],
+      "qualified": false,
+      "advance_samples_both_clear_fraction": 0,
+      "support_ankle_lift_progress_mean": 0.721749897353442,
+      "selected_landing_rejections_nonexclusive": {
+        "short_forward_travel": 18,
+        "insufficient_clearance": 17,
+        "all_individual_flight_criteria_met": 4,
+        "short_air_time": 2
+      },
+      "landing_evidence_by_leg": [
+        {
+          "leg": "FL",
+          "selected_touchdowns_in_lower_or_later": 5,
+          "substantial_flights": 0,
+          "best_airborne_landing_forward_mm": null,
+          "mean_airborne_landing_forward_mm": null
+        },
+        {
+          "leg": "RL",
+          "selected_touchdowns_in_lower_or_later": 7,
+          "substantial_flights": 0,
+          "best_airborne_landing_forward_mm": null,
+          "mean_airborne_landing_forward_mm": null
+        },
+        {
+          "leg": "FR",
+          "selected_touchdowns_in_lower_or_later": 6,
+          "substantial_flights": 2,
+          "best_airborne_landing_forward_mm": 76.54166221618652,
+          "mean_airborne_landing_forward_mm": 68.03882122039795
+        },
+        {
+          "leg": "RR",
+          "selected_touchdowns_in_lower_or_later": 6,
+          "substantial_flights": 5,
+          "best_airborne_landing_forward_mm": 68.6788558959961,
+          "mean_airborne_landing_forward_mm": 60.25733947753906
+        }
+      ]
+    },
+    {
+      "environment": 2,
+      "start_pair": 0,
+      "motor_strength": 0.8500000238418579,
+      "outcome": {
+        "failed": false,
+        "duration_s": 32.0
+      },
+      "forward_m": 0.05700373649597168,
+      "lateral_m": -0.010198354721069336,
+      "tilt_rms_deg": 2.602179785631438,
+      "tilt_max_deg": 5.526002540926075,
+      "full_steps_by_leg_FL_RL_FR_RR": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "qualified_touchdowns_by_leg": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "peak_swing_clearance_m_by_leg": [
+        0.00737437978386879,
+        0.0,
+        0.017813436686992645,
+        0.05121917277574539
+      ],
+      "qualified": false,
+      "advance_samples_both_clear_fraction": 0,
+      "support_ankle_lift_progress_mean": 0.46769003824489874,
+      "selected_landing_rejections_nonexclusive": {
+        "insufficient_clearance": 14,
+        "short_forward_travel": 15,
+        "short_air_time": 1
+      },
+      "landing_evidence_by_leg": [
+        {
+          "leg": "FL",
+          "selected_touchdowns_in_lower_or_later": 6,
+          "substantial_flights": 0,
+          "best_airborne_landing_forward_mm": null,
+          "mean_airborne_landing_forward_mm": null
+        },
+        {
+          "leg": "RL",
+          "selected_touchdowns_in_lower_or_later": 1,
+          "substantial_flights": 0,
+          "best_airborne_landing_forward_mm": null,
+          "mean_airborne_landing_forward_mm": null
+        },
+        {
+          "leg": "FR",
+          "selected_touchdowns_in_lower_or_later": 1,
+          "substantial_flights": 1,
+          "best_airborne_landing_forward_mm": 27.220964431762695,
+          "mean_airborne_landing_forward_mm": 27.220964431762695
+        },
+        {
+          "leg": "RR",
+          "selected_touchdowns_in_lower_or_later": 8,
+          "substantial_flights": 1,
+          "best_airborne_landing_forward_mm": 56.668758392333984,
+          "mean_airborne_landing_forward_mm": 56.668758392333984
+        }
+      ]
+    },
+    {
+      "environment": 3,
+      "start_pair": 1,
+      "motor_strength": 0.8500000238418579,
+      "outcome": {
+        "failed": false,
+        "duration_s": 32.0
+      },
+      "forward_m": 0.08991193771362305,
+      "lateral_m": 0.0028154850006103516,
+      "tilt_rms_deg": 2.9731556777327035,
+      "tilt_max_deg": 7.47977516480046,
+      "full_steps_by_leg_FL_RL_FR_RR": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "qualified_touchdowns_by_leg": [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "peak_swing_clearance_m_by_leg": [
+        0.0005732513964176178,
+        0.0,
+        0.020281687378883362,
+        0.006020531058311462
+      ],
+      "qualified": false,
+      "advance_samples_both_clear_fraction": 0,
+      "support_ankle_lift_progress_mean": 0.4806739595241663,
+      "selected_landing_rejections_nonexclusive": {
+        "short_forward_travel": 12,
+        "insufficient_clearance": 12,
+        "short_air_time": 2,
+        "all_individual_flight_criteria_met": 1
+      },
+      "landing_evidence_by_leg": [
+        {
+          "leg": "FL",
+          "selected_touchdowns_in_lower_or_later": 4,
+          "substantial_flights": 0,
+          "best_airborne_landing_forward_mm": null,
+          "mean_airborne_landing_forward_mm": null
+        },
+        {
+          "leg": "RL",
+          "selected_touchdowns_in_lower_or_later": 3,
+          "substantial_flights": 0,
+          "best_airborne_landing_forward_mm": null,
+          "mean_airborne_landing_forward_mm": null
+        },
+        {
+          "leg": "FR",
+          "selected_touchdowns_in_lower_or_later": 1,
+          "substantial_flights": 1,
+          "best_airborne_landing_forward_mm": 82.85093307495117,
+          "mean_airborne_landing_forward_mm": 82.85093307495117
+        },
+        {
+          "leg": "RR",
+          "selected_touchdowns_in_lower_or_later": 5,
+          "substantial_flights": 0,
+          "best_airborne_landing_forward_mm": null,
+          "mean_airborne_landing_forward_mm": null
+        }
+      ]
+    }
+  ],
+  "trace_sample_hz": 10,
+  "touchdown_event_sample_hz": 60,
+  "hardware_qualified": false,
+  "interpretation": "Forward body translation alone is not completed stepping; original success criteria unchanged."
+}

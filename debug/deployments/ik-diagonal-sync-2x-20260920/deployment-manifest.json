@@ -1,0 +1,144 @@
+{
+  "package": "ik-diagonal-sync-2x-v4-20260920",
+  "created_at_utc": "2026-09-21T00:34:08.189217+00:00",
+  "purpose": "4-second diagonal reference cycle; 10 mm push synchronized with lift, 10 mm with swing; shared motor-command progress",
+  "files": [
+    {
+      "path": "hardware/robot-runtime/four-leg.toml",
+      "expected_previous_sha256": [
+        "760c560b062d369830caff8f56051ba08f7b5c01ae892e317ca1e6a88ae7e7a8"
+      ],
+      "new_sha256": "eccfa76d46bc6fdcc6e49a370d52f2bde0bb34fd50501f10a76af346af57cf82"
+    },
+    {
+      "path": "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/ankle_ik_gait.py",
+      "expected_previous_sha256": [
+        "d2fd70000ae25fb61a7a1922e6d7985775e8f43a430224a04dac6022d977c91b"
+      ],
+      "new_sha256": "b4aa560152bf7fc9fdd936f1ab2fdab5e84bb505c406357139c29d0d8d501726"
+    },
+    {
+      "path": "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/four_leg_control.py",
+      "expected_previous_sha256": [
+        "d8941467c864e9c4c870a631fab3816497ab8cf3b99c533dd9e1379fdaa85404"
+      ],
+      "new_sha256": "0d87e982439890c0a207b1b20bc008abd8bc6a5dd8e810ed3f509474592e0377"
+    },
+    {
+      "path": "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/four_leg_static/app.js",
+      "expected_previous_sha256": [
+        "4a1f89bd8c900a40df5e4c640770f24be5ac1fca9417bed6a1f5076f13dc85d2"
+      ],
+      "new_sha256": "a4ec5e288d3c2bf4b82ca294fc639d9dfd8fa7df6871f8667c5dfc06406df770"
+    },
+    {
+      "path": "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/four_leg_static/index.html",
+      "expected_previous_sha256": [
+        "25dab8bd3ff242562ecc21dafbb73894e140c446efc74223fc73aecc0fc5a59d"
+      ],
+      "new_sha256": "a1077d06ebece766821f9f6f643852bd06635762529d1d7d2f2174117807dfa6"
+    }
+  ],
+  "read_only_prerequisites": [
+    {
+      "path": "hardware/robot-runtime/servos/leg-1.toml",
+      "sha256": [
+        "14f9f395ee75471469dba05ca32c0d0ba19edf7380728babab8e56b24b6b8364",
+        "9a2211a20c02835cb57c39aead4b4a0a92023bf5eb72d8b2edb8a9f39aff19c0"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/leg-2.toml",
+      "sha256": [
+        "7f2b85b5561e39433fb02ef078999d057b5330e2dee820af52cf0e06433ef858",
+        "bcb249f01a56d26f6b513c20cef725c5a8186e5f581bf4459b1d68432d4267b8"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/leg-3.toml",
+      "sha256": [
+        "7ce5a8500db665f3eb2b46cc033e93c66d0f580ecf64c36dc30b9bbeb76997f6",
+        "d9829a88e9dea6df0e1fd2ad855eb920ca07103114c3bcc462e49989f59ce031"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/leg-4.toml",
+      "sha256": [
+        "a0b9c0f13e6de0f374135f126fa5c3341f9a38871c31a3ab84f5116d448e8ea3",
+        "e0399c7a22f0b55f12367fc270ea81ff0fb2e796a67f0a63bfd6d20dfa32aa67"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/calibration-leg-1.json",
+      "sha256": [
+        "5ceac26b8cf1a4ddbda8d93ec9eedcb32a1c3ac22c241445e8319031a2811283"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/calibration-leg-2.json",
+      "sha256": [
+        "04ac79971e2b025229db7d08e349487d1a52c93cac8c0e40ad255e937535447d",
+        "437943e6a7d4a005fefae022c2a130ded9bc563541950170dd1cfbcdf205c85d"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/calibration-leg-3.json",
+      "sha256": [
+        "29900c89c1539c78da339d4000e62e3c97f7d6678a7b032392c5e92a0945dce1"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/calibration-leg-4.json",
+      "sha256": [
+        "c2081012cfa771ab323ffcb94d1d03a040a4f84a2d1a1a0b536490f07690ee5e"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/calibration-ankles.json",
+      "sha256": [
+        "7a4a95e89e91144d799b4940d38a4154cc89a70e26126448ed30c48a8b5c0824",
+        "d86102f8fa47563a7d25b18e01a73637599688d3ad87d66c1fd2bb2b90ad54f3"
+      ]
+    },
+    {
+      "path": "hardware/robot-runtime/servos/ankle-travel-observations.json",
+      "sha256": [
+        "5081320a979f1bd5e5c2bbdb98d63c3b19b14eaa98aff3cc893fcd388da5c4f8",
+        "7848663d22174b668cf8a875baeb85c9ab3ea7d934cd83dcab9cee500a278142"
+      ]
+    },
+    {
+      "path": "onboard/policy-runtime/src/drobot_policy_runtime/sources.py",
+      "sha256": [
+        "3a268cc3a3ecd476debc73c53f706d1f6e4d334026317d605cee79ed1ca9cb7a",
+        "bdcf1f8a80188a5d52cc87125a923d0fff5d2d33bf53af0333210db1e89843fb"
+      ]
+    },
+    {
+      "path": "onboard/policy-runtime/src/drobot_policy_runtime/recording.py",
+      "sha256": [
+        "415f2123954f4260b41cae7ba44863adaa1e5bd878cdc3458e42aa132ff642a5",
+        "4851d128d66558532020ebff56f57a6e5b68a08cc95fc319f30e8b70dd2f1ad8"
+      ]
+    },
+    {
+      "path": "onboard/policy-runtime/src/drobot_policy_runtime/ankle_transfer.py",
+      "sha256": [
+        "396a66d6fa4db85889092d79d80d084ebd44b5c28da3da0cb498046a8e02ae3d",
+        "3bcca3374ef0eb5ad64e6b3479e755efe4e5c3807c6aab026488ffb82148abb1"
+      ]
+    }
+  ],
+  "baseline_note": "Installed V3 package; retain all previously reviewed Pi calibration/runtime prerequisites. Abort on any intervening source change.",
+  "verification": {
+    "tests_run": false,
+    "simulation_run": false,
+    "build_run": false,
+    "hardware_checks_run": false,
+    "ui_validation_run": false,
+    "review": "read-only source inspection and independent scalar endpoint/timing calculations"
+  },
+  "calibration_files_replaced": false,
+  "learned_weights_included": false,
+  "motion_commanded_by_installer": false
+}

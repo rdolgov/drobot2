@@ -1,0 +1,23 @@
+{
+  "package": "ik-diagonal-immediate-push-v5-20260920",
+  "recorded_at_utc": "2026-09-21T00:52:41.266645+00:00",
+  "host": "pi5-dog.local",
+  "ip_used": "192.168.1.58",
+  "remote_archive": "/home/rd/ik-diagonal-immediate-push-v5.zip",
+  "archive_sha256": "411e785fcf44b143d17687e9ba9f55befe3ac8cc1993c1fbda2bba8ba1d1fb2c",
+  "uploaded": true,
+  "file_hashes_match": true,
+  "installed": false,
+  "service_restarted": false,
+  "pending": "Operator supported/disarmed readiness before torque-releasing restart; latest recorded walk ended holding torque",
+  "tests_run": false,
+  "simulation_run": false,
+  "build_run": false,
+  "ui_validation_run": false,
+  "hardware_motion_check_run": false,
+  "walk_commanded": false,
+  "existing_recordings_downloaded": [
+    "20260921T004236623929Z-ee0018c9",
+    "20260921T004314914106Z-6a9f2521"
+  ]
+}

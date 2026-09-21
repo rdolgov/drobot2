@@ -1,0 +1,830 @@
+{
+  "scope": "Offline URDF FK and minimum peak static torque with two supporting sole patches.\n\nNo simulator, robot, asset modification or learning. Vertical contact forces\nonly; friction, acceleration, actuator dynamics and collision are not modeled.\nThe result is a quasi-static feasibility bound, not gait qualification.\n",
+  "urdf": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\exports\\isaac\\ankle_v23_stride\\active\\training_input.urdf",
+  "urdf_sha256": "3b9fa69f1c7ec81879c50e4b7eac4606b0ac5504d932cc530626e0d88707a66b",
+  "nominal_effort_cap_nm": 0.8825985,
+  "weak_motor_effort_cap_nm": 0.7502087249999999,
+  "current_pose": [
+    {
+      "pair": 0,
+      "feasible_vertical_equilibrium": true,
+      "minimum_peak_torque_nm": 0.8213841554769077,
+      "body_com_m": [
+        -0.021006212315649045,
+        -1.0560201287585945e-06,
+        -0.06974471567875237
+      ],
+      "mass_kg": 3.444019908818,
+      "support_force_n": [
+        18.71002021757732,
+        15.075815087927257
+      ],
+      "joint_torque_nm": {
+        "front_left_hip_abduction": 0.1289303420300317,
+        "rear_left_hip_abduction": 0.09877540378585314,
+        "front_right_hip_abduction": -0.5193840138504802,
+        "rear_right_hip_abduction": 0.12893034204296672,
+        "front_left_hip_flexion": 0.2771702166420602,
+        "rear_left_hip_flexion": 0.8213841554769079,
+        "front_right_hip_flexion": -0.3897774752750405,
+        "rear_right_hip_flexion": -0.3316837948083204,
+        "front_left_knee": -0.08885641538190626,
+        "rear_left_knee": -0.8213841554769077,
+        "front_right_knee": 0.8213841554769076,
+        "rear_right_knee": 0.0504921714091764,
+        "front_left_ankle_pitch": 8.089262531553535e-09,
+        "rear_left_ankle_pitch": -0.6322449495473249,
+        "front_right_ankle_pitch": 0.35308026653433294,
+        "rear_right_ankle_pitch": -8.089262524739051e-09
+      },
+      "support_corner_height_range_m": 3.609812448956973e-11
+    },
+    {
+      "pair": 1,
+      "feasible_vertical_equilibrium": true,
+      "minimum_peak_torque_nm": 0.8236792454834275,
+      "body_com_m": [
+        -0.021006152292470485,
+        -1.0560207059366437e-06,
+        -0.06974387867970434
+      ],
+      "mass_kg": 3.444019908818,
+      "support_force_n": [
+        15.031842333694874,
+        18.753992971809705
+      ],
+      "joint_torque_nm": {
+        "front_left_hip_abduction": -0.534341738898592,
+        "rear_left_hip_abduction": 0.12893034190694636,
+        "front_right_hip_abduction": 0.12893034191637706,
+        "rear_right_hip_abduction": 0.09870453256336774,
+        "front_left_hip_flexion": -0.38300911815511307,
+        "rear_left_hip_flexion": -0.3314941608987288,
+        "front_right_hip_flexion": 0.27698529868678584,
+        "rear_right_hip_flexion": 0.8236792454834274,
+        "front_left_knee": 0.8236792454834276,
+        "rear_left_knee": 0.05065499618957551,
+        "front_right_knee": -0.08901289980254545,
+        "rear_right_knee": -0.8236792454834275,
+        "front_left_ankle_pitch": 0.356751755622742,
+        "rear_left_ankle_pitch": 8.089262531553534e-09,
+        "front_right_ankle_pitch": -8.089262524739051e-09,
+        "rear_right_ankle_pitch": -0.6338859437429086
+      },
+      "support_corner_height_range_m": 3.609829102302342e-11
+    }
+  ],
+  "candidate_count": 81,
+  "best_candidates": [
+    {
+      "front_m": 0.03,
+      "rear_m": 0.02,
+      "down_m": 0.31,
+      "pair_lateral_shift_m": 0.03,
+      "worst_pair_peak_torque_nm": 0.4573422006663391,
+      "pairs": [
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.4517006948313864,
+          "body_com_m": [
+            -0.01653328734398049,
+            -0.010000949129712739,
+            -0.08063756293331471
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            19.064408029693382,
+            14.721427275811195
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": 0.04634114110422966,
+            "rear_left_hip_abduction": 0.4517006948313865,
+            "front_right_hip_abduction": -0.4517006948313864,
+            "rear_right_hip_abduction": 0.2110310187048364,
+            "front_left_hip_flexion": 0.1653944020267726,
+            "rear_left_hip_flexion": 0.4517006948313865,
+            "front_right_hip_flexion": -0.14167267531917538,
+            "rear_right_hip_flexion": -0.1431762082672584,
+            "front_left_knee": -0.08816437936427957,
+            "rear_left_knee": -0.31163769802462393,
+            "front_right_knee": 0.45170069483138664,
+            "rear_right_knee": 0.09844286650285308,
+            "front_left_ankle_pitch": 8.0661079341186e-09,
+            "rear_left_ankle_pitch": 0.1716876078356624,
+            "front_right_ankle_pitch": 0.17722501140466018,
+            "rear_right_ankle_pitch": -8.066831648934764e-09
+          },
+          "support_corner_height_range_m": 0.008341027734683482
+        },
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.4573422006663391,
+          "body_com_m": [
+            -0.016533315085444148,
+            0.00999873080354202,
+            -0.08063614963743161
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            14.688032800269873,
+            19.09780250523471
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": -0.45734220066633907,
+            "rear_left_hip_abduction": 0.21102802759536032,
+            "front_right_hip_abduction": 0.0463435793426664,
+            "rear_right_hip_abduction": 0.457342200666339,
+            "front_left_hip_flexion": -0.13428869054549822,
+            "rear_left_hip_flexion": -0.14298553803732647,
+            "front_right_hip_flexion": 0.16520198926745094,
+            "rear_right_hip_flexion": 0.45734220066633896,
+            "front_left_knee": 0.457342200666339,
+            "rear_left_knee": 0.09859666219051554,
+            "front_right_knee": -0.08832051783477643,
+            "rear_right_knee": -0.30755068816687525,
+            "front_left_ankle_pitch": 0.18340601928646333,
+            "rear_left_ankle_pitch": 8.06683163317572e-09,
+            "front_right_ankle_pitch": -8.066107931666724e-09,
+            "rear_right_ankle_pitch": 0.1768662615908837
+          },
+          "support_corner_height_range_m": 0.008341027732119588
+        }
+      ]
+    },
+    {
+      "front_m": 0.05,
+      "rear_m": 0.02,
+      "down_m": 0.31,
+      "pair_lateral_shift_m": 0.03,
+      "worst_pair_peak_torque_nm": 0.45765678304897783,
+      "pairs": [
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.45204725459929607,
+          "body_com_m": [
+            -0.014117465096737197,
+            -0.00998425171710997,
+            -0.08041553834182245
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            19.06769771947039,
+            14.718137586034185
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": 0.0467670752497638,
+            "rear_left_hip_abduction": 0.4520472545992961,
+            "front_right_hip_abduction": -0.4520472545992962,
+            "rear_right_hip_abduction": 0.2110310187048364,
+            "front_left_hip_flexion": 0.2079160985070671,
+            "rear_left_hip_flexion": 0.4520472545992961,
+            "front_right_hip_flexion": -0.1849473763615979,
+            "rear_right_hip_flexion": -0.1431762082672584,
+            "front_left_knee": -0.06529667186909362,
+            "rear_left_knee": -0.3114482518030276,
+            "front_right_knee": 0.4520472545992962,
+            "rear_right_knee": 0.09844286650285308,
+            "front_left_ankle_pitch": 8.066107934118599e-09,
+            "rear_left_ankle_pitch": 0.17196855908145597,
+            "front_right_ankle_pitch": 0.3885166966682861,
+            "rear_right_ankle_pitch": -8.066831648934764e-09
+          },
+          "support_corner_height_range_m": 0.008341027738478002
+        },
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.45765678304897783,
+          "body_com_m": [
+            -0.01411755527091986,
+            0.009982028904833731,
+            -0.08041406538117332
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            14.684934602353751,
+            19.10090070315083
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": -0.45765678304897783,
+            "rear_left_hip_abduction": 0.21102802759536032,
+            "front_right_hip_abduction": 0.04676832847666149,
+            "rear_right_hip_abduction": 0.4576567830489779,
+            "front_left_hip_flexion": -0.17748053423077814,
+            "rear_left_hip_flexion": -0.14298553803732647,
+            "front_right_hip_flexion": 0.20772056269885864,
+            "rear_right_hip_flexion": 0.45765678304897767,
+            "front_left_knee": 0.4576567830489778,
+            "rear_left_knee": 0.09859666219051554,
+            "front_right_knee": -0.06545700911887867,
+            "rear_right_knee": -0.3073840737976639,
+            "front_left_ankle_pitch": 0.3941230811408759,
+            "rear_left_ankle_pitch": 8.06683163317572e-09,
+            "front_right_ankle_pitch": -8.066107931666723e-09,
+            "rear_right_ankle_pitch": 0.17711905450433682
+          },
+          "support_corner_height_range_m": 0.008341027728325179
+        }
+      ]
+    },
+    {
+      "front_m": 0.03,
+      "rear_m": 0.02,
+      "down_m": 0.31,
+      "pair_lateral_shift_m": 0.015,
+      "worst_pair_peak_torque_nm": 0.4577760592307517,
+      "pairs": [
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.4510164971261592,
+          "body_com_m": [
+            -0.016533287343869538,
+            -0.005011580974316859,
+            -0.08091888376623164
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            19.083160296936846,
+            14.702675008567738
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": 0.08763923636985813,
+            "rear_left_hip_abduction": 0.37659312947153145,
+            "front_right_hip_abduction": -0.4510164971261595,
+            "rear_right_hip_abduction": 0.17015839256952905,
+            "front_left_hip_flexion": 0.1657443274018701,
+            "rear_left_hip_flexion": 0.4510164971261592,
+            "front_right_hip_flexion": -0.14265431558774655,
+            "rear_right_hip_flexion": -0.14347912653861877,
+            "front_left_knee": -0.08835090897026487,
+            "rear_left_knee": -0.3148343842320207,
+            "front_right_knee": 0.45101649712615943,
+            "rear_right_knee": 0.0986511423337256,
+            "front_left_ankle_pitch": 8.08336494382757e-09,
+            "rear_left_ankle_pitch": 0.17003620527331068,
+            "front_right_ankle_pitch": 0.1763558931134788,
+            "rear_right_ankle_pitch": -8.083727567900064e-09
+          },
+          "support_corner_height_range_m": 0.004179337445060605
+        },
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.4577760592307517,
+          "body_com_m": [
+            -0.01653331508556754,
+            0.005009415679296188,
+            -0.08091746748025691
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            14.681644625556917,
+            19.104190679947667
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": -0.45777605923075176,
+            "rear_left_hip_abduction": 0.17015689382123755,
+            "front_right_hip_abduction": 0.08764045803439854,
+            "rear_right_hip_abduction": 0.3769133948877047,
+            "front_left_hip_flexion": -0.13478020726347623,
+            "rear_left_hip_flexion": -0.14328805291741625,
+            "front_right_hip_flexion": 0.16555150754296905,
+            "rear_right_hip_flexion": 0.4577760592307517,
+            "front_left_knee": 0.4577760592307518,
+            "rear_left_knee": 0.0988052634033352,
+            "front_right_knee": -0.08850737778786041,
+            "rear_right_knee": -0.30904085626814176,
+            "front_left_ankle_pitch": 0.18339514016971026,
+            "rear_left_ankle_pitch": 8.083727545219046e-09,
+            "front_right_ankle_pitch": -8.083364943006825e-09,
+            "rear_right_ankle_pitch": 0.17657904317098147
+          },
+          "support_corner_height_range_m": 0.0041793374417292695
+        }
+      ]
+    },
+    {
+      "front_m": 0.05,
+      "rear_m": 0.02,
+      "down_m": 0.31,
+      "pair_lateral_shift_m": 0.015,
+      "worst_pair_peak_torque_nm": 0.45818141095578796,
+      "pairs": [
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.45144564194707326,
+          "body_com_m": [
+            -0.014117465096625325,
+            -0.005003214604365449,
+            -0.08069638943671205
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            19.085137945773372,
+            14.700697359731208
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": 0.08785265402256905,
+            "rear_left_hip_abduction": 0.37662330374140135,
+            "front_right_hip_abduction": -0.45144564194707304,
+            "rear_right_hip_abduction": 0.17015839256952905,
+            "front_left_hip_flexion": 0.20835598714669026,
+            "rear_left_hip_flexion": 0.45144564194707326,
+            "front_right_hip_flexion": -0.18593997779701674,
+            "rear_right_hip_flexion": -0.14347912653861877,
+            "front_left_knee": -0.06543482020640438,
+            "rear_left_knee": -0.3144998905255276,
+            "front_right_knee": 0.4514456419470733,
+            "rear_right_knee": 0.0986511423337256,
+            "front_left_ankle_pitch": 8.083364930099202e-09,
+            "rear_left_ankle_pitch": 0.17042582505084752,
+            "front_right_ankle_pitch": 0.3878659792165855,
+            "rear_right_ankle_pitch": -8.083727567900064e-09
+          },
+          "support_corner_height_range_m": 0.004179337449008558
+        },
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.45818141095578796,
+          "body_com_m": [
+            -0.014117555271042434,
+            0.005001047062041636,
+            -0.0806949133597757
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            14.679742033472284,
+            19.106093272032297
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": -0.4581814109557878,
+            "rear_left_hip_abduction": 0.17015689382123755,
+            "front_right_hip_abduction": 0.08785328191903273,
+            "rear_right_hip_abduction": 0.3769424239679042,
+            "front_left_hip_flexion": -0.17801482401917418,
+            "rear_left_hip_flexion": -0.14328805291741625,
+            "front_right_hip_flexion": 0.2081600376315522,
+            "rear_right_hip_flexion": 0.458181410955788,
+            "front_left_knee": 0.45818141095578785,
+            "rear_left_knee": 0.0988052634033352,
+            "front_right_knee": -0.06559549668676787,
+            "rear_right_knee": -0.3087265634093349,
+            "front_left_ankle_pitch": 0.39453868949499094,
+            "rear_left_ankle_pitch": 8.083727545219046e-09,
+            "front_right_ankle_pitch": -8.083364943006822e-09,
+            "rear_right_ankle_pitch": 0.17694636992778848
+          },
+          "support_corner_height_range_m": 0.004179337437781316
+        }
+      ]
+    },
+    {
+      "front_m": 0.03,
+      "rear_m": 0.04,
+      "down_m": 0.31,
+      "pair_lateral_shift_m": 0.03,
+      "worst_pair_peak_torque_nm": 0.4719626415705631,
+      "pairs": [
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.46609764712328106,
+          "body_com_m": [
+            -0.019063471616637465,
+            -0.009981511251678737,
+            -0.08037909850591114
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            19.150407413248324,
+            14.635427892256264
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": 0.04634114110422966,
+            "rear_left_hip_abduction": 0.466097647123281,
+            "front_right_hip_abduction": -0.46609764712328117,
+            "rear_right_hip_abduction": 0.21057051488483775,
+            "front_left_hip_flexion": 0.1653944020267726,
+            "rear_left_hip_flexion": 0.466097647123281,
+            "front_right_hip_flexion": -0.12289172223248249,
+            "rear_right_hip_flexion": -0.18697943214617155,
+            "front_left_knee": -0.08816437936427957,
+            "rear_left_knee": -0.39140962843718974,
+            "front_right_knee": 0.46609764712328183,
+            "rear_right_knee": 0.07712174760876545,
+            "front_left_ankle_pitch": 8.0661079341186e-09,
+            "rear_left_ankle_pitch": -0.15611974780979962,
+            "front_right_ankle_pitch": 0.1934332481416438,
+            "rear_right_ankle_pitch": -8.066831635235384e-09
+          },
+          "support_corner_height_range_m": 0.008341027730273898
+        },
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.4719626415705631,
+          "body_com_m": [
+            -0.01906344201847229,
+            0.009979290023243931,
+            -0.0803776466325913
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            14.600722761775279,
+            19.1851125437293
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": -0.47196264157056317,
+            "rear_left_hip_abduction": 0.2105686555380175,
+            "front_right_hip_abduction": 0.0463435793426664,
+            "rear_right_hip_abduction": 0.47196264157056317,
+            "front_left_hip_flexion": -0.11521743543889112,
+            "rear_left_hip_flexion": -0.18678538484618476,
+            "front_right_hip_flexion": 0.16520198926745094,
+            "rear_right_hip_flexion": 0.471962641570563,
+            "front_left_knee": 0.47196264157056317,
+            "rear_left_knee": 0.0772800835951302,
+            "front_right_knee": -0.08832051783477643,
+            "rear_right_knee": -0.3873567406304544,
+            "front_left_ankle_pitch": 0.19986534912848886,
+            "rear_left_ankle_pitch": 8.06683163317572e-09,
+            "front_right_ankle_pitch": -8.066107931666724e-09,
+            "rear_right_ankle_pitch": -0.1514344474898099
+          },
+          "support_corner_height_range_m": 0.008341027736529394
+        }
+      ]
+    },
+    {
+      "front_m": 0.05,
+      "rear_m": 0.04,
+      "down_m": 0.31,
+      "pair_lateral_shift_m": 0.03,
+      "worst_pair_peak_torque_nm": 0.4721677956784444,
+      "pairs": [
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.4663380383150933,
+          "body_com_m": [
+            -0.016647649369394165,
+            -0.009964813839075978,
+            -0.0801570739144189
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            19.153072894053388,
+            14.632762411451205
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": 0.0467670752497638,
+            "rear_left_hip_abduction": 0.4663380383150933,
+            "front_right_hip_abduction": -0.46633803831509324,
+            "rear_right_hip_abduction": 0.21057051488483775,
+            "front_left_hip_flexion": 0.2079160985070671,
+            "rear_left_hip_flexion": 0.4663380383150933,
+            "front_right_hip_flexion": -0.16598313299323827,
+            "rear_right_hip_flexion": -0.18697943214617155,
+            "front_left_knee": -0.06529667186909362,
+            "rear_left_knee": -0.39131147855614845,
+            "front_right_knee": 0.4663380383150932,
+            "rear_right_knee": 0.07712174760876545,
+            "front_left_ankle_pitch": 8.066107934118599e-09,
+            "rear_left_ankle_pitch": -0.15598567561333537,
+            "front_right_ankle_pitch": 0.40322420201797743,
+            "rear_right_ankle_pitch": -8.066831635235384e-09
+          },
+          "support_corner_height_range_m": 0.008341027734068418
+        },
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.4721677956784444,
+          "body_com_m": [
+            -0.016647682203948005,
+            0.009962588124535638,
+            -0.080155562376333
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            14.598267937947803,
+            19.187567367556802
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": -0.47216779567844447,
+            "rear_left_hip_abduction": 0.2105686555380175,
+            "front_right_hip_abduction": 0.04676832847666149,
+            "rear_right_hip_abduction": 0.47216779567844436,
+            "front_left_hip_flexion": -0.15822536545896504,
+            "rear_left_hip_flexion": -0.18678538484618476,
+            "front_right_hip_flexion": 0.20772056269885864,
+            "rear_right_hip_flexion": 0.47216779567844447,
+            "front_left_knee": 0.4721677956784444,
+            "rear_left_knee": 0.0772800835951302,
+            "front_right_knee": -0.06545700911887867,
+            "rear_right_knee": -0.3872825862873577,
+            "front_left_ankle_pitch": 0.4090571192531077,
+            "rear_left_ankle_pitch": 8.06683163317572e-09,
+            "front_right_ankle_pitch": -8.066107931666723e-09,
+            "rear_right_ankle_pitch": -0.15132720982601097
+          },
+          "support_corner_height_range_m": 0.008341027732734985
+        }
+      ]
+    },
+    {
+      "front_m": 0.03,
+      "rear_m": 0.04,
+      "down_m": 0.31,
+      "pair_lateral_shift_m": 0.015,
+      "worst_pair_peak_torque_nm": 0.47516587904919383,
+      "pairs": [
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.46824019814243767,
+          "body_com_m": [
+            -0.01906347161652736,
+            -0.00500184147317802,
+            -0.08065987250498459
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            19.137183356685938,
+            14.648651948818646
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": 0.08763923636985813,
+            "rear_left_hip_abduction": 0.3775157124437157,
+            "front_right_hip_abduction": -0.46824019814243784,
+            "rear_right_hip_abduction": 0.1699276535200936,
+            "front_left_hip_flexion": 0.1657443274018701,
+            "rear_left_hip_flexion": 0.46824019814243767,
+            "front_right_hip_flexion": -0.12267084811712063,
+            "rear_right_hip_flexion": -0.18737502501234388,
+            "front_left_knee": -0.08835090897026487,
+            "rear_left_knee": -0.3903741232561374,
+            "front_right_knee": 0.46824019814243795,
+            "rear_right_knee": 0.07728491429295502,
+            "front_left_ankle_pitch": 8.08336494382757e-09,
+            "rear_left_ankle_pitch": -0.15476503502525607,
+            "front_right_ankle_pitch": 0.19471981336885677,
+            "rear_right_ankle_pitch": -8.083727554171698e-09
+          },
+          "support_corner_height_range_m": 0.004179337440804454
+        },
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.47516587904919383,
+          "body_com_m": [
+            -0.01906344201859643,
+            0.004999674723436471,
+            -0.08065841755991578
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            14.62711014192011,
+            19.15872516358447
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": -0.47516587904919366,
+            "rear_left_hip_abduction": 0.1699267218413622,
+            "front_right_hip_abduction": 0.08764045803439854,
+            "rear_right_hip_abduction": 0.37784439717992374,
+            "front_left_hip_flexion": -0.11460449491934592,
+            "rear_left_hip_flexion": -0.18718056717612147,
+            "front_right_hip_flexion": 0.16555150754296905,
+            "rear_right_hip_flexion": 0.47516587904919383,
+            "front_left_knee": 0.47516587904919383,
+            "rear_left_knee": 0.07744358526708105,
+            "front_right_knee": -0.08850737778786041,
+            "rear_right_knee": -0.38456044620484786,
+            "front_left_ankle_pitch": 0.20193597342408487,
+            "rear_left_ankle_pitch": 8.08372755894741e-09,
+            "front_right_ankle_pitch": -8.083364943006825e-09,
+            "rear_right_ankle_pitch": -0.14849538312503813
+          },
+          "support_corner_height_range_m": 0.004179337445985476
+        }
+      ]
+    },
+    {
+      "front_m": 0.05,
+      "rear_m": 0.04,
+      "down_m": 0.31,
+      "pair_lateral_shift_m": 0.015,
+      "worst_pair_peak_torque_nm": 0.4754898123777408,
+      "pairs": [
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.4685894469113674,
+          "body_com_m": [
+            -0.016647649369283146,
+            -0.00499347510322661,
+            -0.08043737817546501
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            19.138915105183635,
+            14.646920200320944
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": 0.08785265402256905,
+            "rear_left_hip_abduction": 0.37754213485276045,
+            "front_right_hip_abduction": -0.4685894469113677,
+            "rear_right_hip_abduction": 0.1699276535200936,
+            "front_left_hip_flexion": 0.20835598714669026,
+            "rear_left_hip_flexion": 0.4685894469113674,
+            "front_right_hip_flexion": -0.16584616873915362,
+            "rear_right_hip_flexion": -0.18737502501234388,
+            "front_left_knee": -0.06543482020640438,
+            "rear_left_knee": -0.39011748341866215,
+            "front_right_knee": 0.4685894469113679,
+            "rear_right_knee": 0.07728491429295502,
+            "front_left_ankle_pitch": 8.083364930099202e-09,
+            "rear_left_ankle_pitch": -0.15448500727586503,
+            "front_right_ankle_pitch": 0.4052728292517573,
+            "rear_right_ankle_pitch": -8.083727554171698e-09
+          },
+          "support_corner_height_range_m": 0.004179337444752407
+        },
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.4754898123777408,
+          "body_com_m": [
+            -0.016647682204071326,
+            0.00499130610618192,
+            -0.08043586343943461
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            14.625458135575045,
+            19.160377169929532
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": -0.4754898123777408,
+            "rear_left_hip_abduction": 0.1699267218413622,
+            "front_right_hip_abduction": 0.08785328191903273,
+            "rear_right_hip_abduction": 0.3778696029111361,
+            "front_left_hip_flexion": -0.15772862082050515,
+            "rear_left_hip_flexion": -0.18718056717612147,
+            "front_right_hip_flexion": 0.2081600376315522,
+            "rear_right_hip_flexion": 0.4754898123777408,
+            "front_left_knee": 0.47548981237774074,
+            "rear_left_knee": 0.07744358526708105,
+            "front_right_knee": -0.06559549668676787,
+            "rear_right_knee": -0.38432485742655864,
+            "front_left_ankle_pitch": 0.4121126146469187,
+            "rear_left_ankle_pitch": 8.08372755894741e-09,
+            "front_right_ankle_pitch": -8.083364943006822e-09,
+            "rear_right_ankle_pitch": -0.14823748338235188
+          },
+          "support_corner_height_range_m": 0.004179337442037523
+        }
+      ]
+    },
+    {
+      "front_m": 0.03,
+      "rear_m": 0.06,
+      "down_m": 0.31,
+      "pair_lateral_shift_m": 0.03,
+      "worst_pair_peak_torque_nm": 0.4871842897303848,
+      "pairs": [
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.4849264573113473,
+          "body_com_m": [
+            -0.02134034137584714,
+            -0.009968744839480825,
+            -0.08020934420238364
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            19.17070794413841,
+            14.615127361366168
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": 0.04634114110422966,
+            "rear_left_hip_abduction": 0.48492645731134726,
+            "front_right_hip_abduction": -0.45379372030069176,
+            "rear_right_hip_abduction": 0.21018976711230591,
+            "front_left_hip_flexion": 0.1653944020267726,
+            "rear_left_hip_flexion": 0.4849264573113473,
+            "front_right_hip_flexion": -0.10302804946891764,
+            "rear_right_hip_flexion": -0.2281800680283687,
+            "front_left_knee": -0.08816437936427957,
+            "rear_left_knee": -0.39548648907323014,
+            "front_right_knee": 0.48492645731134754,
+            "rear_right_knee": 0.05265983102700042,
+            "front_left_ankle_pitch": 8.0661079341186e-09,
+            "rear_left_ankle_pitch": -0.48492645731134737,
+            "front_right_ankle_pitch": 0.21268961995059926,
+            "rear_right_ankle_pitch": -8.066831635235382e-09
+          },
+          "support_corner_height_range_m": 0.008341027725864203
+        },
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.4871842897303848,
+          "body_com_m": [
+            -0.02134024011703614,
+            0.009966516615850976,
+            -0.0802077993267185
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            14.536227789564382,
+            19.249607515940205
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": -0.478300738739262,
+            "rear_left_hip_abduction": 0.2101891475962427,
+            "front_right_hip_abduction": 0.0463435793426664,
+            "rear_right_hip_abduction": 0.4871842897303848,
+            "front_left_hip_flexion": -0.09670801942043639,
+            "rear_left_hip_flexion": -0.22798322965964088,
+            "front_right_hip_flexion": 0.16520198926745094,
+            "rear_right_hip_flexion": 0.48718428973038486,
+            "front_left_knee": 0.4871842897303848,
+            "rear_left_knee": 0.05282191946314474,
+            "front_right_knee": -0.08832051783477643,
+            "rear_right_knee": -0.3975063117798964,
+            "front_left_ankle_pitch": 0.21644536447022122,
+            "rear_left_ankle_pitch": 8.06683163317572e-09,
+            "front_right_ankle_pitch": -8.066107931666724e-09,
+            "rear_right_ankle_pitch": -0.4871842897303849
+          },
+          "support_corner_height_range_m": 0.008341027740939144
+        }
+      ]
+    },
+    {
+      "front_m": 0.05,
+      "rear_m": 0.06,
+      "down_m": 0.31,
+      "pair_lateral_shift_m": 0.03,
+      "worst_pair_peak_torque_nm": 0.4872604192746279,
+      "pairs": [
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.4850369648120726,
+          "body_com_m": [
+            -0.018924519128603847,
+            -0.009952047426878056,
+            -0.07998731961089137
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            19.174401929660668,
+            14.611433375843921
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": 0.0467670752497638,
+            "rear_left_hip_abduction": 0.4545138616106384,
+            "front_right_hip_abduction": -0.4850369648120727,
+            "rear_right_hip_abduction": 0.21018976711230591,
+            "front_left_hip_flexion": 0.2079160985070671,
+            "rear_left_hip_flexion": 0.4850369648120727,
+            "front_right_hip_flexion": -0.14611664944204958,
+            "rear_right_hip_flexion": -0.2281800680283687,
+            "front_left_knee": -0.06529667186909362,
+            "rear_left_knee": -0.39557811863467984,
+            "front_right_knee": 0.48503696481207254,
+            "rear_right_knee": 0.05265983102700042,
+            "front_left_ankle_pitch": 8.066107934118599e-09,
+            "rear_left_ankle_pitch": -0.48503696481207265,
+            "front_right_ankle_pitch": 0.42202723688851007,
+            "rear_right_ankle_pitch": -8.066831635235382e-09
+          },
+          "support_corner_height_range_m": 0.008341027729658723
+        },
+        {
+          "feasible_vertical_equilibrium": true,
+          "minimum_peak_torque_nm": 0.4872604192746279,
+          "body_com_m": [
+            -0.018924480302511853,
+            0.009949814717142683,
+            -0.07998571507046018
+          ],
+          "mass_kg": 3.444019908818,
+          "support_force_n": [
+            14.53368297194525,
+            19.252152333559337
+          ],
+          "joint_torque_nm": {
+            "front_left_hip_abduction": -0.4786655305969566,
+            "rear_left_hip_abduction": 0.2101891475962427,
+            "front_right_hip_abduction": 0.04676832847666149,
+            "rear_right_hip_abduction": 0.4872604192746279,
+            "front_left_hip_flexion": -0.13959734373404936,
+            "rear_left_hip_flexion": -0.22798322965964088,
+            "front_right_hip_flexion": 0.20772056269885864,
+            "rear_right_hip_flexion": 0.48726041927462793,
+            "front_left_knee": 0.4872604192746279,
+            "rear_left_knee": 0.05282191946314474,
+            "front_right_knee": -0.06545700911887867,
+            "rear_right_knee": -0.39756943615356444,
+            "front_left_ankle_pitch": 0.42446498616239065,
+            "rear_left_ankle_pitch": 8.06683163317572e-09,
+            "front_right_ankle_pitch": -8.066107931666723e-09,
+            "rear_right_ankle_pitch": -0.48726041927462793
+          },
+          "support_corner_height_range_m": 0.008341027737144735
+        }
+      ]
+    }
+  ]
+}

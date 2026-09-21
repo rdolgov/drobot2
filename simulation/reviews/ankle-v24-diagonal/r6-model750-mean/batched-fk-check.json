@@ -1,0 +1,5 @@
+{
+  "scope": "Offline batched FK versus previously audited exact URDF FK for four recorded poses",
+  "maximum_error_m": 2.7755575615628914e-16,
+  "passed": true
+}

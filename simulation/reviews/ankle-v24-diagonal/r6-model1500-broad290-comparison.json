@@ -1,0 +1,320 @@
+{
+  "scope": "Four deterministic first episodes per condition; full curriculum, both starts, nominal/85% motors. Candidate actor was not trained for its changed stance. No gait/hardware qualification.",
+  "conditions": {
+    "r6-model1500-mean": {
+      "checkpoint_sha256": "b9165cb4d43e6fe4cf41752378f2aa1728dd8201a654fbe237b3f879ffc626c9",
+      "reference_config": {
+        "stance_forward_m": 0.08,
+        "stance_down_m": 0.28,
+        "body_forward_shift_m": 0.014,
+        "maximum_leg_reach_m": 0.317,
+        "lift_m": 0.022
+      },
+      "trials": [
+        {
+          "trial": 0,
+          "pair": 0,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "time_s": 7.833333333333333,
+          "end_stage": "settle",
+          "pairs_seen": [
+            0
+          ],
+          "paired_landings": 0,
+          "qualified_touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "selected_leg_peak_clearance_mm": {
+            "front_left": 37.12127357721329,
+            "rear_left": null,
+            "front_right": null,
+            "rear_right": 0.4161261022090912
+          },
+          "physical_fall": false,
+          "final_gate_blocked": {
+            "tracking": true,
+            "delivery": false,
+            "forward": true,
+            "height": false,
+            "speed": false,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.09348885758305235,
+          "samples_with_reference_clipping": 0
+        },
+        {
+          "trial": 1,
+          "pair": 1,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "time_s": 8.033333333333333,
+          "end_stage": "settle",
+          "pairs_seen": [
+            1
+          ],
+          "paired_landings": 0,
+          "qualified_touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "selected_leg_peak_clearance_mm": {
+            "front_left": null,
+            "rear_left": -0.11559203267097473,
+            "front_right": 31.858257949352264,
+            "rear_right": null
+          },
+          "physical_fall": false,
+          "final_gate_blocked": {
+            "tracking": true,
+            "delivery": false,
+            "forward": true,
+            "height": false,
+            "speed": true,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.08472255802901507,
+          "samples_with_reference_clipping": 0
+        },
+        {
+          "trial": 2,
+          "pair": 0,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "time_s": 10.2,
+          "end_stage": "lift",
+          "pairs_seen": [
+            0,
+            1
+          ],
+          "paired_landings": 0,
+          "qualified_touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "selected_leg_peak_clearance_mm": {
+            "front_left": 35.26008129119873,
+            "rear_left": -0.15373528003692627,
+            "front_right": 13.336393982172012,
+            "rear_right": -0.048667192459106445
+          },
+          "physical_fall": false,
+          "final_gate_blocked": {
+            "tracking": false,
+            "delivery": false,
+            "forward": true,
+            "height": false,
+            "speed": false,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.09336143612464547,
+          "samples_with_reference_clipping": 0
+        },
+        {
+          "trial": 3,
+          "pair": 1,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "time_s": 4.85,
+          "end_stage": "lift",
+          "pairs_seen": [
+            1
+          ],
+          "paired_landings": 0,
+          "qualified_touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "selected_leg_peak_clearance_mm": {
+            "front_left": null,
+            "rear_left": -0.06923824548721313,
+            "front_right": 32.4493870139122,
+            "rear_right": null
+          },
+          "physical_fall": false,
+          "final_gate_blocked": {
+            "tracking": true,
+            "delivery": false,
+            "forward": false,
+            "height": false,
+            "speed": false,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.08307102550209867,
+          "samples_with_reference_clipping": 0
+        }
+      ]
+    },
+    "r6-model1500-broad290": {
+      "checkpoint_sha256": "b9165cb4d43e6fe4cf41752378f2aa1728dd8201a654fbe237b3f879ffc626c9",
+      "reference_config": {
+        "stance_forward_m": 0.08,
+        "stance_down_m": 0.29,
+        "body_forward_shift_m": 0.014,
+        "maximum_leg_reach_m": 0.317,
+        "lift_m": 0.022
+      },
+      "trials": [
+        {
+          "trial": 0,
+          "pair": 0,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "time_s": 8.816666666666666,
+          "end_stage": "lift",
+          "pairs_seen": [
+            0,
+            1
+          ],
+          "paired_landings": 0,
+          "qualified_touchdowns_by_leg": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "selected_leg_peak_clearance_mm": {
+            "front_left": 32.348960638046265,
+            "rear_left": 0.04427507519721985,
+            "front_right": 31.280778348445892,
+            "rear_right": 1.101367175579071
+          },
+          "physical_fall": false,
+          "final_gate_blocked": {
+            "tracking": true,
+            "delivery": false,
+            "forward": false,
+            "height": false,
+            "speed": false,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.0797928979432738,
+          "samples_with_reference_clipping": 0
+        },
+        {
+          "trial": 1,
+          "pair": 1,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "time_s": 7.116666666666666,
+          "end_stage": "settle",
+          "pairs_seen": [
+            1
+          ],
+          "paired_landings": 0,
+          "qualified_touchdowns_by_leg": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "selected_leg_peak_clearance_mm": {
+            "front_left": null,
+            "rear_left": 1.9459165632724762,
+            "front_right": 26.45677700638771,
+            "rear_right": null
+          },
+          "physical_fall": false,
+          "final_gate_blocked": {
+            "tracking": true,
+            "delivery": false,
+            "forward": true,
+            "height": false,
+            "speed": true,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.06504158997779207,
+          "samples_with_reference_clipping": 0
+        },
+        {
+          "trial": 2,
+          "pair": 0,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "time_s": 11.633333333333333,
+          "end_stage": "settle",
+          "pairs_seen": [
+            0,
+            1
+          ],
+          "paired_landings": 0,
+          "qualified_touchdowns_by_leg": [
+            1.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "selected_leg_peak_clearance_mm": {
+            "front_left": 31.826704740524292,
+            "rear_left": 0.09562075138092041,
+            "front_right": 24.538014084100723,
+            "rear_right": 1.8904656171798706
+          },
+          "physical_fall": false,
+          "final_gate_blocked": {
+            "tracking": false,
+            "delivery": false,
+            "forward": true,
+            "height": false,
+            "speed": true,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.08126982806542984,
+          "samples_with_reference_clipping": 0
+        },
+        {
+          "trial": 3,
+          "pair": 1,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "time_s": 7.333333333333333,
+          "end_stage": "settle",
+          "pairs_seen": [
+            1
+          ],
+          "paired_landings": 0,
+          "qualified_touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "selected_leg_peak_clearance_mm": {
+            "front_left": null,
+            "rear_left": 0.019393861293792725,
+            "front_right": 26.10119804739952,
+            "rear_right": null
+          },
+          "physical_fall": false,
+          "final_gate_blocked": {
+            "tracking": true,
+            "delivery": false,
+            "forward": true,
+            "height": false,
+            "speed": true,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.06561454881656376,
+          "samples_with_reference_clipping": 0
+        }
+      ]
+    }
+  }
+}

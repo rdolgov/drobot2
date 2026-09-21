@@ -1,0 +1,14 @@
+{
+  "status": "completed",
+  "pid": 26012,
+  "mode": "train",
+  "started_unix": 1789962622.0223963,
+  "started_simulation_unix": 1789962631.148642,
+  "start_iteration": 300,
+  "last_iteration": 549,
+  "updated_unix": 1789963344.3602333,
+  "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v26-balanced\\20260920-train-r2\\checkpoints\\model_549.pt",
+  "checkpoint_sha256": "e130f5a1a463a293e6a0696fb94354828ceaa1b34bed74ce12797d18807bbe8c",
+  "training_returned": true,
+  "finished_unix": 1789963344.3727307
+}

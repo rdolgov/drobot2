@@ -1,0 +1,17 @@
+{
+  "package": "diagonal-ui-start-help-20260920",
+  "created_at_utc": "2026-09-21T00:04:29.786092+00:00",
+  "files": [
+    {
+      "path": "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/four_leg_static/app.js",
+      "old_sha256": "747396d5e49d40ddefcfcecb74928dea63f61b3431c42e3b71eb813ae4f3a786",
+      "new_sha256": "84d3e8133aaaadf306c585be048daa54b74b6709949a6e1d123f57829b5963cf"
+    },
+    {
+      "path": "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/four_leg_static/index.html",
+      "old_sha256": "c18eaf65bccf140a7fd7c8db030ff625b260f2149b792efeabd63f1116684711",
+      "new_sha256": "42115b4d4d85c84bca517550163a977c287ef011d1f83c2dae47ca453b4578ca"
+    }
+  ],
+  "scope": "Static UI availability explanation; existing motor interlocks retained; no controller restart"
+}

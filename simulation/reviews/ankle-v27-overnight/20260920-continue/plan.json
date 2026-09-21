@@ -1,0 +1,41 @@
+{
+  "schema": "drobot.overnight-diagonal-plan.v1",
+  "created_unix": 1789968959.071963,
+  "authorization": "User approved Latest candidate \u2014 full simulation recording and asked to train it more for a possible real trial tomorrow, September 21 local time.",
+  "initial_checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v26-balanced\\20260920-train-r2\\checkpoints\\model_549.pt",
+  "initial_sha256": "e130f5a1a463a293e6a0696fb94354828ceaa1b34bed74ce12797d18807bbe8c",
+  "iterations": 2000,
+  "start_iteration": 550,
+  "final_iteration": 2549,
+  "environments": 512,
+  "steps_per_iteration": 64,
+  "planned_transitions": 65536000,
+  "optimizer_resumed": true,
+  "learning_rate": 5e-05,
+  "training_seed": 2721,
+  "physics_rewards_reference_limits": "unchanged V26 feasible; only continuation/optimizer settings changed",
+  "evaluate_checkpoints": [
+    600,
+    1000,
+    1400,
+    1800,
+    2200,
+    2549
+  ],
+  "evaluation_cases": "32-second first episode, both diagonal starts, nominal and 85% motor strength; unchanged strict walking criteria",
+  "baseline_report": "simulation/reviews/ankle-v26-balanced/20260920-eval-r2-549/report.json",
+  "baseline_analysis": "simulation/reviews/ankle-v26-balanced/20260920-eval-r2-549/analysis.json",
+  "outputs": [
+    "ranking.json",
+    "selected/model.pt",
+    "selected/actor.npz",
+    "selected/actor.json",
+    "video-pair-0/walk.mp4",
+    "video-pair-1/walk.mp4",
+    "comparison.mp4",
+    "README.md"
+  ],
+  "local_supervisor": "supervise.py",
+  "monitor_automation_id": "monitor-diagonal-walking-retraining",
+  "hardware_scope": "No connections, deployment or movement tonight. A matching controller integration and supported check are still needed before real use."
+}

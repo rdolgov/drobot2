@@ -1,0 +1,18 @@
+Traceback (most recent call last):
+  File "C:\Users\roman\Documents\dev\drobot2\simulation\isaac\rl\ankle_v25_ik\run.py", line 86, in <module>
+    env = RslRlVecEnvWrapper(gym.make("Drobot-Ankle-V25-IK", cfg=cfg,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\roman\Documents\dev\IsaacLab\source\isaaclab_rl\isaaclab_rl\rsl_rl\vecenv_wrapper.py", line 95, in __init__
+    self.env.reset()
+  File "C:\isaacsim\kit\python\Lib\site-packages\gymnasium\wrappers\common.py", line 400, in reset
+    return super().reset(seed=seed, options=options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\isaacsim\kit\python\Lib\site-packages\gymnasium\core.py", line 333, in reset
+    return self.env.reset(seed=seed, options=options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\roman\Documents\dev\IsaacLab\source\isaaclab\isaaclab\envs\direct_rl_env.py", line 371, in reset
+    self._reset_idx(indices)
+  File "C:\Users\roman\Documents\dev\drobot2\simulation\isaac\rl\ankle_v25_ik\env.py", line 208, in _reset_idx
+    self.pair[env_ids] = env_ids % 2 if self.num_envs > 1 else self.cfg.evaluation_pair
+    ~~~~~~~~~^^^^^^^^^
+RuntimeError: Index put requires the source and destination dtypes match, got Long for the destination and Int for the source.

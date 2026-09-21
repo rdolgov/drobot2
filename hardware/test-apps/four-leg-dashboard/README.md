@@ -9,6 +9,22 @@ transport, calibration, angle conversion, and bounded-motion logic from
 
 ## Four-leg dashboard
 
+The current 16-motor configuration includes active ankles (IDs 13–16).
+Its crawl uses the local [16-motor IK implementation](specs/ankle-ik-gait-v1.md).
+The [diagonal V6 sequence](specs/ankle-ik-diagonal-v6-measured-onset.md) uses
+100 mm strides, 35 mm lift and a 4-second reference cycle, stopping after
+two cycles. Its planted-ankle push leads the opposite pair's initial lift:
+6 mm of advance while lift reaches 3.815 mm, then an encoder gate requires
+both support ankles to move at least 0.5 degrees before lift continues.
+The full 20 mm early advance completes during lift; 30 mm follows landing.
+Support ankle feedforward is selected before lift. Raised feet move
+forward with the body during lift and finish their 100 mm world stride in
+swing. All diagonal joint commands share one progress limit and sync-write
+packet. Encoder/delivery waits can add time. V6 has not been
+tested or simulated; see its release record for deployment status.
+These remain commissioning features, not a qualified floor gait. The original
+12-motor controls described below remain available with a 12-motor manifest.
+
 The local dashboard provides:
 
 - all four legs and IDs 1-12 on one screen;
@@ -64,6 +80,8 @@ control page to the public internet.
   HTTP endpoints, telemetry summaries, and demo behavior.
 - `src/drobot_hardware_test_apps/crawl_gait.py` owns the dependency-free
   foot-space inverse kinematics and deterministic crawl equations.
+- `src/drobot_hardware_test_apps/ankle_ik_gait.py` owns the 16-motor foot-space
+  trajectories, active ankle pitch and encoder-gated clock.
 - `src/drobot_hardware_test_apps/rl_policy_control.py` adapts the shared ONNX
   policy runtime to the single motor-owning dashboard session.
 - `src/drobot_hardware_test_apps/four_leg_static/` owns the browser UI.

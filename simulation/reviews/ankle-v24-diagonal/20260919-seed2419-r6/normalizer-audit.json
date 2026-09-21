@@ -1,0 +1,78 @@
+{
+  "scope": "Read-only checkpoint tensors and installed normalization/load source; no policy execution or training",
+  "findings": "Actor weights and normalization statistics update; normalization until defaults to None. Actor loading includes prior normalizer statistics, while critic, optimizer and iteration are fresh. No frozen-normalizer or actor-loading failure identified.",
+  "records": [
+    {
+      "path": "simulation\\isaac\\models\\ankle-v23-transfer\\seed2311-model_2999.pt",
+      "sha256": "d0b1e4e31fe39919dcedefd2e816dc48b34aeadfd366ccbaf9b9d4c32f7d069d",
+      "iteration": 2999,
+      "normalizer": {
+        "obs_normalizer._mean": {
+          "minimum": -0.9984709024429321,
+          "maximum": 0.9989237785339355,
+          "finite": true
+        },
+        "obs_normalizer._var": {
+          "minimum": 0.0,
+          "maximum": 0.5000203847885132,
+          "finite": true
+        },
+        "obs_normalizer._std": {
+          "minimum": 0.0,
+          "maximum": 0.7071211934089661,
+          "finite": true
+        },
+        "obs_normalizer.count": 110624768
+      },
+      "maximum_actor_weight_change_from_warm": 0.0
+    },
+    {
+      "path": "logs\\rsl_rl\\drobot_ankle_v24_diagonal\\2026-09-19_21-28-02_diagonal-2419-r6\\model_0.pt",
+      "sha256": "43233dee8673b7dc2342375d05b23bead3208bdc82c175cb229a297f7f147d0b",
+      "iteration": 0,
+      "normalizer": {
+        "obs_normalizer._mean": {
+          "minimum": -0.9984709024429321,
+          "maximum": 0.9989237785339355,
+          "finite": true
+        },
+        "obs_normalizer._var": {
+          "minimum": 0.0,
+          "maximum": 0.50005704164505,
+          "finite": true
+        },
+        "obs_normalizer._std": {
+          "minimum": 0.0,
+          "maximum": 0.7071471214294434,
+          "finite": true
+        },
+        "obs_normalizer.count": 110641152
+      },
+      "maximum_actor_weight_change_from_warm": 0.0020496249198913574
+    },
+    {
+      "path": "logs\\rsl_rl\\drobot_ankle_v24_diagonal\\2026-09-19_21-28-02_diagonal-2419-r6\\model_2000.pt",
+      "sha256": "f2813ab94176ed3acdd794e4c1f308b159f291f064d4a5363aa793c1349984e9",
+      "iteration": 2000,
+      "normalizer": {
+        "obs_normalizer._mean": {
+          "minimum": -0.9984709024429321,
+          "maximum": 0.9988078474998474,
+          "finite": true
+        },
+        "obs_normalizer._var": {
+          "minimum": 0.0,
+          "maximum": 0.5714995265007019,
+          "finite": true
+        },
+        "obs_normalizer._std": {
+          "minimum": 0.0,
+          "maximum": 0.7559759020805359,
+          "finite": true
+        },
+        "obs_normalizer.count": 143409152
+      },
+      "maximum_actor_weight_change_from_warm": 0.6509188413619995
+    }
+  ]
+}

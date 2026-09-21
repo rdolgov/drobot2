@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "C:\Users\roman\Documents\dev\drobot2\simulation\isaac\rl\ankle_v24_diagonal\_train_worker.py", line 61, in <module>
+    runner.learn(num_learning_iterations=args.iterations, init_at_random_ep_len=False)
+  File "C:\isaacsim\kit\python\Lib\site-packages\rsl_rl\runners\on_policy_runner.py", line 115, in learn
+    self.logger.log(
+  File "C:\isaacsim\kit\python\Lib\site-packages\rsl_rl\utils\logger.py", line 280, in log
+    print(log_string)
+OSError: [Errno 22] Invalid argument

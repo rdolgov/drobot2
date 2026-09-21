@@ -1,0 +1,13 @@
+{
+  "launcher_pid": 7864,
+  "started_utc": "2026-09-20T06:47:24.9696654Z",
+  "arguments": [
+    "simulation/isaac/diagnostics/diagonal_optimizer_pilot.py",
+    "--output",
+    "simulation/reviews/ankle-v24-diagonal/20260920-optimizer-pilot-r7",
+    "--checkpoint",
+    "logs/rsl_rl/drobot_ankle_v24_diagonal/2026-09-19_21-28-02_diagonal-2419-r6/model_1500.pt",
+    "--base-run",
+    "simulation/reviews/ankle-v24-diagonal/20260919-seed2419-r6"
+  ]
+}

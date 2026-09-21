@@ -1,0 +1,73 @@
+{
+  "observed_unix": 1789882075.5490143,
+  "status": "running",
+  "last_iteration": 1464,
+  "source_contract_changes": [],
+  "scope": "Unweighted last 100 rounded iteration summaries; training evidence only",
+  "iteration_range": [
+    1365,
+    1464
+  ],
+  "means": {
+    "train_paired_landings": 0.0,
+    "train_min_steps_per_leg": 0.0,
+    "train_gate_timeout_lift": 0.57167,
+    "train_gate_timeout_advance": 0.284074,
+    "train_gate_timeout_settle": 0.029854,
+    "train_front_left_lift_clear": 0.148098,
+    "train_rear_left_lift_clear": 0.0,
+    "train_front_right_lift_clear": 0.161059,
+    "train_rear_right_lift_clear": 0.0,
+    "train_stance_slip_m_s": 0.000511,
+    "train_angular_rms_rad_s": 0.091651,
+    "train_fall_fraction": 0.0
+  },
+  "gate_totals": {
+    "schema": "drobot.ankle-v24-diagonal.gate-diagnostics.v2",
+    "step": 93342,
+    "evidence": "training_only",
+    "blocker_counting": "each blocker observed at least once during a timed-out wait; reasons can overlap",
+    "episode_scope": "completed episodes only; current unfinished episodes excluded",
+    "completed_episodes": 38689,
+    "completed_moving_episodes": 34960,
+    "timeouts_by_stage": {
+      "transfer": 0,
+      "lift": 15145,
+      "advance": 8617,
+      "lower": 0,
+      "settle": 11198,
+      "push": 0
+    },
+    "timeouts_by_pair": {
+      "front_left_rear_right": 17454,
+      "front_right_rear_left": 17506
+    },
+    "timeout_blockers": {
+      "tracking": 32617,
+      "delivery": 34937,
+      "forward": 25952,
+      "height": 15728,
+      "speed": 34959,
+      "tilt": 0,
+      "angular": 166
+    },
+    "stage_entries": {
+      "transfer": 34975,
+      "lift": 34975,
+      "advance": 19830,
+      "lower": 11213,
+      "settle": 11213,
+      "push": 15
+    },
+    "qualified_touchdowns_by_leg": {
+      "front_left": 417,
+      "rear_left": 0,
+      "front_right": 6298,
+      "rear_right": 0
+    }
+  },
+  "error_files": [],
+  "launcher_stderr_bytes": 0,
+  "additional_read_only_audit": "../r6-model750-mean/support-load-audit.json",
+  "decision": "Continue current run unchanged through full curriculum; no new simulation or training launched in this check."
+}

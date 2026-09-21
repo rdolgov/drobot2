@@ -1,0 +1,30 @@
+{
+  "status": "completed",
+  "worker_pid": 25564,
+  "started_unix": 1789886845.081897,
+  "last_iteration": 249,
+  "training_returned": true,
+  "deployed": false,
+  "checkpoint_directory": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v24_diagonal\\2026-09-19_23-47-33_diagonal-optimizer-pilot-2421-r7",
+  "updated_unix": 1789887475.9917045,
+  "optimizer_health": {
+    "iteration": 249,
+    "unix": 1789887475.9907033,
+    "sample": "last actual PPO update minibatch, before its optimizer step",
+    "learning_rate": 0.0001,
+    "uniform_action_fraction": 0.115753173828125,
+    "consecutive_collapsed_updates": 0,
+    "mean_abs_action_mean": 0.18101337552070618,
+    "action_std_mean": 0.4857495427131653,
+    "raw_head_min": -1435.17529296875,
+    "raw_head_max": 284.2037353515625,
+    "loss": {
+      "value": 0.22850409373641015,
+      "surrogate": -0.006073906808160246,
+      "entropy": -3.9125728607177734
+    }
+  },
+  "finished_unix": 1789887475.999202,
+  "checkpoint": "C:\\Users\\roman\\Documents\\dev\\drobot2\\logs\\rsl_rl\\drobot_ankle_v24_diagonal\\2026-09-19_23-47-33_diagonal-optimizer-pilot-2421-r7\\model_249.pt",
+  "checkpoint_sha256": "789bd0153075ab286e3bc753712cc840af4b41af6b0795a7a4ff69eaf0b08663"
+}

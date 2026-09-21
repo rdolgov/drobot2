@@ -1,0 +1,10 @@
+{
+  "status": "completed",
+  "pid": 9440,
+  "mode": "evaluate",
+  "started_unix": 1789973396.9848964,
+  "started_simulation_unix": 1789973402.0865128,
+  "start_iteration": 1800,
+  "finished_unix": 1789973454.7540736,
+  "report": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v27-overnight\\20260920-continue\\eval-model_1800\\report.json"
+}

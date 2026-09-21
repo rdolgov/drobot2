@@ -1,0 +1,27 @@
+{
+  "observed_unix": 1789879378.951557,
+  "status": "running",
+  "last_iteration": 351,
+  "sample": "Unweighted average of last 100 complete rounded iteration summaries; training only, not evaluation",
+  "iteration_range": [
+    252,
+    351
+  ],
+  "means": {
+    "train_paired_landings": 0.0,
+    "train_min_steps_per_leg": 0.0,
+    "train_gate_timeout_fraction": 0.900872,
+    "train_gate_timeout_moving_episodes": 0.916564,
+    "train_front_left_lift_clear": 0.20863400000000001,
+    "train_rear_left_lift_clear": 0.002732,
+    "train_front_right_lift_clear": 0.278609,
+    "train_rear_right_lift_clear": 0.0,
+    "train_supported_swing_clear": 0.132253,
+    "train_stance_slip_m_s": 0.0005459999999999999,
+    "train_angular_rms_rad_s": 0.100692,
+    "train_fall_fraction": 0.0
+  },
+  "checkpoint_diagnostic": "../r6-model250-mean/diagnosis.md",
+  "errors_present": [],
+  "launcher_stderr_bytes": 0
+}

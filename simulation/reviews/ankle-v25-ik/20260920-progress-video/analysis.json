@@ -1,0 +1,86 @@
+{
+  "run": "simulation\\reviews\\ankle-v25-ik\\20260920-progress-video",
+  "status": {
+    "status": "completed",
+    "pid": 7836,
+    "mode": "evaluate",
+    "started_unix": 1789959111.7109542,
+    "started_simulation_unix": 1789959121.3367047,
+    "finished_unix": 1789959236.3117878,
+    "report": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v25-ik\\20260920-progress-video\\report.json"
+  },
+  "evaluation": {
+    "status": "completed",
+    "checkpoint": "simulation\\reviews\\ankle-v25-ik\\20260920-train-r1\\checkpoints\\model_100.pt",
+    "reference_only": false,
+    "first_episodes_only": true,
+    "all_trials_qualified": false,
+    "hardware_qualified": false,
+    "trials": [
+      {
+        "environment": 0,
+        "start_pair": 0,
+        "motor_strength": 1.0,
+        "outcome": {
+          "failed": false,
+          "duration_s": 32.0
+        },
+        "forward_m": 0.367129921913147,
+        "lateral_m": -0.032213158905506134,
+        "tilt_rms_deg": 1.8864492313402563,
+        "tilt_max_deg": 5.492392887567735,
+        "full_steps_by_leg_FL_RL_FR_RR": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "qualified_touchdowns_by_leg": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "peak_swing_clearance_m_by_leg": [
+          0.04390235245227814,
+          0.00477798655629158,
+          0.025076232850551605,
+          0.00011367350816726685
+        ],
+        "qualified": false
+      }
+    ],
+    "video": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v25-ik\\20260920-progress-video\\walk.mp4"
+  },
+  "trace_analysis": [
+    {
+      "environment": 0,
+      "evidence": "10 Hz saved trace; may miss brief transients",
+      "legs": {
+        "FL": {
+          "peak_swing_clearance_mm": 43.514952063560486,
+          "swing_samples_clear_above_8mm": 0.7714285714285715,
+          "mean_knee_target_lag_deg": 1.7156391639740984
+        },
+        "RL": {
+          "peak_swing_clearance_mm": 4.488755017518997,
+          "swing_samples_clear_above_8mm": 0,
+          "mean_knee_target_lag_deg": 5.022157841987628
+        },
+        "FR": {
+          "peak_swing_clearance_mm": 24.361878633499146,
+          "swing_samples_clear_above_8mm": 0.2542372881355932,
+          "mean_knee_target_lag_deg": 4.993648892865311
+        },
+        "RR": {
+          "peak_swing_clearance_mm": 0.11251866817474365,
+          "swing_samples_clear_above_8mm": 0,
+          "mean_knee_target_lag_deg": 5.632268831647846
+        }
+      },
+      "motion_tilt_rms_deg": 2.2148446408573697,
+      "swing_pair_simultaneously_clear_above_8mm_fraction": 0,
+      "lift_support_ankle_progress_mean": 0.6616956747886611
+    }
+  ]
+}

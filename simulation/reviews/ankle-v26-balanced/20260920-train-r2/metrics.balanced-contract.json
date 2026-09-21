@@ -1,0 +1,10 @@
+{
+  "schema": "drobot.ankle-v26-balanced.v1",
+  "initialization": "continue pair-focused checkpoint; preserve actor and critic, fresh optimizer",
+  "curriculum": "full stride from the first reset",
+  "symmetry": "soft lateral-reflection actor consistency only; no synthetic mirrored rewards",
+  "new_shaping": "bounded once-per-placement credit for actual airborne forward foot travel",
+  "physics_controller_observations_limits": "unchanged from ankle_v25_pair",
+  "qualification": "unchanged strict paired landings; shaping is not success",
+  "hardware_qualified": false
+}

@@ -1,0 +1,23 @@
+{
+  "recorded_baseline_lb": 7,
+  "baseline_kg": 3.17514659,
+  "baseline_source": "simulation/docs/rl-robust-straight-low-stance-v25.md:22",
+  "baseline_measured_servo_count": 12,
+  "added_servos": 4,
+  "servo_model": "Feetech ST-3215-C018 / 12 V STS3215",
+  "servo_nominal_mass_kg": 0.055,
+  "servo_tolerance_kg": 0.001,
+  "servo_source": "https://www.feetechrc.com/525603.html",
+  "source_checked_date": "2026-09-20",
+  "added_servo_mass_kg": 0.22,
+  "estimated_total_kg": 3.3951465900000004,
+  "estimated_total_lb": 7.485016976806731,
+  "servo_tolerance_only_total_range_kg": [
+    3.3911465900000004,
+    3.3991465900000004
+  ],
+  "current_asset_mass_kg": 3.444019908818,
+  "difference_kg": 0.0488733188179995,
+  "reduction_fraction": 0.014190777089547413,
+  "interpretation": "User-approved working estimate from recorded pre-upgrade total plus four specified motors. Baseline measurement precision and net printed-part/mount/fastener changes are not included in the servo-only tolerance. No new weigh-in required to continue."
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "drobot.ankle-v25-pair.v2",
+  "changes_from_ik_r1": {
+    "forward_reward": "gated by actual pair clearance during lift or strict completed pair during final push",
+    "swing": "stronger minimum-pair clearance, synchronization and level-body rewards",
+    "residual_scales_rad_joint_major": [
+      0.14,
+      0.22,
+      0.35,
+      0.15
+    ],
+    "extra_lift_m": 0.025,
+    "forward_window_m": 0.012,
+    "curriculum_steps": 1
+  },
+  "physics_unchanged": true,
+  "qualification_unchanged": true,
+  "fresh_actor": true,
+  "hardware_qualified": false
+}

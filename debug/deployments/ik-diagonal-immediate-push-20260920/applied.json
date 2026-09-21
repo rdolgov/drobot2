@@ -1,0 +1,27 @@
+{
+  "package": "ik-diagonal-immediate-push-v5-20260920",
+  "installed_at_utc": "2026-09-21T00:53:05.472624Z",
+  "host": "pi5-dog.local",
+  "ip_used": "192.168.1.58",
+  "remote_archive": "/home/rd/ik-diagonal-immediate-push-v5.zip",
+  "archive_sha256": "411e785fcf44b143d17687e9ba9f55befe3ac8cc1993c1fbda2bba8ba1d1fb2c",
+  "backup": "/home/rd/drobot2/debug/deployment-backups/ik-diagonal-20260921T005305472624Z",
+  "installed": true,
+  "service_restarted": true,
+  "service": "drobot-manual-web",
+  "service_state": {
+    "ActiveState": "active",
+    "SubState": "running",
+    "ExecMainStatus": 0
+  },
+  "client_version": 17,
+  "operator_confirmed_readiness": true,
+  "tests_run": false,
+  "simulation_run": false,
+  "build_run": false,
+  "ui_validation_run": false,
+  "hardware_motion_check_run": false,
+  "walk_commanded": false,
+  "calibration_replaced": false,
+  "model_weights_replaced": false
+}

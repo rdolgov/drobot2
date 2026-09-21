@@ -1,0 +1,436 @@
+{
+  "scope": "Read-only stored checkpoints and TensorBoard scalar history. Neural probes use zero and 256 seeded clipped-normal normalized inputs, not recorded observations. Final diagnostic trace separately establishes zero mean actions on its actual observations.",
+  "configured_initial_learning_rate": 0.0003,
+  "installed_adaptive_cap": 0.01,
+  "head_transform": "softplus(raw) + 1, float32",
+  "records": [
+    {
+      "iteration": 0,
+      "optimizer_learning_rates": [
+        5.925925925925925e-05
+      ],
+      "raw_head_min": -353.6743469238281,
+      "raw_head_max": 60.18998336791992,
+      "concentration_exact_floor_fraction": 0.3160262703895569,
+      "maximum_absolute_mean_action": 0.9678404331207275,
+      "mean_action_std": 0.4475700259208679,
+      "maximum_softplus_derivative": 1.0,
+      "actor_parameters_finite": true
+    },
+    {
+      "iteration": 750,
+      "optimizer_learning_rates": [
+        5.0625000000000024e-05
+      ],
+      "raw_head_min": -677.9354858398438,
+      "raw_head_max": 86.91148376464844,
+      "concentration_exact_floor_fraction": 0.4874756932258606,
+      "maximum_absolute_mean_action": 0.9775057435035706,
+      "mean_action_std": 0.49472200870513916,
+      "maximum_softplus_derivative": 1.0,
+      "actor_parameters_finite": true
+    },
+    {
+      "iteration": 1500,
+      "optimizer_learning_rates": [
+        0.0008649755859375004
+      ],
+      "raw_head_min": -1108.6607666015625,
+      "raw_head_max": 230.44908142089844,
+      "concentration_exact_floor_fraction": 0.5947227478027344,
+      "maximum_absolute_mean_action": 0.9913959503173828,
+      "mean_action_std": 0.5030528903007507,
+      "maximum_softplus_derivative": 1.0,
+      "actor_parameters_finite": true
+    },
+    {
+      "iteration": 2000,
+      "optimizer_learning_rates": [
+        0.0005766503906250003
+      ],
+      "raw_head_min": -1779.4619140625,
+      "raw_head_max": 133.24131774902344,
+      "concentration_exact_floor_fraction": 0.6828793883323669,
+      "maximum_absolute_mean_action": 0.9852116107940674,
+      "mean_action_std": 0.5321176052093506,
+      "maximum_softplus_derivative": 1.0,
+      "actor_parameters_finite": true
+    },
+    {
+      "iteration": 2250,
+      "optimizer_learning_rates": [
+        0.00038443359375000017
+      ],
+      "raw_head_min": -1825.455322265625,
+      "raw_head_max": 106.298828125,
+      "concentration_exact_floor_fraction": 0.7194795608520508,
+      "maximum_absolute_mean_action": 0.9815325736999512,
+      "mean_action_std": 0.5447928309440613,
+      "maximum_softplus_derivative": 1.0,
+      "actor_parameters_finite": true
+    },
+    {
+      "iteration": 2500,
+      "optimizer_learning_rates": [
+        1e-05
+      ],
+      "raw_head_min": -2349.227783203125,
+      "raw_head_max": 100.71572875976562,
+      "concentration_exact_floor_fraction": 0.8405885100364685,
+      "maximum_absolute_mean_action": 0.9805288314819336,
+      "mean_action_std": 0.5586243867874146,
+      "maximum_softplus_derivative": 1.0,
+      "actor_parameters_finite": true
+    },
+    {
+      "iteration": 2750,
+      "optimizer_learning_rates": [
+        0.01
+      ],
+      "raw_head_min": -4990.513671875,
+      "raw_head_max": -5.3676581382751465,
+      "concentration_exact_floor_fraction": 0.9978112578392029,
+      "maximum_absolute_mean_action": 0.0023217201232910156,
+      "mean_action_std": 0.5773501396179199,
+      "maximum_softplus_derivative": 0.004643382038921118,
+      "actor_parameters_finite": true
+    },
+    {
+      "iteration": 2999,
+      "optimizer_learning_rates": [
+        0.01
+      ],
+      "raw_head_min": -5239.326171875,
+      "raw_head_max": -2.312354564666748,
+      "concentration_exact_floor_fraction": 0.9985408782958984,
+      "maximum_absolute_mean_action": 0.045084357261657715,
+      "mean_action_std": 0.5773473381996155,
+      "maximum_softplus_derivative": 0.09010492265224457,
+      "actor_parameters_finite": true
+    }
+  ],
+  "learning_rate_history": {
+    "Loss/learning_rate": [
+      {
+        "iteration": 0,
+        "value": 5.9259258705424145e-05
+      },
+      {
+        "iteration": 100,
+        "value": 0.0008649755618534982
+      },
+      {
+        "iteration": 200,
+        "value": 0.0005766503745689988
+      },
+      {
+        "iteration": 300,
+        "value": 0.00038443360244855285
+      },
+      {
+        "iteration": 400,
+        "value": 0.0008649755618534982
+      },
+      {
+        "iteration": 500,
+        "value": 5.062499985797331e-05
+      },
+      {
+        "iteration": 600,
+        "value": 0.0002562890585977584
+      },
+      {
+        "iteration": 700,
+        "value": 0.0005766503745689988
+      },
+      {
+        "iteration": 800,
+        "value": 9.999999747378752e-06
+      },
+      {
+        "iteration": 900,
+        "value": 0.00038443360244855285
+      },
+      {
+        "iteration": 1000,
+        "value": 7.593750342493877e-05
+      },
+      {
+        "iteration": 1100,
+        "value": 0.0005766503745689988
+      },
+      {
+        "iteration": 1200,
+        "value": 0.0005766503745689988
+      },
+      {
+        "iteration": 1300,
+        "value": 0.00011390625149942935
+      },
+      {
+        "iteration": 1400,
+        "value": 0.00038443360244855285
+      },
+      {
+        "iteration": 1500,
+        "value": 0.0008649755618534982
+      },
+      {
+        "iteration": 1600,
+        "value": 3.3749998692655936e-05
+      },
+      {
+        "iteration": 1700,
+        "value": 0.0008649755618534982
+      },
+      {
+        "iteration": 1800,
+        "value": 7.593750342493877e-05
+      },
+      {
+        "iteration": 1900,
+        "value": 0.0005766503745689988
+      },
+      {
+        "iteration": 2000,
+        "value": 0.0005766503745689988
+      },
+      {
+        "iteration": 2100,
+        "value": 0.0008649755618534982
+      },
+      {
+        "iteration": 2200,
+        "value": 0.0005766503745689988
+      },
+      {
+        "iteration": 2300,
+        "value": 0.0002562890585977584
+      },
+      {
+        "iteration": 2400,
+        "value": 0.0008649755618534982
+      },
+      {
+        "iteration": 2500,
+        "value": 9.999999747378752e-06
+      },
+      {
+        "iteration": 2600,
+        "value": 9.999999747378752e-06
+      },
+      {
+        "iteration": 2700,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2800,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2900,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2950,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2951,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2952,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2953,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2954,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2955,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2956,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2957,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2958,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2959,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2960,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2961,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2962,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2963,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2964,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2965,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2966,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2967,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2968,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2969,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2970,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2971,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2972,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2973,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2974,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2975,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2976,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2977,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2978,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2979,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2980,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2981,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2982,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2983,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2984,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2985,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2986,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2987,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2988,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2989,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2990,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2991,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2992,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2993,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2994,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2995,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2996,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2997,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2998,
+        "value": 0.009999999776482582
+      },
+      {
+        "iteration": 2999,
+        "value": 0.009999999776482582
+      }
+    ]
+  }
+}

@@ -1,0 +1,431 @@
+{
+  "scope": "Four first-episode diagnostics per condition; different controller than training for prototype; no qualification",
+  "conditions": {
+    "r6-model250-mean": {
+      "checkpoint_sha256": "2c3e3f8d4f07fb1328bf17df2e6b28621e500a8105a26b5f8c34e594259b326b",
+      "curriculum": 0.166666666666667,
+      "trials": [
+        {
+          "trial": 0,
+          "pair": 0,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "time_s": 8.033333333333333,
+          "end_stage": "settle",
+          "paired_landings": 0,
+          "touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "max_selected_clearance_mm": {
+            "front_left": 25.204505771398544,
+            "rear_right": -0.5562528967857361
+          },
+          "peak_minimum_of_selected_clearance_mm": -0.5562528967857361,
+          "end_gate_blocked": {
+            "tracking": true,
+            "delivery": false,
+            "forward": true,
+            "height": false,
+            "speed": false,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.06059027551298233,
+          "min_root_height_m": 0.35898905992507935
+        },
+        {
+          "trial": 1,
+          "pair": 1,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "time_s": 7.583333333333333,
+          "end_stage": "settle",
+          "paired_landings": 0,
+          "touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "max_selected_clearance_mm": {
+            "front_right": 31.24845027923584,
+            "rear_left": 3.8034915924072266
+          },
+          "peak_minimum_of_selected_clearance_mm": 3.8034915924072266,
+          "end_gate_blocked": {
+            "tracking": true,
+            "delivery": true,
+            "forward": true,
+            "height": false,
+            "speed": true,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.07313247125953709,
+          "min_root_height_m": 0.35900211334228516
+        },
+        {
+          "trial": 2,
+          "pair": 0,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "time_s": 6.25,
+          "end_stage": "advance",
+          "paired_landings": 0,
+          "touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "max_selected_clearance_mm": {
+            "front_left": 26.290331035852432,
+            "rear_right": -0.8117370307445526
+          },
+          "peak_minimum_of_selected_clearance_mm": -0.8117370307445526,
+          "end_gate_blocked": {
+            "tracking": false,
+            "delivery": false,
+            "forward": false,
+            "height": false,
+            "speed": false,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.061365737980780266,
+          "min_root_height_m": 0.3472628891468048
+        },
+        {
+          "trial": 3,
+          "pair": 1,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "time_s": 7.05,
+          "end_stage": "settle",
+          "paired_landings": 0,
+          "touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "max_selected_clearance_mm": {
+            "front_right": 32.21191465854645,
+            "rear_left": 0.7816553115844727
+          },
+          "peak_minimum_of_selected_clearance_mm": 0.7816553115844727,
+          "end_gate_blocked": {
+            "tracking": true,
+            "delivery": false,
+            "forward": true,
+            "height": false,
+            "speed": false,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.08350190169610999,
+          "min_root_height_m": 0.36337390542030334
+        }
+      ]
+    },
+    "r6-model750-mean": {
+      "checkpoint_sha256": "d7d7e5e5795f102aa64abb962e76cdfb79770726eb1520c514a5cb5b32117b83",
+      "curriculum": 0.5,
+      "trials": [
+        {
+          "trial": 0,
+          "pair": 0,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "time_s": 7.6,
+          "end_stage": "settle",
+          "paired_landings": 0,
+          "touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "max_selected_clearance_mm": {
+            "front_left": 22.92725443840027,
+            "rear_right": -0.4539117217063904
+          },
+          "peak_minimum_of_selected_clearance_mm": -0.4539117217063904,
+          "end_gate_blocked": {
+            "tracking": true,
+            "delivery": false,
+            "forward": true,
+            "height": true,
+            "speed": false,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.05781684415919529,
+          "min_root_height_m": 0.3584754765033722
+        },
+        {
+          "trial": 1,
+          "pair": 1,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "time_s": 7.133333333333333,
+          "end_stage": "settle",
+          "paired_landings": 0,
+          "touchdowns_by_leg": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "max_selected_clearance_mm": {
+            "front_right": 32.9231321811676,
+            "rear_left": 0.011388212442398071
+          },
+          "peak_minimum_of_selected_clearance_mm": 0.011388212442398071,
+          "end_gate_blocked": {
+            "tracking": true,
+            "delivery": false,
+            "forward": false,
+            "height": false,
+            "speed": true,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.0714408607153721,
+          "min_root_height_m": 0.3689623773097992
+        },
+        {
+          "trial": 2,
+          "pair": 0,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "time_s": 7.45,
+          "end_stage": "settle",
+          "paired_landings": 0,
+          "touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "max_selected_clearance_mm": {
+            "front_left": 22.527914494276047,
+            "rear_right": -0.415802001953125
+          },
+          "peak_minimum_of_selected_clearance_mm": -0.415802001953125,
+          "end_gate_blocked": {
+            "tracking": true,
+            "delivery": false,
+            "forward": true,
+            "height": true,
+            "speed": false,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.060868591831623145,
+          "min_root_height_m": 0.34820258617401123
+        },
+        {
+          "trial": 3,
+          "pair": 1,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "time_s": 7.133333333333333,
+          "end_stage": "settle",
+          "paired_landings": 0,
+          "touchdowns_by_leg": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "max_selected_clearance_mm": {
+            "front_right": 31.712085008621216,
+            "rear_left": 0.007040798664093018
+          },
+          "peak_minimum_of_selected_clearance_mm": 0.007040798664093018,
+          "end_gate_blocked": {
+            "tracking": true,
+            "delivery": false,
+            "forward": false,
+            "height": false,
+            "speed": false,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.06928670571155952,
+          "min_root_height_m": 0.3682522475719452
+        }
+      ]
+    },
+    "r6-model750-support-plane": {
+      "checkpoint_sha256": "d7d7e5e5795f102aa64abb962e76cdfb79770726eb1520c514a5cb5b32117b83",
+      "curriculum": 0.5,
+      "trials": [
+        {
+          "trial": 0,
+          "pair": 0,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "time_s": 4.85,
+          "end_stage": "lift",
+          "paired_landings": 0,
+          "touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "max_selected_clearance_mm": {
+            "front_left": 37.38917410373688,
+            "rear_right": -0.2025514841079712
+          },
+          "peak_minimum_of_selected_clearance_mm": -0.2025514841079712,
+          "end_gate_blocked": {
+            "tracking": false,
+            "delivery": false,
+            "forward": false,
+            "height": false,
+            "speed": true,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.12268602949251897,
+          "min_root_height_m": 0.3578232526779175,
+          "max_extra_lift_mm": {
+            "front_left": 0.0,
+            "rear_right": 24.99970979988575
+          },
+          "maximum_estimator_height_error_mm": 2.0044147968292236,
+          "clipped_reference_samples": 14
+        },
+        {
+          "trial": 1,
+          "pair": 1,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "time_s": 4.85,
+          "end_stage": "lift",
+          "paired_landings": 0,
+          "touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "max_selected_clearance_mm": {
+            "front_right": 59.540167450904846,
+            "rear_left": 0.0058710575103759766
+          },
+          "peak_minimum_of_selected_clearance_mm": 0.0058710575103759766,
+          "end_gate_blocked": {
+            "tracking": false,
+            "delivery": false,
+            "forward": false,
+            "height": false,
+            "speed": false,
+            "tilt": true,
+            "angular": false
+          },
+          "max_tilt_sine": 0.1856378011110484,
+          "min_root_height_m": 0.36232343316078186,
+          "max_extra_lift_mm": {
+            "front_right": 0.0,
+            "rear_left": 24.997878819704056
+          },
+          "maximum_estimator_height_error_mm": 4.136562347412109,
+          "clipped_reference_samples": 12
+        },
+        {
+          "trial": 2,
+          "pair": 0,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "time_s": 4.85,
+          "end_stage": "lift",
+          "paired_landings": 0,
+          "touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "max_selected_clearance_mm": {
+            "front_left": 31.706228852272034,
+            "rear_right": -0.08243322372436523
+          },
+          "peak_minimum_of_selected_clearance_mm": -0.08243322372436523,
+          "end_gate_blocked": {
+            "tracking": false,
+            "delivery": false,
+            "forward": true,
+            "height": true,
+            "speed": true,
+            "tilt": false,
+            "angular": false
+          },
+          "max_tilt_sine": 0.1154448967152955,
+          "min_root_height_m": 0.3294174373149872,
+          "max_extra_lift_mm": {
+            "front_left": 24.93373118340969,
+            "rear_right": 24.999715387821198
+          },
+          "maximum_estimator_height_error_mm": 3.0279457569122314,
+          "clipped_reference_samples": 14
+        },
+        {
+          "trial": 3,
+          "pair": 1,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "time_s": 4.85,
+          "end_stage": "lift",
+          "paired_landings": 0,
+          "touchdowns_by_leg": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "max_selected_clearance_mm": {
+            "front_right": 52.3141548037529,
+            "rear_left": 0.005684792995452881
+          },
+          "peak_minimum_of_selected_clearance_mm": 0.005684792995452881,
+          "end_gate_blocked": {
+            "tracking": true,
+            "delivery": false,
+            "forward": true,
+            "height": false,
+            "speed": true,
+            "tilt": true,
+            "angular": false
+          },
+          "max_tilt_sine": 0.17517299274270584,
+          "min_root_height_m": 0.3613370656967163,
+          "max_extra_lift_mm": {
+            "front_right": 0.0,
+            "rear_left": 24.998392909765244
+          },
+          "maximum_estimator_height_error_mm": 3.72961163520813,
+          "clipped_reference_samples": 12
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,230 @@
+{
+  "scope": "Offline approximately 10 Hz lift/advance samples from checkpoint-750 deterministic diagnostic; implicit-drive torque is approximate telemetry, not calibrated measured torque.",
+  "threshold": "At least 95% of configured strength-scaled conservative torque-speed cap",
+  "trials": [
+    {
+      "trial": 0,
+      "motor_fraction": 1.0,
+      "sample_count": 27,
+      "support_joints": [
+        {
+          "joint": "rear_left_knee",
+          "near_cap_fraction": 1,
+          "mean_tracking_error_deg": 9.624134841764565,
+          "maximum_tracking_error_deg": 10.924931973665
+        },
+        {
+          "joint": "front_right_knee",
+          "near_cap_fraction": 0.7037037037037037,
+          "mean_tracking_error_deg": 2.387551819350764,
+          "maximum_tracking_error_deg": 4.198688037536089
+        },
+        {
+          "joint": "rear_left_ankle_pitch",
+          "near_cap_fraction": 0.6666666666666666,
+          "mean_tracking_error_deg": 1.3621438830763581,
+          "maximum_tracking_error_deg": 5.918546746018224
+        },
+        {
+          "joint": "front_right_hip_flexion",
+          "near_cap_fraction": 0.5185185185185185,
+          "mean_tracking_error_deg": 3.13731306819168,
+          "maximum_tracking_error_deg": 6.632625948270132
+        },
+        {
+          "joint": "rear_left_hip_flexion",
+          "near_cap_fraction": 0.4444444444444444,
+          "mean_tracking_error_deg": 3.169407115221693,
+          "maximum_tracking_error_deg": 5.874133440940216
+        },
+        {
+          "joint": "front_right_ankle_pitch",
+          "near_cap_fraction": 0.3333333333333333,
+          "mean_tracking_error_deg": 0.2965583550786065,
+          "maximum_tracking_error_deg": 0.7715074327933753
+        },
+        {
+          "joint": "rear_left_hip_abduction",
+          "near_cap_fraction": 0,
+          "mean_tracking_error_deg": 0.3391085538543284,
+          "maximum_tracking_error_deg": 0.4781524321685706
+        },
+        {
+          "joint": "front_right_hip_abduction",
+          "near_cap_fraction": 0,
+          "mean_tracking_error_deg": 0.4117150922181405,
+          "maximum_tracking_error_deg": 1.0870367593417751
+        }
+      ],
+      "mean_support_compression_mm": 5.904117116221675
+    },
+    {
+      "trial": 1,
+      "motor_fraction": 1.0,
+      "sample_count": 22,
+      "support_joints": [
+        {
+          "joint": "front_left_knee",
+          "near_cap_fraction": 1,
+          "mean_tracking_error_deg": 9.002470605685353,
+          "maximum_tracking_error_deg": 9.681048657873543
+        },
+        {
+          "joint": "front_left_ankle_pitch",
+          "near_cap_fraction": 0.9545454545454546,
+          "mean_tracking_error_deg": 3.4784522541171135,
+          "maximum_tracking_error_deg": 5.225005495713721
+        },
+        {
+          "joint": "rear_right_knee",
+          "near_cap_fraction": 0.9545454545454546,
+          "mean_tracking_error_deg": 4.8681924938750605,
+          "maximum_tracking_error_deg": 6.23797420293221
+        },
+        {
+          "joint": "rear_right_ankle_pitch",
+          "near_cap_fraction": 0.8636363636363636,
+          "mean_tracking_error_deg": 0.9760959018782556,
+          "maximum_tracking_error_deg": 1.4359945524725248
+        },
+        {
+          "joint": "rear_right_hip_flexion",
+          "near_cap_fraction": 0.6818181818181818,
+          "mean_tracking_error_deg": 1.0135966577353073,
+          "maximum_tracking_error_deg": 2.749004291862977
+        },
+        {
+          "joint": "front_left_hip_abduction",
+          "near_cap_fraction": 0.22727272727272727,
+          "mean_tracking_error_deg": 0.9970771410671293,
+          "maximum_tracking_error_deg": 2.4035444227011333
+        },
+        {
+          "joint": "front_left_hip_flexion",
+          "near_cap_fraction": 0,
+          "mean_tracking_error_deg": 0.9470043313381196,
+          "maximum_tracking_error_deg": 1.7699171649091592
+        },
+        {
+          "joint": "rear_right_hip_abduction",
+          "near_cap_fraction": 0,
+          "mean_tracking_error_deg": 0.4005615415138501,
+          "maximum_tracking_error_deg": 1.4404670457184139
+        }
+      ],
+      "mean_support_compression_mm": -2.945519983768463
+    },
+    {
+      "trial": 2,
+      "motor_fraction": 0.85,
+      "sample_count": 25,
+      "support_joints": [
+        {
+          "joint": "rear_left_knee",
+          "near_cap_fraction": 1,
+          "mean_tracking_error_deg": 12.914117881876379,
+          "maximum_tracking_error_deg": 24.735922815078453
+        },
+        {
+          "joint": "rear_left_hip_flexion",
+          "near_cap_fraction": 0.88,
+          "mean_tracking_error_deg": 4.931910210974791,
+          "maximum_tracking_error_deg": 8.386317998805927
+        },
+        {
+          "joint": "front_right_knee",
+          "near_cap_fraction": 0.76,
+          "mean_tracking_error_deg": 2.180352521192497,
+          "maximum_tracking_error_deg": 4.286968232558503
+        },
+        {
+          "joint": "rear_left_ankle_pitch",
+          "near_cap_fraction": 0.56,
+          "mean_tracking_error_deg": 1.7093926559376689,
+          "maximum_tracking_error_deg": 5.906751009321612
+        },
+        {
+          "joint": "front_right_hip_flexion",
+          "near_cap_fraction": 0.56,
+          "mean_tracking_error_deg": 3.1412345985363457,
+          "maximum_tracking_error_deg": 8.175668134613563
+        },
+        {
+          "joint": "front_right_ankle_pitch",
+          "near_cap_fraction": 0.4,
+          "mean_tracking_error_deg": 0.3861292743482008,
+          "maximum_tracking_error_deg": 0.9575438565379514
+        },
+        {
+          "joint": "rear_left_hip_abduction",
+          "near_cap_fraction": 0,
+          "mean_tracking_error_deg": 0.2240569982151198,
+          "maximum_tracking_error_deg": 0.3304936595037583
+        },
+        {
+          "joint": "front_right_hip_abduction",
+          "near_cap_fraction": 0,
+          "mean_tracking_error_deg": 0.28507148257753606,
+          "maximum_tracking_error_deg": 1.0798370729459206
+        }
+      ],
+      "mean_support_compression_mm": 8.210424780845642
+    },
+    {
+      "trial": 3,
+      "motor_fraction": 0.85,
+      "sample_count": 22,
+      "support_joints": [
+        {
+          "joint": "front_left_knee",
+          "near_cap_fraction": 1,
+          "mean_tracking_error_deg": 9.139877712470945,
+          "maximum_tracking_error_deg": 9.902674636062116
+        },
+        {
+          "joint": "front_left_ankle_pitch",
+          "near_cap_fraction": 1,
+          "mean_tracking_error_deg": 3.521610376107506,
+          "maximum_tracking_error_deg": 5.226150833060168
+        },
+        {
+          "joint": "rear_right_knee",
+          "near_cap_fraction": 0.9545454545454546,
+          "mean_tracking_error_deg": 4.430058056733546,
+          "maximum_tracking_error_deg": 6.860440077846738
+        },
+        {
+          "joint": "rear_right_ankle_pitch",
+          "near_cap_fraction": 0.6818181818181818,
+          "mean_tracking_error_deg": 0.8956811547837731,
+          "maximum_tracking_error_deg": 1.6326982375967798
+        },
+        {
+          "joint": "rear_right_hip_flexion",
+          "near_cap_fraction": 0.45454545454545453,
+          "mean_tracking_error_deg": 1.4698959829744715,
+          "maximum_tracking_error_deg": 3.0782535608034416
+        },
+        {
+          "joint": "front_left_hip_abduction",
+          "near_cap_fraction": 0.3181818181818182,
+          "mean_tracking_error_deg": 1.22473759819016,
+          "maximum_tracking_error_deg": 3.0126362536122464
+        },
+        {
+          "joint": "rear_right_hip_abduction",
+          "near_cap_fraction": 0.045454545454545456,
+          "mean_tracking_error_deg": 0.5566725339457838,
+          "maximum_tracking_error_deg": 1.5663192575914224
+        },
+        {
+          "joint": "front_left_hip_flexion",
+          "near_cap_fraction": 0,
+          "mean_tracking_error_deg": 0.8335840727597523,
+          "maximum_tracking_error_deg": 1.6591041758148724
+        }
+      ],
+      "mean_support_compression_mm": -2.6019662618637085
+    }
+  ]
+}

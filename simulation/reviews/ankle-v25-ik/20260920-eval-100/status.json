@@ -1,0 +1,9 @@
+{
+  "status": "completed",
+  "pid": 13036,
+  "mode": "evaluate",
+  "started_unix": 1789957961.6390808,
+  "started_simulation_unix": 1789957966.9073546,
+  "finished_unix": 1789958055.6446042,
+  "report": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v25-ik\\20260920-eval-100\\report.json"
+}

@@ -1,0 +1,44 @@
+{
+  "scope": "Terminal snapshot FK comparison, exact URDF transforms and measured root/joint pose versus simulator ankle pivots; no model edits.",
+  "urdf": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\exports\\isaac\\ankle_v23_stride\\active\\training_input.urdf",
+  "urdf_sha256": "3b9fa69f1c7ec81879c50e4b7eac4606b0ac5504d932cc530626e0d88707a66b",
+  "trials": [
+    {
+      "trial": 1,
+      "ankle_pivot_fk_error_m": [
+        6.376081089307036e-08,
+        3.638398613101089e-07,
+        4.0534244469965e-07,
+        2.5976121634738564e-07
+      ]
+    },
+    {
+      "trial": 3,
+      "ankle_pivot_fk_error_m": [
+        4.264238819420862e-07,
+        2.0449907937768514e-07,
+        3.2507965654107297e-07,
+        2.804625186399481e-07
+      ]
+    },
+    {
+      "trial": 0,
+      "ankle_pivot_fk_error_m": [
+        3.129206540318788e-07,
+        4.4983460578830887e-07,
+        1.388269041630531e-07,
+        3.610851271770801e-07
+      ]
+    },
+    {
+      "trial": 2,
+      "ankle_pivot_fk_error_m": [
+        3.741198505888892e-07,
+        7.42623936195737e-08,
+        1.6817526574812016e-07,
+        4.096158086978552e-07
+      ]
+    }
+  ],
+  "max_error_m": 4.4983460578830887e-07
+}

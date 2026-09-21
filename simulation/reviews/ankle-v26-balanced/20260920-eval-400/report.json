@@ -1,0 +1,139 @@
+{
+  "status": "completed",
+  "checkpoint": "simulation\\reviews\\ankle-v26-balanced\\20260920-train-r1\\checkpoints\\model_400.pt",
+  "reference_only": false,
+  "first_episodes_only": true,
+  "all_trials_qualified": false,
+  "hardware_qualified": false,
+  "trials": [
+    {
+      "environment": 0,
+      "start_pair": 0,
+      "motor_strength": 1.0,
+      "outcome": {
+        "failed": false,
+        "duration_s": 32.0
+      },
+      "forward_m": 0.09771490097045898,
+      "lateral_m": 0.07831931114196777,
+      "tilt_rms_deg": 1.1638452891104978,
+      "tilt_max_deg": 4.169899643958131,
+      "full_steps_by_leg_FL_RL_FR_RR": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "qualified_touchdowns_by_leg": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "peak_swing_clearance_m_by_leg": [
+        0.027292221784591675,
+        0.002694740891456604,
+        0.020944006741046906,
+        0.021408677101135254
+      ],
+      "qualified": false
+    },
+    {
+      "environment": 1,
+      "start_pair": 1,
+      "motor_strength": 1.0,
+      "outcome": {
+        "failed": false,
+        "duration_s": 32.0
+      },
+      "forward_m": 0.20859384536743164,
+      "lateral_m": 0.02647876739501953,
+      "tilt_rms_deg": 1.0185283102684375,
+      "tilt_max_deg": 3.1582865158464775,
+      "full_steps_by_leg_FL_RL_FR_RR": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "qualified_touchdowns_by_leg": [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "peak_swing_clearance_m_by_leg": [
+        0.0073540546000003815,
+        0.001647401601076126,
+        0.032785654067993164,
+        0.012812063097953796
+      ],
+      "qualified": false
+    },
+    {
+      "environment": 2,
+      "start_pair": 0,
+      "motor_strength": 0.8500000238418579,
+      "outcome": {
+        "failed": false,
+        "duration_s": 32.0
+      },
+      "forward_m": 0.1518702507019043,
+      "lateral_m": 0.01987624168395996,
+      "tilt_rms_deg": 1.2086387284984905,
+      "tilt_max_deg": 4.611968270061574,
+      "full_steps_by_leg_FL_RL_FR_RR": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "qualified_touchdowns_by_leg": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "peak_swing_clearance_m_by_leg": [
+        0.0296003520488739,
+        0.0,
+        0.021470941603183746,
+        0.007482275366783142
+      ],
+      "qualified": false
+    },
+    {
+      "environment": 3,
+      "start_pair": 1,
+      "motor_strength": 0.8500000238418579,
+      "outcome": {
+        "failed": false,
+        "duration_s": 32.0
+      },
+      "forward_m": 0.22980737686157227,
+      "lateral_m": 0.012038707733154297,
+      "tilt_rms_deg": 1.3530087226997856,
+      "tilt_max_deg": 5.251181768820972,
+      "full_steps_by_leg_FL_RL_FR_RR": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "qualified_touchdowns_by_leg": [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "peak_swing_clearance_m_by_leg": [
+        0.008620381355285645,
+        1.6592442989349365e-05,
+        0.02289649099111557,
+        0.004362195730209351
+      ],
+      "qualified": false
+    }
+  ],
+  "video": null
+}

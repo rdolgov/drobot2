@@ -1,0 +1,299 @@
+{
+  "scope": "Same checkpoint1500, full curriculum, deterministic means, both starting pairs and nominal/85% motors. First episodes only. Preload is an untrained intervention, not a hardware controller.",
+  "conditions": {
+    "r6-model1500-mean": {
+      "checkpoint_sha256": "b9165cb4d43e6fe4cf41752378f2aa1728dd8201a654fbe237b3f879ffc626c9",
+      "trials": [
+        {
+          "trial": 0,
+          "pair": 0,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "end_stage": "settle",
+          "time_s": 7.833333333333333,
+          "paired_landings": 0,
+          "qualified_touchdowns": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "peak_selected_sole_clearance_mm": {
+            "front_left": 37.12127357721329,
+            "rear_right": 0.4161261022090912
+          },
+          "support_knees": [
+            {
+              "leg": "rear_left",
+              "mean_knee_tracking_deg": 9.544127035153117,
+              "knee_near_cap_fraction": 1
+            },
+            {
+              "leg": "front_right",
+              "mean_knee_tracking_deg": 4.025233734897263,
+              "knee_near_cap_fraction": 0.896551724137931
+            }
+          ],
+          "max_tilt_sine": 0.09348885758305235
+        },
+        {
+          "trial": 1,
+          "pair": 1,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "end_stage": "settle",
+          "time_s": 8.033333333333333,
+          "paired_landings": 0,
+          "qualified_touchdowns": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "peak_selected_sole_clearance_mm": {
+            "rear_left": -0.11559203267097473,
+            "front_right": 31.858257949352264
+          },
+          "support_knees": [
+            {
+              "leg": "front_left",
+              "mean_knee_tracking_deg": 7.016466870189758,
+              "knee_near_cap_fraction": 1
+            },
+            {
+              "leg": "rear_right",
+              "mean_knee_tracking_deg": 3.875166792906569,
+              "knee_near_cap_fraction": 0.7666666666666667
+            }
+          ],
+          "max_tilt_sine": 0.08472255802901507
+        },
+        {
+          "trial": 2,
+          "pair": 0,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "end_stage": "lift",
+          "time_s": 10.2,
+          "paired_landings": 0,
+          "qualified_touchdowns": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "peak_selected_sole_clearance_mm": {
+            "front_left": 35.26008129119873,
+            "rear_left": -0.15373528003692627,
+            "front_right": 13.336393982172012,
+            "rear_right": -0.048667192459106445
+          },
+          "support_knees": [
+            {
+              "leg": "front_left",
+              "mean_knee_tracking_deg": 10.137485983980255,
+              "knee_near_cap_fraction": 1
+            },
+            {
+              "leg": "rear_left",
+              "mean_knee_tracking_deg": 8.824212891455836,
+              "knee_near_cap_fraction": 1
+            },
+            {
+              "leg": "front_right",
+              "mean_knee_tracking_deg": 7.84955087331054,
+              "knee_near_cap_fraction": 0.8928571428571429
+            },
+            {
+              "leg": "rear_right",
+              "mean_knee_tracking_deg": 10.26239275796372,
+              "knee_near_cap_fraction": 1
+            }
+          ],
+          "max_tilt_sine": 0.09336143612464547
+        },
+        {
+          "trial": 3,
+          "pair": 1,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "end_stage": "lift",
+          "time_s": 4.85,
+          "paired_landings": 0,
+          "qualified_touchdowns": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "peak_selected_sole_clearance_mm": {
+            "rear_left": -0.06923824548721313,
+            "front_right": 32.4493870139122
+          },
+          "support_knees": [
+            {
+              "leg": "front_left",
+              "mean_knee_tracking_deg": 8.577862636030778,
+              "knee_near_cap_fraction": 1
+            },
+            {
+              "leg": "rear_right",
+              "mean_knee_tracking_deg": 2.3374374345631455,
+              "knee_near_cap_fraction": 0.9130434782608695
+            }
+          ],
+          "max_tilt_sine": 0.08307102550209867
+        }
+      ]
+    },
+    "r6-model1500-support-preload": {
+      "checkpoint_sha256": "b9165cb4d43e6fe4cf41752378f2aa1728dd8201a654fbe237b3f879ffc626c9",
+      "trials": [
+        {
+          "trial": 0,
+          "pair": 0,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "end_stage": "settle",
+          "time_s": 7.283333333333333,
+          "paired_landings": 0,
+          "qualified_touchdowns": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "peak_selected_sole_clearance_mm": {
+            "front_left": 33.40087831020355,
+            "rear_right": 1.3684071600437164
+          },
+          "support_knees": [
+            {
+              "leg": "rear_left",
+              "mean_knee_tracking_deg": 9.143027399875646,
+              "knee_near_cap_fraction": 1
+            },
+            {
+              "leg": "front_right",
+              "mean_knee_tracking_deg": 5.809097233437001,
+              "knee_near_cap_fraction": 1
+            }
+          ],
+          "max_tilt_sine": 0.08148939001939667,
+          "maximum_preload_degrees": 1.5683375784911613,
+          "peak_static_requested_torque_nm": 0.8213841319084167
+        },
+        {
+          "trial": 1,
+          "pair": 1,
+          "motor_fraction": 1.0,
+          "result": "gate_timeout",
+          "end_stage": "settle",
+          "time_s": 7.316666666666666,
+          "paired_landings": 0,
+          "qualified_touchdowns": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "peak_selected_sole_clearance_mm": {
+            "rear_left": -0.102214515209198,
+            "front_right": 28.716295957565308
+          },
+          "support_knees": [
+            {
+              "leg": "front_left",
+              "mean_knee_tracking_deg": 6.3174542683914945,
+              "knee_near_cap_fraction": 1
+            },
+            {
+              "leg": "rear_right",
+              "mean_knee_tracking_deg": 6.769880591780046,
+              "knee_near_cap_fraction": 1
+            }
+          ],
+          "max_tilt_sine": 0.0721130573422816,
+          "maximum_preload_degrees": 1.5728352580596148,
+          "peak_static_requested_torque_nm": 0.8236792087554932
+        },
+        {
+          "trial": 2,
+          "pair": 0,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "end_stage": "advance",
+          "time_s": 6.533333333333333,
+          "paired_landings": 0,
+          "qualified_touchdowns": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "peak_selected_sole_clearance_mm": {
+            "front_left": 31.08861669898033,
+            "rear_right": 0.0029355287551879883
+          },
+          "support_knees": [
+            {
+              "leg": "rear_left",
+              "mean_knee_tracking_deg": 7.065469779187048,
+              "knee_near_cap_fraction": 1
+            },
+            {
+              "leg": "front_right",
+              "mean_knee_tracking_deg": 16.137101555260383,
+              "knee_near_cap_fraction": 1
+            }
+          ],
+          "max_tilt_sine": 0.08599778241638449,
+          "maximum_preload_degrees": 1.5687111044613964,
+          "peak_static_requested_torque_nm": 0.8213841319084167
+        },
+        {
+          "trial": 3,
+          "pair": 1,
+          "motor_fraction": 0.85,
+          "result": "gate_timeout",
+          "end_stage": "settle",
+          "time_s": 7.633333333333333,
+          "paired_landings": 0,
+          "qualified_touchdowns": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "physical_fall": false,
+          "peak_selected_sole_clearance_mm": {
+            "rear_left": -0.0993385910987854,
+            "front_right": 35.75149178504944
+          },
+          "support_knees": [
+            {
+              "leg": "front_left",
+              "mean_knee_tracking_deg": 6.874372525388702,
+              "knee_near_cap_fraction": 1
+            },
+            {
+              "leg": "rear_right",
+              "mean_knee_tracking_deg": 7.9950038127574325,
+              "knee_near_cap_fraction": 0.9259259259259259
+            }
+          ],
+          "max_tilt_sine": 0.09174886803213037,
+          "maximum_preload_degrees": 1.5730755953410345,
+          "peak_static_requested_torque_nm": 0.8236792087554932
+        }
+      ]
+    }
+  }
+}

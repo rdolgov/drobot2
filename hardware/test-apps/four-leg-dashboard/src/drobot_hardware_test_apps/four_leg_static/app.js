@@ -24,6 +24,7 @@ const gaitPanel = document.querySelector(".gait-panel");
 const setCrawlStance = document.querySelector("#setCrawlStance");
 const walkForward = document.querySelector("#walkForward");
 const walkDiagonalPair = document.querySelector("#walkDiagonalPair");
+const diagonalStartStatus = document.querySelector("#diagonalStartStatus");
 const stopWalk = document.querySelector("#stopWalk");
 const gaitStage = document.querySelector("#gaitStage");
 const gaitPhase = document.querySelector("#gaitPhase");
@@ -314,7 +315,7 @@ function renderRecordings(recordings) {
   recordingsList.innerHTML = "";
   if (!recordings.length) {
     const empty = document.createElement("small");
-    empty.textContent = "No RL trials recorded yet.";
+    empty.textContent = "No walking trials recorded yet.";
     recordingsList.appendChild(empty);
     return;
   }
@@ -906,10 +907,26 @@ function updateSummary(state) {
     ? `${crawl.stage.toUpperCase()}${cycleText} / ${(crawl.progress * 100).toFixed(0)}%`
     : crawl.stage === "complete" || crawl.stage === "holding"
       ? "COMPLETE / HOLDING"
+      : state.any_armed
+        ? "ARMED / HOLDING"
       : "READY / DISARMED";
   gaitPhase.textContent = `${phaseText}${swingText}${swingPairText}${pushText}`;
   gaitProgress.style.width = `${Math.max(0, Math.min(100, crawl.progress * 100))}%`;
-  gaitDetail.textContent = crawl.pattern === "diagonal_pair_flat_support_gait_v1"
+  gaitDetail.textContent = crawl.ankle_ik
+    ? `16-motor IK / ${crawl.mode === "diagonal_pair" ? "alternating diagonal pairs" : "one leg at a time"} / ` +
+      `${crawl.stride_mm.toFixed(0)} mm stride / ${crawl.lift_mm.toFixed(0)} mm lift / ` +
+      `${crawl.period_s.toFixed(0)} s cycle plus encoder settling / ` +
+      `${crawl.sole_leveling ? "IMU + encoder ankle leveling" : "active ankle pitch"} / ` +
+      `${crawl.mode === "diagonal_pair" ? `stance push ${Number(crawl.support_push_mm || 0).toFixed(0)} / ${Math.round((crawl.diagonal_parameters?.support_push_m || 0) * 1000)} mm / ` : ""}` +
+      `${crawl.mode === "diagonal_pair" ? "V6: ankle lead + measured start / " : ""}` +
+      `${crawl.encoder_gate === "support_ankle_onset" ? "LIFT HELD LOW: waiting for both planted ankles to move / " : ""}` +
+      `${crawl.support_onset_confirmed ? "both support ankles started / " : ""}` +
+      `${crawl.delivery_wait_s > 0 ? "waiting for coordinated motor delivery / " : ""}` +
+      `${crawl.ankle_feedforward_corners?.length ? "ANKLE DRIVE: " + crawl.ankle_feedforward_corners.map((corner) => corner.replaceAll("_", " ")).join(" + ") + " / " : ""}` +
+      `${crawl.max_cycles ? `${crawl.max_cycles} cycles, then hold / ` : ""}` +
+      `${crawl.stop_requested ? "finishing placement to stop" : "STOP plants, then holds"}` +
+      `${crawl.sole_leveling_limited_legs?.length ? " / LEVELING LIMITED: " + crawl.sole_leveling_limited_legs.join(", ") : ""}`
+    : crawl.pattern === "diagonal_pair_flat_support_gait_v1"
     ? `Continuous / 2 diagonal placements per cycle / ` +
       `${crawl.stride_mm.toFixed(0)} mm stride / ` +
       `${crawl.lift_mm.toFixed(0)} mm lift / 2 planted shoes / ` +
@@ -930,14 +947,30 @@ function updateSummary(state) {
     crawl.available === false || crawl.active ||
     rl.active ||
     (state.any_armed && !crawl.start_ready);
+  const diagonalStartReason = crawl.available === false
+    ? crawl.unavailable_reason
+    : crawl.active
+      ? "Diagonal start is unavailable while a gait is preparing or running."
+      : rlStartPending || rl.status === "initializing" || rl.active
+        ? "Stop the RL controller before starting diagonal IK."
+        : state.any_armed
+          ? "Diagonal start requires all motors disarmed. Support the robot, then press DISARM ALL. The diagonal button moves to its own start stance."
+          : "Diagonal ready. Start directly from disarmed; SET GAIT START STANCE is for crawl mode.";
   walkDiagonalPair.disabled =
     crawl.available === false || crawl.active ||
-    rl.active ||
+    rlStartPending || rl.status === "initializing" || rl.active ||
     state.any_armed;
+  walkDiagonalPair.title = diagonalStartReason;
+  if (diagonalStartStatus) diagonalStartStatus.textContent = diagonalStartReason;
   setCrawlStance.disabled =
     crawl.available === false || crawl.active || rl.active;
   if (crawl.available === false) gaitDetail.textContent = crawl.unavailable_reason;
-  stopWalk.disabled = !state.any_armed;
+  walkForward.textContent = crawl.ankle_ik ? "TEST 16-MOTOR IK CRAWL" : "TEST DISTRIBUTED CRAWL";
+  const diagonal = crawl.diagonal_parameters || {};
+  walkDiagonalPair.textContent = crawl.ankle_ik
+    ? `DIAGONAL ${Math.round((diagonal.stride_m || 0.1) * 1000)} MM${diagonal.support_push_m > 0 ? " + ANKLE LEAD V6" : ""} / ${Number(diagonal.period_s || 8) <= 4 ? "2× PACE / " : ""}${diagonal.max_cycles || 2} CYCLES`
+    : "TEST DIAGONAL PAIRS";
+  stopWalk.disabled = !state.any_armed && !crawl.active;
   zeroAll.disabled = crawl.active || rl.active;
   centerAll.disabled = crawl.active || rl.active;
   captureZeroAll.disabled = runtime?.capture_zero_available === false || crawl.active || rl.active || state.any_armed;
@@ -972,6 +1005,9 @@ async function refresh() {
     connected = false;
     connection.className = "connection offline";
     connectionText.textContent = "CONNECTION LOST";
+    if (diagonalStartStatus) {
+      diagonalStartStatus.textContent = "Diagonal unavailable: dashboard connection lost.";
+    }
     [
       disarmAll,
       zeroAll,
@@ -1055,7 +1091,7 @@ setCrawlStance.addEventListener("click", () => {
   postAction(
     "/api/crawl-stance",
     { safety_ack: true, confirmation: "SET GAIT START STANCE" },
-    "Moving all four legs to the distributed-push start stance",
+    "Moving all configured joints to the gait start stance",
   );
 });
 
@@ -1076,13 +1112,15 @@ walkForward.addEventListener("click", () => {
 
 walkDiagonalPair.addEventListener("click", () => {
   if (latestState?.any_armed) {
-    showNotice("Disarm all motors before starting the gait sequence", true);
+    showNotice("Support the robot, then press DISARM ALL before diagonal start. It moves to its own start stance.", true);
     return;
   }
   postAction(
     "/api/diagonal-pair-forward",
     { safety_ack: true, confirmation: "TEST DIAGONAL PAIR GAIT" },
-    "Moving to the diagonal stance, then walking continuously until STOP",
+    latestState?.crawl?.ankle_ik
+      ? "Preparing ankle leveling, then ankle lead with lift held low until both support encoders show movement; automatic hold after two cycles"
+      : "Moving to the diagonal stance, then walking continuously until STOP",
   );
 });
 
@@ -1090,7 +1128,9 @@ stopWalk.addEventListener("click", () => {
   postAction(
     "/api/crawl-stop",
     {},
-    "Returning slowly to a stable four-foot stance; torque remains armed",
+    latestState?.crawl?.ankle_ik
+      ? "Finishing the current placement, then holding with torque armed"
+      : "Returning slowly to a stable four-foot stance; torque remains armed",
   );
 });
 

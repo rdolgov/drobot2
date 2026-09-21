@@ -1,0 +1,24 @@
+{
+  "output": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v25-ik\\diagonal-rl-comparison.mp4",
+  "playback_speed": 1,
+  "source_time_s": [
+    2.5,
+    14.5
+  ],
+  "sources": [
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v25-ik\\20260920-reference-video\\walk.mp4",
+      "title": "1 - IK reference - SIMULATION"
+    },
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v25-ik\\20260920-progress-video\\walk.mp4",
+      "title": "2 - Forward-progress RL candidate - SIMULATION"
+    },
+    {
+      "path": "C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\reviews\\ankle-v25-ik\\20260920-pair-final-video\\walk.mp4",
+      "title": "3 - Pair-focused RL candidate - SIMULATION"
+    }
+  ],
+  "changes": "trim, concatenate, annotate titles; no change to robot frames or motion",
+  "qualification": "review evidence, not a qualified walking demonstration"
+}

@@ -1,0 +1,75 @@
+{
+  "status": "failed",
+  "scope": "independent flat-ground IK trial; no RL",
+  "config": {
+    "period_s": 16.0,
+    "stride_m": 0.06,
+    "lift_m": 0.025,
+    "down_m": 0.295,
+    "fore_aft_m": 0.08,
+    "forward_transfer_m": 0.025,
+    "lateral_transfer_m": 0.025
+  },
+  "trial_definitions": [
+    [
+      "distributed",
+      0,
+      1.0
+    ],
+    [
+      "distributed",
+      0,
+      0.85
+    ],
+    [
+      "diagonal_pair",
+      0,
+      1.0
+    ],
+    [
+      "diagonal_pair",
+      0,
+      0.85
+    ],
+    [
+      "diagonal_pair",
+      1,
+      1.0
+    ],
+    [
+      "diagonal_pair",
+      1,
+      0.85
+    ]
+  ],
+  "seconds": 60.0,
+  "stop_command_s": 48.0,
+  "mass_kg": 3.39514659,
+  "mass_method": "uniform mass/inertia sensitivity scaling; same COM distribution",
+  "source_hashes": {
+    "simulation/isaac/diagnostics/ankle_ik_walk.py": "69943276f89bc6b201b0555bab5aa5665f7c482e69a649f89688ba3852c092e8",
+    "hardware/robot-runtime/four-leg.toml": "004c16bf0f117a4444695fb1aa7f0d0d21a4f3089fe4a88170dbb6d894434792",
+    "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/ankle_ik_gait.py": "9bf6acf5f7c6343414da047e7b6e7092f49dcc3f047c6c4f67ee90d2b687d925",
+    "hardware/test-apps/four-leg-dashboard/src/drobot_hardware_test_apps/four_leg_control.py": "c4018b241d928156793679939e17b19c7a155c4482019191b194bdc10c8f90cc",
+    "simulation/isaac/rl/ankle_v24_diagonal/diagnose_reference.py": "308638aff4884917d33a984a2cbeebd27a39194f8552f722dfa3c810a27dbd32",
+    "simulation/isaac/rl/ankle_v24_diagonal/env.py": "fe6f8f188c071709a249110bd544704064191d421d52550cc6b60ba33b20d2a6",
+    "simulation/isaac/rl/ankle_v24_diagonal/env_cfg.py": "94139c8304dcab3b9635d2e151d5318b2f0e1d0fd498a5c5a2c79b71605201f6",
+    "simulation/isaac/rl/ankle_v24_diagonal/ppo_cfg.py": "bd8d5486f0bf39b2bed843ddd0bc8d54132c7e0b69e1b8b84ebe6340e2af415a",
+    "simulation/isaac/rl/ankle_v24_diagonal/progress_io.py": "8350d771f8fbd82c6f60d7b0edcf7b461b2a43077d07760bd8da1704e083a3ec",
+    "simulation/isaac/rl/ankle_v24_diagonal/train.py": "21e2bc8610411ab6954009c848d95eeee0820e90cc1a9165d4a57badf23bf59f",
+    "simulation/isaac/rl/ankle_v24_diagonal/_train_worker.py": "b9fb727b4cee155121cdf710eeb82fefad54f311de0dd3627bbde57e97546e9c",
+    "simulation/isaac/rl/ankle_v24_diagonal/__init__.py": "cfc7f91cd5f24f67c41638c48ed0fdc07fcdc22b11096538a6084f443d9c559f"
+  },
+  "qualification": "air >=0.1s, clearance >=8mm, forward advance >=65% stride, sideways <35mm; per-leg counts; no automatic hardware qualification",
+  "hardware_qualified": false,
+  "outcomes": [],
+  "actual_mass_kg": [
+    3.395146369934082,
+    3.395146369934082,
+    3.395146369934082,
+    3.395146369934082,
+    3.395146369934082,
+    3.395146369934082
+  ],
+  "error": "Traceback (most recent call last):\n  File \"C:\\Users\\roman\\Documents\\dev\\drobot2\\simulation\\isaac\\diagnostics\\ankle_ik_walk.py\", line 169, in <module>\n    _, state = ankle_ik_gait_degrees(clock.time_s, config, clock.mode)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\roman\\Documents\\dev\\drobot2\\hardware\\test-apps\\four-leg-dashboard\\src\\drobot_hardware_test_apps\\ankle_ik_gait.py\", line 153, in ankle_ik_gait_degrees\n    abduction, hip, knee, ankle = shifted_ankle_leg_ik(leg, forwards[leg], down-(lift if leg in moving else 0.), lateral)\n                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\roman\\Documents\\dev\\drobot2\\hardware\\test-apps\\four-leg-dashboard\\src\\drobot_hardware_test_apps\\ankle_ik_gait.py\", line 84, in shifted_ankle_leg_ik\n    hip, knee, ankle = ankle_leg_ik(corner, forward_m, local_down-.095696689-SOLE_OFFSET_M)\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\roman\\Documents\\dev\\drobot2\\hardware\\test-apps\\four-leg-dashboard\\src\\drobot_hardware_test_apps\\ankle_ik_gait.py\", line 59, in ankle_leg_ik\n    raise ValueError(f\"Unreachable ankle-pivot target for {corner}: {forward_m}, {down_m}\")\nValueError: Unreachable ankle-pivot target for rear_right: -0.13374009942345522, 0.2874592126469976\n"
+}

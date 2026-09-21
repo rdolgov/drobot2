@@ -43,6 +43,10 @@ from drobot_hardware_test_apps.crawl_gait import (
     diagonal_pair_gait_degrees,
     distributed_push_crawl_degrees,
 )
+from drobot_hardware_test_apps.ankle_ik_gait import (
+    AnkleIKConfig, AnkleIKClock, ankle_ik_gait_degrees, level_sole_pitch_degrees,
+    validate_leveling_gravity,
+)
 
 LOCAL_HOST = "127.0.0.1"
 APP_ROOT = Path(__file__).resolve().parents[2]
@@ -67,7 +71,7 @@ DEFAULT_RECORDINGS_DIR = (
     Path.home() / ".local" / "share" / "drobot2" / "rl-recordings"
 )
 STATIC_DIR = Path(__file__).with_name("four_leg_static")
-LAN_CLIENT_VERSION = "12"
+LAN_CLIENT_VERSION = "18"
 RL_TARGET_STEP_ABSOLUTE_LIMIT_DEG = 4.0
 
 
@@ -126,6 +130,12 @@ class DashboardConfig:
     monitoring: MonitoringConfig
     crawl: CrawlConfig
     legs: tuple[LegProfile, ...]
+    ankle_ik: AnkleIKConfig = AnkleIKConfig()
+    ankle_ik_diagonal: AnkleIKConfig = AnkleIKConfig(
+        period_s=4., stride_m=.100, lift_m=.035, down_m=.288,
+        fore_aft_m=.080, forward_transfer_m=0., lateral_transfer_m=0., max_cycles=2,
+        support_push_m=.020, support_lift_fraction=1., support_onset_fraction=.30,
+        ramp_rate_deg_s=200., max_command_step_deg=4.)
 
     @property
     def bus(self) -> BusConfig:
@@ -359,7 +369,9 @@ def load_dashboard_config(path: str | Path) -> DashboardConfig:
 
         profiles = attach_ankles(profiles, data["ankles"], manifest_path.parent)
 
-    return DashboardConfig(server, monitoring, crawl, tuple(profiles))
+    ankle_ik = AnkleIKConfig(**data.get("ankle_ik", {}))
+    diagonal = AnkleIKConfig(**data["ankle_ik_diagonal"]) if "ankle_ik_diagonal" in data else DashboardConfig.ankle_ik_diagonal
+    return DashboardConfig(server, monitoring, crawl, tuple(profiles), ankle_ik, diagonal)
 
 
 class FourLegDemoBus:
@@ -457,7 +469,7 @@ class FourLegDemoBus:
 
 
 class FourLegSession:
-    """Serialize twelve-motor access and enforce bounded, explicit motion."""
+    """Serialize the configured servo bus and enforce bounded, explicit motion."""
 
     RL_MOTOR_OUTPUT_HZ = 60.0
 
@@ -520,6 +532,27 @@ class FourLegSession:
         self.crawl_elapsed_s = 0.0
         self.crawl_target_reached_at: float | None = None
         self.crawl_progress = 0.0
+        self.ik_clock: AnkleIKClock | None = None
+        self.ik_feedback_at: float | None = None
+        self.ik_measured: dict[tuple[str, str], float] = {}
+        self.ik_velocity: dict[tuple[str, str], float] = {}
+        self.ik_positioning_started_at: float | None = None
+        self.ik_imu_axis_map = rl_imu_axis_map
+        self.ik_imu_source = None
+        self.ik_retiring_imu = None
+        self.ik_prepare_cancel = threading.Event()
+        self.ik_leveling_correction: dict[str, float] = {}
+        self.ik_leveling_limited: list[str] = []
+        self.ik_leveling_at: float | None = None
+        self.ik_gravity_body: list[float] | None = None
+        self.ik_support_push_m = 0.
+        self.ik_body_forward_advance_m = 0.
+        self.ik_ankle_feedforward_corners: list[str] = []
+        self.ik_leveling_feedforward_corners: tuple[str, ...] = ()
+        self.ik_command_fraction = 1.
+        self.ik_delivery_hold_started_at: float | None = None
+        self.ik_delivery_wait_s = 0.
+        self.ik_recording_active = False
         self.power_samples: deque[tuple[float, float, float, float]] = deque()
         self.idle_voltage_samples: deque[float] = deque(maxlen=30)
         self.power_energy_wh = 0.0
@@ -533,6 +566,10 @@ class FourLegSession:
         # after a delayed bus cycle.
         self.rl_target_lock = threading.Lock()
         self.rl_output_authorized = threading.Event()
+        # Ankle targets wake the bus owner as soon as they are published. The
+        # event and pending slot are consumed together under rl_target_lock.
+        self.rl_target_ready = threading.Event()
+        self.rl_worker_bus_lock_wait_s = 0.0
         self.rl_pending_target_deg: dict[tuple[int, str], float] | None = None
         self.rl_policy_target_deg: dict[tuple[int, str], float] = {}
         self.rl_pending_target_sequence = 0
@@ -670,6 +707,11 @@ class FourLegSession:
                     "observation_size": 82, "action_size": 16,
                     "observation_order": OBSERVATION_ORDER,
                     "action_history_semantics": "completed bus target plus filter state",
+                    "target_rate_limit": (
+                        "producer: completed target with max production-interval/ack-age budget; "
+                        "actual bus: per-joint elapsed-time rate limit and two-degree packet cap"
+                    ),
+                    "motor_output_scheduling": "latest_target_wakeup_with_periodic_guard",
                     "missed_deadline_policy": "skip; never replay catch-up bursts",
                 }
                 recording_metadata["robot"]["measured_total_mass_kg"] = None
@@ -762,6 +804,7 @@ class FourLegSession:
 
     def close(self) -> None:
         self.stop_event.set()
+        self.rl_target_ready.set()
         if self.worker is not None:
             self.worker.join(timeout=2.0)
         for controller in self.rl_controllers.values():
@@ -779,9 +822,17 @@ class FourLegSession:
         next_deadline_s = previous_started_s + self.tick_interval_s
         while True:
             wait_s = max(0.0, next_deadline_s - time.monotonic())
-            if self.stop_event.wait(wait_s):
+            target_ready = self.rl_target_ready.wait(wait_s)
+            if self.stop_event.is_set():
                 break
             started_s = time.monotonic()
+            if target_ready:
+                # Align output with fresh policy work instead of waiting for
+                # an independently phased 60 Hz polling slot. Only the newest
+                # target is consumed; actual packet limits remain authoritative.
+                next_deadline_s = started_s
+            scheduled_s = next_deadline_s
+            output_sequence_before = self.rl_motor_output_sequence
             try:
                 self.advance_once(elapsed_s=started_s - previous_started_s)
             except Exception as exc:
@@ -801,22 +852,48 @@ class FourLegSession:
             previous_started_s = started_s
             period_s = (
                 1.0 / self.RL_MOTOR_OUTPUT_HZ
-                if self.rl_controller is not None and self.rl_controller.active
+                if (self.rl_controller is not None and self.rl_controller.active)
+                or (self.motor_count == 16 and self.crawl_active)
                 else self.tick_interval_s
             )
             next_deadline_s += period_s
             completed_s = time.monotonic()
+            skipped = 0
             if next_deadline_s <= completed_s:
                 # Skip missed output slots instead of replaying a burst of stale
                 # targets after a slow USB or diagnostic transaction.
-                next_deadline_s = completed_s + period_s
+                skipped = math.floor((completed_s - next_deadline_s) / period_s) + 1
+                next_deadline_s += skipped * period_s
+            if (
+                self.motor_count == 16
+                and self.rl_output_authorized.is_set()
+                and self.rl_controller is not None
+                and self.rl_controller.active
+            ):
+                self.rl_controller.record_event(
+                    "motor_worker_cycle",
+                    {
+                        "wake_reason": "policy_target" if target_ready else "periodic_guard",
+                        "scheduled_s": scheduled_s,
+                        "started_s": started_s,
+                        "completed_s": completed_s,
+                        "start_lateness_s": max(0.0, started_s - scheduled_s),
+                        "bus_lock_wait_s": self.rl_worker_bus_lock_wait_s,
+                        "duration_s": max(0.0, completed_s - started_s),
+                        "skipped_periodic_slots": skipped,
+                        "output_packets": max(0, self.rl_motor_output_sequence - output_sequence_before),
+                    },
+                )
 
     def advance_once(self, *, elapsed_s: float | None = None) -> None:
+        lock_requested_s = self.clock()
         with self.lock:
+            self.rl_worker_bus_lock_wait_s = max(0.0, self.clock() - lock_requested_s)
             self._consume_rl_target_locked()
             self._advance_crawl_locked()
 
-            hardcoded_crawl_active = self.crawl_active
+            hardcoded_crawl_active = self.crawl_active or (
+                self.motor_count == 16 and self.crawl_stage == "holding" and self.ik_clock is not None)
             nominal_period_s = (
                 1.0 / self.RL_MOTOR_OUTPUT_HZ
                 if self.rl_controller is not None and self.rl_controller.active
@@ -827,11 +904,13 @@ class FourLegSession:
                 # to miss one or more 20 Hz crawl ticks.  Never compensate with
                 # a larger catch-up step: the real robot must remain slower
                 # than the planned one-leg-at-a-time support transition.
-                motion_elapsed_s = self.tick_interval_s
+                motion_elapsed_s = 1./60. if self.motor_count == 16 else self.tick_interval_s
                 motion_rate_deg_s = min(
                     self.ramp_rate_deg_s,
                     self.dashboard.crawl.ramp_rate_deg_s,
                 )
+                if self.motor_count == 16:
+                    motion_rate_deg_s = self._ik_motion_rate_locked()
             else:
                 motion_elapsed_s = (
                     nominal_period_s
@@ -848,6 +927,9 @@ class FourLegSession:
                 self.dashboard.bus.max_command_step_deg,
                 motion_rate_deg_s * motion_elapsed_s,
             )
+            if hardcoded_crawl_active and self.motor_count == 16:
+                step_limit = min(step_limit, self._ik_config_locked().max_command_step_deg,
+                                 4. if self.crawl_stage == "walking" else 2.)
             if self.rl_controller is not None and self.rl_controller.active:
                 step_limit = min(step_limit, 5.0)
             rl_step_limits: dict[int, float] | None = None
@@ -878,7 +960,9 @@ class FourLegSession:
                     )
                     for index, (_profile, motor, _controller) in enumerate(self.rl_motor_order)
                 }
-            planned: list[tuple[LegController, Any]] = []
+            synchronized_ik = (hardcoded_crawl_active and self.motor_count == 16
+                               and self.crawl_mode == "diagonal_pair")
+            pending_motion = []
             for profile in self.profiles:
                 controller = self.controllers[profile.number]
                 for motor in profile.config.motors:
@@ -895,12 +979,24 @@ class FourLegSession:
                     motor_step_limit = (
                         step_limit if rl_step_limits is None else rl_step_limits[motor.servo_id]
                     )
-                    step = max(-motor_step_limit, min(motor_step_limit, delta))
-                    if rl_step_limits is not None and abs(step) < 0.01:
-                        continue
-                    planned.append(
-                        (controller, controller.plan_command(motor, current + step))
-                    )
+                    if hardcoded_crawl_active and self.motor_count == 16 and motor.name == "hip_abduction":
+                        motor_step_limit = min(motor_step_limit, 60.*motion_elapsed_s)
+                    pending_motion.append((controller, motor, current, delta, motor_step_limit))
+            # One interpolation fraction for the entire diagonal pose: a
+            # limited knee slows both lifting legs and both pushing ankles.
+            # The hardware batch writer sends these targets in one packet.
+            self.ik_command_fraction = min(
+                [1.] + [limit/abs(delta) for _, _, _, delta, limit in pending_motion]
+            ) if synchronized_ik else 1.
+            planned: list[tuple[LegController, Any]] = []
+            for controller, motor, current, delta, motor_step_limit in pending_motion:
+                step = (delta*self.ik_command_fraction if synchronized_ik else
+                        max(-motor_step_limit, min(motor_step_limit, delta)))
+                if rl_step_limits is not None and abs(step) < 0.01:
+                    continue
+                planned.append(
+                    (controller, controller.plan_command(motor, current + step))
+                )
             if not planned:
                 self._update_rl_stance_progress_locked()
                 return
@@ -939,6 +1035,7 @@ class FourLegSession:
             return
         with self.rl_target_lock:
             pending = self.rl_pending_target_deg
+            self.rl_target_ready.clear()
             if pending is None:
                 return
             self.rl_pending_target_deg = None
@@ -965,6 +1062,7 @@ class FourLegSession:
         # Commit history only after the broadcast and controller commits above.
         # A policy thread reads this short snapshot without taking the bus lock.
         with self.rl_target_lock:
+            previous_output_time_s = self.rl_sent_target_time_s
             self.rl_sent_target_rad = tuple(
                 math.radians(controller.targets_deg[motor.name])
                 for _profile, motor, controller in self.rl_motor_order
@@ -985,6 +1083,11 @@ class FourLegSession:
                 "bus_write_duration_s": max(
                     0.0, output_completed_s - output_started_s
                 ),
+                "output_interval_s": (
+                    None if previous_output_time_s is None
+                    else max(0.0, output_completed_s - previous_output_time_s)
+                ),
+                "bus_lock_wait_s": self.rl_worker_bus_lock_wait_s,
                 "policy_target_age_s": (
                     None
                     if queued_at_s is None
@@ -1004,6 +1107,7 @@ class FourLegSession:
     @property
     def crawl_active(self) -> bool:
         return self.crawl_stage in {
+            "initializing_imu",
             "positioning",
             "preparing",
             "preloading",
@@ -1011,12 +1115,24 @@ class FourLegSession:
             "stopping",
         }
 
+    def _ik_config_locked(self) -> AnkleIKConfig:
+        return self.dashboard.ankle_ik_diagonal if self.crawl_mode == "diagonal_pair" else self.dashboard.ankle_ik
+
+    def _ik_motion_rate_locked(self) -> float:
+        rate = min(self.ramp_rate_deg_s, self._ik_config_locked().ramp_rate_deg_s)
+        if self.crawl_mode != "diagonal_pair":
+            rate = min(rate, self.dashboard.crawl.ramp_rate_deg_s)
+        # The faster pace applies to the walk, not the initial stance move.
+        return min(rate, 100.) if self.crawl_stage != "walking" else rate
+
     def _crawl_pose_locked(
         self,
         gait_time_s: float,
     ) -> tuple[dict[tuple[int, str], float], dict[str, object]]:
         config = self.dashboard.crawl
-        if self.crawl_mode == "diagonal_pair":
+        if self.motor_count == 16:
+            pose, state = ankle_ik_gait_degrees(gait_time_s, self._ik_config_locked(), self.crawl_mode)
+        elif self.crawl_mode == "diagonal_pair":
             pose, state = diagonal_pair_gait_degrees(
                 gait_time_s,
                 period_s=config.period_s,
@@ -1053,13 +1169,12 @@ class FourLegSession:
         return targets, state
 
     def _crawl_stance_targets_locked(self) -> dict[tuple[int, str], float]:
-        if self.motor_count != 12:
-            raise RuntimeError("Legacy crawl stance is unavailable with ankle motors")
         targets, _state = self._crawl_pose_locked(0.0)
         return targets
 
     def _set_crawl_stance_locked(self, phase: str) -> None:
-        self.desired_deg.update(self._crawl_stance_targets_locked())
+        targets = self._crawl_stance_targets_locked()
+        self.desired_deg.update(self._level_ik_targets_locked(targets))
         self.crawl_phase = phase
         self.crawl_swing_corner = None
         self.crawl_swing_pair = None
@@ -1067,7 +1182,7 @@ class FourLegSession:
 
     def _set_crawl_pose_locked(self, gait_time_s: float) -> None:
         targets, state = self._crawl_pose_locked(gait_time_s)
-        self.desired_deg.update(targets)
+        self.desired_deg.update(self._level_ik_targets_locked(targets, state))
         self.crawl_phase = str(state["phase"])
         swing_corner = state["swing_corner"]
         self.crawl_swing_corner = None if swing_corner is None else str(swing_corner)
@@ -1081,6 +1196,8 @@ class FourLegSession:
         self.crawl_push_partner = None if push_partner is None else str(push_partner)
 
     def _crawl_targets_reached_locked(self, tolerance_deg: float = 0.3) -> bool:
+        if self.motor_count == 16:
+            self._read_ik_feedback_locked()
         for profile in self.profiles:
             controller = self.controllers[profile.number]
             for motor in profile.config.motors:
@@ -1090,11 +1207,14 @@ class FourLegSession:
                     return False
                 if abs(commanded - desired) > tolerance_deg:
                     return False
+                if self.motor_count == 16 and (
+                    abs(self.ik_measured[(profile.corner, motor.name)] - desired) > 5.
+                    or abs(self.ik_velocity[(profile.corner, motor.name)]) > 18.
+                ):
+                    return False
         return True
 
     def _crawl_stance_ready_locked(self, tolerance_deg: float = 0.3) -> bool:
-        if self.motor_count != 12:
-            return False
         if self.crawl_stage != "holding" or self._armed_count_locked() != self.motor_count:
             return False
         stance_targets = self._crawl_stance_targets_locked()
@@ -1113,11 +1233,146 @@ class FourLegSession:
                     return False
         return True
 
+    def _read_ik_feedback_locked(self) -> None:
+        now = self.clock()
+        if self.ik_feedback_at is not None and now - self.ik_feedback_at < .05:
+            return
+        ids = [m.servo_id for p in self.profiles for m in p.config.motors]
+        reader = getattr(self.bus, "read_positions_speeds", None)
+        readings = reader(ids) if reader is not None else {
+            servo_id: (self.bus.read_position(servo_id), 0) for servo_id in ids}
+        if self.clock()-now > .2:
+            raise RuntimeError("IK feedback transaction exceeded 200 ms")
+        measured = {}
+        for profile in self.profiles:
+            for motor in profile.config.motors:
+                measured[(profile.corner, motor.name)] = raw_to_degrees(
+                    readings[motor.servo_id][0], motor, profile.calibration.motor(motor))
+        interval = None if self.ik_feedback_at is None else now-self.ik_feedback_at
+        self.ik_velocity = {
+            key: 0. if interval is None else (value-self.ik_measured[key])/max(interval, 1e-6)
+            for key, value in measured.items()}
+        self.ik_measured, self.ik_feedback_at = measured, self.clock()
+        if self.ik_recording_active and self.rl_recorder is not None:
+            self.rl_recorder.record_sample({
+                "sample_type": "ankle_ik_v2", "monotonic_time_s": self.ik_feedback_at,
+                "trajectory_time_s": self.crawl_elapsed_s, "stage": self.crawl_stage,
+                "phase": self.crawl_phase, "mode": self.crawl_mode,
+                "gravity_body": self.ik_gravity_body,
+                "leveling_limited_legs": list(self.ik_leveling_limited),
+                "gait_revision": "measured_ankle_onset_v6",
+                "ankle_leveling_correction_deg": dict(self.ik_leveling_correction),
+                "support_onset_confirmed": self.ik_clock.support_onset_confirmed if self.ik_clock else False,
+                "support_ankle_progress_deg": dict(self.ik_clock.support_ankle_progress_deg) if self.ik_clock else {},
+                "support_ankle_required_deg": dict(self.ik_clock.support_ankle_required_deg) if self.ik_clock else {},
+                "support_push_m": self.ik_support_push_m,
+                "body_forward_advance_m": self.ik_body_forward_advance_m,
+                "ankle_feedforward_corners": list(self.ik_ankle_feedforward_corners),
+                "command_fraction": self.ik_command_fraction,
+                "delivery_wait_s": self.ik_delivery_wait_s,
+                "gate": self.ik_clock.gate if self.ik_clock is not None else None,
+                "joints": [{"id": m.servo_id, "corner": p.corner, "name": m.name,
+                    "measured_deg": measured[(p.corner, m.name)],
+                    "velocity_deg_s": self.ik_velocity[(p.corner, m.name)],
+                    "desired_deg": self.desired_deg.get((p.number, m.name)),
+                    "delivered_deg": self.controllers[p.number].targets_deg.get(m.name)}
+                    for p in self.profiles for m in p.config.motors]})
+
+    def _level_ik_targets_locked(self, targets, state=None):
+        if self.motor_count != 16 or self.crawl_mode != "diagonal_pair":
+            return targets
+        state = state or {}
+        self.ik_support_push_m = float(state.get("support_push_m", 0.))
+        self.ik_body_forward_advance_m = float(state.get("body_forward_advance_m", 0.))
+        self.ik_ankle_feedforward_corners = list(state.get("ankle_feedforward_corners", ()))
+        self._read_ik_feedback_locked()
+        now = self.clock()
+        pose = {(p.corner, m.name): targets[(p.number, m.name)] for p in self.profiles for m in p.config.motors}
+        feedforward_corners = tuple(self.ik_ankle_feedforward_corners)
+        if (self.ik_leveling_at is None or now-self.ik_leveling_at >= .05
+                or feedforward_corners != self.ik_leveling_feedforward_corners):
+            if isinstance(self.bus, FourLegDemoBus):
+                gravity = (0., 0., -1.)
+            else:
+                if self.ik_imu_source is None:
+                    raise RuntimeError("Prepare the IK IMU before ankle leveling")
+                sample = self.ik_imu_source.read()
+                gravity = sample.projected_gravity_body
+            dt = .05 if self.ik_leveling_at is None else max(1e-6, now-self.ik_leveling_at)
+            _, self.ik_leveling_correction, self.ik_leveling_limited = level_sole_pitch_degrees(
+                pose, self.ik_measured, gravity, self.ik_leveling_correction, dt,
+                feedforward_legs=self.ik_ankle_feedforward_corners)
+            self.ik_gravity_body = [float(v) for v in gravity]
+            self.ik_leveling_at = now
+            self.ik_leveling_feedforward_corners = feedforward_corners
+        result = dict(targets)
+        for p in self.profiles:
+            key = (p.number, "ankle_pitch")
+            value = max(-33.25, min(33.25, targets[key]+self.ik_leveling_correction.get(p.corner, 0.)))
+            motor = next(m for m in p.config.motors if m.name == "ankle_pitch")
+            degrees_to_raw(value, motor, p.calibration.motor(motor))
+            result[key] = value
+        return result
+
+    def _advance_ik_walk_locked(self) -> None:
+        if self.ik_clock is None:
+            raise RuntimeError("IK gait clock is not initialized")
+        self._read_ik_feedback_locked()
+        if self.ik_feedback_at is None or self.clock()-self.ik_feedback_at > .2:
+            raise RuntimeError("IK joint feedback is stale")
+        delivered = {(p.corner, m.name): self.controllers[p.number].targets_deg[m.name]
+                     for p in self.profiles for m in p.config.motors}
+        current, state = self._crawl_pose_locked(self.ik_clock.time_s)
+        current = self._level_ik_targets_locked(current, state)
+        tracking = {(p.corner, m.name): current[(p.number, m.name)] for p in self.profiles for m in p.config.motors}
+        # Keep a rate-limited packet on the same reference frame until every
+        # joint's delivered command catches up. Encoder gates retain their
+        # separate measured-position/speed deadline at the phase endpoints.
+        pending_delivery_error = max(
+            abs(self.desired_deg[(p.number, m.name)]-delivered[(p.corner, m.name)])
+            for p in self.profiles for m in p.config.motors
+        )
+        if (self.crawl_mode == "diagonal_pair" and not self.ik_clock.gate
+                and pending_delivery_error > .3):
+            now = self.clock()
+            if self.ik_delivery_hold_started_at is None:
+                self.ik_delivery_hold_started_at = now
+            self.ik_delivery_wait_s = now-self.ik_delivery_hold_started_at
+            if self.ik_delivery_wait_s >= 2.:
+                raise RuntimeError("IK synchronized command delivery timed out; stop motion")
+            self.desired_deg.update(current)
+            self.crawl_phase = "synchronizing_motor_targets"
+            return
+        self.ik_delivery_hold_started_at = None
+        self.ik_delivery_wait_s = 0.
+        self.ik_clock.tick(1./60., self.ik_measured, self.ik_velocity, delivered, tracking_targets=tracking)
+        self.crawl_elapsed_s = self.ik_clock.time_s
+        self.crawl_progress = (self.crawl_elapsed_s % self._ik_config_locked().period_s)/self._ik_config_locked().period_s
+        self._set_crawl_pose_locked(self.crawl_elapsed_s)
+        if self.ik_clock.gate:
+            self.crawl_phase = "waiting_for_encoders_" + self.ik_clock.gate
+        if self.ik_clock.stopped:
+            self.crawl_stage = "holding"
+            self.crawl_phase = "ik_four_foot_hold"
+            self.last_event = "IK walk stopped after planting; torque remains armed"
+            if self.ik_recording_active and self.rl_recorder is not None:
+                self.rl_recorder.finish_trial(status="completed", details={
+                    "reason": "operator_stop" if self.ik_clock.stop_requested else "cycle_limit",
+                    "trajectory_time_s": self.crawl_elapsed_s, "torque_holding": True})
+                self.ik_recording_active = False
+
     def _advance_crawl_locked(self) -> None:
         if not self.crawl_active:
             return
         now = self.clock()
         config = self.dashboard.crawl
+        if self.motor_count == 16 and self.crawl_stage in {"positioning", "preparing", "preloading"}:
+            if self.ik_positioning_started_at is None:
+                self.ik_positioning_started_at = now
+            elif now-self.ik_positioning_started_at > 15.:
+                raise RuntimeError("IK start stance did not settle within 15 seconds")
+        else:
+            self.ik_positioning_started_at = None
         if self.crawl_stage in {"positioning", "stopping"}:
             positioning_only = self.crawl_stage == "positioning"
             self.crawl_mode = "distributed"
@@ -1193,6 +1448,9 @@ class FourLegSession:
             return
 
         if self.crawl_stage == "walking":
+            if self.motor_count == 16:
+                self._advance_ik_walk_locked()
+                return
             if self.crawl_started_at is None:
                 raise RuntimeError("Crawl clock was not initialized")
             # Advance one trajectory tick per completed controller iteration.
@@ -1206,6 +1464,30 @@ class FourLegSession:
             return
 
     def _cancel_crawl_locked(self) -> None:
+        if self.ik_recording_active and self.rl_recorder is not None:
+            self.rl_recorder.finish_trial(status="fault" if self.fault else "stopped", error=self.fault)
+            self.ik_recording_active = False
+        self.ik_prepare_cancel.set()
+        if self.ik_imu_source is not None:
+            source, self.ik_imu_source = self.ik_imu_source, None
+            source.close()
+            self.ik_retiring_imu = source if source.cleanup_pending else None
+        self.ik_leveling_correction = {}
+        self.ik_leveling_limited = []
+        self.ik_leveling_at = None
+        self.ik_gravity_body = None
+        self.ik_support_push_m = 0.
+        self.ik_body_forward_advance_m = 0.
+        self.ik_ankle_feedforward_corners = []
+        self.ik_leveling_feedforward_corners = ()
+        self.ik_command_fraction = 1.
+        self.ik_delivery_hold_started_at = None
+        self.ik_delivery_wait_s = 0.
+        self.ik_clock = None
+        self.ik_feedback_at = None
+        self.ik_measured = {}
+        self.ik_velocity = {}
+        self.ik_positioning_started_at = None
         self.crawl_stage = "idle"
         self.crawl_phase = "idle"
         self.crawl_swing_corner = None
@@ -1252,6 +1534,7 @@ class FourLegSession:
 
         self.rl_output_authorized.clear()
         with self.rl_target_lock:
+            self.rl_target_ready.clear()
             self.rl_pending_target_deg = None
             self.rl_policy_target_deg = dict(initial_target_deg)
             self.rl_pending_target_sequence = 0
@@ -1275,6 +1558,7 @@ class FourLegSession:
             self._consume_rl_target_locked()
         self.rl_output_authorized.clear()
         with self.rl_target_lock:
+            self.rl_target_ready.clear()
             self.rl_pending_target_deg = None
             self.rl_pending_target_queued_at_s = None
             self.rl_policy_target_deg.clear()
@@ -1479,6 +1763,9 @@ class FourLegSession:
     ) -> None:
         if self.rl_controller is None:
             raise RuntimeError("RL policy runtime is not configured")
+        with self.lock:
+            if self.crawl_active:
+                raise RuntimeError("Stop IK motion or sensor preparation before starting RL")
         if not safety_ack:
             raise ValueError(
                 "Confirm the robot is supported, feet are clear, and cutoff is ready"
@@ -1823,6 +2110,8 @@ class FourLegSession:
             self.rl_pending_target_deg = dict(updates)
             self.rl_pending_target_sequence += 1
             self.rl_pending_target_queued_at_s = float(_monotonic_time_s)
+            if self.motor_count == 16:
+                self.rl_target_ready.set()
         if clamp_event is not None:
             controller.record_event("rl_target_step_clamped", clamp_event)
 
@@ -1941,7 +2230,7 @@ class FourLegSession:
     ) -> None:
         if not safety_ack:
             raise ValueError(
-                "Confirm the body is supported with every foot clear before testing"
+                "Confirm a stable test area, link clearance and reachable power cutoff"
             )
         if confirmation != "TEST DIAGONAL PAIR GAIT":
             raise ValueError("TEST DIAGONAL PAIR GAIT confirmation is required")
@@ -1949,8 +2238,56 @@ class FourLegSession:
         self._start_crawl_mode("diagonal_pair")
 
     def _start_crawl_mode(self, mode: str) -> None:
-        if self.motor_count != 12:
-            raise RuntimeError("Legacy crawl does not control the new ankles; use the 16-motor RL panel")
+        if self.motor_count != 16 or mode != "diagonal_pair":
+            self._start_crawl_mode_ready(mode)
+            return
+        # Reserve this motion while initializing the sensor without holding
+        # the bus lock. STOP/DISARM can cancel initialization before arming.
+        with self.lock:
+            if self.crawl_active or self._armed_count_locked() or (
+                self.rl_controller is not None and self.rl_controller.active
+            ):
+                raise RuntimeError("Disarm all motors and stop other motion before diagonal IK")
+            if self.fault:
+                raise RuntimeError("Clear the reported fault before diagonal IK")
+            self._cancel_crawl_locked()
+            if self.ik_retiring_imu is not None and self.ik_retiring_imu.cleanup_pending:
+                raise RuntimeError("Wait for the previous IK IMU connection to close")
+            self.ik_retiring_imu = None
+            cancel = threading.Event()
+            self.ik_prepare_cancel = cancel
+            source = None
+            if not isinstance(self.bus, FourLegDemoBus):
+                from drobot_policy_runtime.sources import BackgroundImuSource, Bno085ImuSource
+                source = BackgroundImuSource(
+                    lambda: Bno085ImuSource(axis_map=self.ik_imu_axis_map),
+                    poll_hz=100., stale_after_s=.12, startup_timeout_s=30., close_timeout_s=.01)
+            self.ik_imu_source = source
+            self.crawl_mode = mode
+            self.crawl_stage = "initializing_imu"
+            self.crawl_phase = "initializing_ankle_leveling_no_motor_output"
+            self.last_event = "Preparing IK ankle leveling; motors remain disarmed"
+            controller = self.rl_controller
+        try:
+            if controller is not None:
+                controller.release_if_idle()
+            if source is not None:
+                sample = source.start(cancel_event=cancel)
+                validate_leveling_gravity(sample.projected_gravity_body)
+            with self.lock:
+                if cancel.is_set() or self.ik_prepare_cancel is not cancel:
+                    raise RuntimeError("Diagonal IK initialization was cancelled")
+                self.crawl_stage = "idle"
+                self._start_crawl_mode_ready(mode)
+        except BaseException:
+            with self.lock:
+                if self.ik_prepare_cancel is cancel and not cancel.is_set():
+                    self._disarm_all_locked(raise_errors=False)
+            if source is not None:
+                source.close()
+            raise
+
+    def _start_crawl_mode_ready(self, mode: str) -> None:
         if mode not in {"distributed", "diagonal_pair"}:
             raise ValueError(f"Unknown crawl mode: {mode}")
 
@@ -1974,10 +2311,30 @@ class FourLegSession:
             try:
                 self.crawl_mode = mode
                 sample_count = 80
-                duration_s = self.dashboard.crawl.period_s
+                duration_s = self._ik_config_locked().period_s if self.motor_count == 16 else self.dashboard.crawl.period_s
                 self._crawl_stance_targets_locked()
                 for sample in range(sample_count + 1):
                     self._crawl_pose_locked(duration_s * sample / sample_count)
+                if self.motor_count == 16:
+                    self.ik_clock = AnkleIKClock(self._ik_config_locked(), mode)
+                    self.ik_feedback_at = None
+                    self.ik_positioning_started_at = None
+                    if self.rl_recorder is not None:
+                        from drobot_policy_runtime.recording import sha256_file
+                        self.rl_recorder.start_trial({
+                            "label": "IK diagonal / measured ankle onset" if mode == "diagonal_pair" else "IK crawl",
+                            "controller": "ankle_ik_v6_measured_ankle_onset", "trial": {"mode": mode,
+                                "duration_s": None, "forward_m_s": None,
+                                "parameters": vars(self._ik_config_locked())},
+                            "imu_axis_map": self.ik_imu_axis_map,
+                            "ankle_leveling": mode == "diagonal_pair",
+                            "source_sha256": sha256_file(Path(__file__).with_name("ankle_ik_gait.py")),
+                            "motors": [{"id": m.servo_id, "corner": p.corner, "name": m.name,
+                                "direction": m.direction, "center_tick": p.calibration.motor(m).center_tick,
+                                "min_deg": m.min_deg, "max_deg": m.max_deg}
+                                for p in self.profiles for m in p.config.motors],
+                            "schema_note": "IK joint/IMU trace; no policy observations or ground-contact sensor"})
+                        self.ik_recording_active = True
 
                 if not start_from_held_stance:
                     for profile in self.profiles:
@@ -2000,6 +2357,7 @@ class FourLegSession:
                 self.crawl_swing_pair = None
                 self.crawl_push_partner = None
                 self.crawl_started_at = None
+                self.crawl_elapsed_s = 0.0
                 self.crawl_target_reached_at = None
                 self.crawl_progress = 0.0
                 self._set_crawl_stance_locked(
@@ -2039,6 +2397,22 @@ class FourLegSession:
             if not self._armed_count_locked():
                 self._cancel_crawl_locked()
                 self.last_event = "Crawl stopped; all motors already disarmed"
+                return
+            if self.motor_count == 16:
+                if self.crawl_stage == "walking" and self.ik_clock is not None:
+                    self.ik_clock.stop_requested = True
+                    self.last_event = "IK stop requested; finishing the current placement"
+                else:
+                    for profile in self.profiles:
+                        for motor in profile.config.motors:
+                            value = self.controllers[profile.number].targets_deg.get(motor.name)
+                            if value is not None:
+                                self.desired_deg[(profile.number, motor.name)] = value
+                    self.crawl_stage = "holding"
+                    self.crawl_phase = "ik_target_hold"
+                    if self.ik_recording_active and self.rl_recorder is not None:
+                        self.rl_recorder.finish_trial(status="stopped", details={"reason": "operator_stop_during_preparation"})
+                        self.ik_recording_active = False
                 return
             self.crawl_mode = "distributed"
             self.crawl_stage = "stopping"
@@ -2284,6 +2658,7 @@ class FourLegSession:
         with self.lock:
             self._require_manual_control_locked()
             self._clear_rl_stance_locked()
+            self._cancel_crawl_locked()
             self.crawl_mode = "distributed"
             targets = self._crawl_stance_targets_locked()
             try:
@@ -2810,7 +3185,8 @@ class FourLegSession:
             power_assessment = "Start from idle, then observe during walking"
 
         crawl_elapsed_s = (
-            self.crawl_elapsed_s if self.crawl_stage == "walking" else 0.0
+            self.crawl_elapsed_s if self.crawl_stage == "walking"
+            or (self.motor_count == 16 and self.crawl_stage == "holding") else 0.0
         )
 
         payload = {
@@ -2893,15 +3269,35 @@ class FourLegSession:
                 "port": getattr(self.bus, "port_name", None),
             },
             "crawl": {
-                "available": self.motor_count == 12,
-                "unavailable_reason": "Legacy crawl is configured for the original three-motor legs.",
+                "available": self.motor_count in (12, 16),
+                "unavailable_reason": "Gait requires complete calibrated 12- or 16-motor legs.",
+                "ankle_ik": self.motor_count == 16,
+                "sole_leveling": self.motor_count == 16 and self.crawl_mode == "diagonal_pair",
+                "sole_leveling_correction_deg": dict(self.ik_leveling_correction),
+                "sole_leveling_limited_legs": list(self.ik_leveling_limited),
+                "gravity_body": self.ik_gravity_body,
+                "support_push_mm": self.ik_support_push_m*1000.,
+                "body_forward_advance_mm": self.ik_body_forward_advance_m*1000.,
+                "ankle_feedforward_corners": list(self.ik_ankle_feedforward_corners),
+                "command_fraction": self.ik_command_fraction,
+                "delivery_wait_s": self.ik_delivery_wait_s,
+                "support_onset_confirmed": self.ik_clock.support_onset_confirmed if self.ik_clock else False,
+                "support_ankle_progress_deg": dict(self.ik_clock.support_ankle_progress_deg) if self.ik_clock else {},
+                "support_ankle_required_deg": dict(self.ik_clock.support_ankle_required_deg) if self.ik_clock else {},
+                "max_cycles": self._ik_config_locked().max_cycles if self.motor_count == 16 else 0,
+                "diagonal_parameters": vars(self.dashboard.ankle_ik_diagonal),
+                "encoder_gate": self.ik_clock.gate if self.ik_clock is not None else None,
+                "encoder_gate_wait_s": self.ik_clock.wait_s if self.ik_clock is not None else 0.,
+                "stop_requested": self.ik_clock.stop_requested if self.ik_clock is not None else False,
                 "mode": self.crawl_mode,
                 "pattern": (
+                    "ankle_ik_" + self.crawl_mode + "_v6_measured_ankle_onset"
+                    if self.motor_count == 16 else
                     "diagonal_pair_flat_support_gait_v1"
                     if self.crawl_mode == "diagonal_pair"
                     else "rectangular_flat_support_crawl_v10_medium"
                 ),
-                "supported_test_only": True,
+                "supported_test_only": not (self.motor_count == 16 and self.crawl_mode == "diagonal_pair"),
                 "active": self.crawl_active,
                 "start_ready": self._crawl_stance_ready_locked(),
                 "stage": self.crawl_stage,
@@ -2920,27 +3316,27 @@ class FourLegSession:
                     2 if self.crawl_mode == "diagonal_pair" else 3
                 ),
                 "progress": self.crawl_progress,
-                "period_s": self.dashboard.crawl.period_s,
-                "ramp_rate_deg_s": self.dashboard.crawl.ramp_rate_deg_s,
-                "run_until_stopped": True,
+                "period_s": self._ik_config_locked().period_s if self.motor_count == 16 else self.dashboard.crawl.period_s,
+                "ramp_rate_deg_s": self._ik_motion_rate_locked() if self.motor_count == 16 else self.dashboard.crawl.ramp_rate_deg_s,
+                "run_until_stopped": not (self.motor_count == 16 and self._ik_config_locked().max_cycles),
                 "elapsed_s": crawl_elapsed_s,
                 "completed_cycles": int(
-                    crawl_elapsed_s / self.dashboard.crawl.period_s
+                    crawl_elapsed_s / (self._ik_config_locked().period_s if self.motor_count == 16 else self.dashboard.crawl.period_s)
                 ),
                 "duration_s": None,
-                "stride_mm": self.dashboard.crawl.stride_m * 1000.0,
-                "lift_mm": self.dashboard.crawl.lift_m * 1000.0,
+                "stride_mm": (self._ik_config_locked().stride_m if self.motor_count == 16 else self.dashboard.crawl.stride_m) * 1000.0,
+                "lift_mm": (self._ik_config_locked().lift_m if self.motor_count == 16 else self.dashboard.crawl.lift_m) * 1000.0,
                 "support_extension_mm": (
                     self.dashboard.crawl.support_extension_m * 1000.0
                 ),
-                "stance_down_mm": self.dashboard.crawl.stance_down_m * 1000.0,
-                "stance_fore_aft_mm": (self.dashboard.crawl.stance_fore_aft_m * 1000.0),
+                "stance_down_mm": (self._ik_config_locked().down_m if self.motor_count == 16 else self.dashboard.crawl.stance_down_m) * 1000.0,
+                "stance_fore_aft_mm": (self._ik_config_locked().fore_aft_m if self.motor_count == 16 else self.dashboard.crawl.stance_fore_aft_m) * 1000.0,
                 "abduction_deg": self.dashboard.crawl.abduction_deg,
                 "weight_shift_forward_mm": (
-                    self.dashboard.crawl.weight_shift_forward_m * 1000.0
+                    (self._ik_config_locked().forward_transfer_m if self.motor_count == 16 else self.dashboard.crawl.weight_shift_forward_m) * 1000.0
                 ),
                 "weight_shift_lateral_mm": (
-                    self.dashboard.crawl.weight_shift_lateral_m * 1000.0
+                    (self._ik_config_locked().lateral_transfer_m if self.motor_count == 16 else self.dashboard.crawl.weight_shift_lateral_m) * 1000.0
                 ),
                 "corner_map": {
                     str(profile.number): profile.corner for profile in self.profiles
@@ -2953,6 +3349,9 @@ class FourLegSession:
             "fault": self.fault,
         }
         self.last_full_snapshot = copy.deepcopy(payload)
+        if self.ik_recording_active and self.rl_recorder is not None:
+            self.rl_recorder.record_event({"event": "ik_power_telemetry", "monotonic_time_s": self.clock(),
+                "summary": payload["summary"], "legs": payload["legs"]})
         return payload
 
     def snapshot(self) -> dict[str, Any]:

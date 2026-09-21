@@ -1,24 +1,65 @@
 {
   "schema_version": 1,
-  "captured_at_utc": "2026-08-09T00:04:22.017245+00:00",
+  "captured_at_utc": "2026-08-29T20:06:50.168485+00:00",
   "motors": [
     {
       "number": 1,
       "name": "hip_abduction",
       "id": 4,
-      "center_tick": 2022
+      "center_tick": 2081
     },
     {
       "number": 2,
       "name": "hip_flexion",
       "id": 5,
-      "center_tick": 2162
+      "center_tick": 2101
     },
     {
       "number": 3,
       "name": "knee",
       "id": 6,
-      "center_tick": 2052
+      "center_tick": 2054
+    }
+  ],
+  "updated_at_utc": "2026-09-19T19:53:58.924768+00:00",
+  "neutral_center_updates": [
+    {
+      "id": 5,
+      "previous_center_tick": 2162,
+      "center_tick": 2101,
+      "captured_at_utc": "2026-09-19T19:36:30.632771+00:00",
+      "applied_at_utc": "2026-09-19T19:53:58.924768+00:00",
+      "reference_pose": "Hip aligned: servo 6 pivot directly below servo 5 pivot with body level",
+      "capture_source": "debug/hardware-calibration/front-right-alignment-20260919/hip-aligned-20260919T193631Z.json",
+      "capture_sha256": "6896f00173a2028cdfa340a8e42295fd1a62f918b8724fcc29af55f8d91bd91b",
+      "sample_ticks": [
+        2101,
+        2100,
+        2101,
+        2101,
+        2101
+      ],
+      "torque_off_during_capture": true,
+      "powered_motion_verification": false
+    },
+    {
+      "id": 6,
+      "previous_center_tick": 2051,
+      "center_tick": 2054,
+      "captured_at_utc": "2026-09-19T19:50:21.859886+00:00",
+      "applied_at_utc": "2026-09-19T19:53:58.924768+00:00",
+      "reference_pose": "Knee aligned: hip, knee, and ankle pivot centers form a straight line viewed from the robot right side",
+      "capture_source": "debug/hardware-calibration/front-right-alignment-20260919/knee-aligned-20260919T195022Z.json",
+      "capture_sha256": "b09756c5fd57e482207d6b7f59821dc08f020984fd1afde75ce32768079e2ac5",
+      "sample_ticks": [
+        2054,
+        2054,
+        2054,
+        2054,
+        2054
+      ],
+      "torque_off_during_capture": true,
+      "powered_motion_verification": false
     }
   ]
 }
