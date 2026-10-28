@@ -1,7 +1,5 @@
 # drobot2
 
-![Drobot2 robot in motion](docs/RobotMove1.jpg)
-
 Monorepo for the Drobot2 robot. Engineering areas are separated at the
 repository root so CAD, simulation, hardware control, and electrical design
 can evolve without sharing one package boundary.
@@ -10,7 +8,25 @@ The [September 21 diagonal walking model](simulation/docs/rl-ankle-v27-overnight
 includes checkpoint 2549, its actor export, the approved fallback, simulation
 videos and the hardware handoff. A matching Pi controller is still required.
 
+## Sim-to-real walking demo
+
+A walking policy trained in NVIDIA Isaac Sim, demonstrated in simulation
+and on the physical Drobot2 robot.
+
+[![Side by side walking demo: trained policy in Isaac Sim on the left and the physical Drobot2 robot on the right](docs/media/sim-to-real-walking.gif)](docs/media/sim-to-real-walking.mp4)
+
+[Watch the side by side video](docs/media/sim-to-real-walking.mp4)
+or view the full original clips:
+[Isaac Sim (V30)](docs/media/isaac-sim-v30-walking.mov) ·
+[Physical robot](docs/media/physical-robot-walking.mov).
+
+The comparison shows simulator policy playback and a physical robot trial
+at their original speed. It ends with the shorter simulator clip (15.9 seconds);
+the full physical recording is 23 seconds.
+
 ## Physical robot reference
+
+![Drobot2 robot in motion](docs/RobotMove1.jpg)
 
 - Measured total assembled robot mass: approximately **3.18 kg** (converted
   from a 7 lb measurement), including the installed rear battery and its
