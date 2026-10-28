@@ -13,12 +13,12 @@ videos and the hardware handoff. A matching Pi controller is still required.
 A walking policy trained in NVIDIA Isaac Sim, demonstrated in simulation
 and on the physical Drobot2 robot.
 
-[![Side by side walking demo: trained policy in Isaac Sim on the left and the physical Drobot2 robot on the right](docs/media/sim-to-real-walking.gif)](docs/media/sim-to-real-walking.mp4)
+![Side by side walking demo: trained policy in Isaac Sim on the left and the physical Drobot2 robot on the right](docs/media/sim-to-real-walking.gif)
 
-[Watch the side by side video](docs/media/sim-to-real-walking.mp4)
-or view the full original clips:
-[Isaac Sim (V30)](docs/media/isaac-sim-v30-walking.mov) ·
-[Physical robot](docs/media/physical-robot-walking.mov).
+[Download the side by side MP4](docs/media/sim-to-real-walking.mp4?raw=true)
+or download the full original clips:
+[Isaac Sim (V30)](docs/media/isaac-sim-v30-walking.mov?raw=true) ·
+[Physical robot](docs/media/physical-robot-walking.mov?raw=true).
 
 The comparison shows simulator policy playback and a physical robot trial
 at their original speed. It ends with the shorter simulator clip (15.9 seconds);
